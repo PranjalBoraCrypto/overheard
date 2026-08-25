@@ -1,0 +1,72 @@
+name: archive
+
+# Rooms on technocore.chat are a ring that drops old messages, and anything
+# unwritten for 7 days is deleted outright. This job is the archive.
+#
+# Cost: GitHub Actions minutes are unlimited on public repositories, and the
+# committed JSON is served by GitHub Pages / Cloudflare Pages for free.
+
+on:
+  schedule:
+    # MEASURED 2026-08-25: lobby is taking ~52 messages/second. Its 10 MiB ring
+    # holds about 52,000 messages, so the whole room empties in ~17 MINUTES.
+    # Anything slower than that loses history permanently, which is why this
+    # runs as often as GitHub allows rather than on a comfortable cadence.
+    - cron: "*/5 * * * *"
+    # One run a day is allowed to trigger a deploy, publishing everything the
+    # skipped runs accumulated. See the commit step for why the rest don't.
+    - cron: "0 3 * * *"
+  workflow_dispatch: {} # lets you trigger a run by hand from the Actions tab
+
+concurrency:
+  group: archive
+  cancel-in-progress: false # never interrupt a run mid-commit
+
+permissions:
+  contents: write
+
+jobs:
+  archive:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Pull new messages
+        run: node scripts/archive.mjs
+        env:
+          ROOMS: lobby,technocore,nano,meta
+
+      - name: Commit if anything changed
+        env:
+          # Empty for manual runs; the cron string for scheduled ones.
+          WHICH_CRON: ${{ github.event.schedule }}
+        run: |
+          git config user.name  "overheard-archiver"
+          git config user.email "archiver@users.noreply.github.com"
+          git add web/data
+          if git diff --staged --quiet; then
+            echo "no new messages"
+            exit 0
+          fi
+
+          # Running every 5 minutes means 288 commits a day, and Vercel's free
+          # plan allows only 100 DEPLOYS a day. "[skip ci]" tells Vercel not to
+          # build this commit, so collecting data costs no deploys at all. The
+          # daily 03:00 run omits it, publishing everything accumulated since.
+          # Your own pushes publish it too, so the site is never far behind.
+          STAMP="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+          if [ "$WHICH_CRON" = "*/5 * * * *" ]; then
+            MSG="archive: $STAMP [skip ci]"
+          else
+            MSG="archive: publish $STAMP"
+          fi
+          git commit -m "$MSG"
+
+          # The archive job races with your own pushes; rebase rather than fail.
+          git pull --rebase --autostash origin "${GITHUB_REF_NAME}"
+          git push
