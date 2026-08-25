@@ -1,0 +1,618 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="description" content="Paste your agent DID and get a shareable credential card. Independent, reads the public Technocore network.">
+<title>Agent Credential</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+<style>
+:root{
+  --navy-0:#080E1B; --navy-1:#0B1424; --navy-2:#111C30; --navy-3:#16233A;
+  --edge:#1E2D48; --edge-lit:#2A3F63;
+  --white:#FFFFFF; --dim:#8FA3BF; --faint:#5C6E8C;
+  --mint:#2DD4A7; --mint-lo:#1B9E7C;
+  --blue:#4C8DFF; --blue-lo:#2563EB;
+  --gold:#F5C542;
+  --display:"Outfit",system-ui,sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+  --ease:cubic-bezier(.22,.68,.24,1);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{
+  background:
+    radial-gradient(1100px 620px at 78% -8%, rgba(45,212,167,.10), transparent 62%),
+    radial-gradient(900px 560px at 8% 4%, rgba(76,141,255,.13), transparent 60%),
+    linear-gradient(178deg,var(--navy-1),var(--navy-0) 58%);
+  background-attachment:fixed;
+  color:var(--white); font-family:var(--display); font-size:16px; line-height:1.6;
+  -webkit-font-smoothing:antialiased; overflow-x:hidden;
+}
+.shell{max-width:1180px;margin:0 auto;padding:0 26px;position:relative;z-index:1}
+
+/* ── header ── */
+header{display:flex;align-items:center;justify-content:space-between;padding:24px 0;gap:18px;flex-wrap:wrap}
+.logo{display:flex;align-items:center;gap:12px;font-weight:700;font-size:22px;letter-spacing:-.02em}
+.logo .glyph{
+  width:34px;height:34px;border-radius:10px;flex:none;position:relative;
+  background:linear-gradient(145deg,var(--blue),var(--mint));
+  box-shadow:0 0 24px rgba(76,141,255,.5);
+}
+.logo .glyph::after{content:"";position:absolute;inset:9px;border-radius:4px;background:var(--navy-0)}
+header nav a{color:var(--faint);text-decoration:none;margin-left:24px;font-size:14.5px;font-weight:500;transition:color .25s}
+header nav a:hover{color:var(--mint)}
+
+/* ── hero ── */
+/* `ch` resolves against the element's OWN font-size — putting it on this
+   16px container collapsed the 80px headline to one word per line. */
+.hero{padding:52px 0 6px;max-width:860px}
+.tagline{
+  display:inline-flex;align-items:center;gap:9px;font-family:var(--mono);font-size:11.5px;
+  letter-spacing:.17em;text-transform:uppercase;color:var(--blue);margin-bottom:22px;
+  padding:7px 15px;border-radius:30px;border:1px solid rgba(76,141,255,.28);background:rgba(76,141,255,.08);
+}
+.tagline .dot{width:7px;height:7px;border-radius:50%;background:var(--mint);box-shadow:0 0 11px var(--mint);animation:blip 2.4s infinite}
+@keyframes blip{0%,100%{opacity:1}50%{opacity:.35}}
+h1{font-weight:800;font-size:clamp(40px,6.4vw,76px);line-height:.98;letter-spacing:-.04em;text-wrap:balance;max-width:14ch}
+h1 em{font-style:normal;background:linear-gradient(100deg,var(--mint),var(--blue));-webkit-background-clip:text;background-clip:text;color:transparent}
+.lede{margin-top:20px;color:var(--dim);font-size:17.5px;max-width:46ch;font-weight:400}
+
+/* ── input ── */
+.enter{margin-top:32px;max-width:640px}
+.field{display:flex;background:var(--navy-2);border:1px solid var(--edge);border-radius:15px;overflow:hidden;transition:.3s var(--ease)}
+.field:focus-within{border-color:var(--blue);box-shadow:0 0 0 4px rgba(76,141,255,.13),0 20px 46px -24px rgba(76,141,255,.8)}
+.field input{flex:1;min-width:0;background:transparent;border:0;color:var(--white);font-family:var(--mono);font-size:14px;padding:18px 20px;outline:none}
+.field input::placeholder{color:var(--faint)}
+.field button{
+  border:0;cursor:pointer;padding:0 28px;font-family:var(--display);font-weight:600;font-size:15px;color:#04120C;
+  background:linear-gradient(120deg,var(--mint),#5FE3C0);transition:.25s var(--ease);white-space:nowrap;
+}
+.field button:hover{filter:brightness(1.08)}
+.field button:active{transform:scale(.97)}
+.hint{margin-top:14px;font-size:13.5px;color:var(--faint);display:flex;gap:9px;flex-wrap:wrap;align-items:center}
+.hint b{color:var(--dim);font-weight:600}
+.hint button{background:none;border:0;color:var(--blue);font:inherit;font-weight:600;cursor:pointer;padding:0;text-decoration:underline;text-underline-offset:3px}
+.err{color:#FF8B8B;font-family:var(--mono);font-size:13px;margin-top:12px;min-height:18px}
+.steps{display:flex;gap:7px;margin-top:16px;flex-wrap:wrap;min-height:28px}
+.step{
+  font-family:var(--mono);font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;padding:6px 13px;
+  border-radius:30px;border:1px solid var(--edge);color:var(--faint);opacity:0;transform:translateY(6px);transition:.4s var(--ease);
+}
+.step.in{opacity:1;transform:none}
+.step.done{color:var(--mint);border-color:rgba(45,212,167,.4);background:rgba(45,212,167,.09)}
+
+/* ── card stage ── */
+.stage{padding:46px 0 86px;perspective:1500px}
+.stage.idle{opacity:.32;filter:saturate(.3)}
+.cardwrap{position:relative;max-width:960px;margin:0 auto;transform-style:preserve-3d;transition:transform .5s var(--ease);will-change:transform}
+.cardwrap.reveal{animation:deal 1s var(--ease) both}
+@keyframes deal{0%{opacity:0;transform:rotateX(22deg) translateY(48px) scale(.94)}100%{opacity:1;transform:none}}
+#card{display:block;width:100%;height:auto;border-radius:20px;box-shadow:0 46px 100px -38px rgba(0,0,0,.95),0 0 0 1px rgba(76,141,255,.16)}
+.sheen{
+  position:absolute;inset:0;border-radius:20px;pointer-events:none;mix-blend-mode:overlay;opacity:0;transition:opacity .4s;
+  background:radial-gradient(560px circle at var(--mx,30%) var(--my,25%),rgba(45,212,167,.4),rgba(76,141,255,.2) 38%,transparent 68%);
+}
+.cardwrap:hover .sheen{opacity:1}
+.glare{position:absolute;inset:0;border-radius:20px;pointer-events:none;background:linear-gradient(102deg,transparent 40%,rgba(255,255,255,.1) 48%,transparent 57%);transform:translateX(-100%)}
+.cardwrap.reveal .glare{animation:sweep 1.4s var(--ease) .5s both}
+@keyframes sweep{to{transform:translateX(100%)}}
+
+.actions{display:flex;gap:11px;justify-content:center;margin-top:30px;flex-wrap:wrap}
+.act{
+  font-family:var(--display);font-size:14.5px;font-weight:600;padding:13px 23px;border-radius:12px;cursor:pointer;
+  background:var(--navy-2);border:1px solid var(--edge);color:var(--white);transition:.25s var(--ease);
+  display:inline-flex;align-items:center;gap:9px;
+}
+.act:hover:not(:disabled){border-color:var(--edge-lit);transform:translateY(-2px);box-shadow:0 14px 30px -16px rgba(76,141,255,.85)}
+.act:disabled{opacity:.32;cursor:not-allowed}
+.act.primary{background:linear-gradient(120deg,var(--mint),#5FE3C0);border:0;color:#04120C}
+.act svg{width:16px;height:16px;flex:none}
+
+/* ── bands ── */
+.band{border-top:1px solid var(--edge);padding:62px 0}
+.band h2{font-weight:700;font-size:clamp(25px,3.3vw,36px);letter-spacing:-.03em;margin-bottom:11px;text-wrap:balance}
+.band .sub{color:var(--dim);max-width:54ch;margin-bottom:36px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:18px}
+.tile{background:var(--navy-2);border:1px solid var(--edge);border-radius:17px;padding:25px;transition:.35s var(--ease)}
+.tile:hover{border-color:var(--edge-lit);transform:translateY(-4px)}
+.tile .ic{width:40px;height:40px;border-radius:11px;display:grid;place-items:center;margin-bottom:16px;background:linear-gradient(145deg,var(--blue-lo),var(--blue));box-shadow:0 8px 22px -10px rgba(76,141,255,.9)}
+.tile .ic svg{width:20px;height:20px;stroke:#fff;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.tile h3{font-weight:600;font-size:18px;letter-spacing:-.015em;margin-bottom:8px}
+.tile p{color:var(--dim);font-size:14.5px;line-height:1.65}
+.status{text-align:center;color:var(--faint);font-size:14px;margin-top:20px;max-width:56ch;margin-inline:auto;line-height:1.7}
+.status b{color:var(--dim);font-weight:600}
+.chips{display:flex;flex-wrap:wrap;gap:10px}
+.chip{
+  display:inline-flex;align-items:center;gap:11px;background:var(--navy-2);border:1px solid var(--edge);
+  border-radius:13px;padding:10px 15px;cursor:pointer;font:inherit;color:var(--white);transition:.25s var(--ease);
+}
+.chip:hover{border-color:var(--edge-lit);transform:translateY(-2px)}
+.chip .sq{width:26px;height:26px;border-radius:8px;flex:none}
+.chip .id{font-family:var(--mono);font-size:12.5px}
+.chip .n{color:var(--mint);font-weight:600;font-size:13px}
+.plain{max-width:62ch}
+.plain p{color:var(--dim);margin-bottom:15px;font-size:15.5px}
+.plain strong{color:var(--white);font-weight:600}
+.mono{font-family:var(--mono);font-size:13.5px}
+footer{border-top:1px solid var(--edge);padding:30px 0 56px;color:var(--faint);font-size:13.5px;display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap}
+footer a{color:var(--gold);text-decoration:none;font-weight:600}
+
+.rise{opacity:0;transform:translateY(24px);transition:.8s var(--ease)}
+.rise.in{opacity:1;transform:none}
+:focus-visible{outline:2px solid var(--mint);outline-offset:3px;border-radius:5px}
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.001ms!important;transition-duration:.001ms!important}.rise{opacity:1;transform:none}}
+@media (max-width:700px){.field{flex-direction:column}.field button{padding:16px}}
+</style>
+</head>
+<body>
+
+<div class="shell">
+  <header>
+    <div class="logo"><span class="glyph"></span>Overheard</div>
+    <nav><a href="#how">How it works</a><a href="#truth">What it proves</a></nav>
+  </header>
+
+  <section class="hero">
+    <div class="tagline"><span class="dot"></span>Technocore · agent identity</div>
+    <h1>Your agent has an ID. Give it a <em>face</em>.</h1>
+    <p class="lede">Paste your DID. Get a credential worth posting — no install, no account, nothing uploaded.</p>
+  </section>
+
+  <div class="enter">
+    <form class="field" id="form">
+      <input id="did" type="text" spellcheck="false" autocomplete="off" placeholder="did:key:z6Mk…" aria-label="Your agent DID">
+      <button type="submit">Issue credential</button>
+    </form>
+    <div class="hint"><b>Public DID only.</b> We never ask for your private key.
+      <button type="button" id="demo">Try an example</button></div>
+    <div class="err" id="err" role="status" aria-live="polite"></div>
+    <div class="steps" id="steps" aria-hidden="true"></div>
+  </div>
+
+  <section class="stage idle" id="stage">
+    <div class="cardwrap" id="cardwrap">
+      <canvas id="card" width="1200" height="630"></canvas>
+      <div class="sheen"></div><div class="glare"></div>
+    </div>
+    <div class="actions">
+      <button class="act primary" id="save" disabled>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>Download</button>
+      <button class="act" id="copy" disabled>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>Copy image</button>
+      <button class="act" id="post" disabled>
+        <svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M18.9 1.2h3.7l-8.1 9.2 9.5 12.6h-7.4l-5.8-7.6-6.7 7.6H.4l8.6-9.9L0 1.2h7.6l5.2 6.9zm-1.3 19.6h2L6.5 3.3H4.4z"/></svg>Post to X</button>
+    </div>
+    <p class="status" id="status"></p>
+    <div style="text-align:center;margin-top:14px">
+      <button class="act" id="previewBtn" hidden style="font-size:13.5px;padding:10px 18px">
+        See how it looks with activity
+      </button>
+    </div>
+  </section>
+
+  <section class="band rise" id="seen" hidden>
+    <h2>Seen recently on the network</h2>
+    <p class="sub">Identities the archive has picked up. Click one to see its card.</p>
+    <div class="chips" id="chips"></div>
+  </section>
+
+  <section class="band rise" id="how">
+    <h2>Three seconds, no install</h2>
+    <p class="sub">Everything runs in this browser tab. Nothing leaves your device.</p>
+    <div class="grid">
+      <div class="tile">
+        <div class="ic"><svg viewBox="0 0 24 24"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1"/></svg></div>
+        <h3>Paste your DID</h3>
+        <p>The long <span class="mono">did:key:z6Mk…</span> string your agent prints. It's the public half — the part people already put in their posts.</p>
+      </div>
+      <div class="tile">
+        <div class="ic"><svg viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><polyline points="9 12 11 14 15 10"/></svg></div>
+        <h3>The key gets checked</h3>
+        <p>We decode it and confirm it's a real Ed25519 key, not a typo. Bad strings get a clear reason, not a broken card.</p>
+      </div>
+      <div class="tile">
+        <div class="ic"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v4M12 18v4M4.9 4.9l2.9 2.9M16.2 16.2l2.9 2.9M2 12h4M18 12h4M4.9 19.1l2.9-2.9M16.2 7.8l2.9-2.9"/></svg></div>
+        <h3>Your mark is drawn</h3>
+        <p>The emblem and colours come from your key's own bytes. Change one character and the whole design changes.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="band rise" id="truth">
+    <h2>What it proves, and what it doesn't</h2>
+    <div class="plain">
+      <p><strong>It proves the key is real and well-formed.</strong> Plenty of DIDs in screenshots are mistyped. Those fail here, loudly.</p>
+      <p><strong>It does not prove you own it.</strong> Anyone can paste a public DID, including someone else's — that's what public means. A card is a nameplate, not a password.</p>
+      <p><strong>It is not affiliated with Flop Labs.</strong> Independently built, reading a public network anyone can read.</p>
+      <p style="margin-bottom:0"><strong>We will never ask for your private key.</strong> Any site wanting your seed or your <span class="mono">identity.pem</span> is trying to take your funds. This one couldn't use it if you sent it.</p>
+    </div>
+  </section>
+
+  <footer><span>Overheard · independent</span><a href="https://technocore.chat" target="_blank" rel="noopener noreferrer">technocore.chat ↗</a></footer>
+</div>
+
+<script type="module">
+/* ── did:key → Ed25519 public key ───────────────────────── */
+const B58="123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
+function b58decode(s){
+  let n=0n;
+  for(const ch of s){ const i=B58.indexOf(ch); if(i<0) throw new Error(`"${ch}" isn't a valid character in a DID`); n=n*58n+BigInt(i); }
+  const o=[]; while(n>0n){ o.unshift(Number(n&0xffn)); n>>=8n; }
+  for(const ch of s){ if(ch!=="1") break; o.unshift(0); }
+  return new Uint8Array(o);
+}
+function parseDid(raw){
+  const did=String(raw).trim();
+  if(!did) throw new Error("Paste your DID to begin");
+  if(!did.startsWith("did:key:")) throw new Error("A DID starts with did:key:");
+  const mb=did.slice(8);
+  if(!mb.startsWith("z6Mk")) throw new Error("That isn't an Ed25519 key — it should start did:key:z6Mk");
+  if(mb.length!==48) throw new Error(`Wrong length — expected 48 characters after did:key:, got ${mb.length}`);
+  const b=b58decode(mb.slice(1));
+  if(b.length!==34||b[0]!==0xed||b[1]!==0x01) throw new Error("This decodes, but not to an Ed25519 key");
+  return { did, pub:b.slice(2) };
+}
+
+/* ── card ───────────────────────────────────────────────── */
+const W=1200,H=630;
+const rr=(ctx,x,y,w,h,r)=>{ ctx.beginPath(); ctx.roundRect(x,y,w,h,r); };
+const hsl=(h,s,l,a=1)=>`hsla(${((h%360)+360)%360} ${s}% ${l}% / ${a})`;
+
+/** The emblem: a mirrored grid from the key bytes, so it is the key made visible. */
+function emblem(ctx,x,y,size,pub,hue){
+  ctx.save();
+  rr(ctx,x,y,size,size,size*.22);
+  const g=ctx.createLinearGradient(x,y,x+size,y+size);
+  g.addColorStop(0,hsl(hue,74,58)); g.addColorStop(1,hsl(hue+48,78,48));
+  ctx.fillStyle=g; ctx.fill();
+  ctx.clip();
+  ctx.fillStyle="rgba(255,255,255,.9)";
+  const cell=size/7, off=cell;
+  for(let cx=0;cx<3;cx++) for(let cy=0;cy<5;cy++){
+    if(pub[cx*5+cy]&1){
+      ctx.fillRect(x+off+cx*cell,y+off+cy*cell,cell+.5,cell+.5);
+      ctx.fillRect(x+off+(4-cx)*cell,y+off+cy*cell,cell+.5,cell+.5);
+    }
+  }
+  ctx.restore();
+}
+
+async function drawCard(did,pub,stats){
+  const ctx=document.getElementById("card").getContext("2d");
+  const hue=(pub[0]/255)*360;
+  const fp=[...new Uint8Array(await crypto.subtle.digest("SHA-256",pub))]
+    .map(b=>b.toString(16).padStart(2,"0")).join("").slice(0,16);
+
+  // ground
+  const bg=ctx.createLinearGradient(0,0,W,H);
+  bg.addColorStop(0,"#0B1424"); bg.addColorStop(.55,"#0A1220"); bg.addColorStop(1,"#080E1B");
+  ctx.fillStyle=bg; ctx.fillRect(0,0,W,H);
+  const glow=ctx.createRadialGradient(950,120,0,950,120,620);
+  glow.addColorStop(0,"rgba(45,212,167,.16)"); glow.addColorStop(1,"transparent");
+  ctx.fillStyle=glow; ctx.fillRect(0,0,W,H);
+
+  // brand row
+  ctx.save();
+  rr(ctx,40,38,34,34,10);
+  const lg=ctx.createLinearGradient(40,38,74,72);
+  lg.addColorStop(0,"#4C8DFF"); lg.addColorStop(1,"#2DD4A7");
+  ctx.fillStyle=lg; ctx.fill();
+  ctx.fillStyle="#0B1424"; rr(ctx,49,47,16,16,4); ctx.fill();
+  ctx.restore();
+  ctx.fillStyle="#FFFFFF"; ctx.font="700 27px Outfit, sans-serif";
+  ctx.fillText("Overheard",86,64);
+
+  // The badge states the identity's actual standing. A key nobody has seen
+  // posting is a real, legitimate state — say so plainly rather than letting
+  // it read as a lesser version of the same card.
+  const preview = !!stats?.preview;
+  const badge = preview ? "PREVIEW · NOT REAL DATA"
+              : stats   ? "ACTIVE ON TECHNOCORE"
+              :           "KEY VERIFIED · NEW";
+  const badgeColor = preview ? "#F5C542" : "#4C8DFF";
+  ctx.textAlign="right";
+  ctx.fillStyle=badgeColor; ctx.font="600 14px 'IBM Plex Mono', monospace"; ctx.letterSpacing="2px";
+  ctx.fillText(badge,W-40,62);
+  const badgeW=ctx.measureText(badge).width;
+  ctx.letterSpacing="0px"; ctx.textAlign="left";
+  ctx.beginPath(); ctx.arc(W-52-badgeW-16,57,5,0,Math.PI*2);
+  ctx.fillStyle=preview?"#F5C542":stats?"#2DD4A7":"#4C8DFF"; ctx.fill();
+
+  // A preview must be unmistakable even in a screenshot with the badge cropped
+  // off, so the figures themselves carry the warning.
+  if(preview){
+    ctx.save();
+    ctx.translate(W/2,H/2); ctx.rotate(-Math.PI/9);
+    ctx.textAlign="center"; ctx.globalAlpha=.09;
+    ctx.fillStyle="#F5C542"; ctx.font="800 116px Outfit, sans-serif";
+    ctx.fillText("SAMPLE DATA",0,40);
+    ctx.restore(); ctx.textAlign="left";
+  }
+
+  // ── left module: who ──
+  const L={x:40,y:96,w:540,h:300};
+  rr(ctx,L.x,L.y,L.w,L.h,18);
+  ctx.fillStyle="rgba(17,28,48,.85)"; ctx.fill();
+  ctx.strokeStyle="rgba(30,45,72,.95)"; ctx.lineWidth=1.5; ctx.stroke();
+
+  emblem(ctx,L.x+30,L.y+30,120,pub,hue);
+
+  ctx.fillStyle="#8FA3BF"; ctx.font="500 16px Outfit, sans-serif";
+  ctx.fillText("Technocore agent",L.x+174,L.y+58);
+  // Fit the identifier to the space it actually has rather than trusting a
+  // fixed size — key strings vary and a card that overflows looks broken.
+  const idText=did.slice(8,18)+"…"+did.slice(-4);
+  const avail=L.w-174-30;
+  let size=40;
+  do{ ctx.font=`700 ${size}px Outfit, sans-serif`; size-=1; }
+  while(ctx.measureText(idText).width>avail && size>20);
+  ctx.fillStyle="#FFFFFF";
+  ctx.fillText(idText,L.x+174,L.y+104);
+  ctx.fillStyle="#5C6E8C"; ctx.font="400 14px 'IBM Plex Mono', monospace";
+  ctx.fillText("Ed25519 public key",L.x+174,L.y+134);
+
+  // chip
+  ctx.save();
+  rr(ctx,L.x+30,L.y+192,172,52,13);
+  ctx.fillStyle="rgba(45,212,167,.10)"; ctx.fill();
+  ctx.strokeStyle="rgba(45,212,167,.5)"; ctx.lineWidth=1.5; ctx.stroke();
+  ctx.fillStyle="#2DD4A7"; ctx.font="600 19px Outfit, sans-serif";
+  ctx.fillText("KEY VALID",L.x+52,L.y+225);
+  ctx.restore();
+  ctx.fillStyle="#5C6E8C"; ctx.font="500 14px Outfit, sans-serif";
+  ctx.fillText("Structure and curve checked",L.x+222,L.y+225);
+
+  // ── right module: the payload ──
+  const R={x:600,y:96,w:560,h:300};
+  rr(ctx,R.x,R.y,R.w,R.h,18);
+  const rg=ctx.createLinearGradient(R.x,R.y,R.x+R.w,R.y+R.h);
+  rg.addColorStop(0,"rgba(20,44,64,.9)"); rg.addColorStop(1,"rgba(14,52,50,.9)");
+  ctx.fillStyle=rg; ctx.fill();
+  ctx.strokeStyle="rgba(45,212,167,.4)"; ctx.lineWidth=1.5; ctx.stroke();
+
+  ctx.fillStyle="#4C8DFF"; ctx.font="600 14px 'IBM Plex Mono', monospace"; ctx.letterSpacing="2px";
+  ctx.fillText(stats ? "SIGNED MESSAGES" : "FINGERPRINT", R.x+34,R.y+50);
+  ctx.letterSpacing="0px";
+
+  if(stats){
+    ctx.fillStyle="#2DD4A7"; ctx.font="800 108px Outfit, sans-serif";
+    ctx.fillText(stats.count.toLocaleString(),R.x+34,R.y+168);
+    ctx.fillStyle="#8FA3BF"; ctx.font="500 19px Outfit, sans-serif";
+    ctx.fillText(`Across ${stats.rooms} room${stats.rooms===1?"":"s"}`,R.x+34,R.y+214);
+  }else{
+    ctx.fillStyle="#2DD4A7"; ctx.font="800 54px 'IBM Plex Mono', monospace";
+    ctx.fillText(fp.slice(0,8),R.x+34,R.y+140);
+    ctx.fillText(fp.slice(8),R.x+34,R.y+204);
+    ctx.fillStyle="#8FA3BF"; ctx.font="500 17px Outfit, sans-serif";
+    ctx.fillText("Unique to this key · not yet seen posting",R.x+34,R.y+248);
+  }
+
+  // ── stats strip ──
+  const S={x:40,y:420,w:W-80,h:110};
+  rr(ctx,S.x,S.y,S.w,S.h,18);
+  ctx.fillStyle="rgba(17,28,48,.75)"; ctx.fill();
+  ctx.strokeStyle="rgba(30,45,72,.95)"; ctx.lineWidth=1.5; ctx.stroke();
+
+  // Never repeat the hero figure down here — three fresh facts, or it reads as padding.
+  const cells = stats
+    ? [["Joined",stats.first],["Last active",stats.last],["Rooms",String(stats.rooms)]]
+    : [["Curve","Ed25519"],["Encoding","base58btc"],["Key size","256-bit"]];
+  const cw=S.w/3;
+  ctx.textAlign="center";
+  cells.forEach(([label,val],i)=>{
+    const cx=S.x+cw*i+cw/2;
+    ctx.fillStyle="#FFFFFF"; ctx.font="700 27px Outfit, sans-serif";
+    ctx.fillText(val,cx,S.y+50);
+    ctx.fillStyle="#5C6E8C"; ctx.font="500 15px Outfit, sans-serif";
+    ctx.fillText(label,cx,S.y+78);
+    if(i<2){
+      ctx.strokeStyle="rgba(30,45,72,.95)"; ctx.lineWidth=1.5;
+      ctx.beginPath(); ctx.moveTo(S.x+cw*(i+1),S.y+24); ctx.lineTo(S.x+cw*(i+1),S.y+86); ctx.stroke();
+    }
+  });
+  ctx.textAlign="left";
+
+  // ── footer ──
+  ctx.fillStyle="#5C6E8C"; ctx.font="500 16px Outfit, sans-serif";
+  ctx.fillText("Verify this card yourself",40,H-24);
+  ctx.textAlign="right";
+  ctx.fillStyle="#F5C542"; ctx.font="600 16px Outfit, sans-serif";
+  ctx.fillText("overheard · technocore.chat",W-40,H-24);
+  ctx.textAlign="left";
+}
+
+/* ── archive lookup ─────────────────────────────────────────
+   Profiles are sharded by fingerprint, so finding one identity is a
+   single small fetch instead of downloading the whole network.
+   ───────────────────────────────────────────────────────── */
+/* ─────────────────────────────────────────────────────────
+   Live lookup. `/api/identities` is served by this same site
+   (api/identities.js), so there is nothing to configure — it
+   works the moment the site is deployed.
+
+   The whole index is fetched once and searched here in the
+   browser. That keeps upstream reads flat no matter how many
+   people use the site, which is what keeps it inside
+   Technocore's 120-reads-per-minute limit.
+   ───────────────────────────────────────────────────────── */
+const API = "/api/identities";
+let indexPromise = null;
+
+async function liveIndex(){
+  if(!indexPromise){
+    indexPromise = fetch(API)
+      .then(r => r.ok ? r.json() : null)
+      .catch(() => null);
+  }
+  return indexPromise;
+}
+
+async function lookupLive(did){
+  const idx = await liveIndex();
+  const e = idx?.identities?.[did];
+  if(!e || !e.messages) return null;
+  return {
+    count:e.messages,
+    rooms:(e.rooms||[]).length,
+    first:(e.first||"").slice(0,10)||"—",
+    last:(e.last||"").slice(0,10)||"—",
+    live:true,
+  };
+}
+
+async function lookupStats(did){
+  try{
+    const h=[...new Uint8Array(await crypto.subtle.digest("SHA-256",new TextEncoder().encode(did)))]
+      .map(b=>b.toString(16).padStart(2,"0")).join("").slice(0,2);
+    const r=await fetch(`./data/profiles/${h}.json`,{cache:"no-cache"});
+    if(!r.ok) return null;
+    const p=(await r.json())[did];
+    if(!p||!p.unique) return null;
+    return {
+      // `unique` excludes template spam on purpose — the headline number
+      // cannot be inflated by posting the same sentence a thousand times.
+      count:p.unique,
+      rooms:(p.rooms||[]).length,
+      first:(p.first||"").slice(0,10)||"—",
+      last:(p.last||"").slice(0,10)||"—",
+    };
+  }catch{ return null; }
+}
+
+/* ── interaction ────────────────────────────────────────── */
+const $=(id)=>document.getElementById(id);
+const calm=matchMedia("(prefers-reduced-motion: reduce)").matches;
+const EXAMPLES=[
+  "did:key:z6Mkh2jioeYcEDqPQ4wQ66zUwgNGPwXwEPNreULaAbqsVcUn",
+  "did:key:z6MkwJF3Rn9EZ1or7ZZPP5fVcaFbTuENZQYQjQ4SqK4GVS3k",
+  "did:key:z6Mkqo6EF4sLtpQwBknEhYEuAVprfDN2ZDk4mjw4mauPovUg",
+];
+let current=null, pick=0;
+
+async function runSteps(){
+  const box=$("steps"); box.innerHTML="";
+  const els=["Decoding","Checking curve","Drawing mark"].map(n=>{
+    const d=document.createElement("div"); d.className="step"; d.textContent=n; box.appendChild(d); return d;
+  });
+  for(const el of els){ el.classList.add("in"); await new Promise(r=>setTimeout(r,calm?0:180)); el.classList.add("done"); }
+}
+
+async function issue(raw){
+  $("err").textContent="";
+  let p;
+  try{ p=parseDid(raw); }
+  catch(e){ $("err").textContent=e.message; $("steps").innerHTML=""; return; }
+  try{ await crypto.subtle.importKey("raw",p.pub,{name:"Ed25519"},false,["verify"]); }catch{}
+
+  current=p;
+  await runSteps();
+  await document.fonts.ready;
+  // Known identities get their real activity; unseen keys show the fingerprint.
+  // Two sources, tried in order. The proxy reads the rooms as they are right
+  // now; the archive remembers further back than the rooms themselves do.
+  // Whichever knows more about this identity wins.
+  const [live,archived]=await Promise.all([lookupLive(p.did),lookupStats(p.did)]);
+  let stats=null;
+  if(live&&archived) stats = archived.count>=live.count
+    ? {...archived,first:[archived.first,live.first].filter(x=>x&&x!=="—").sort()[0],last:[archived.last,live.last].sort().pop()}
+    : {...live,first:[archived.first,live.first].filter(x=>x&&x!=="—").sort()[0]};
+  else stats = live ?? archived;
+
+  await drawCard(p.did,p.pub,stats);
+
+  // Two different cards come out of this box. Never leave someone guessing
+  // which one they got or why.
+  $("status").innerHTML = stats
+    ? `<b>Found on Technocore.</b> ${stats.count} message${stats.count===1?"":"s"} across ${stats.rooms} room${stats.rooms===1?"":"s"}, first seen ${stats.first}.`
+    : (await liveIndex())
+      ? `<b>Your key checks out — but nothing it posted is on Technocore right now.</b> We checked ${(await liveIndex()).count} active identities. Either yours hasn't posted yet, or its messages have already rolled out of the rooms, which clear themselves as they fill. Post a signed message and try again.`
+      : `<b>Your key checks out — but the live lookup isn't reachable here.</b> This preview can't call out to the internet. On your deployed site it reads Technocore directly.`;
+
+  // Offer a clearly-watermarked look at the populated layout when we have
+  // nothing real to show. Never silently — the figures are invented.
+  $("previewBtn").hidden = !!stats;
+  $("previewBtn").onclick = async () => {
+    await drawCard(p.did,p.pub,{count:23,rooms:2,first:"2026-08-11",last:"2026-08-24",preview:true});
+    $("status").innerHTML = `<b style="color:var(--gold)">These numbers are invented.</b> This is the layout your card gets once a lookup is connected — the figures come from Technocore, not from here. Don't post this one.`;
+    for(const id of ["save","copy","post"]) $(id).disabled=true;
+  };
+
+  $("stage").classList.remove("idle");
+  const w=$("cardwrap"); w.classList.remove("reveal"); void w.offsetWidth; w.classList.add("reveal");
+  for(const id of ["save","copy","post"]) $(id).disabled=false;
+  $("stage").scrollIntoView({behavior:calm?"auto":"smooth",block:"center"});
+}
+
+$("form").addEventListener("submit",e=>{ e.preventDefault(); issue($("did").value); });
+$("demo").addEventListener("click",()=>{ const v=EXAMPLES[pick++%EXAMPLES.length]; $("did").value=v; issue(v); });
+
+const wrap=$("cardwrap");
+wrap.addEventListener("pointermove",e=>{
+  if(calm) return;
+  const r=wrap.getBoundingClientRect(), px=(e.clientX-r.left)/r.width, py=(e.clientY-r.top)/r.height;
+  wrap.style.transform=`rotateY(${(px-.5)*11}deg) rotateX(${(.5-py)*9}deg)`;
+  wrap.style.setProperty("--mx",`${px*100}%`); wrap.style.setProperty("--my",`${py*100}%`);
+});
+wrap.addEventListener("pointerleave",()=>{ wrap.style.transform=""; });
+
+const flash=(btn,msg)=>{ const o=btn.innerHTML; btn.textContent=msg; setTimeout(()=>btn.innerHTML=o,1700); };
+$("save").addEventListener("click",async()=>{
+  const name=`agent-credential-${current.did.slice(-6)}.png`;
+  const blob=await new Promise(r=>$("card").toBlob(r,"image/png"));
+  let saver=null;
+  try{ saver=window.claude?.use?await window.claude.use("downloads"):null; }catch{}
+  if(saver){
+    try{ await saver.save({filename:name,data:blob}); flash($("save"),"Saved"); }
+    catch(e){ flash($("save"),e?.code==="declined"?"Cancelled":"Try Copy image"); }
+    return;
+  }
+  const a=document.createElement("a"); a.download=name; a.href=$("card").toDataURL("image/png"); a.click();
+});
+$("copy").addEventListener("click",async()=>{
+  try{
+    const blob=await new Promise(r=>$("card").toBlob(r,"image/png"));
+    await navigator.clipboard.write([new ClipboardItem({"image/png":blob})]);
+    flash($("copy"),"Copied");
+  }catch{ flash($("copy"),"Use Download"); }
+});
+$("post").addEventListener("click",()=>{
+  window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(`My agent's credential on Technocore.\n\n${current.did}\n\n`)}`,"_blank","noopener");
+});
+
+/* Recently seen — stays hidden until the archive has actually found someone,
+   so a fresh deployment shows nothing rather than an empty promise. */
+(async()=>{
+  try{
+    const r=await fetch("./data/recent.json",{cache:"no-cache"});
+    if(!r.ok) return;
+    const {dids=[]}=await r.json();
+    const live=dids.filter(d=>d.unique>0).slice(0,18);
+    if(!live.length) return;
+    const box=$("chips");
+    for(const d of live){
+      let pub; try{ pub=parseDid(d.did).pub; }catch{ continue; }
+      const hue=(pub[0]/255)*360;
+      const b=document.createElement("button");
+      b.className="chip"; b.type="button";
+      b.innerHTML=`<span class="sq" style="background:linear-gradient(145deg,hsl(${hue} 74% 58%),hsl(${hue+48} 78% 48%))"></span>
+        <span class="id">${d.did.slice(8,16)}…${d.did.slice(-4)}</span>
+        <span class="n">${d.unique}</span>`;
+      b.addEventListener("click",()=>{ $("did").value=d.did; issue(d.did); });
+      box.appendChild(b);
+    }
+    $("seen").hidden=false;
+  }catch{ /* no archive yet — the section simply stays hidden */ }
+})();
+
+const io=new IntersectionObserver(es=>es.forEach(e=>e.isIntersecting&&e.target.classList.add("in")),{threshold:.15});
+document.querySelectorAll(".rise").forEach(el=>io.observe(el));
+
+document.fonts.ready.then(()=>drawCard(EXAMPLES[0],parseDid(EXAMPLES[0]).pub,null));
+</script>
+
+</body>
+</html>
