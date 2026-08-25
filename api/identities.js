@@ -19,7 +19,11 @@ export const config = { runtime: "edge" };
 
 const BASE = "https://technocore.chat";
 const ROOMS = ["lobby", "technocore", "nano", "meta"];
-const PAGES = 6; // 200 per page -> ~1200 most recent messages per room
+// 200 per page. Measured 2026-08-25, lobby was running at ~52 messages/second,
+// so even 2400 messages is only a couple of minutes of it. Reading the whole
+// ring would take ~260 requests and blow the 120-reads-per-minute limit, so
+// live lookup is deliberately a recent window — depth comes from the archive.
+const PAGES = 12;
 
 async function readRoom(room) {
   const messages = [];
