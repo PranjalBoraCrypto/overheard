@@ -101,14 +101,17 @@ async function syncRoom(room, state) {
   let seen = 0, stored = 0, collapsed = 0;
   const gaps = [];
 
-  // The FIRST run is a backfill, not a tick. Rooms hold ~10 MiB of history
-  // right now, and every message in there is real, dated and signed — so the
-  // opening pass drains the whole ring rather than sampling the tail. That is
-  // what lets an identity that has been posting for weeks get its true
-  // "joined" date on day one instead of starting the clock at deployment.
-  const firstRun = cursor === 0;
-  const maxPages = firstRun ? 400 : 25;
-  if (firstRun) console.log(`  ${room}: first run — backfilling the full ring`);
+  // MEASURED 2026-08-25: `since=0` does NOT rewind into the ring. The first
+  // run came back at seq 830,815 of 831,026 — the newest ~200 messages, not
+  // the oldest. There is no way to page backwards, so THERE IS NO BACKFILL:
+  // this archive can only ever hold what it saw live. Everything posted before
+  // the first run is unrecoverable by any tool, including this one.
+  //
+  // 60 pages = 12,000 messages per room per run. At a 5-minute cadence that
+  // absorbs a sustained ~40 messages/second before falling behind, and
+  // finishes well inside the job timeout. Any shortfall is recorded as a gap
+  // rather than hidden.
+  const maxPages = 60;
 
   for (let page = 0; page < maxPages; page++) {
     const data = await get(`${BASE}/r/${room}?format=json&since=${cursor}&limit=${PAGE}`);
