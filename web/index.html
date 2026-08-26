@@ -377,6 +377,24 @@ h1 em{
 .menu button:hover,.menu button:focus-visible{background:rgba(0,180,215,.12);color:var(--txt);outline:none}
 .menu button svg{width:15px;height:15px;flex:none;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
 .menu .sep{height:1px;margin:5px 8px;background:rgba(16,57,74,.9)}
+/* Confirmations appear AT the control that caused them. Centred at the bottom
+   of the viewport, this went unnoticed: the eye is on the button it just
+   clicked, and a message two thirds of a screen away is a message in a place
+   nobody is looking. */
+.toast{
+  position:absolute;z-index:90;display:flex;align-items:center;gap:10px;
+  padding:11px 16px;border-radius:12px;font-size:13.5px;line-height:1.4;color:var(--txt);
+  background:linear-gradient(rgba(4,20,28,.97),rgba(4,20,28,.97)) padding-box,var(--bevel) border-box;
+  border:1px solid transparent;box-shadow:0 20px 44px -18px rgba(0,0,0,.95);
+  animation:toastin .3s var(--spring);max-width:min(340px,calc(100vw - 24px));
+  pointer-events:none;
+}
+.toast .dot{width:7px;height:7px;border-radius:50%;flex:none;background:var(--cy-hi);box-shadow:0 0 11px var(--cy)}
+.toast.quiet .dot{background:var(--faint);box-shadow:none}
+.toast.leaving{animation:toastout .32s var(--ease) forwards}
+@keyframes toastin{from{opacity:0;transform:translateY(9px) scale(.96)}}
+@keyframes toastout{to{opacity:0;transform:translateY(-7px)}}
+@media (prefers-reduced-motion:reduce){.toast,.toast.leaving{animation:none}}
 .plain{max-width:64ch}
 .plain p{color:var(--dim);margin-bottom:15px;font-size:15.5px}
 .plain strong{color:var(--txt);font-weight:600}
@@ -1761,6 +1779,9 @@ const ICON = {
 };
 
 function openMenu(btn, d){
+  // The menu is gone by the time an action finishes, so its confirmation
+  // anchors to the button the menu belonged to.
+  const anchor = btn;
   const reopen = openMenuBtn === btn;
   closeMenu();
   if(reopen) return;                       // second click on the same row shuts it
@@ -1782,13 +1803,13 @@ function openMenu(btn, d){
     $("did").value = d.did; issue(d.did);
   }));
   m.appendChild(item(ICON.copy, "Copy this DID", async () => {
-    try{ await navigator.clipboard.writeText(d.did); toast("DID copied"); }
-    catch{ toast("Could not copy"); }
+    try{ await navigator.clipboard.writeText(d.did); toast("DID copied", anchor); }
+    catch{ toast("Could not copy", anchor, true); }
   }));
   m.appendChild(item(ICON.link, "Copy a link to its card", async () => {
     const url = `${location.origin}/?did=${encodeURIComponent(d.did)}`;
-    try{ await navigator.clipboard.writeText(url); toast("Link copied"); }
-    catch{ toast("Could not copy"); }
+    try{ await navigator.clipboard.writeText(url); toast("Link copied", anchor); }
+    catch{ toast("Could not copy", anchor, true); }
   }));
 
   // Room names come off the network. Only a plain one is ever put in a URL,
@@ -1826,14 +1847,39 @@ addEventListener("keydown", (e) => { if(e.key === "Escape") closeMenu(); });
 // browser had to scroll to first.
 addEventListener("resize", closeMenu);
 
-/** A one-line confirmation that does not need a element reserved for it. */
-function toast(msg){
+/* A one-line confirmation, shown AT the control that caused it.
+   `near` is the element it belongs to — the Refresh button, the row's own
+   menu button. Positioned in document coordinates like the menu, so it stays
+   with its control if the page moves under it. */
+const TOAST_MS = 2800;
+let toastEl = null;
+
+function toast(msg, near, quiet){
+  toastEl?.remove();
   const t = document.createElement("div");
-  t.className = "menu"; t.style.cssText =
-    "left:50%;top:auto;bottom:26px;transform:translateX(-50%);padding:12px 18px;font-size:13.5px;color:var(--txt);min-width:0;position:fixed";
-  t.textContent = msg;
+  t.className = "toast" + (quiet ? " quiet" : "");
+  const dot = document.createElement("span"); dot.className = "dot";
+  t.append(dot, document.createTextNode(msg));
   document.body.appendChild(t);
-  setTimeout(() => t.remove(), 1800);
+  toastEl = t;
+
+  const w = t.offsetWidth, h = t.offsetHeight;
+  const r = near?.getBoundingClientRect();
+  if(r){
+    // Above the control by preference, below it when there is no room above.
+    const above = r.top - h - 10 > 0;
+    t.style.top  = `${(above ? r.top - h - 10 : r.bottom + 10) + scrollY}px`;
+    t.style.left = `${Math.max(10 + scrollX, Math.min(r.right + scrollX - w, scrollX + innerWidth - w - 10))}px`;
+  }else{
+    t.style.position = "fixed";
+    t.style.left = `${Math.max(10, innerWidth/2 - w/2)}px`;
+    t.style.bottom = "26px";
+  }
+
+  setTimeout(() => {
+    t.classList.add("leaving");
+    setTimeout(() => { t.remove(); if(toastEl === t) toastEl = null; }, 320);
+  }, TOAST_MS);
 }
 
 /* ── render ─────────────────────────────────────────────────────────────── */
@@ -1877,15 +1923,19 @@ async function loadSeen(animate){
        rather than mistaken for a bug. */
     if(animate){
       const moved = j.updated && j.updated !== seenStamp;
-      toast(moved ? "Updated from the archive"
-                  : `No new collection yet — the archive last moved ${ago(j.updated)}`);
+      // "No new collection yet ... 2 minutes ago" reads as a complaint about
+      // data that is in fact two minutes old. Say what is true and calm:
+      // there is nothing newer, and here is how new what you have is.
+      toast(moved ? "Updated — collected just now"
+                  : `Already current — last collection ${ago(j.updated)}`,
+            $("refresh"), !moved);
     }
     seenStamp = j.updated || seenStamp;
   }else if(animate){
     // Nothing came back. Put the rows we already had back rather than leaving
     // a hole where a working section was a moment ago.
     [...box.children].forEach((c) => c.classList.remove("out"));
-    toast("Could not reach the archive");
+    toast("Could not reach the archive", $("refresh"), true);
   }
 
   if(animate){
