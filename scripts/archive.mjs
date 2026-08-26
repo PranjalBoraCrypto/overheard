@@ -109,7 +109,7 @@ const ROSTER_MS = Number(process.env.ROSTER_SECONDS ?? 120) * 1000;
 // each read once per MAX_INTERVAL, which is what bounds how late a message in
 // a quiet room can be.
 const READS_PER_MIN = Number(process.env.READS_PER_MIN ?? 360);
-const CONCURRENCY = Number(process.env.CONCURRENCY ?? 4);
+const CONCURRENCY = Number(process.env.CONCURRENCY ?? 6);
 
 const PAGE = 200;
 // Aim to arrive when a page is a little over half full. The margin absorbs a
@@ -420,22 +420,39 @@ async function readRoom(state, e) {
    room is now read every few seconds, and rewriting a multi-megabyte day
    shard that often would spend the whole run in the filesystem.
    ─────────────────────────────────────────────────────────────────────── */
+/* Take the buffers away from the writers in ONE synchronous step, before the
+   first await. Everything after this point is I/O that takes seconds, and
+   reads keep arriving throughout — without the handover, a message collected
+   mid-flush would be dropped on the floor when the buffer was cleared. */
+function detach(state) {
+  const work = [];
+  for (const [room, p] of state.pending) {
+    if (!p.days.size && !p.gaps.length) continue;
+    work.push({ room, days: p.days, gaps: p.gaps, p });
+    p.days = new Map();
+    p.gaps = [];
+  }
+  const shards = [...state.dirtyProfiles];
+  state.dirtyProfiles.clear();
+  return { work, shards };
+}
+
 async function flush(state, rows, total, standings = false) {
+  const { work, shards } = detach(state);
+
   await mkdir(path.join(OUT, "profiles"), { recursive: true });
-  for (const shard of state.dirtyProfiles) {
+  for (const shard of shards) {
     await writeAtomic(path.join(OUT, "profiles", `${shard}.json`),
       JSON.stringify(state.profiles.get(shard)) + "\n");
   }
-  state.dirtyProfiles.clear();
 
-  for (const [room, p] of state.pending) {
-    if (!p.days.size && !p.gaps.length) continue;
+  for (const { room, days, gaps, p } of work) {
     const roomDir = path.join(OUT, room);
     await mkdir(roomDir, { recursive: true });
     const metaFile = path.join(roomDir, "_meta.json");
     const meta = await readJson(metaFile, { room, days: [], total: 0, gaps: [] });
 
-    for (const [d, recs] of p.days) {
+    for (const [d, recs] of days) {
       const file = path.join(roomDir, `${d}.json`);
       const shard = await readJson(file, { room, date: d, messages: [] });
       let capped = 0;
@@ -470,11 +487,8 @@ async function flush(state, rows, total, standings = false) {
     p.cappedFlushed = p.capped;
     meta.cursor = state.cursors[room];
     meta.updated = new Date().toISOString();
-    if (p.gaps.length) meta.gaps = [...(meta.gaps ?? []), ...p.gaps].slice(-MAX_GAPS_KEPT);
+    if (gaps.length) meta.gaps = [...(meta.gaps ?? []), ...gaps].slice(-MAX_GAPS_KEPT);
     await writeAtomic(metaFile, JSON.stringify(meta) + "\n");
-
-    p.days = new Map();
-    p.gaps = [];
   }
 
   const pruned = pruneTemplates(state.templates);
@@ -743,18 +757,29 @@ async function main() {
   const STANDINGS_MS = Math.max(FLUSH_MS, 240_000);
   let lastFlush = started, lastStandings = 0, lastRoster = started;
   const inflight = new Set();
+  let flushing = null, rostering = null;
 
   while (Date.now() < deadline) {
     const now = Date.now();
 
-    if (now - lastRoster > ROSTER_MS) { lastRoster = now; await refreshRoster(); continue; }
+    /* Neither of these is awaited. A flush walks every day shard and, every
+       fourth minute, all 256 profile shards — seconds of filesystem work
+       during which the old code issued NO READS AT ALL. At 21 messages a
+       second the lobby fills a page in under ten, so the flush was quietly
+       buying itself a guaranteed miss. The buffers are handed over
+       synchronously inside flush(), so collection continues underneath it. */
+    if (now - lastRoster > ROSTER_MS && !rostering) {
+      lastRoster = now;
+      rostering = refreshRoster().finally(() => { rostering = null; });
+    }
 
-    if (now - lastFlush > FLUSH_MS) {
+    if (now - lastFlush > FLUSH_MS && !flushing) {
       lastFlush = now;
       const standings = now - lastStandings > STANDINGS_MS;
       if (standings) lastStandings = now;
-      await flush(state, rows, total, standings);
-      continue;
+      flushing = flush(state, rows, total, standings)
+        .catch((err) => console.error(`  flush failed (${err.message})`))
+        .finally(() => { flushing = null; });
     }
 
     if (inflight.size >= CONCURRENCY) { await Promise.race(inflight); continue; }
@@ -777,7 +802,7 @@ async function main() {
     inflight.add(p);
   }
 
-  await Promise.allSettled([...inflight]);
+  await Promise.allSettled([...inflight, flushing, rostering].filter(Boolean));
   const pruned = await flush(state, rows, total, true);
 
   /* The report is written on every flush, not just at the end, so the
