@@ -438,6 +438,56 @@ h1 em{
   background:rgba(0,7,10,.6);border:1px solid var(--edge);transition:.25s var(--ease);
 }
 .restore input[type=password]:focus{outline:none;border-color:var(--cy);box-shadow:0 0 0 4px rgba(0,180,215,.14)}
+.restore textarea{
+  padding:13px 15px;border-radius:12px;font-family:var(--mono);font-size:12.5px;line-height:1.5;color:var(--txt);
+  background:rgba(0,7,10,.6);border:1px solid var(--edge);min-height:88px;resize:vertical;transition:.25s var(--ease);
+}
+.restore textarea:focus{outline:none;border-color:var(--cy);box-shadow:0 0 0 4px rgba(0,180,215,.14)}
+.restore .or{font-family:var(--mono);font-size:10.5px;letter-spacing:.15em;text-transform:uppercase;color:var(--faint);text-align:center;margin:-2px 0}
+
+/* ── importing ─────────────────────────────────────────────────────────────
+   Real steps, and one of them genuinely takes time: deriving a key from a
+   passphrase is 310,000 PBKDF2 rounds. The rest are instant, so each gets a
+   short floor — an import that flashes past is indistinguishable from an
+   import that did not happen, and this one is about to move a private key
+   into the browser. */
+.importing{
+  margin-top:16px;padding:22px 24px;border-radius:16px;
+  background:linear-gradient(rgba(0,52,68,.4),rgba(0,7,10,.6)) padding-box,var(--bevel) border-box;
+  border:1px solid transparent;display:flex;gap:18px;align-items:flex-start;
+}
+.importing .spin{width:34px;height:34px;flex:none;border-radius:50%;position:relative}
+.importing .spin::before,.importing .spin::after{content:"";position:absolute;inset:0;border-radius:50%}
+.importing .spin::before{border:2px solid rgba(0,180,215,.2)}
+.importing .spin::after{border:2px solid transparent;border-top-color:var(--cy-hi);animation:spin 900ms linear infinite}
+.importing.ok .spin::after{animation:none;border-top-color:transparent}
+.importing .st{
+  display:flex;align-items:center;gap:11px;font-size:14px;color:var(--faint);
+  padding:4px 0;opacity:.45;transition:.35s var(--ease);
+}
+.importing .st .dot{width:16px;height:16px;flex:none;border-radius:50%;border:1.5px solid var(--edge-lit);position:relative;transition:.35s var(--ease)}
+.importing .st.now{opacity:1;color:var(--dim)}
+.importing .st.now .dot{border-color:var(--cy-hi);box-shadow:0 0 12px -2px var(--cy)}
+.importing .st.was{opacity:1;color:var(--txt)}
+.importing .st.was .dot{background:var(--cy-hi);border-color:transparent}
+.importing .st.was .dot::after{
+  content:"";position:absolute;left:4.5px;top:1.5px;width:4px;height:8px;
+  border:solid #00181F;border-width:0 2px 2px 0;transform:rotate(42deg);
+}
+@media (prefers-reduced-motion:reduce){.importing .spin::after{animation:none}}
+
+/* Points at the next thing to do, and keeps pointing until it is done. */
+.act.beckon{position:relative}
+.act.beckon::before{
+  content:"";position:absolute;inset:-3px;border-radius:16px;pointer-events:none;
+  animation:beckon 2.3s var(--ease) infinite;
+}
+@keyframes beckon{
+  0%{box-shadow:0 0 0 0 rgba(95,235,255,.5)}
+  70%{box-shadow:0 0 0 15px rgba(95,235,255,0)}
+  100%{box-shadow:0 0 0 0 rgba(95,235,255,0)}
+}
+@media (prefers-reduced-motion:reduce){.act.beckon::before{animation:none;box-shadow:0 0 0 3px rgba(95,235,255,.4)}}
 
 /* ── all done, now wait ────────────────────────────────────────────────── */
 .allset{
@@ -1887,6 +1937,7 @@ function renderDiagnostic(parsed, stats, note){
   const reg=!!note?.registered;
   const fp=note?.fingerprint;
   const mine=savedIdentity?.did===parsed.did;
+  if(openKey && !mine) openKey=null;   // a key only ever belongs to its own DID
 
   $("diagTitle").textContent = reg
     ? "Registered — now it needs something to say"
@@ -1910,7 +1961,14 @@ function renderDiagnostic(parsed, stats, note){
      is possible — compose, unlock first, or go and make an identity — but the
      screen never shows a task with no way to start it. */
   const jobsToDo=[["note","Publish a note",!reg],["post","Post a message",true]];
-  if(mine){
+  if(mine && openKey){
+    // Already unlocked this session — go straight to the work, and point at
+    // the first thing that needs doing.
+    armJobs(parsed, openKey, fp, reg);
+    para("Unlocked in this tab. Your key is used here and never sent anywhere.");
+    $("diag").scrollIntoView({behavior:calm?"auto":"smooth",block:"start"});
+    setTimeout(beckonNext, calm?0:500);
+  }else if(mine){
     for(const [key,label,show] of jobsToDo){
       if(!show) continue;
       const arm=()=>jobButton(key,label,()=>{
@@ -1938,7 +1996,9 @@ function renderDiagnostic(parsed, stats, note){
       try{
         const jwk=await openVault(savedIdentity,pw.value);
         pw.value=""; row.remove(); msg.textContent="Unlocked. Your key stays in this tab.";
+        openKey=jwk;
         armJobs(parsed, jwk, fp, reg);
+        beckonNext();
       }catch{ msg.textContent="Wrong passphrase, or the stored identity is damaged."; go.disabled=false; }
     });
     row.append(pw,go); doit.append(row,msg);
@@ -1968,6 +2028,15 @@ function renderDiagnostic(parsed, stats, note){
     fileBtn.appendChild(file);
     fileBtn.addEventListener("keydown",(e)=>{ if(e.key==="Enter"||e.key===" "){ e.preventDefault(); file.click(); } });
 
+    /* Two ways in, one path through. Choosing a file just FILLS the box below
+       it, so pasting the contents is a first-class route rather than a thing
+       the button refuses — plenty of people already have the JSON on their
+       clipboard and no file to browse to. */
+    const or=document.createElement("div"); or.className="or"; or.textContent="or paste it";
+    const text=document.createElement("textarea");
+    text.spellcheck=false; text.setAttribute("aria-label","Backup file contents");
+    text.placeholder='{"v":1,"did":"did:key:z6Mk…","salt":"…","iv":"…","data":"…"}';
+
     const pw=document.createElement("input");
     pw.type="password"; pw.autocomplete="current-password";
     pw.placeholder="the passphrase you set for it";
@@ -1975,36 +2044,36 @@ function renderDiagnostic(parsed, stats, note){
     go.className="act primary"; go.type="button"; go.textContent="Bring it into this browser";
     const msg=document.createElement("p"); msg.className="small";
 
-    file.addEventListener("change",()=>{
+    file.addEventListener("change",async()=>{
       const f=file.files?.[0];
       fileBtn.classList.toggle("has",!!f);
       fileLabel.textContent=f?f.name:"Choose your backup file — overheard-identity-….json";
+      if(f){ try{ text.value=(await f.text()).trim(); msg.textContent=""; }catch{} }
     });
+
     go.addEventListener("click",async()=>{
-      const f=file.files?.[0];
-      if(!f) return msg.textContent="Choose the backup file first.";
+      const raw=text.value.trim();
+      if(!raw) return msg.textContent="Paste your backup file's contents, or choose the file above.";
       if(!pw.value) return msg.textContent="Enter the passphrase you set when you made this identity.";
-      go.disabled=true; msg.textContent="Opening it on this device…";
-      try{
-        const vault=JSON.parse(await f.text());
-        if(!vault?.did || !vault?.data) throw new Error("shape");
-        // The right file for the WRONG identity is a real mistake and worth
-        // naming, rather than unlocking something and then failing later.
-        if(vault.did!==parsed.did){
-          msg.textContent=`That file holds ${vault.did.slice(8,16)}…${vault.did.slice(-4)}, which is a different identity from the one on this page.`;
-          go.disabled=false; return;
-        }
-        await openVault(vault,pw.value);            // proves the passphrase
-        try{ localStorage.setItem("overheard.identity",JSON.stringify(vault)); }catch{}
-        savedIdentity=vault; pw.value="";
-        renderDiagnostic(parsed,stats,note);        // redraw: it is "mine" now
-        $("doit").querySelector(".unlockrow input")?.focus();
-      }catch{
-        msg.textContent="That did not open — wrong passphrase, or not an Overheard backup file.";
-        go.disabled=false;
+
+      let vault=null;
+      try{ vault=JSON.parse(raw); }catch{}
+      if(!vault?.did || !vault?.data){
+        return msg.textContent="That is not an Overheard backup — it should be the whole JSON file, braces included.";
       }
+      // The right file for the WRONG identity is a real mistake and worth
+      // naming, rather than unlocking something and failing later.
+      if(vault.did!==parsed.did){
+        return msg.textContent=`That backup holds ${vault.did.slice(8,16)}…${vault.did.slice(-4)}, which is a different identity from the one on this page.`;
+      }
+
+      go.disabled=pw.disabled=text.disabled=true; msg.textContent="";
+      const done=await runImport(box,vault,pw.value,parsed);
+      if(done) return;                              // renderDiagnostic took over
+      go.disabled=pw.disabled=text.disabled=false;
+      msg.textContent="That did not open — wrong passphrase, or the backup is damaged.";
     });
-    box.append(fileBtn,pw,go,msg);
+    box.append(fileBtn,or,text,pw,go,msg);
     doit.appendChild(box);
 
     const small=document.createElement("p"); small.className="small";
@@ -2020,6 +2089,77 @@ function renderDiagnostic(parsed, stats, note){
   }
 
   diag.hidden=false; wrap.hidden=true;
+}
+
+/* ── importing an identity ─────────────────────────────────────────────────
+   Four steps, one of which genuinely takes time: deriving a key from a
+   passphrase is 310,000 PBKDF2 rounds. The instant ones get a short floor,
+   because an import that flashes past is indistinguishable from an import
+   that did not happen — and this one is moving a private key into a browser,
+   which is exactly the moment to show your working rather than hide it. */
+const IMPORT_STEPS = [
+  "Reading the backup",
+  "Deriving the key from your passphrase",
+  "Checking it matches this identity",
+  "Installing it in this browser",
+];
+const hold = (ms)=>new Promise((r)=>setTimeout(r,calm?0:ms));
+
+async function runImport(box, vault, pass, parsed){
+  const panel=document.createElement("div"); panel.className="importing";
+  const spin=document.createElement("div"); spin.className="spin";
+  const list=document.createElement("div");
+  const rows=IMPORT_STEPS.map((label)=>{
+    const r=document.createElement("div"); r.className="st";
+    const d=document.createElement("span"); d.className="dot";
+    r.append(d,document.createTextNode(label)); list.appendChild(r); return r;
+  });
+  panel.append(spin,list);
+  // Detach the form rather than destroying it: a wrong passphrase has to land
+  // back on the same filled-in box, with its listeners intact, not on an
+  // empty panel that ate the paste.
+  const form=[...box.children];
+  box.replaceChildren(panel);
+
+  const at=(i)=>{ rows.forEach((r,n)=>{ r.classList.toggle("now",n===i); r.classList.toggle("was",n<i); }); };
+
+  try{
+    at(0); await hold(420);
+    at(1);
+    const jwk=await openVault(vault,pass);          // the slow, real one
+    await hold(240);
+    at(2); await hold(360);
+    if(vault.did!==parsed.did) throw new Error("mismatch");
+    at(3);
+    try{ localStorage.setItem("overheard.identity",JSON.stringify(vault)); }catch{}
+    await hold(340);
+    rows.forEach((r)=>{ r.classList.remove("now"); r.classList.add("was"); });
+    panel.classList.add("ok");
+    await hold(420);
+
+    /* The passphrase was just proved, so asking for it again on the very next
+       screen would be a form built for the developer rather than the person.
+       The key is carried straight through and the jobs arm themselves. */
+    savedIdentity=vault; openKey=jwk;
+    renderDiagnostic(parsed, lastStats, lastNote);
+    return true;
+  }catch{
+    box.replaceChildren(...form);
+    return false;
+  }
+}
+
+/** Draw the eye to the next thing that needs doing, and keep drawing it until
+ *  it is done. Landing on a finished panel with nothing marked is how people
+ *  end up reading the whole thing again to find where they were. */
+function beckonNext(){
+  const btn=document.querySelector(".job:not(.done) .reveal");
+  if(!btn) return;
+  btn.classList.add("beckon");
+  const stop=()=>btn.classList.remove("beckon");
+  btn.addEventListener("click",stop,{once:true});
+  btn.addEventListener("mouseenter",stop,{once:true});
+  btn.addEventListener("focus",stop,{once:true});
 }
 
 /** Both jobs, live, using a key that is already open in this tab. */
@@ -2279,6 +2419,7 @@ const encU = new TextEncoder();
 const b64u = (b) => btoa(String.fromCharCode(...new Uint8Array(b))).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,"");
 const fromB64u = (t) => Uint8Array.from(atob(String(t).replace(/-/g,"+").replace(/_/g,"/")), (c)=>c.charCodeAt(0));
 
+let openKey = null;   // a jwk already proved this session — never persisted
 let savedIdentity = (()=>{ try{ return JSON.parse(localStorage.getItem("overheard.identity")||"null"); }catch{ return null; } })();
 
 async function openVault(vault, pass){
