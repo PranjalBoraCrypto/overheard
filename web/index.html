@@ -449,6 +449,35 @@ h1 em{
 }
 .restore textarea:focus{outline:none;border-color:var(--cy);box-shadow:0 0 0 4px rgba(0,180,215,.14)}
 .restore .or{font-family:var(--mono);font-size:10.5px;letter-spacing:.15em;text-transform:uppercase;color:var(--faint);text-align:center;margin:-2px 0}
+/* Two ways a key can reach this browser, and they need different fields, so
+   they get a switch rather than one form trying to be both. */
+.routes{display:flex;gap:6px;padding:5px;border-radius:14px;background:rgba(0,7,10,.6);border:1px solid var(--edge)}
+.routes button{
+  flex:1;padding:10px 12px;border:0;border-radius:10px;background:transparent;color:var(--dim);
+  font:inherit;font-size:13.5px;font-weight:600;cursor:pointer;transition:.25s var(--ease);
+}
+.routes button:hover{color:var(--txt)}
+.routes button[aria-selected="true"]{background:linear-gradient(120deg,var(--cy-hi),var(--cy));color:#001016}
+.caution{
+  display:flex;gap:11px;align-items:flex-start;padding:13px 15px;border-radius:12px;
+  background:rgba(242,179,61,.08);border:1px solid rgba(242,179,61,.32);
+  font-size:13px;line-height:1.6;color:var(--dim);
+}
+.caution b{color:var(--warn);font-weight:600}
+.caution svg{width:17px;height:17px;flex:none;stroke:var(--warn);fill:none;stroke-width:2;stroke-linecap:round;margin-top:1px}
+/* Its own class, not a second .restore nested inside the first: two elements
+   with the same class, one inside the other, makes every selector ambiguous —
+   which is exactly how it was found. */
+.seedbox{display:flex;flex-direction:column;gap:11px}
+.seedbox input{
+  padding:13px 15px;border-radius:12px;font:inherit;font-size:14.5px;color:var(--txt);
+  background:rgba(0,7,10,.6);border:1px solid var(--edge);transition:.25s var(--ease);
+}
+.seedbox input:focus{outline:none;border-color:var(--cy);box-shadow:0 0 0 4px rgba(0,180,215,.14)}
+.seedbox input:disabled{opacity:.45}
+.restore .lbl,.seedbox .lbl{font-size:13px;color:var(--faint);margin-bottom:-4px}
+.seedbox .pair{display:flex;gap:10px;flex-wrap:wrap}
+.seedbox .pair input{flex:1;min-width:180px}
 /* The DID is already known — it is what was typed at the top of the page —
    so this states it instead of leaving a placeholder that reads like a field
    waiting to be filled in. Shown, never asked for. */
@@ -770,12 +799,11 @@ footer a:hover{color:var(--cy-hi)}
       <input id="did" type="text" spellcheck="false" autocomplete="off" placeholder="did:key:z6Mk…" aria-label="Your agent DID">
       <button type="submit">Issue credential</button>
     </form>
-    <div class="hint"><b>Public DID only.</b> We never ask for your private key.
+    <div class="hint"><b>Public DID only.</b> This box takes the public half — nothing that can sign.
       <button type="button" id="demo">Try an example</button>
       <span style="color:var(--edge-lit)">·</span>
       <a href="/create.html" style="color:var(--mint);font-weight:600;text-decoration:underline;text-underline-offset:3px">No DID yet? Make one →</a></div>
     <div class="err" id="err" role="status" aria-live="polite"></div>
-    <div class="steps" id="steps" aria-hidden="true"></div>
   </div>
 
   <!-- Real figures, read from the archive this site publishes. Placeholders
@@ -812,7 +840,7 @@ footer a:hover{color:var(--cy-hi)}
     <section class="prove" id="prove" hidden>
       <div class="phead"><span class="ptag">Optional</span><h3>Prove this card is yours</h3></div>
       <p class="pbody">Anyone can look up any public DID, including someone else&rsquo;s — so a card on its own says who the identity is, never who is holding it. Sign one line with this identity and the card says so instead, with a link anyone can check for themselves.</p>
-      <p class="psafe"><b>Nothing leaves this device.</b> The signing happens in this tab and only the signature is ever shown. We never ask you to type or paste a seed, here or anywhere on this site — the box below unlocks the identity your browser already has.</p>
+      <p class="psafe"><b>Nothing leaves this device.</b> The signing happens in this tab and only the signature is ever shown. The box below unlocks the identity this browser already holds — no seed is needed or asked for here.</p>
       <div class="prow" id="proveRow">
         <input id="ppw" type="password" autocomplete="current-password" placeholder="passphrase for the identity in this browser">
         <button class="act primary" id="proveGo">Prove it&rsquo;s mine</button>
@@ -905,7 +933,7 @@ footer a:hover{color:var(--cy-hi)}
       <p><strong>It proves the key is real and well-formed.</strong> Plenty of DIDs in screenshots are mistyped. Those fail here, loudly.</p>
       <p><strong>It does not prove you own it.</strong> Anyone can paste a public DID, including someone else's — that's what public means. A card is a nameplate, not a password.</p>
       <p><strong>It is not affiliated with Flop Labs.</strong> Independently built, reading a public network anyone can read.</p>
-      <p style="margin-bottom:0"><strong>We will never ask for your private key.</strong> Any site wanting your seed or your <span class="mono">identity.pem</span> is trying to take your funds. This one couldn't use it if you sent it.</p>
+      <p style="margin-bottom:0"><strong>It asks for a seed in one place, once.</strong> Bringing an identity made somewhere else into this browser needs its key, so that one screen takes a seed, encrypts it on your device, and never asks again — everywhere else it is a passphrase. No request this site makes carries key material, and the endpoint that forwards writes rejects anything that looks like it. A site that asks for your seed <em>routinely</em> is indistinguishable from one that steals it, which is why this one asks once and then stops.</p>
     </div>
   </section>
 
@@ -2101,7 +2129,8 @@ function renderDiagnostic(parsed, stats, note){
     const swap=document.createElement("button");
     swap.className="swap"; swap.type="button"; swap.textContent="Replace";
     swap.addEventListener("click",()=>{
-      loaded.hidden=true; fileBtn.hidden=or.hidden=text.hidden=false;
+      loaded.hidden=true; delete loaded.dataset.on;
+      fileBtn.hidden=or.hidden=text.hidden=false;
       text.value=""; text.classList.remove("good");
       file.value=""; fileBtn.classList.remove("has");
       fileLabel.textContent=filePrompt;
@@ -2164,7 +2193,7 @@ function renderDiagnostic(parsed, stats, note){
 
       // Fold the field away and show what is worth checking instead.
       loaded.querySelector(".txt").textContent=midTrim(raw,30,14);
-      loaded.hidden=false;
+      loaded.hidden=false; loaded.dataset.on="1";
       fileBtn.hidden=or.hidden=text.hidden=true;
 
       if(advanced) return;
@@ -2211,8 +2240,16 @@ function renderDiagnostic(parsed, stats, note){
       }
 
       go.disabled=pw.disabled=text.disabled=true; msg.className="small"; msg.textContent="";
-      const done=await runImport(box,vault,pw.value,parsed);
-      if(done) return;                              // renderDiagnostic took over
+      const pass=pw.value;
+      const done=await runSteps(box,IMPORT_STEPS,async(at)=>{
+        at(0); await hold(420);
+        at(1); const jwk=await openVault(vault,pass); await hold(240);   // the slow, real one
+        at(2); await hold(360);
+        if(vault.did!==parsed.did) throw new Error("mismatch");
+        at(3); await hold(340);
+        return {vault,jwk};
+      });
+      if(done){ adopt(parsed,done.vault,done.jwk); return; }
       go.disabled=pw.disabled=text.disabled=false;
       msg.className="small warn";
       msg.textContent="That did not open — wrong passphrase, or the backup is damaged.";
@@ -2220,12 +2257,127 @@ function renderDiagnostic(parsed, stats, note){
       // folded away and put the cursor back on the thing that was wrong.
       pw.focus({preventScroll:true}); pw.select();
     });
-    box.append(fileBtn,or,text,loaded,pw,go,msg);
+    /* ── the second route: a seed ────────────────────────────────────────
+       Identities made elsewhere — floppysol, a CLI — have no Overheard backup
+       file, only a DID and a seed. Without this they simply could not use the
+       site, which is the wrong answer for a network this one is built to read.
+       So: the seed comes in ONCE and leaves as a vault. */
+    const seedBox=document.createElement("div");
+    seedBox.className="seedbox"; seedBox.hidden=true;
+
+    const caution=document.createElement("div"); caution.className="caution";
+    caution.innerHTML='<svg viewBox="0 0 24 24"><path d="M12 9v4M12 17h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg>';
+    const cwrap=document.createElement("span");
+    const cb=document.createElement("b"); cb.textContent="A seed is the key itself. ";
+    cwrap.append(cb,document.createTextNode(
+      "Check the address in your address bar before you paste one anywhere — including here. Overheard asks for it once, encrypts it on this device, and never asks again."));
+    caution.appendChild(cwrap);
+
+    const seedLbl=document.createElement("p"); seedLbl.className="lbl";
+    seedLbl.textContent=`Seed for ${forWhom} — 64 hex characters, or the 43-character form`;
+    const seed=document.createElement("input");
+    seed.type="password"; seed.autocomplete="off"; seed.spellcheck=false;
+    seed.placeholder="your seed";
+
+    const setLbl=document.createElement("p"); setLbl.className="lbl"; setLbl.hidden=true;
+    setLbl.textContent="Choose a passphrase for this browser. It encrypts the seed here — you will use this instead of the seed from now on.";
+    const pair=document.createElement("div"); pair.className="pair"; pair.hidden=true;
+    const np1=document.createElement("input");
+    np1.type="password"; np1.autocomplete="new-password"; np1.placeholder="new passphrase, 12+ characters";
+    const np2=document.createElement("input");
+    np2.type="password"; np2.autocomplete="new-password"; np2.placeholder="type it again";
+    pair.append(np1,np2);
+
+    const sgo=document.createElement("button");
+    sgo.className="act primary"; sgo.type="button"; sgo.hidden=true;
+    sgo.textContent="Encrypt it and bring it in";
+    const smsg=document.createElement("p"); smsg.className="small";
+
+    let seedBytes=null;
+    const checkSeed=async()=>{
+      seedBytes=null; pair.hidden=setLbl.hidden=sgo.hidden=true;
+      const bytes=parseSeed(seed.value);
+      if(!seed.value.trim()){ smsg.className="small"; smsg.textContent=""; return; }
+      if(!bytes){
+        smsg.className="small";
+        smsg.textContent="Not a seed yet — 64 hex characters, or the 43-character base64 form.";
+        return;
+      }
+      try{
+        await keyFromSeed(bytes,parsed.pub);        // derive AND prove
+        seedBytes=bytes;
+        smsg.className="small ok";
+        smsg.textContent=`This seed matches ${forWhom}. Now choose a passphrase for this browser.`;
+        setLbl.hidden=pair.hidden=sgo.hidden=false;
+        np1.focus({preventScroll:true});
+        np1.classList.add("beckon");
+        np1.addEventListener("input",()=>np1.classList.remove("beckon"),{once:true});
+      }catch{
+        smsg.className="small warn";
+        smsg.textContent="That is a valid seed, but for a different identity — it does not produce this DID.";
+      }
+    };
+    seed.addEventListener("input",()=>{ checkSeed(); });
+
+    sgo.addEventListener("click",async()=>{
+      if(!seedBytes) return;
+      if(np1.value.length<12){ smsg.className="small warn"; smsg.textContent="Twelve characters or more, please — this is the only thing standing between the file and your key."; np1.focus(); return; }
+      if(np1.value!==np2.value){ smsg.className="small warn"; smsg.textContent="The two passphrases do not match."; np2.focus(); return; }
+      const pass=np1.value, bytes=seedBytes;
+      sgo.disabled=seed.disabled=np1.disabled=np2.disabled=true;
+      smsg.className="small"; smsg.textContent="";
+      const done=await runSteps(seedBox,SEED_STEPS,async(at)=>{
+        at(0); const jwk=await keyFromSeed(bytes,parsed.pub); await hold(380);
+        at(1); await hold(340);
+        at(2); const vault=await makeVault(parsed.did,jwk,pass);   // the slow, real one
+        await hold(200);
+        at(3); await hold(320);
+        return {vault,jwk};
+      });
+      if(!done){
+        sgo.disabled=seed.disabled=np1.disabled=np2.disabled=false;
+        smsg.className="small warn"; smsg.textContent="That did not complete. Try again.";
+        return;
+      }
+      // Hand back a copy before anything else can go wrong. This browser can
+      // be cleared; the file is the only other place this key now exists.
+      try{
+        const a=document.createElement("a");
+        a.href=URL.createObjectURL(new Blob([JSON.stringify(done.vault,null,2)],{type:"application/json"}));
+        a.download=`overheard-identity-${parsed.did.slice(-8)}.json`;
+        a.click(); URL.revokeObjectURL(a.href);
+      }catch{}
+      seed.value=np1.value=np2.value="";
+      adopt(parsed,done.vault,done.jwk);
+    });
+
+    seedBox.append(caution,seedLbl,seed,setLbl,pair,sgo,smsg);
+
+    /* The switch. Two routes, because they need different fields and one form
+       pretending to accept either is how both end up confusing. */
+    const routes=document.createElement("div"); routes.className="routes";
+    const rFile=document.createElement("button"); rFile.type="button"; rFile.textContent="I have a backup file";
+    const rSeed=document.createElement("button"); rSeed.type="button"; rSeed.textContent="I have my seed";
+    const fileParts=[fileBtn,or,text,loaded,pw,go,msg];
+    const pick=(useSeed)=>{
+      rFile.setAttribute("aria-selected",String(!useSeed));
+      rSeed.setAttribute("aria-selected",String(useSeed));
+      seedBox.hidden=!useSeed;
+      fileParts.forEach((el)=>{ el.hidden = useSeed || (el===loaded ? loaded.dataset.on!=="1" : false); });
+      if(useSeed) seed.focus({preventScroll:true}); else text.focus({preventScroll:true});
+    };
+    rFile.addEventListener("click",()=>pick(false));
+    rSeed.addEventListener("click",()=>pick(true));
+    routes.append(rFile,rSeed);
+
+    box.append(routes,fileBtn,or,text,loaded,pw,go,msg,seedBox);
     doit.appendChild(box);
+    pick(false);
+    loaded.hidden=true;
 
     const small=document.createElement("p"); small.className="small";
     small.append(
-      document.createTextNode("You are never asked to paste a seed, here or on any other site. No backup file? Make a new identity on the "),
+      document.createTextNode("Overheard asks for a seed once, here, and encrypts it on this device — never sends it. No backup file and no seed? Make a new identity on the "),
       link("/create.html","create page"),
       document.createTextNode(", or do these two steps from the command line with "),
       link("https://github.com/zunmax/technocore-did-starter","the open-source starter"),
@@ -2252,11 +2404,15 @@ const IMPORT_STEPS = [
 ];
 const hold = (ms)=>new Promise((r)=>setTimeout(r,calm?0:ms));
 
-async function runImport(box, vault, pass, parsed){
+/** The stepped panel, driven by whatever work is passed in. Two routes use
+ *  it now — a backup file and a raw seed — and they have different steps but
+ *  the same need: show the working, because this is the moment a private key
+ *  enters the browser. */
+async function runSteps(box, labels, work){
   const panel=document.createElement("div"); panel.className="importing";
   const spin=document.createElement("div"); spin.className="spin";
   const list=document.createElement("div");
-  const rows=IMPORT_STEPS.map((label)=>{
+  const rows=labels.map((label)=>{
     const r=document.createElement("div"); r.className="st";
     const d=document.createElement("span"); d.className="dot";
     r.append(d,document.createTextNode(label)); list.appendChild(r); return r;
@@ -2271,29 +2427,83 @@ async function runImport(box, vault, pass, parsed){
   const at=(i)=>{ rows.forEach((r,n)=>{ r.classList.toggle("now",n===i); r.classList.toggle("was",n<i); }); };
 
   try{
-    at(0); await hold(420);
-    at(1);
-    const jwk=await openVault(vault,pass);          // the slow, real one
-    await hold(240);
-    at(2); await hold(360);
-    if(vault.did!==parsed.did) throw new Error("mismatch");
-    at(3);
-    try{ localStorage.setItem("overheard.identity",JSON.stringify(vault)); }catch{}
-    await hold(340);
+    const out=await work(at);
     rows.forEach((r)=>{ r.classList.remove("now"); r.classList.add("was"); });
     panel.classList.add("ok");
     await hold(420);
-
-    /* The passphrase was just proved, so asking for it again on the very next
-       screen would be a form built for the developer rather than the person.
-       The key is carried straight through and the jobs arm themselves. */
-    savedIdentity=vault; openKey=jwk;
-    renderDiagnostic(parsed, lastStats, lastNote);
-    return true;
+    return out;
   }catch{
     box.replaceChildren(...form);
-    return false;
+    return null;
   }
+}
+
+/** Both routes end the same way: a vault in this browser and an open key in
+ *  this tab. The secret was just proved, so asking for it again on the very
+ *  next screen would be a form built for the developer rather than the
+ *  person. */
+function adopt(parsed, vault, jwk){
+  try{ localStorage.setItem("overheard.identity",JSON.stringify(vault)); }catch{}
+  savedIdentity=vault; openKey=jwk;
+  renderDiagnostic(parsed, lastStats, lastNote);
+}
+
+/* ── a seed, brought in once ───────────────────────────────────────────────
+   A seed IS the private key, so this is the one place on the site that ever
+   asks for one — and it asks ONCE. What it does with it is the whole point:
+   derive the key, prove it against the DID that was searched, encrypt it with
+   a passphrase, and store that. From then on this identity works like any
+   other here and the seed is never wanted again.
+
+   The alternative — a seed box on a page people return to — is the habit that
+   makes a typosquatted clone indistinguishable from the real site.
+   ─────────────────────────────────────────────────────────────────────── */
+const SEED_STEPS = [
+  "Deriving the key from your seed",
+  "Checking it matches this identity",
+  "Encrypting it with your passphrase",
+  "Saving it in this browser",
+];
+
+/** Hex with or without 0x and spaces, or base64url. Anything that is 32 bytes
+ *  is accepted, because people copy seeds out of very different tools. */
+function parseSeed(raw){
+  const t=String(raw||"").trim().replace(/\s+/g,"").replace(/^0x/i,"");
+  if(/^[0-9a-fA-F]{64}$/.test(t)){
+    return Uint8Array.from(t.match(/../g).map((h)=>parseInt(h,16)));
+  }
+  if(/^[A-Za-z0-9_-]{43}$/.test(t)){
+    try{ const b=fromB64u(t); return b.length===32?b:null; }catch{ return null; }
+  }
+  return null;
+}
+
+/** Derive, then PROVE. A seed for a different identity would otherwise sign
+ *  perfectly well and verify against nobody — the failure would surface much
+ *  later, on someone else's screen. */
+async function keyFromSeed(seed, pub){
+  const jwk={ kty:"OKP", crv:"Ed25519", d:b64u(seed), x:b64u(pub), key_ops:["sign"], ext:true };
+  const priv=await crypto.subtle.importKey("jwk",jwk,{name:"Ed25519"},true,["sign"]);
+  const probe=encU.encode("overheard-seed-check");
+  const sig=await crypto.subtle.sign({name:"Ed25519"},priv,probe);
+  const pk=await crypto.subtle.importKey("raw",pub,{name:"Ed25519"},false,["verify"]);
+  if(!(await crypto.subtle.verify({name:"Ed25519"},pk,sig,probe))) throw new Error("mismatch");
+  return jwk;
+}
+
+/** The same vault format create.html writes, so one identity is one format
+ *  wherever it came from. */
+async function makeVault(did, jwk, pass){
+  const salt=crypto.getRandomValues(new Uint8Array(16));
+  const iv=crypto.getRandomValues(new Uint8Array(12));
+  const base=await crypto.subtle.importKey("raw",encU.encode(pass),"PBKDF2",false,["deriveKey"]);
+  const aes=await crypto.subtle.deriveKey(
+    { name:"PBKDF2", salt, iterations:310000, hash:"SHA-256" },
+    base, { name:"AES-GCM", length:256 }, false, ["encrypt"]);
+  const ct=await crypto.subtle.encrypt({name:"AES-GCM",iv},aes,encU.encode(JSON.stringify(jwk)));
+  const h=await crypto.subtle.digest("SHA-256",encU.encode(did));
+  const fingerprint=[...new Uint8Array(h)].map((b)=>b.toString(16).padStart(2,"0")).join("").slice(0,16);
+  return { v:1, did, fingerprint, salt:b64u(salt), iv:b64u(iv), data:b64u(ct), created:new Date().toISOString() };
 }
 
 /** Scroll to a control and put the cursor in it. Focusing alone was not
@@ -2456,23 +2666,20 @@ const EXAMPLES=[
 ];
 let current=null, pick=0, lastStats=null, lastNote=null;
 
-async function runSteps(){
-  const box=$("steps"); box.innerHTML="";
-  const els=["Decoding","Checking curve","Drawing mark"].map(n=>{
-    const d=document.createElement("div"); d.className="step"; d.textContent=n; box.appendChild(d); return d;
-  });
-  for(const el of els){ el.classList.add("in"); await new Promise(r=>setTimeout(r,calm?0:180)); el.classList.add("done"); }
-}
+/* The old three-chip progress strip ("Decoding / Checking curve / Drawing
+   mark") lived here. The boot animation replaced it months of commits ago and
+   nothing has called it since — it was found by colliding with a new function
+   of the same name, which is the only reason anyone noticed. Its container
+   went with it. */
 
 async function issue(raw){
   $("err").textContent="";
   let p;
   try{ p=parseDid(raw); }
-  catch(e){ $("err").textContent=e.message; $("steps").innerHTML=""; return; }
+  catch(e){ $("err").textContent=e.message; return; }
   try{ await crypto.subtle.importKey("raw",p.pub,{name:"Ed25519"},false,["verify"]); }catch{}
 
   current=p;
-  $("steps").innerHTML="";
   await document.fonts.ready;
 
   // Show the stage and go to it BEFORE the work starts, so the boot animation
