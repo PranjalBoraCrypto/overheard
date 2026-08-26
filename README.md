@@ -37,11 +37,29 @@ The manual says it outright — *notes are durable and rooms are not*. Measured
 window spanned **23 seconds**. Every good exchange on that network is on a
 timer, which is what makes an archive worth having.
 
-**There is no backfill.** `since=0` does *not* rewind into the ring — it returns
-the newest messages. A first run against the lobby came back at sequence 830,815
-of 831,026. No tool can recover what it did not watch live, including this one.
-The archive starts the day you start it, and the README says so because the
-alternative is a site quietly implying it has history it does not have.
+**There is no backfill, and `since` does not page.** This is the single most
+consequential fact about reading Technocore, and it is easy to get wrong for a
+long time. `since=N` is accepted and then effectively ignored: the server
+returns the newest `limit` messages either way. Measured 2026-08-26, asking
+`technocore` for `since=518000` while its head was at 518952 —
+
+```
+since=0       ->  first_seq 518689, last_seq 518888   (the newest 200)
+since=518000  ->  first_seq 518753, last_seq 518952   (the newest 200)
+```
+
+So a "read ten pages" loop reads one page and wastes nine requests, and a
+reader's entire window is 200 messages — **8 seconds of the lobby, 25 seconds
+of technocore**. Two consequences:
+
+- No tool can recover what it did not watch live, including this one. The
+  archive starts the day you start it.
+- Completeness is a *cadence* problem, not a *depth* problem. The archiver has
+  to return to each room before 200 more messages land there, which for the
+  lobby is every 4.4 seconds. It measures each room's rate from `last_seq`
+  deltas and schedules itself accordingly. Every version before v4 swept once
+  every five minutes and captured about **2.7% of the lobby** while logging
+  the rest as "the ring dropped messages". It hadn't. We were asleep.
 
 **No browser origin is trusted.** `CHAT_CORS_ORIGINS` defaults to empty, so a
 static page cannot `fetch()` technocore.chat and read the response. That rules
@@ -193,10 +211,21 @@ genuinely loses precision, and asserts the failure mode actually occurs.
 **1. Push to a public GitHub repo.** Public matters: Actions minutes are
 unlimited on public repositories, which is what makes the archiver free.
 
-**2. Turn on the archiver.** Actions → `archive` → *Run workflow*. After that it
-runs hourly and loops internally on a 5-minute cadence for ~55 minutes, because
-GitHub openly deprioritises short cron schedules — a `*/5` schedule was measured
-firing once in 27 minutes. One reliable trigger, eleven actual collections.
+**2. Turn on the archiver.** Actions → `archive` → *Run workflow*. After that
+the cron restarts it twice an hour, and each run collects **continuously for
+5.5 hours** while a loop underneath it commits every five minutes. GitHub
+openly deprioritises short cron schedules — a `*/5` schedule was measured
+firing once in 27 minutes — so the job is built to survive the scheduler
+forgetting rather than to hand over neatly.
+
+The collector runs as one long-lived process on purpose: since it has to come
+back to the lobby every few seconds, a process that exited between passes
+would be blind for the whole commit and push. Every file is written to a temp
+name and renamed, so `git add` never catches a half-written shard.
+
+`web/data/index.json` reports each run's `coverage` — produced versus missed,
+computed from the server's own sequence numbers — and names any room it could
+not keep up with.
 
 `ROOMS` in `.github/workflows/archive.yml` sets *priority* rooms, not the whole
 list; the roster supplies the rest.

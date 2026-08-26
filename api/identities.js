@@ -23,10 +23,20 @@
  * `zero_response_share`). Breadth goes where the conversation is, without
  * reading a single message body to decide.
  *
- * The budget is spent deliberately: DEPTH on the busy rooms, BREADTH across
- * the rest. The lobby has been measured at ~52 messages/second, so ten pages
- * of it is under a minute of traffic — depth beyond that belongs to the
- * archive, not to a live scan.
+ * WHY THERE IS NO LONGER ANY "DEPTH"
+ *
+ * This used to read ten pages of each priority room and describe itself as a
+ * 2,000-message window. MEASURED 2026-08-26: it never was. Technocore's
+ * `since` does not page backwards — asked for `since=518000` with ~950
+ * messages of backlog, the server returned seq 518753..518952, the newest 200,
+ * exactly as it does for `since=0`. So page 2 started from a cursor that was
+ * already the head, came back with a handful, and stopped. Nine of every ten
+ * reads bought nothing and the window was 200 messages: 25 seconds of
+ * technocore, 8 seconds of the lobby.
+ *
+ * A live scan therefore cannot be deep, and pretending otherwise cost reads
+ * that are better spent on BREADTH. Depth is the archiver's job now, and it
+ * does it by returning to each room before 200 more messages land there.
  *
  * Runs on Vercel's free tier. No database, no environment variables.
  */
@@ -40,11 +50,11 @@ const BASE = "https://technocore.chat";
 // nowhere else, so a DID created there is invisible without it.
 const CORE = ["lobby", "technocore", "nano", "meta", "ca-cxxphyiwazuwwxd9agjca3l6gjjj4wmxogyyjczkpump"];
 
-const CORE_PAGES = 10;   // ~2,000 recent messages each
-const OTHER_PAGES = 1;   // ~200 recent messages each
-const OTHER_ROOMS = 28;  // breadth across the rest of the network
+// One read per room, because one read per room is all there is. The whole
+// budget therefore goes on how MANY rooms get looked at.
+const OTHER_ROOMS = 44;  // breadth across the rest of the network
 const ROSTER_LIMIT = 300;
-const READ_CEILING = 90; // hard cap on upstream reads per cache miss
+const READ_CEILING = 60; // hard cap on upstream reads per cache miss
 
 // Room names come from the network and the roster response labels its own
 // contents untrusted. This name is interpolated into a URL path, so anything
@@ -88,28 +98,16 @@ async function pickRooms() {
     .map((r) => r.room);
 
   return {
-    plan: [
-      ...CORE.map((room) => ({ room, pages: CORE_PAGES })),
-      ...others.map((room) => ({ room, pages: OTHER_PAGES })),
-    ],
+    plan: [...CORE, ...others],
     listed: rows.length,
     networkTotal: Number(data?.total) || null,
   };
 }
 
-async function readRoom(room, pages) {
-  const messages = [];
-  let cursor = 0;
-  for (let page = 0; page < pages; page++) {
-    const data = await getJson(`${BASE}/r/${room}?format=json&since=${cursor}&limit=200`);
-    if (!data) break;
-    const batch = Array.isArray(data.messages) ? data.messages : [];
-    if (!batch.length) break;
-    messages.push(...batch);
-    cursor = data.last_seq ?? cursor;
-    if (batch.length < 200) break;
-  }
-  return messages;
+/** The newest page of a room. There is no second page to ask for. */
+async function readRoom(room) {
+  const data = await getJson(`${BASE}/r/${room}?format=json&since=0&limit=200`);
+  return Array.isArray(data?.messages) ? data.messages : [];
 }
 
 export default async function handler() {
@@ -118,9 +116,9 @@ export default async function handler() {
   const byDid = new Map();
   const scanned = [];
 
-  for (const { room, pages } of plan) {
+  for (const room of plan) {
     if (reads >= READ_CEILING) break;
-    const messages = await readRoom(room, pages);
+    const messages = await readRoom(room);
     if (!messages.length) continue;
     scanned.push(room);
     for (const m of messages) {
@@ -159,7 +157,7 @@ export default async function handler() {
   const body = {
     updated: new Date().toISOString(),
     count: Object.keys(identities).length,
-    window: `${CORE_PAGES * 200} recent messages in each priority room, ${OTHER_PAGES * 200} in the rest`,
+    window: "the newest 200 messages in each room — about 8 seconds of the lobby and 25 of technocore. Anything older is in the archive, not here.",
     rooms_scanned: scanned.length,
     rooms_listed: listed,
     network_rooms: networkTotal,
@@ -172,9 +170,12 @@ export default async function handler() {
     headers: {
       "Content-Type": "application/json",
       "Access-Control-Allow-Origin": "*",
-      // The CDN serves this for 60s and refreshes in the background for 10 min,
-      // so upstream reads stay flat no matter how much traffic arrives.
-      "Cache-Control": "public, s-maxage=60, stale-while-revalidate=600",
+      // Was 60s fresh with a TEN MINUTE stale window, which meant a visitor
+      // who had just posted could be handed an index built before they did —
+      // and then be told their identity was not on the record. The window a
+      // scan covers is 200 messages; serving it for longer than that window
+      // lasts is serving an answer that was already wrong when it was cached.
+      "Cache-Control": "public, s-maxage=20, stale-while-revalidate=40",
     },
   });
 }

@@ -22,6 +22,12 @@ name: archive
 # remembers to. Coverage now survives the scheduler forgetting for two hours,
 # because it usually will.
 #
+# Since v4 the collector is ONE long-lived process rather than one per pass.
+# Technocore's reads cannot page backwards, so the archiver has to return to a
+# busy room before 200 more messages land there — every four seconds in the
+# lobby. A process that exited between passes would be blind for the whole
+# commit-and-push, which is hundreds of messages that exist nowhere else.
+#
 # Actions minutes are unlimited on public repositories, so a job that runs
 # almost continuously costs nothing.
 
@@ -58,44 +64,48 @@ jobs:
         with:
           node-version: "22"
 
-      - name: Collect for the hour
+      - name: Collect continuously, commit on a timer
         env:
-          # These are the PRIORITY rooms, not the whole list. Since v3 the
-          # archiver reads GET /rooms and follows every active room on the
-          # network (~450 listed of 8,518); this env var only decides which
-          # ones get served first and get a bigger page allowance when the
-          # read budget is tight.
+          # PRIORITY rooms, not the whole list. The archiver reads GET /rooms
+          # and follows every active room on the network; these are the ones
+          # that start at the fastest cadence instead of learning their way up
+          # to it, and that are followed even when the roster window drops them.
           ROOMS: lobby,technocore,nano,meta,ca-cxxphyiwazuwwxd9agjca3l6gjjj4wmxogyyjczkpump
+          # 5.5 hours — longer than the worst observed cron gap, inside
+          # GitHub's 6-hour job ceiling.
+          RUN_SECONDS: "19800"
+          FLUSH_SECONDS: "45"
         run: |
           git config user.name  "overheard-archiver"
           git config user.email "archiver@users.noreply.github.com"
 
-          # The lobby has been measured at ~52 messages/second, and a 10 MiB
-          # room empties in about 17 minutes. Five-minute passes keep roughly
-          # 3x margin against losing history.
-          # 66 passes x 5 minutes = 5.5 hours of continuous collection.
-          PASSES=66
-          GAP=300
+          # ── WHY THE COLLECTOR RUNS IN THE BACKGROUND ──────────────────────
+          # It used to be one process per five-minute pass: collect, exit,
+          # commit, sleep, repeat. That left the network unwatched for the
+          # whole commit-and-push — and since v4 the archiver has to come back
+          # to the lobby every ~4 seconds or lose messages outright, a 15
+          # second commit is 375 messages gone. So the collector now runs for
+          # the whole window and this loop commits underneath it. Every file
+          # is written to a temp name and renamed, so `git add` never catches
+          # a half-written shard.
+          node scripts/archive.mjs &
+          ARCH=$!
+          echo "collector started (pid $ARCH)"
 
-          for pass in $(seq 1 $PASSES); do
-            echo "::group::pass $pass of $PASSES"
-            PASS_START=$(date +%s)
-            node scripts/archive.mjs || echo "collection failed this pass; continuing"
+          pass=0
+          while true; do
+            sleep 300
+            pass=$((pass + 1))
 
             git add web/data
             if git diff --staged --quiet; then
-              echo "no new messages"
+              echo "pass $pass: no new messages"
             else
               STAMP="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
-              # Collecting is free; PUBLISHING costs a Vercel deploy and the
-              # free plan allows 100 a day. Every 6th pass is twice an hour —
-              # about 48 deploys a day, unchanged by the longer run, and the
-              # site is never more than ~30 minutes behind.
-              #
-              # The pages that matter most no longer wait for a deploy anyway:
-              # /api/profile and /api/recent read the archive straight from the
-              # repository, so a card and the archive strip are current within
-              # a commit of the collection itself.
+              # Collecting is free; PUBLISHING costs a Vercel deploy. Every
+              # 12th commit is roughly twice an hour — and the pages that
+              # matter do not wait for a deploy anyway, because /api/profile
+              # and /api/recent read the archive straight from the repository.
               if [ $(( (pass - 1) % 12 )) -eq 0 ]; then
                 MSG="archive: publish $STAMP"
               else
@@ -103,10 +113,11 @@ jobs:
               fi
               git commit -m "$MSG"
 
-              # Your own pushes race with this loop. Retry, and on a conflict in
-              # the generated data keep THIS pass's version — it read the rooms
-              # later, so it is strictly newer. A lost push is never fatal: the
-              # cursor lives in the repo, so the next pass re-reads the same range.
+              # Your own pushes race with this loop. Retry, and on a conflict
+              # in the generated data keep THIS run's version — it read the
+              # rooms later, so it is strictly newer. A lost push is never
+              # fatal: the cursor lives in the repo AND in the running
+              # process's memory, so nothing is re-read or skipped.
               for attempt in 1 2 3; do
                 git push && break
                 echo "push rejected, rebasing (attempt $attempt)"
@@ -119,22 +130,25 @@ jobs:
                 sleep 5
               done
             fi
-            echo "::endgroup::"
 
-            # Sleep the REMAINDER of the five minutes, not a flat five minutes.
-            # Since the archiver started reading the whole room roster a pass
-            # can itself take up to four minutes, and a flat sleep would push
-            # the cadence to nine minutes and overrun the hour.
-            if [ "$pass" -lt "$PASSES" ]; then
-              ELAPSED=$(( $(date +%s) - PASS_START ))
-              REMAIN=$(( GAP - ELAPSED ))
-              if [ "$REMAIN" -gt 0 ]; then
-                echo "pass took ${ELAPSED}s; sleeping ${REMAIN}s to hold the 5-minute cadence"
-                sleep $REMAIN
-              else
-                echo "pass took ${ELAPSED}s — already past the cadence, starting the next one now"
-              fi
+            # Coverage is the number worth watching, so it goes in the log
+            # every pass rather than only at the end.
+            node -e '
+              const fs=require("fs");
+              try{
+                const r=JSON.parse(fs.readFileSync("web/data/index.json","utf8")).last_run;
+                if(r) console.log(`  coverage ${(r.coverage*100).toFixed(2)}% — produced ${r.produced}, missed ${r.missed}, ${r.reads} reads`);
+              }catch{}' || true
+
+            if ! kill -0 $ARCH 2>/dev/null; then
+              # Either the window finished or the collector died. Both end the
+              # job; the cron restarts the chain, and a dead collector that
+              # kept the loop alive would be a job that looks healthy and
+              # archives nothing.
+              echo "collector is no longer running — ending this window after $pass pass(es)"
+              break
             fi
           done
 
-          echo "collection window complete: $PASSES passes"
+          wait $ARCH || echo "collector exited non-zero"
+          echo "collection window complete"

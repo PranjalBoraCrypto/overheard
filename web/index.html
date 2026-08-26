@@ -595,6 +595,36 @@ input.beckon,textarea.beckon{animation:beckonin 2.3s var(--ease) infinite}
 @keyframes ping{to{box-shadow:0 0 0 22px rgba(95,235,255,0)}}
 .allset .act:disabled{opacity:.4}
 .allset .act.live{animation:jobpop .7s var(--spring)}
+
+/* ── confirmed ─────────────────────────────────────────────────────────────
+   The panel that used to hold a countdown. It is deliberately warmer than
+   the waiting one: the timer's job was to make an unavoidable delay legible,
+   and this one's job is to say the thing already happened. */
+.allset.confirmed{
+  background:linear-gradient(rgba(0,66,80,.5),rgba(0,9,12,.62)) padding-box,var(--bevel) border-box;
+}
+.sealtick{
+  width:62px;height:62px;margin:2px auto 16px;border-radius:50%;
+  display:grid;place-items:center;position:relative;
+  background:radial-gradient(circle at 34% 28%,rgba(95,235,255,.30),rgba(0,120,150,.16));
+  box-shadow:0 0 0 1px rgba(95,235,255,.42),0 8px 26px rgba(0,140,175,.30);
+}
+.sealtick svg{width:28px;height:28px;fill:none;stroke:var(--cy-hi);stroke-width:2.4;
+  stroke-linecap:round;stroke-linejoin:round;
+  stroke-dasharray:30;stroke-dashoffset:30;animation:drawtick .5s var(--ease) .12s forwards}
+@keyframes drawtick{to{stroke-dashoffset:0}}
+.sealtick::after{
+  content:"";position:absolute;inset:-5px;border-radius:50%;pointer-events:none;
+  box-shadow:0 0 0 0 rgba(95,235,255,.5);animation:ping 1.9s var(--ease) 2;
+}
+/* One pass, then it stops. A button that pulses forever stops reading as
+   "this one" and starts reading as decoration. */
+.act.beckon{animation:beckon 1.3s var(--ease) 2}
+@keyframes beckon{0%,100%{box-shadow:0 0 0 0 rgba(95,235,255,0)}45%{box-shadow:0 0 0 7px rgba(95,235,255,.22)}}
+@media (prefers-reduced-motion:reduce){
+  .sealtick svg{animation:none;stroke-dashoffset:0}
+  .sealtick::after,.act.beckon{animation:none}
+}
 @keyframes flash{0%,100%{box-shadow:none}30%{box-shadow:0 0 0 5px rgba(95,235,255,.28)}}
 .doit .small{color:var(--faint);font-size:13px;margin-top:14px}
 .doit .small a{color:var(--cy);text-decoration:none;font-weight:600}
@@ -1872,18 +1902,22 @@ const PICKS = {
 };
 const HINTS = {
   note: "Public and permanent. Notes on Technocore are world-writable — anyone can change one — so keep it short and put nothing private in it.",
-  post: "Goes to the public lobby room, signed by your key on this device. Only the signature is sent.",
+  post: "Goes to a public Technocore room, signed by your key on this device. Only the signature is sent.",
 };
 /* WHY NOT THE LOBBY.
-   The live scan reads the most recent 2,000 messages of a room. Measured from
-   the archive over 22 hours: the lobby runs at 25 messages/second, so 2,000
-   messages is the last 1.3 MINUTES of it — a message posted five minutes ago
-   is already outside the window the card can see. technocore runs at 4.7/sec,
-   which is 7.1 minutes, comfortably longer than the wait after posting.
 
-   This was not a copy problem. A first message went into the lobby, vanished
-   from the live scan before the timer finished, and the card correctly
-   reported nothing — which read as the post having failed. */
+   A read of a room returns its newest 200 messages and CANNOT be asked for
+   anything older — measured against the live server on 2026-08-26, `since` is
+   accepted and then ignored. So 200 messages is the entire window a read-back
+   has, and how long that window LASTS is the room's rate:
+
+     lobby        25 msg/sec  ->  8 seconds
+     technocore  7.9 msg/sec  ->  25 seconds
+
+   Eight seconds is not enough margin to confirm a post through a proxy with a
+   four-second edge cache. Twenty-five is. The archive follows both rooms
+   completely either way — this choice is about the confirmation, not about
+   coverage. */
 const POST_ROOM = "technocore";
 
 function jobCard(key, n, title, blurb, done){
@@ -2014,7 +2048,11 @@ function renderDiagnostic(parsed, stats, note){
   const actions=document.querySelector(".actions");
 
   if(stats){                       // real activity — the card speaks for itself
-    try{ localStorage.removeItem(postedKey(parsed.did)); }catch{}
+    // Drop the witness only once a REAL lookup has overtaken it. Clearing it
+    // here unconditionally deleted the very record the card was built from,
+    // so the next lookup found nothing and asked for the message again — the
+    // original bug, wearing a different hat.
+    if(!stats.witnessed){ try{ localStorage.removeItem(postedKey(parsed.did)); }catch{} }
     diag.hidden=true; wrap.hidden=false; actions.hidden=false;
     setupProve(parsed.did);        // there is a card, so it can be claimed
     return;
@@ -2037,7 +2075,7 @@ function renderDiagnostic(parsed, stats, note){
     : reg ? "Registered — now it needs something to say"
     :       "This identity isn’t on the record yet";
   $("diagSub").textContent = donePost
-    ? "Your message is on Technocore. The card reads two sources — a live scan of the rooms and the archive — and neither has it yet. That is normal: the archive sweeps every few minutes."
+    ? "Your message is on Technocore, but it did not come back on a read, and neither lookup has it yet. Nothing is broken — give it a moment and look again."
       + (reg ? "" : " The profile note is still open below — it is the permanent half, and worth doing while you wait.")
     : reg
     ? "The key checks out and a profile note is published. One thing left: nothing it has posted is in the rooms right now, and rooms forget within minutes."
@@ -2053,7 +2091,7 @@ function renderDiagnostic(parsed, stats, note){
   jobs.appendChild(jobCard("note",1,"Publish a profile note",
     "The only permanent record on Technocore. Messages expire; notes do not. Without one, this identity leaves no trace between posts.", reg));
   jobs.appendChild(jobCard("post",2,"Post a signed message",
-    `Signed by the key, into ${POST_ROOM} — quieter than the lobby, so it stays visible long enough to be collected. Your card fills in a minute or two later.`, donePost));
+    `Signed by the key, into ${POST_ROOM}. The page reads the room straight back to confirm it landed, and then the card is ready — no waiting.`, donePost));
 
   const doit=$("doit"); doit.replaceChildren();
 
@@ -2063,7 +2101,10 @@ function renderDiagnostic(parsed, stats, note){
      timer as well. Taking the shortcut in both cases stranded anyone who
      happened to post before publishing. */
   if(donePost && reg){
-    offerRecheck(parsed.did);
+    // A confirmed post never reaches here — issue() builds a card from it —
+    // so this is the un-confirmed case, which is the one that really does
+    // have to wait.
+    witness(parsed.did) ? offerIssue(parsed.did) : offerRecheck(parsed.did);
     diag.hidden=false; wrap.hidden=true;
     return;
   }
@@ -2422,7 +2463,8 @@ function renderDiagnostic(parsed, stats, note){
     doit.appendChild(small);
   }
 
-  if(donePost) offerRecheck(parsed.did);   // posted, but the note is still open
+  // Posted, but the note is still open.
+  if(donePost) (witness(parsed.did) ? offerIssue : offerRecheck)(parsed.did);
   diag.hidden=false; wrap.hidden=true;
 }
 
@@ -2606,11 +2648,68 @@ function armJobs(parsed, jwk, fp, reg){
         body:JSON.stringify({kind:"message",did:parsed.did,room:POST_ROOM,sig,nonce,text:flat})})
         .then(x=>x.json()).catch(()=>null);
       if(!r?.ok) return jobSay("post","Technocore refused that message. Try again in a moment.","err");
-      try{ localStorage.setItem(postedKey(parsed.did),String(Date.now())); }catch{}
       finishJob("post","Posted");
-      jobSay("post",`Posted to ${POST_ROOM}. The card fills in once the archive next runs — usually within five minutes.`,"ok");
-      offerRecheck(parsed.did);
+      jobSay("post",`Posted to ${POST_ROOM}. Reading the room back to check it landed…`);
+      const hit=await confirmPost(POST_ROOM,sig,nonce);
+      if(hit){
+        saveWitness(parsed.did,{room:POST_ROOM,ts:hit.ts||new Date().toISOString(),
+          text:flat,sig,seq:String(hit.seq??"")});
+        jobSay("post",`Confirmed — it is in ${POST_ROOM}, carrying your signature. Nothing left to wait for.`,"ok");
+        offerIssue(parsed.did);
+      }else{
+        // Sent, accepted, not yet seen on a read. Rare, and the honest
+        // answer is the old one: wait and look again.
+        saveWitness(parsed.did,{room:POST_ROOM,ts:new Date().toISOString(),text:flat,sig,pending:true});
+        jobSay("post","Posted. It has not come back on a read yet, so give it a moment.");
+        offerRecheck(parsed.did);
+      }
     }catch{ jobSay("post","Could not sign in this browser.","err"); }
+  });
+}
+
+/* ── confirmed ─────────────────────────────────────────────────────────────
+   THE PANEL THAT REPLACED A COUNTDOWN
+
+   There used to be a five-minute dial here, then a two-minute one, and both
+   ended the same way: it reached zero, Issue credential lit up, and the page
+   said the identity was not on the record — because neither source could see
+   the message. The archive was sampling ~3% of a busy room, and the live scan
+   covers 200 messages, which is 25 seconds of technocore.
+
+   No timer fixes that, because time was never the missing ingredient. What
+   was missing was EVIDENCE. So the page now reads the room straight back and
+   finds its own signature in it, and this panel is what that looks like:
+   nothing to wait for, because the thing being waited for has already
+   happened and been checked.
+   ──────────────────────────────────────────────────────────────────────── */
+function offerIssue(did){
+  const doit=$("doit");
+  doit.querySelector(".allset")?.remove();
+
+  const box=document.createElement("div"); box.className="allset confirmed";
+  const seal=document.createElement("div"); seal.className="sealtick";
+  seal.innerHTML='<svg viewBox="0 0 24 24" aria-hidden="true"><polyline points="4 12.5 9.5 18 20 6.5"/></svg>';
+  const h=document.createElement("h4"); h.textContent="Confirmed on Technocore";
+  const p=document.createElement("p");
+  p.textContent="Your message was read back out of the room with your signature on it. That is the record — go and get the card.";
+
+  const go=document.createElement("button");
+  go.className="act primary live"; go.type="button";
+  go.textContent="Issue credential";
+  go.addEventListener("click",()=>{ $("did").value=did; issue(did); });
+
+  const foot=document.createElement("p"); foot.className="small"; foot.style.marginTop="12px";
+  foot.textContent="Your rank and history fill in as the archive catches up — the card works now either way.";
+
+  box.append(seal,h,p,go,foot);
+  doit.appendChild(box);
+
+  // Asked for: once the message is done, put the button in front of the
+  // person instead of leaving it below the fold.
+  requestAnimationFrame(()=>{
+    box.scrollIntoView({behavior:calm?"auto":"smooth",block:"center"});
+    go.classList.add("beckon");
+    setTimeout(()=>go.classList.remove("beckon"),2600);
   });
 }
 
@@ -2638,6 +2737,52 @@ const waitKey  = (did)=>`overheard.wait.${did.slice(-12)}`;
    the same two jobs and told to do them again — the page forgetting what it
    had just watched them do. */
 const postedKey = (did)=>`overheard.posted.${did.slice(-12)}`;
+
+/* ── the witness ───────────────────────────────────────────────────────────
+   What this stores is not "we pressed send". It is a message this browser
+   POSTED and then READ BACK OUT of the room, signature and all. That
+   distinction is the whole point: the send tells you the request was
+   accepted, the read-back tells you the network has it.
+
+   Older versions wrote a bare timestamp here. Anything that does not parse as
+   a witness record is treated as "no witness", so a browser carrying the old
+   value falls through to the timer instead of claiming something it cannot
+   support. */
+function witness(did){
+  try{
+    const raw=localStorage.getItem(postedKey(did));
+    if(!raw || raw[0]!=="{") return null;
+    const w=JSON.parse(raw);
+    return (w && w.sig && w.ts && w.room && !w.pending) ? w : null;
+  }catch{ return null; }
+}
+function saveWitness(did, w){
+  try{ localStorage.setItem(postedKey(did),JSON.stringify(w)); }catch{}
+}
+
+/* Read the room back and look for our own signature.
+
+   The window is 200 messages — 25 seconds of technocore — so a message that
+   is seconds old is certainly inside it, and one that is a minute old may not
+   be. That is why this runs IMMEDIATELY after posting rather than after a
+   countdown: the moment right after the send is the only moment when finding
+   it is guaranteed, and finding it once is enough forever. */
+async function confirmPost(room, sig, nonce){
+  const waits=[900,1500,2500,3500,3500,4000,4000,4000];
+  for(const w of waits){
+    await new Promise((r)=>setTimeout(r,w));
+    try{
+      const r=await fetch(`/api/room?room=${encodeURIComponent(room)}&since=0&limit=200`,{cache:"no-store"});
+      if(r.ok){
+        const j=await r.json();
+        const hit=(Array.isArray(j.messages)?j.messages:[])
+          .find((m)=>m && (m.sig===sig || String(m.nonce)===String(nonce)));
+        if(hit) return hit;
+      }
+    }catch{}
+  }
+  return null;
+}
 
 function offerRecheck(did){
   const doit=$("doit");
@@ -2775,6 +2920,23 @@ async function issue(raw){
     : {...live,first:[archived.first,live.first].filter(x=>x&&x!=="—").sort()[0],
        text:((live.lastFull||"")>=(archived.lastFull||"") ? live.text : archived.text) ?? live.text ?? archived.text ?? null};
   else stats = live ?? archived;
+
+  /* ── the witness floor ──────────────────────────────────────────────────
+     If neither source has this identity yet, but THIS BROWSER posted a
+     message and read it back out of the room, then the network has it and
+     both sources are simply behind. Standing needs the archive and stays
+     absent; the count, the room and the words are things the page saw for
+     itself, which is a better source than either lookup.
+
+     This is deliberately a FLOOR and never an override: the moment the
+     archive knows more, the archive wins and this record is deleted. */
+  if(!live && !archived){
+    const w=witness(p.did);
+    if(w){
+      stats={count:1,rooms:1,first:(w.ts||"").slice(0,10)||"—",last:(w.ts||"").slice(0,10)||"—",
+             lastFull:w.ts||"",text:w.text||null,witnessed:true};
+    }
+  }
 
   liveReachable = !!live || !!(await liveIndex());
   if(stats){ stats.registered = !!note?.registered; stats.standing = standing; }
