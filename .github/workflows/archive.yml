@@ -13,9 +13,12 @@ on:
     # Anything slower than that loses history permanently, which is why this
     # runs as often as GitHub allows rather than on a comfortable cadence.
     - cron: "*/5 * * * *"
-    # One run a day is allowed to trigger a deploy, publishing everything the
-    # skipped runs accumulated. See the commit step for why the rest don't.
-    - cron: "0 3 * * *"
+    # Collection is cheap; PUBLISHING costs a Vercel deploy, and the free plan
+    # allows 100/day. Publishing twice an hour is 48 — safe, and it means the
+    # archive the site can actually read is never more than 30 minutes stale.
+    # A daily publish (the earlier design) left the site a day behind, which
+    # made recently-seen identities look like they had never posted at all.
+    - cron: "0,30 * * * *"
   workflow_dispatch: {} # lets you trigger a run by hand from the Actions tab
 
 concurrency:
@@ -60,10 +63,13 @@ jobs:
           # daily 03:00 run omits it, publishing everything accumulated since.
           # Your own pushes publish it too, so the site is never far behind.
           STAMP="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
-          if [ "$WHICH_CRON" = "*/5 * * * *" ]; then
-            MSG="archive: $STAMP [skip ci]"
-          else
+          # "[skip ci]" tells Vercel not to build this commit. Only the
+          # half-hourly run omits it, so data reaches the site regularly
+          # without burning the deploy budget.
+          if [ "$WHICH_CRON" = "0,30 * * * *" ] || [ -z "$WHICH_CRON" ]; then
             MSG="archive: publish $STAMP"
+          else
+            MSG="archive: $STAMP [skip ci]"
           fi
           git commit -m "$MSG"
 
