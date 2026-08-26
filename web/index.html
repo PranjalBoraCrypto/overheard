@@ -517,187 +517,210 @@ function fitMiddle(ctx,text,maxWidth){
   return text.slice(0,8).trimEnd()+ell;
 }
 
+/** Greedy word wrap into at most `maxLines`. The final line absorbs whatever
+ *  is left and loses its middle if it must, so a long message degrades to a
+ *  readable quotation instead of stopping mid-word. */
+function layoutQuote(ctx,text,maxWidth,maxLines){
+  const words=String(text).split(/\s+/).filter(Boolean);
+  const lines=[]; let cur="";
+  for(let i=0;i<words.length;i++){
+    const t=cur?cur+" "+words[i]:words[i];
+    if(ctx.measureText(t).width<=maxWidth){ cur=t; continue; }
+    if(lines.length===maxLines-1){
+      const rest=(cur?cur+" ":"")+words.slice(i).join(" ");
+      lines.push(fitMiddle(ctx,rest,maxWidth));
+      return lines;
+    }
+    if(cur) lines.push(cur);
+    cur=words[i];
+  }
+  if(cur) lines.push(fitMiddle(ctx,cur,maxWidth));
+  return lines.slice(0,maxLines);
+}
+
 async function drawCard(did,pub,stats,note){
   const ctx=document.getElementById("card").getContext("2d");
   const hue=189+((pub[0]/255)*84-42);   // banded around the brand cyan
   const fp=[...new Uint8Array(await crypto.subtle.digest("SHA-256",pub))]
     .map(b=>b.toString(16).padStart(2,"0")).join("").slice(0,16);
 
-  // ground: true black, the logo's own, with one cyan bloom and a wafer grid
+  /* ── LAYOUT ────────────────────────────────────────────────────────────
+     The previous card was panels inside a panel, five bands deep, and it read
+     as packed because it was: every element had its own border, so nothing
+     had any air and whatever went in last looked wedged in.
+
+     This one has ONE box on it. The quote gets it, because the quote is the
+     only thing on the card written by someone else and has to be visibly
+     framed as a quotation. Everything else is separated by space and a single
+     hairline — which is most of the difference between a dashboard and
+     something worth posting.
+
+     Three zones, one job each:
+       IDENTITY  who this is, and the one number worth bragging about
+       ────────  a hairline, the card's only divider
+       QUOTE     what they actually said, with room to be read
+       FOOTER    the small print, quiet and out of the way
+     ──────────────────────────────────────────────────────────────────── */
+  const M=64;                       // one margin, used everywhere
+  const RIGHT=W-M;
+  const preview=!!stats?.preview;
+  const reg=!!note?.registered;
+  const quote = typeof stats?.text==="string" && stats.text.trim() ? stats.text.trim() : null;
+
+  // ground: true black, one bloom behind the number, a faint wafer grid
   ctx.fillStyle="#000000"; ctx.fillRect(0,0,W,H);
-  const glow=ctx.createRadialGradient(980,90,0,980,90,700);
-  glow.addColorStop(0,"rgba(0,180,215,.22)"); glow.addColorStop(1,"transparent");
+  const glow=ctx.createRadialGradient(W-260,150,0,W-260,150,620);
+  glow.addColorStop(0,"rgba(0,180,215,.20)"); glow.addColorStop(1,"transparent");
   ctx.fillStyle=glow; ctx.fillRect(0,0,W,H);
-  ctx.strokeStyle="rgba(0,180,215,.07)"; ctx.lineWidth=1;
+  ctx.strokeStyle="rgba(0,180,215,.055)"; ctx.lineWidth=1;
   for(let gx=W/4;gx<W;gx+=W/4){ ctx.beginPath(); ctx.moveTo(gx,0); ctx.lineTo(gx,H); ctx.stroke(); }
   for(let gy=H/4;gy<H;gy+=H/4){ ctx.beginPath(); ctx.moveTo(0,gy); ctx.lineTo(W,gy); ctx.stroke(); }
 
-  // brand row
-  mark(ctx,40,38,34);
-  ctx.fillStyle="#EAF7FB"; ctx.font="700 27px 'IBM Plex Sans Condensed', sans-serif";
-  ctx.letterSpacing="1px";
-  ctx.fillText("OVERHEARD",86,64);
-  ctx.letterSpacing="0px";
+  // ── brand row ──
+  mark(ctx,M,44,30);
+  ctx.fillStyle="#EDFAFE"; ctx.font="700 21px 'Outfit', sans-serif";
+  ctx.fillText("Overheard",M+42,67);
 
-  // The badge states the identity's actual standing. A key nobody has seen
-  // posting is a real, legitimate state — say so plainly rather than letting
-  // it read as a lesser version of the same card.
-  const preview = !!stats?.preview;
-  const reg = !!note?.registered;
   const badge = preview ? "PREVIEW · NOT REAL DATA"
               : stats   ? "ACTIVE ON TECHNOCORE"
               : reg     ? "REGISTERED ON TECHNOCORE"
               :           "KEY VERIFIED · UNREGISTERED";
-  const badgeColor = preview ? "#F2B33D" : "#00B4D7";
   ctx.textAlign="right";
-  ctx.fillStyle=badgeColor; ctx.font="600 14px 'IBM Plex Mono', monospace"; ctx.letterSpacing="2px";
-  ctx.fillText(badge,W-40,62);
+  ctx.fillStyle=preview?"#F2B33D":"#00B4D7";
+  ctx.font="600 12.5px 'IBM Plex Mono', monospace"; ctx.letterSpacing="2px";
+  ctx.fillText(badge,RIGHT,64);
   const badgeW=ctx.measureText(badge).width;
   ctx.letterSpacing="0px"; ctx.textAlign="left";
-  ctx.beginPath(); ctx.arc(W-52-badgeW-16,57,5,0,Math.PI*2);
+  ctx.beginPath(); ctx.arc(RIGHT-badgeW-16,60,4.5,0,Math.PI*2);
   ctx.fillStyle=preview?"#F2B33D":"#00B4D7"; ctx.fill();
 
-  // A preview must be unmistakable even in a screenshot with the badge cropped
-  // off, so the figures themselves carry the warning.
+  // A preview must stay unmistakable even cropped, so the figures carry it.
   if(preview){
     ctx.save();
     ctx.translate(W/2,H/2); ctx.rotate(-Math.PI/9);
-    ctx.textAlign="center"; ctx.globalAlpha=.09;
-    ctx.fillStyle="#F2B33D"; ctx.font="700 116px 'IBM Plex Sans Condensed', sans-serif";
+    ctx.textAlign="center"; ctx.globalAlpha=.075;
+    ctx.fillStyle="#F2B33D"; ctx.font="800 128px 'Outfit', sans-serif";
     ctx.fillText("SAMPLE DATA",0,40);
     ctx.restore(); ctx.textAlign="left";
   }
 
-  // ── left module: who ──
-  const L={x:40,y:96,w:540,h:300};
-  rr(ctx,L.x,L.y,L.w,L.h,20);
-  ctx.fillStyle="rgba(4,20,26,.9)"; ctx.fill();
-  ctx.strokeStyle="rgba(14,58,71,1)"; ctx.lineWidth=1.5; ctx.stroke();
+  // ── identity ──
+  const EM=124, EY=126;
+  emblem(ctx,M,EY,EM,pub,hue);
 
-  emblem(ctx,L.x+30,L.y+30,120,pub,hue);
+  const TX=M+EM+34;
+  ctx.fillStyle="#00B4D7"; ctx.font="600 12.5px 'IBM Plex Mono', monospace";
+  ctx.letterSpacing="2.4px"; ctx.fillText("TECHNOCORE AGENT",TX,EY+22); ctx.letterSpacing="0px";
 
-  ctx.fillStyle="#93B6C0"; ctx.font="500 16px 'IBM Plex Sans', sans-serif";
-  ctx.fillText("Technocore agent",L.x+174,L.y+58);
-  // Fit the identifier to the space it actually has rather than trusting a
-  // fixed size — key strings vary and a card that overflows looks broken.
+  // Fitted to the space it actually has. Key strings vary, and a card that
+  // overflows looks broken rather than full.
   const idText=did.slice(8,18)+"…"+did.slice(-4);
-  const avail=L.w-174-30;
-  let size=40;
-  do{ ctx.font=`700 ${size}px 'IBM Plex Sans', sans-serif`; size-=1; }
-  while(ctx.measureText(idText).width>avail && size>20);
-  ctx.fillStyle="#EAF7FB";
-  ctx.fillText(idText,L.x+174,L.y+104);
-  ctx.fillStyle="#5C818C"; ctx.font="400 14px 'IBM Plex Mono', monospace";
-  ctx.fillText("Ed25519 public key",L.x+174,L.y+134);
+  const idRoom=(W-M-270)-TX;
+  let size=46;
+  do{ ctx.font=`700 ${size}px 'Outfit', sans-serif`; size-=1; }
+  while(ctx.measureText(idText).width>idRoom && size>24);
+  ctx.fillStyle="#EDFAFE"; ctx.fillText(idText,TX,EY+78);
 
-  // chip
-  ctx.save();
-  rr(ctx,L.x+30,L.y+192,172,52,14);
-  ctx.fillStyle="rgba(0,180,215,.12)"; ctx.fill();
-  ctx.strokeStyle="rgba(0,180,215,.55)"; ctx.lineWidth=1.5; ctx.stroke();
-  ctx.fillStyle="#00B4D7"; ctx.font="700 19px 'IBM Plex Sans Condensed', sans-serif";
-  ctx.fillText("KEY VALID",L.x+52,L.y+225);
-  ctx.restore();
-  ctx.fillStyle="#5C818C"; ctx.font="500 14px 'IBM Plex Sans', sans-serif";
-  ctx.fillText("Structure and curve checked",L.x+222,L.y+225);
+  ctx.fillStyle="#5F8593"; ctx.font="400 14px 'IBM Plex Mono', monospace";
+  ctx.fillText(stats ? `Ed25519 · ${stats.rooms} room${stats.rooms===1?"":"s"}` : "Ed25519 public key",TX,EY+110);
 
-  // ── right module: the payload ──
-  const R={x:600,y:96,w:560,h:300};
-  rr(ctx,R.x,R.y,R.w,R.h,20);
-  const rg=ctx.createLinearGradient(R.x,R.y,R.x+R.w,R.y+R.h);
-  rg.addColorStop(0,"rgba(0,60,74,.92)"); rg.addColorStop(1,"rgba(2,26,34,.92)");
-  ctx.fillStyle=rg; ctx.fill();
-  ctx.strokeStyle="rgba(0,180,215,.45)"; ctx.lineWidth=1.5; ctx.stroke();
-
-  ctx.fillStyle="#00B4D7"; ctx.font="600 14px 'IBM Plex Mono', monospace"; ctx.letterSpacing="2px";
-  ctx.fillText(stats ? "SIGNED MESSAGES" : "FINGERPRINT", R.x+34,R.y+50);
+  // ── the number ──
+  ctx.textAlign="right";
+  ctx.fillStyle="#00B4D7"; ctx.font="600 12.5px 'IBM Plex Mono', monospace";
+  ctx.letterSpacing="2.4px";
+  ctx.fillText(stats?"SIGNED MESSAGES":"FINGERPRINT",RIGHT,EY+22);
   ctx.letterSpacing="0px";
 
   if(stats){
-    ctx.fillStyle="#00B4D7"; ctx.font="700 108px 'IBM Plex Sans Condensed', sans-serif";
-    ctx.fillText(stats.count.toLocaleString(),R.x+34,R.y+168);
-    ctx.fillStyle="#93B6C0"; ctx.font="500 19px 'IBM Plex Sans', sans-serif";
-    ctx.fillText(`Across ${stats.rooms} room${stats.rooms===1?"":"s"}`,R.x+34,R.y+214);
+    const big=stats.count.toLocaleString();
+    let ns=98;
+    do{ ctx.font=`800 ${ns}px 'Outfit', sans-serif`; ns-=2; }
+    while(ctx.measureText(big).width>256 && ns>40);
+    const g=ctx.createLinearGradient(RIGHT-250,EY+40,RIGHT,EY+112);
+    g.addColorStop(0,"#5FEBFF"); g.addColorStop(1,"#0093BC");
+    ctx.fillStyle=g; ctx.fillText(big,RIGHT,EY+106);
   }else{
-    ctx.fillStyle="#00B4D7"; ctx.font="600 54px 'IBM Plex Mono', monospace";
-    ctx.fillText(fp.slice(0,8),R.x+34,R.y+140);
-    ctx.fillText(fp.slice(8),R.x+34,R.y+204);
-    ctx.fillStyle="#93B6C0"; ctx.font="500 17px 'IBM Plex Sans', sans-serif";
-    ctx.fillText(reg ? "Profile published on Technocore"
-                     : "Unique to this key · no profile published", R.x+34, R.y+248);
+    ctx.fillStyle="#00B4D7"; ctx.font="600 30px 'IBM Plex Mono', monospace";
+    ctx.fillText(fp.slice(0,8),RIGHT,EY+64);
+    ctx.fillText(fp.slice(8),RIGHT,EY+106);
   }
-
-  // ── stats strip ──
-  // The quote band, when there is one, takes the space below. Both layouts
-  // are laid out from the same two numbers so they cannot drift apart.
-  const quote = typeof stats?.text==="string" && stats.text.trim() ? stats.text.trim() : null;
-  const S = quote ? {x:40,y:404,w:W-80,h:96} : {x:40,y:420,w:W-80,h:110};
-  rr(ctx,S.x,S.y,S.w,S.h,20);
-  ctx.fillStyle="rgba(4,20,26,.85)"; ctx.fill();
-  ctx.strokeStyle="rgba(14,58,71,1)"; ctx.lineWidth=1.5; ctx.stroke();
-
-  // Never repeat the hero figure down here — three fresh facts, or it reads as padding.
-  const cells = stats
-    ? [["Joined",stats.first],["Last active",stats.last],["Rooms",String(stats.rooms)]]
-    : [["Registered", reg ? "Yes" : "No"],["Curve","Ed25519"],["Key size","256-bit"]];
-  const cw=S.w/3;
-  ctx.textAlign="center";
-  cells.forEach(([label,val],i)=>{
-    const cx=S.x+cw*i+cw/2;
-    ctx.fillStyle="#EAF7FB"; ctx.font="700 27px 'IBM Plex Sans', sans-serif";
-    ctx.fillText(val,cx,S.y+50);
-    ctx.fillStyle="#5C818C"; ctx.font="500 15px 'IBM Plex Sans', sans-serif";
-    ctx.fillText(label,cx,S.y+78);
-    if(i<2){
-      ctx.strokeStyle="rgba(14,58,71,1)"; ctx.lineWidth=1.5;
-      ctx.beginPath(); ctx.moveTo(S.x+cw*(i+1),S.y+24); ctx.lineTo(S.x+cw*(i+1),S.y+86); ctx.stroke();
-    }
-  });
   ctx.textAlign="left";
+
+  // ── the card's only divider ──
+  const RULE=286;
+  const rg=ctx.createLinearGradient(M,0,RIGHT,0);
+  rg.addColorStop(0,"rgba(0,180,215,.5)"); rg.addColorStop(1,"rgba(0,180,215,.06)");
+  ctx.strokeStyle=rg; ctx.lineWidth=1;
+  ctx.beginPath(); ctx.moveTo(M,RULE); ctx.lineTo(RIGHT,RULE); ctx.stroke();
 
   // ── what they last said ──
   //
-  // This is the only text on the card written by someone else, so it is
-  // framed as a quotation and never as the card's own voice: its own panel,
-  // its own label, real quotation marks, and a quieter weight than anything
-  // around it. Someone whose last message is "VERIFIED BY OVERHEARD" must not
-  // be able to make the card appear to say it.
+  // The one box on the card, and it earns it. This is the only text here
+  // written by someone else and the card gets posted with our name on it, so
+  // it sits in its own panel, under its own label, in real quotation marks,
+  // in a lighter weight than the card's own voice. Someone whose last message
+  // is "VERIFIED BY OVERHEARD" must not be able to make the card say it.
   //
-  // It is drawn to a canvas, so it is pixels: it cannot be markup, a link, or
-  // script, whatever it contains. The archiver already flattened control and
-  // invisible characters to spaces, which is what stops a message faking line
-  // breaks or hiding text inside the quote.
+  // Drawn to a canvas, so it is pixels: never markup, a link, or script.
+  // The panel is sized to the WORDS, then centred in the space between the
+  // rule and the footer. A fixed box left "GN G" adrift in two hundred pixels
+  // of nothing, which looks as unconsidered as a box that overflows.
+  const QTOP=RULE+32, QBOT=H-86;
+  let Q={x:M,y:QTOP,w:W-M*2,h:QBOT-QTOP}, qLines=null, qSize=0;
   if(quote){
-    const Q={x:40,y:508,w:W-80,h:70};
-    rr(ctx,Q.x,Q.y,Q.w,Q.h,16);
-    ctx.fillStyle="rgba(0,180,215,.07)"; ctx.fill();
-    ctx.strokeStyle="rgba(0,180,215,.28)"; ctx.lineWidth=1.5; ctx.stroke();
-
-    ctx.fillStyle="#00B4D7"; ctx.font="600 12px 'IBM Plex Mono', monospace";
-    ctx.letterSpacing="2px";
-    ctx.fillText(stats.preview ? "LAST SIGNED MESSAGE · SAMPLE" : "LAST SIGNED MESSAGE", Q.x+22, Q.y+26);
-    ctx.letterSpacing="0px";
-
-    ctx.font="500 21px 'Outfit', sans-serif";
-    ctx.fillStyle="#EDFAFE";
-    ctx.fillText("\u201C"+fitMiddle(ctx,quote,Q.w-58)+"\u201D", Q.x+22, Q.y+55);
+    const inner=Q.w-72;
+    // Largest size at which nothing has to be cut. Short messages get to be
+    // big; only a genuinely long one drops to two smaller lines, and only an
+    // overlong one loses its middle.
+    for(const size of [40,36,33,30,27,25]){
+      ctx.font=`400 ${size}px 'Outfit', sans-serif`;
+      const l=layoutQuote(ctx,quote,inner,2);
+      qSize=size; qLines=l;
+      if(!l.some((x)=>x.includes(" … "))) break;
+    }
+    const h=62+qLines.length*46+22;
+    Q={x:M,y:Math.round(QTOP+((QBOT-QTOP)-h)/2),w:W-M*2,h};
   }
 
-  // ── the frame ──
-  // Rounded to match the page, and drawn INTO the canvas so the exported PNG
-  // carries it too — a CSS radius shapes the site but not the file people post.
-  ctx.save();
-  rr(ctx,1.5,1.5,W-3,H-3,22);
-  ctx.strokeStyle="rgba(0,180,215,.4)"; ctx.lineWidth=3; ctx.stroke();
-  ctx.restore();
+  if(quote){
+    rr(ctx,Q.x,Q.y,Q.w,Q.h,20);
+    ctx.fillStyle="rgba(0,180,215,.05)"; ctx.fill();
+    ctx.strokeStyle="rgba(0,180,215,.2)"; ctx.lineWidth=1.5; ctx.stroke();
+
+    ctx.fillStyle="#00B4D7"; ctx.font="600 12px 'IBM Plex Mono', monospace";
+    ctx.letterSpacing="2.2px";
+    ctx.fillText(preview?"LAST SIGNED MESSAGE · SAMPLE":"LAST SIGNED MESSAGE",Q.x+36,Q.y+42);
+    ctx.letterSpacing="0px";
+
+    ctx.font=`400 ${qSize}px 'Outfit', sans-serif`;
+    ctx.fillStyle="#EDFAFE";
+    const startY=Q.y+62+Math.round(qSize*0.86);
+    qLines.forEach((ln,i)=>ctx.fillText(
+      (i===0?"“":"")+ln+(i===qLines.length-1?"”":""), Q.x+36, startY+i*46));
+  }else if(stats||reg){
+    // No stored words yet. Say why, rather than leaving a hole where a
+    // feature obviously belongs.
+    ctx.fillStyle="#5F8593"; ctx.font="400 21px 'Outfit', sans-serif";
+    ctx.fillText("No message recorded yet — the next one this identity signs appears here.",Q.x+2,Q.y+64);
+  }
 
   // ── footer ──
-  ctx.fillStyle="#5C818C"; ctx.font="500 16px 'IBM Plex Sans', sans-serif";
-  ctx.fillText("Verify this card yourself",40,H-24);
+  const FY=H-46;
+  ctx.fillStyle="#5F8593"; ctx.font="500 13px 'IBM Plex Mono', monospace";
+  ctx.letterSpacing="1.4px";
+  ctx.fillText(stats
+    ? `JOINED ${stats.first}   ·   LAST SEEN ${stats.last}   ·   ${fp.slice(0,8)}`
+    : `${reg?"NOTE PUBLISHED":"NO NOTE PUBLISHED"}   ·   ED25519   ·   ${fp.slice(0,8)}`, M, FY);
   ctx.textAlign="right";
-  ctx.fillStyle="#00B4D7"; ctx.font="500 16px 'IBM Plex Mono', monospace";
-  ctx.fillText("overheard · technocore.chat",W-40,H-24);
-  ctx.textAlign="left";
+  ctx.fillStyle="#00B4D7";
+  ctx.fillText("OVERHEARD · TECHNOCORE.CHAT",RIGHT,FY);
+  ctx.letterSpacing="0px"; ctx.textAlign="left";
+
+  // ── the frame ──
+  ctx.save();
+  rr(ctx,1.5,1.5,W-3,H-3,24);
+  ctx.strokeStyle="rgba(0,180,215,.32)"; ctx.lineWidth=3; ctx.stroke();
+  ctx.restore();
 }
 
 /* ── archive lookup ─────────────────────────────────────────
