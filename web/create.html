@@ -255,15 +255,18 @@ $("doRestore").addEventListener("click", async () => {
 /* ── the checklist ───────────────────────────────────────────────────── */
 const TASKS=[
   { id:"key",   title:"Make your key",        sub:"Ed25519, created in this tab, never sent",
-    cta:"Generate", form:`
-      <p class="hint">A passphrase encrypts the key before this browser stores it. Twelve characters or more. There is no reset — nobody can recover it for you, including us.</p>
+    cta:"Generate", instant:true, form:`
+      <p class="hint">Made on this device the moment you press the button. Nothing is sent anywhere.</p>
+      <div id="keyOut" hidden>
+        <p class="hint" style="margin-top:2px">Your DID — the public half, safe to post anywhere:</p>
+        <div class="didbox" id="didOut"></div>
+      </div>` },
+
+  { id:"backup",title:"Protect and save it",  sub:"encrypted with a passphrase you choose",
+    cta:"Encrypt and download", form:`
+      <div class="warnbox"><b>This step is what keeps the key</b>Until you finish it, the key exists only in this tab and vanishes if you close it. The passphrase encrypts it — there is no reset, and nobody can recover it for you, including us.</div>
       <label for="pw">Passphrase</label><input id="pw" type="password" autocomplete="new-password" placeholder="at least 12 characters">
       <label for="pw2">Type it again</label><input id="pw2" type="password" autocomplete="new-password">` },
-
-  { id:"backup",title:"Save your backup",     sub:"an encrypted file, not a secret on screen",
-    cta:"Download", form:`
-      <p class="hint">Your public DID — safe to share anywhere:</p><div class="didbox" id="didOut"></div>
-      <div class="warnbox"><b>Download this now</b>Browser storage gets cleared — by you, by the browser, by switching device. The file is encrypted with your passphrase, so it is useless to anyone without it, and useless to you without it too.</div>` },
 
   { id:"note",  title:"Publish your DID note", sub:"who this key is — the only permanent record",
     cta:"Publish", form:`
@@ -335,6 +338,12 @@ $("tasks").addEventListener("click", async (e)=>{
   if(head && !btn && !$("t-"+head.dataset.t).classList.contains("locked")) openBody(head.dataset.t);
   if(!btn) return;
   const id=btn.dataset.act;
+  const task=TASKS.find(t=>t.id===id);
+
+  // First press on a collapsed step reveals its form. Running the action
+  // against inputs the person has not seen yet just produces an error that
+  // reads as a fault. Steps with nothing to fill in run straight away.
+  if($("b-"+id).hidden && !task.instant){ openBody(id); return; }
   openBody(id);
   btn.disabled=true;
   try{ await ACTIONS[id](); }
@@ -345,11 +354,7 @@ $("tasks").addEventListener("click", async (e)=>{
 /* ── actions ─────────────────────────────────────────────────────────── */
 const ACTIONS={
   async key(){
-    const pw=$("pw").value, pw2=$("pw2").value;
-    if(pw.length<12) return say("key","Passphrase must be at least 12 characters.","err");
-    if(pw!==pw2)     return say("key","The two passphrases don't match.","err");
     say("key","Generating on this device…");
-
     let kp;
     try{ kp=await crypto.subtle.generateKey({name:"Ed25519"},true,["sign","verify"]); }
     catch{ return say("key","This browser can't make Ed25519 keys. Try Chrome, Edge, Safari 17+ or Firefox 129+.","err"); }
@@ -361,29 +366,35 @@ const ACTIONS={
     const fingerprint=[...new Uint8Array(h)].map(b=>b.toString(16).padStart(2,"0")).join("").slice(0,16);
     ID={did,fingerprint,jwk};
 
+    $("keyOut").hidden=false;
+    $("didOut").textContent=did;
+    say("key","Created. It exists only in this tab until you protect it below.","ok");
+    complete("key");
+  },
+
+  async backup(){
+    const pw=$("pw").value, pw2=$("pw2").value;
+    if(pw.length<12) return say("backup","Passphrase must be at least 12 characters.","err");
+    if(pw!==pw2)     return say("backup","The two passphrases don't match.","err");
+    say("backup","Encrypting on this device…");
+
     // Encrypted before it touches storage, so a copied browser profile is useless.
     const salt=crypto.getRandomValues(new Uint8Array(16));
     const iv=crypto.getRandomValues(new Uint8Array(12));
     const base=await crypto.subtle.importKey("raw",enc.encode(pw),"PBKDF2",false,["deriveKey"]);
     const aes=await crypto.subtle.deriveKey({name:"PBKDF2",salt,iterations:310000,hash:"SHA-256"},
       base,{name:"AES-GCM",length:256},false,["encrypt"]);
-    const ct=await crypto.subtle.encrypt({name:"AES-GCM",iv},aes,enc.encode(JSON.stringify(jwk)));
-    window.__vault={v:1,did,fingerprint,salt:b64u(salt),iv:b64u(iv),data:b64u(ct),created:new Date().toISOString()};
+    const ct=await crypto.subtle.encrypt({name:"AES-GCM",iv},aes,enc.encode(JSON.stringify(ID.jwk)));
+    window.__vault={v:1,did:ID.did,fingerprint:ID.fingerprint,salt:b64u(salt),iv:b64u(iv),data:b64u(ct),created:new Date().toISOString()};
     try{ localStorage.setItem("overheard.identity",JSON.stringify(window.__vault)); }catch{}
-
     $("pw").value=$("pw2").value="";
-    say("key","Created. It exists only on this device.","ok");
-    complete("key");
-    openBody("backup"); $("didOut").textContent=did;
-  },
 
-  async backup(){
     const blob=new Blob([JSON.stringify(window.__vault,null,2)],{type:"application/json"});
     const a=document.createElement("a");
     a.href=URL.createObjectURL(blob);
     a.download=`overheard-identity-${ID.did.slice(-8)}.json`;
     a.click(); URL.revokeObjectURL(a.href);
-    say("backup","Saved. Keep it somewhere you won't lose it.","ok");
+    say("backup","Encrypted, saved in this browser, and downloaded. Keep that file.","ok");
     complete("backup");
   },
 
