@@ -72,7 +72,12 @@ const CORE = (process.env.ROOMS ?? "lobby,technocore,nano,meta")
 const READ_DELAY_MS = Number(process.env.READ_DELAY_MS ?? 250);
 const PASS_MAX_READS = 900;   // hard ceiling per pass
 const PASS_DEADLINE_MS = 240_000; // stop starting rooms after 4 min; workflow gap is 5
-const ROSTER_LIMIT = 500;     // /rooms default is 50; it returns ~450 at this size
+// /rooms defaults to 50. Asking for more is free, but MEASURED 2026-08-26 the
+// server returns at most 200 however large `limit` is. That is fine: the
+// listing is ordered by newest activity, so the rooms beyond the window are
+// the ones with nothing to collect, and cursors persist -- the tracked set
+// grows past 200 as rooms rotate through it.
+const ROSTER_LIMIT = 500;
 const PAGE = 200;             // max messages per read
 const CORE_MAX_PAGES = 100;   // lobby at ~52 msg/sec needs ~78 pages per 5 min
 const ROOM_MAX_PAGES = 10;    // everything else, per pass
