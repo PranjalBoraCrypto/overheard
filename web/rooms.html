@@ -244,7 +244,7 @@ const say=(t,cls="")=>{ $("m").textContent=t; $("m").className="msgline "+cls; }
 /* ── identity ─────────────────────────────────────────────────────────── */
 const stored=(()=>{ try{ return JSON.parse(localStorage.getItem("overheard.identity")||"null"); }catch{ return null; } })();
 if(stored?.did){
-  $("lockWho").textContent=`This browser holds ${stored.did.slice(0,22)}… — unlock it to post.`;
+  $("lockWho").textContent="This browser has a saved identity. Enter its passphrase to post.";
 }else{
   $("lockRow").querySelector("#pw").disabled=true;
   $("unlock").disabled=true;

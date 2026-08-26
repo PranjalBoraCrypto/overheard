@@ -213,6 +213,12 @@ footer a{color:var(--blue)}
   padding:9px 15px;border-radius:11px;transition:.25s cubic-bezier(.22,.68,.24,1);letter-spacing:0;text-transform:none}
 .tabs a:hover{color:#5FEBFF;background:rgba(0,180,215,.09)}
 .tabs a.on{color:#001016;background:linear-gradient(120deg,#5FEBFF,#00B4D7);box-shadow:0 10px 26px -14px rgba(0,180,215,1)}
+.whichbtn{
+  background:none;border:0;padding:0;margin:2px 0 4px;cursor:pointer;
+  font-family:var(--display);font-size:13px;font-weight:500;color:var(--blue);
+  text-decoration:underline;text-underline-offset:3px;
+}
+.whichbtn:hover{color:var(--mint)}
 </style>
 </head>
 <body>
@@ -301,7 +307,14 @@ footer a{color:var(--blue)}
     <p class="hint" id="unlockWho">Unlock it to post, instead of creating a new one.</p>
 
     <div id="storedBox" hidden>
-      <div class="didbox" id="storedDid"></div>
+      <!-- The DID is not shown by default. It is public, so this is not about
+           secrecy — it is that a long identifier nobody typed, sitting in a
+           filled box, reads as an input you are supposed to deal with. The
+           only question here is "what is the passphrase", so that is the only
+           thing on screen. Anyone who genuinely needs to check WHICH identity
+           this browser holds can ask for it. -->
+      <button type="button" class="whichbtn" id="which">Which identity is this?</button>
+      <div class="didbox" id="storedDid" hidden></div>
       <label for="upw">Passphrase</label>
       <input id="upw" type="password" autocomplete="current-password" placeholder="the one you set when you made it">
       <button class="go" id="doUnlock" style="margin-top:14px">Unlock</button>
@@ -544,7 +557,7 @@ const wanted=new URLSearchParams(location.search).get("did");
 
 if(stored){
   $("storedBox").hidden=false;
-  $("storedDid").textContent=stored.did;
+  $("storedDid").textContent=stored.did;   // filled, but revealed only on request
   if(wanted && wanted!==stored.did){
     // Built as text nodes, never innerHTML. `wanted` is a URL parameter, so it
     // is attacker-controlled: on a page that holds a seed and an encrypted
@@ -558,6 +571,12 @@ if(stored){
   $("unlockWho").textContent="This browser has no saved identity. Restore your backup file below, or make a new one above.";
   $("restore").open=true;
 }
+
+$("which")?.addEventListener("click",()=>{
+  const box=$("storedDid"), shown=!box.hidden;
+  box.hidden=shown;
+  $("which").textContent = shown ? "Which identity is this?" : "Hide it";
+});
 
 $("doUnlock")?.addEventListener("click", async () => {
   const pw=$("upw").value;
