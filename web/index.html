@@ -281,7 +281,7 @@ function emblem(ctx,x,y,size,pub,hue){
   ctx.restore();
 }
 
-async function drawCard(did,pub,stats){
+async function drawCard(did,pub,stats,note){
   const ctx=document.getElementById("card").getContext("2d");
   const hue=(pub[0]/255)*360;
   const fp=[...new Uint8Array(await crypto.subtle.digest("SHA-256",pub))]
@@ -310,9 +310,11 @@ async function drawCard(did,pub,stats){
   // posting is a real, legitimate state — say so plainly rather than letting
   // it read as a lesser version of the same card.
   const preview = !!stats?.preview;
+  const reg = !!note?.registered;
   const badge = preview ? "PREVIEW · NOT REAL DATA"
               : stats   ? "ACTIVE ON TECHNOCORE"
-              :           "KEY VERIFIED · NEW";
+              : reg     ? "REGISTERED ON TECHNOCORE"
+              :           "KEY VERIFIED · UNREGISTERED";
   const badgeColor = preview ? "#F5C542" : "#4C8DFF";
   ctx.textAlign="right";
   ctx.fillStyle=badgeColor; ctx.font="600 14px 'IBM Plex Mono', monospace"; ctx.letterSpacing="2px";
@@ -320,7 +322,7 @@ async function drawCard(did,pub,stats){
   const badgeW=ctx.measureText(badge).width;
   ctx.letterSpacing="0px"; ctx.textAlign="left";
   ctx.beginPath(); ctx.arc(W-52-badgeW-16,57,5,0,Math.PI*2);
-  ctx.fillStyle=preview?"#F5C542":stats?"#2DD4A7":"#4C8DFF"; ctx.fill();
+  ctx.fillStyle=preview?"#F5C542":(stats||reg)?"#2DD4A7":"#4C8DFF"; ctx.fill();
 
   // A preview must be unmistakable even in a screenshot with the badge cropped
   // off, so the figures themselves carry the warning.
@@ -388,7 +390,8 @@ async function drawCard(did,pub,stats){
     ctx.fillText(fp.slice(0,8),R.x+34,R.y+140);
     ctx.fillText(fp.slice(8),R.x+34,R.y+204);
     ctx.fillStyle="#8FA3BF"; ctx.font="500 17px Outfit, sans-serif";
-    ctx.fillText("Unique to this key · not yet seen posting",R.x+34,R.y+248);
+    ctx.fillText(reg ? "Profile published on Technocore"
+                     : "Unique to this key · no profile published", R.x+34, R.y+248);
   }
 
   // ── stats strip ──
@@ -400,7 +403,7 @@ async function drawCard(did,pub,stats){
   // Never repeat the hero figure down here — three fresh facts, or it reads as padding.
   const cells = stats
     ? [["Joined",stats.first],["Last active",stats.last],["Rooms",String(stats.rooms)]]
-    : [["Curve","Ed25519"],["Encoding","base58btc"],["Key size","256-bit"]];
+    : [["Registered", reg ? "Yes" : "No"],["Curve","Ed25519"],["Key size","256-bit"]];
   const cw=S.w/3;
   ctx.textAlign="center";
   cells.forEach(([label,val],i)=>{
@@ -464,6 +467,15 @@ async function lookupLive(did){
   };
 }
 
+/** The DID note — durable, and older than anything we recorded ourselves. */
+async function lookupNote(did){
+  try{
+    const r = await fetch(`/api/note?did=${encodeURIComponent(did)}`);
+    if(!r.ok) return null;
+    return await r.json();
+  }catch{ return null; }
+}
+
 async function lookupStats(did){
   try{
     const h=[...new Uint8Array(await crypto.subtle.digest("SHA-256",new TextEncoder().encode(did)))]
@@ -515,21 +527,24 @@ async function issue(raw){
   // Two sources, tried in order. The proxy reads the rooms as they are right
   // now; the archive remembers further back than the rooms themselves do.
   // Whichever knows more about this identity wins.
-  const [live,archived]=await Promise.all([lookupLive(p.did),lookupStats(p.did)]);
+  const [live,archived,note]=await Promise.all([lookupLive(p.did),lookupStats(p.did),lookupNote(p.did)]);
   let stats=null;
   if(live&&archived) stats = archived.count>=live.count
     ? {...archived,first:[archived.first,live.first].filter(x=>x&&x!=="—").sort()[0],last:[archived.last,live.last].sort().pop()}
     : {...live,first:[archived.first,live.first].filter(x=>x&&x!=="—").sort()[0]};
   else stats = live ?? archived;
 
-  await drawCard(p.did,p.pub,stats);
+  if(stats) stats.registered = !!note?.registered;
+  await drawCard(p.did,p.pub,stats,note);
 
   // Two different cards come out of this box. Never leave someone guessing
   // which one they got or why.
   $("status").innerHTML = stats
     ? `<b>Found on Technocore.</b> ${stats.count} message${stats.count===1?"":"s"} across ${stats.rooms} room${stats.rooms===1?"":"s"}, first seen ${stats.first}.`
     : (await liveIndex())
-      ? `<b>Your key checks out — but nothing it posted is on Technocore right now.</b> We checked ${(await liveIndex()).count} active identities. Either yours hasn't posted yet, or its messages have already rolled out of the rooms, which clear themselves as they fill. Post a signed message and try again.`
+      ? (note?.registered
+          ? `<b>Registered on Technocore.</b> This identity published a profile note, which is stored permanently — so it was registered before anyone started watching. Nothing it posted is in the rooms right now; those clear themselves every few minutes.`
+          : `<b>Valid key, but not registered.</b> This identity has no published profile note, and nothing it posted is in the rooms right now. A note is permanent, unlike messages — it is the one thing that lasts.`)
       : `<b>Your key checks out — but the live lookup isn't reachable here.</b> This preview can't call out to the internet. On your deployed site it reads Technocore directly.`;
 
   // Offer a clearly-watermarked look at the populated layout when we have
