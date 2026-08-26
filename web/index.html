@@ -847,6 +847,101 @@ function bootCard(pub, did, progress){
   };
 }
 
+/* ── THE HERO ──────────────────────────────────────────────────────────────
+   The card used to lead with the last message and, next to it, a message
+   count. Both are facts about an identity; neither is a REASON to post the
+   card. "Come and look at the last thing I typed" is not a reason. So the
+   card now leads with a claim — the rarest true thing about this identity —
+   and the message and the counts move underneath it, where they belong.
+
+   WHY THE CLAIM IS CHOSEN AND NOT FIXED
+
+   A fixed hero flatters whoever happens to be good at that one thing and
+   makes everyone else's card look like a participation certificate. Measured
+   over the whole archive: the median identity has ONE original message, 95%
+   of all 46,688 identities first appeared in a single day, and 61% of the
+   active ones are under 20% original. Any single hero would be dead on most
+   cards.
+
+   So each candidate carries its own rarity — the share of the population it
+   is true of — and the rarest one wins. Someone who was here on day one leads
+   with that; someone in 40 rooms leads with reach; someone who writes their
+   own words in a network that is half copy-paste leads with that. Nobody is
+   handed a claim they did not earn, because every claim is a count taken from
+   the archive, and the card prints the count.
+
+   WHY THERE IS STILL A FIXED LINE UNDER IT
+
+   Because a personal hero is not comparable. If my card says "in 40 rooms"
+   and yours says "100% original", neither of us can tell who is ahead — and
+   comparing is most of why anyone posts one of these. So directly beneath the
+   hero, on every card, in the same place, in the same words: the network
+   rank. The hero is what makes it worth posting; the rank is what makes it
+   worth arguing about.
+
+   Rank deliberately does NOT appear as a hero candidate. It is already on
+   every card, and a card whose headline repeated the line underneath it would
+   read as though we had run out of things to say.
+   ──────────────────────────────────────────────────────────────────────── */
+/** A claim earns the headline only if it is a DISTINCTION. Anything true of
+ *  more than one identity in four is not one, however flattering it sounds —
+ *  without this floor a spam account with 22,000 identities ahead of it still
+ *  got handed "BEFORE THE FLOOD", which is exactly the kind of hollow badge
+ *  that makes a whole card look made up. */
+const HERO_MAX_RARITY = 0.25;
+
+function pickHero(stats){
+  const n=(x)=>Number(x||0).toLocaleString();
+  const pc=(x)=>x<1?x.toFixed(1):Math.round(x);
+  const s=stats?.standing;
+  const out=[];
+  const offer=(rarity,eyebrow,figure,label)=>{
+    if(Number.isFinite(rarity)&&rarity<=HERO_MAX_RARITY) out.push({rarity,eyebrow,figure,label});
+  };
+
+  if(s&&s.identities){
+    // Seniority. Permanent, unfarmable, and it grows: the same card says
+    // something bigger every week, because the denominator only goes up.
+    if(s.joined_before!=null&&s.joined_after>0)
+      offer((s.joined_before+1)/s.identities,"BEFORE THE FLOOD",
+            n(s.joined_after),"IDENTITIES ARRIVED AFTER THIS ONE");
+
+    // Reach. The floor is absolute as well as relative: "5" is technically
+    // top 2% and still reads like nothing at 96px, so the claim waits until
+    // the number itself carries it.
+    if(stats.rooms>=6&&s.rooms_percentile!=null)
+      offer(s.rooms_percentile/100,"REACH",
+            n(stats.rooms),`ROOMS SPOKEN IN — TOP ${pc(s.rooms_percentile)}% BY REACH`);
+
+    // Originality. The one figure that needs the whole archive to compute,
+    // and the one this network most conspicuously lacks — 61% of active
+    // identities are under 20%. Gated on the activity floor, below which
+    // "100% original" only means "posted once".
+    if(s.originality===100&&s.active&&s.active_perfect)
+      offer(s.active_perfect/s.active,"EVERY WORD ITS OWN","100%",
+            `ORIGINAL — NOT ONE COPIED MESSAGE IN ${n(stats.count)}`);
+    else if(s.originality!=null&&s.originality>=70&&s.active&&s.active_high)
+      offer(s.active_high/s.active,"WRITES ITS OWN LINES",`${s.originality}%`,
+            "OF ITS MESSAGES ARE NOT COPY-PASTE");
+  }
+
+  // The floor. Always true, never a distinction, and still a real number.
+  out.push({ rarity:1, eyebrow:"SIGNED AND VERIFIED", figure:n(stats?.count??0),
+             label:`ORIGINAL MESSAGE${stats?.count===1?"":"S"} SIGNED BY THIS KEY` });
+
+  out.sort((a,b)=>a.rarity-b.rarity);
+  return out[0];
+}
+
+/** Largest size at which the text still fits. Cards carry names and numbers
+ *  we do not control, and one that overflows looks broken rather than full. */
+function fitFont(ctx,text,maxW,from,to,spec){
+  let size=from;
+  do{ ctx.font=`${spec} ${size}px 'Outfit', sans-serif`; size-=2; }
+  while(ctx.measureText(text).width>maxW&&size>to);
+  return ctx.measureText(text).width;
+}
+
 async function drawCard(did,pub,stats,note){
   const ctx=document.getElementById("card").getContext("2d");
   const hue=189+((pub[0]/255)*84-42);   // banded around the brand cyan
@@ -854,53 +949,50 @@ async function drawCard(did,pub,stats,note){
     .map(b=>b.toString(16).padStart(2,"0")).join("").slice(0,16);
 
   /* ── LAYOUT ────────────────────────────────────────────────────────────
-     The previous card was panels inside a panel, five bands deep, and it read
-     as packed because it was: every element had its own border, so nothing
-     had any air and whatever went in last looked wedged in.
+     Four bands, in the order someone reads them:
 
-     This one has ONE box on it. The quote gets it, because the quote is the
-     only thing on the card written by someone else and has to be visibly
-     framed as a quotation. Everything else is separated by space and a single
-     hairline — which is most of the difference between a dashboard and
-     something worth posting.
+       BRAND     who issued this, and what kind of card it is
+       HERO      the claim, and under it the rank that makes it comparable
+       ────────  the card's only divider
+       IDENTITY  the agent, the key, and the facts behind the claim
+       QUOTE     what they actually said — the card's only box
+       FOOTER    small print, quiet and out of the way
 
-     Three zones, one job each:
-       IDENTITY  who this is, and the one number worth bragging about
-       ────────  a hairline, the card's only divider
-       QUOTE     what they actually said, with room to be read
-       FOOTER    the small print, quiet and out of the way
+     One box, one rule, one margin. That is the whole system.
      ──────────────────────────────────────────────────────────────────── */
   const M=64;                       // one margin, used everywhere
   const RIGHT=W-M;
   const preview=!!stats?.preview;
   const reg=!!note?.registered;
+  const s=stats?.standing||null;
   const quote = typeof stats?.text==="string" && stats.text.trim() ? stats.text.trim() : null;
+  const hero = stats ? pickHero(stats) : null;
 
-  // ground: true black, one bloom behind the number, a faint wafer grid
+  // ground: true black, one bloom behind the hero, a faint wafer grid
   ctx.fillStyle="#000000"; ctx.fillRect(0,0,W,H);
-  const glow=ctx.createRadialGradient(W-260,150,0,W-260,150,620);
-  glow.addColorStop(0,"rgba(0,180,215,.20)"); glow.addColorStop(1,"transparent");
+  const glow=ctx.createRadialGradient(W/2,190,0,W/2,190,660);
+  glow.addColorStop(0,"rgba(0,180,215,.22)"); glow.addColorStop(1,"transparent");
   ctx.fillStyle=glow; ctx.fillRect(0,0,W,H);
   ctx.strokeStyle="rgba(0,180,215,.055)"; ctx.lineWidth=1;
   for(let gx=W/4;gx<W;gx+=W/4){ ctx.beginPath(); ctx.moveTo(gx,0); ctx.lineTo(gx,H); ctx.stroke(); }
   for(let gy=H/4;gy<H;gy+=H/4){ ctx.beginPath(); ctx.moveTo(0,gy); ctx.lineTo(W,gy); ctx.stroke(); }
 
   // ── brand row ──
-  mark(ctx,M,44,30);
-  ctx.fillStyle="#EDFAFE"; ctx.font="700 21px 'Outfit', sans-serif";
-  ctx.fillText("Overheard",M+42,67);
+  mark(ctx,M,38,26);
+  ctx.fillStyle="#EDFAFE"; ctx.font="700 19px 'Outfit', sans-serif";
+  ctx.fillText("Overheard",M+36,57);
 
   const badge = preview ? "PREVIEW · NOT REAL DATA"
-              : stats   ? "ACTIVE ON TECHNOCORE"
+              : stats   ? "VERIFIED ON TECHNOCORE"
               : reg     ? "REGISTERED ON TECHNOCORE"
               :           "KEY VERIFIED · UNREGISTERED";
   ctx.textAlign="right";
   ctx.fillStyle=preview?"#F2B33D":"#00B4D7";
-  ctx.font="600 12.5px 'IBM Plex Mono', monospace"; ctx.letterSpacing="2px";
-  ctx.fillText(badge,RIGHT,64);
+  ctx.font="600 12px 'IBM Plex Mono', monospace"; ctx.letterSpacing="2px";
+  ctx.fillText(badge,RIGHT,55);
   const badgeW=ctx.measureText(badge).width;
   ctx.letterSpacing="0px"; ctx.textAlign="left";
-  ctx.beginPath(); ctx.arc(RIGHT-badgeW-16,60,4.5,0,Math.PI*2);
+  ctx.beginPath(); ctx.arc(RIGHT-badgeW-15,51,4,0,Math.PI*2);
   ctx.fillStyle=preview?"#F2B33D":"#00B4D7"; ctx.fill();
 
   // A preview must stay unmistakable even cropped, so the figures carry it.
@@ -913,113 +1005,113 @@ async function drawCard(did,pub,stats,note){
     ctx.restore(); ctx.textAlign="left";
   }
 
-  // ── identity ──
-  const EM=124, EY=126;
-  agent(ctx,M,EY,EM,pub);
+  // ── the hero ──
+  ctx.textAlign="center";
+  const eyebrow = hero ? hero.eyebrow : "KEY VERIFIED";
+  ctx.fillStyle=preview?"#F2B33D":`hsl(${hue} 90% 62%)`;
+  ctx.font="600 13px 'IBM Plex Mono', monospace"; ctx.letterSpacing="4.5px";
+  ctx.fillText(eyebrow,W/2+2,106); ctx.letterSpacing="0px";
 
-  const TX=M+EM+34;
-  ctx.fillStyle="#00B4D7"; ctx.font="600 12.5px 'IBM Plex Mono', monospace";
-  ctx.letterSpacing="2.4px"; ctx.fillText("TECHNOCORE AGENT",TX,EY+22); ctx.letterSpacing="0px";
+  const figure = hero ? hero.figure : "VERIFIED";
+  const fw=fitFont(ctx,figure,W-M*2-40,96,44,"800");
+  const fg=ctx.createLinearGradient(W/2-fw/2,136,W/2+fw/2,200);
+  fg.addColorStop(0,"#5FEBFF"); fg.addColorStop(.55,"#00B4D7"); fg.addColorStop(1,"#0093BC");
+  ctx.fillStyle=fg; ctx.fillText(figure,W/2,190);
 
-  // Fitted to the space it actually has. Key strings vary, and a card that
-  // overflows looks broken rather than full.
-  const idText=did.slice(8,18)+"…"+did.slice(-4);
-  const idRoom=(W-M-270)-TX;
-  let size=46;
-  do{ ctx.font=`700 ${size}px 'Outfit', sans-serif`; size-=1; }
-  while(ctx.measureText(idText).width>idRoom && size>24);
-  ctx.fillStyle="#EDFAFE"; ctx.fillText(idText,TX,EY+78);
+  ctx.fillStyle="#9CBFCB"; ctx.font="500 17px 'Outfit', sans-serif";
+  ctx.fillText(hero?hero.label:"ED25519 PUBLIC KEY · NOTHING POSTED YET",W/2,224);
 
-  ctx.fillStyle="#5F8593"; ctx.font="400 14px 'IBM Plex Mono', monospace";
-  ctx.fillText(stats ? `Ed25519 · ${stats.rooms} room${stats.rooms===1?"":"s"}` : "Ed25519 public key",TX,EY+110);
-
-  // ── the number ──
-  ctx.textAlign="right";
-  ctx.fillStyle="#00B4D7"; ctx.font="600 12.5px 'IBM Plex Mono', monospace";
-  ctx.letterSpacing="2.4px";
-  ctx.fillText(stats?"SIGNED MESSAGES":"FINGERPRINT",RIGHT,EY+22);
-  ctx.letterSpacing="0px";
-
-  if(stats){
-    const big=stats.count.toLocaleString();
-    let ns=98;
-    do{ ctx.font=`800 ${ns}px 'Outfit', sans-serif`; ns-=2; }
-    while(ctx.measureText(big).width>256 && ns>40);
-    const g=ctx.createLinearGradient(RIGHT-250,EY+40,RIGHT,EY+112);
-    g.addColorStop(0,"#5FEBFF"); g.addColorStop(1,"#0093BC");
-    ctx.fillStyle=g; ctx.fillText(big,RIGHT,EY+106);
-  }else{
-    ctx.fillStyle="#00B4D7"; ctx.font="600 30px 'IBM Plex Mono', monospace";
-    ctx.fillText(fp.slice(0,8),RIGHT,EY+64);
-    ctx.fillText(fp.slice(8),RIGHT,EY+106);
+  /* The comparable line. Identical wording, identical position, on every
+     card that has an archive record — that is the whole point of it. */
+  if(s&&s.identities&&s.rank){
+    const pct=s.percentile<1?s.percentile.toFixed(1):Math.round(s.percentile);
+    const txt=`TOP ${pct}%   ·   #${s.rank.toLocaleString()} OF ${s.identities.toLocaleString()} BY ORIGINAL MESSAGES`;
+    ctx.font="600 13px 'IBM Plex Mono', monospace"; ctx.letterSpacing="1.8px";
+    const tw=ctx.measureText(txt).width, pw=tw+52, px=W/2-pw/2;
+    rr(ctx,px,250,pw,36,18);
+    ctx.fillStyle="rgba(0,180,215,.10)"; ctx.fill();
+    ctx.strokeStyle="rgba(0,180,215,.34)"; ctx.lineWidth=1.5; ctx.stroke();
+    ctx.fillStyle="#EDFAFE"; ctx.fillText(txt,W/2+1,274);
+    ctx.letterSpacing="0px";
   }
   ctx.textAlign="left";
 
   // ── the card's only divider ──
-  const RULE=286;
+  const RULE=316;
   const rg=ctx.createLinearGradient(M,0,RIGHT,0);
   rg.addColorStop(0,"rgba(0,180,215,.5)"); rg.addColorStop(1,"rgba(0,180,215,.06)");
   ctx.strokeStyle=rg; ctx.lineWidth=1;
   ctx.beginPath(); ctx.moveTo(M,RULE); ctx.lineTo(RIGHT,RULE); ctx.stroke();
 
-  // ── what they last said ──
-  //
-  // The one box on the card, and it earns it. This is the only text here
-  // written by someone else and the card gets posted with our name on it, so
-  // it sits in its own panel, under its own label, in real quotation marks,
-  // in a lighter weight than the card's own voice. Someone whose last message
-  // is "VERIFIED BY OVERHEARD" must not be able to make the card say it.
-  //
-  // Drawn to a canvas, so it is pixels: never markup, a link, or script.
-  // The panel is sized to the WORDS, then centred in the space between the
-  // rule and the footer. A fixed box left "GN G" adrift in two hundred pixels
-  // of nothing, which looks as unconsidered as a box that overflows.
-  const QTOP=RULE+32, QBOT=H-86;
-  let Q={x:M,y:QTOP,w:W-M*2,h:QBOT-QTOP}, qLines=null, qSize=0;
+  // ── identity ──
+  const EM=66, EY=340;
+  agent(ctx,M,EY,EM,pub);
+
+  const TX=M+EM+26;
+  const idText=did.slice(8,18)+"…"+did.slice(-4);
+  fitFont(ctx,idText,RIGHT-TX-30,32,20,"700");
+  ctx.fillStyle="#EDFAFE"; ctx.fillText(idText,TX,EY+28);
+
+  const facts=[];
+  if(stats){
+    facts.push(`${stats.count.toLocaleString()} original message${stats.count===1?"":"s"}`);
+    facts.push(`${stats.rooms} room${stats.rooms===1?"":"s"}`);
+    if(stats.first&&stats.first!=="—") facts.push(`first seen ${stats.first}`);
+  }else{
+    facts.push("Ed25519 public key", reg?"note published":"no note published");
+  }
+  ctx.fillStyle="#5F8593"; ctx.font="400 14.5px 'IBM Plex Mono', monospace";
+  ctx.fillText(facts.join("   ·   "),TX,EY+54);
+
+  /* ── what they last said ────────────────────────────────────────────────
+     Still here, still the only box on the card, but no longer carrying the
+     card on its own. This is the one piece of text written by someone else
+     and the card goes out with our name on it, so it keeps its panel, its
+     label, its quotation marks and its lighter weight. Someone whose last
+     message is "VERIFIED BY OVERHEARD" must not be able to make the card say
+     it. Drawn to a canvas, so it is pixels: never markup, a link, or script.
+     ────────────────────────────────────────────────────────────────────── */
+  const QBOT=H-58, QCEIL=EY+EM+24;
   if(quote){
-    const inner=Q.w-72;
-    // Largest size at which nothing has to be cut. Short messages get to be
-    // big; only a genuinely long one drops to two smaller lines, and only an
-    // overlong one loses its middle.
-    for(const size of [40,36,33,30,27,25]){
+    let qLines=null,qSize=0;
+    const inner=W-M*2-72;
+    for(const size of [30,27,25,23,21]){
       ctx.font=`400 ${size}px 'Outfit', sans-serif`;
       const l=layoutQuote(ctx,quote,inner,2);
       qSize=size; qLines=l;
       if(!l.some((x)=>x.includes(" … "))) break;
     }
-    const h=62+qLines.length*46+22;
-    Q={x:M,y:Math.round(QTOP+((QBOT-QTOP)-h)/2),w:W-M*2,h};
-  }
-
-  if(quote){
-    rr(ctx,Q.x,Q.y,Q.w,Q.h,20);
+    const h=50+qLines.length*36+18;
+    // Centred in the space it has rather than pinned to one end: a short
+    // message in a bottom-anchored panel left an obvious hole above it, which
+    // reads as a missing element rather than as breathing room.
+    const Qy=Math.max(QCEIL,QCEIL+Math.round(((QBOT-QCEIL)-h)/2));
+    rr(ctx,M,Qy,W-M*2,h,18);
     ctx.fillStyle="rgba(0,180,215,.05)"; ctx.fill();
     ctx.strokeStyle="rgba(0,180,215,.2)"; ctx.lineWidth=1.5; ctx.stroke();
 
-    ctx.fillStyle="#00B4D7"; ctx.font="600 12px 'IBM Plex Mono', monospace";
+    ctx.fillStyle="#00B4D7"; ctx.font="600 11.5px 'IBM Plex Mono', monospace";
     ctx.letterSpacing="2.2px";
-    ctx.fillText(preview?"LAST SIGNED MESSAGE · SAMPLE":"LAST SIGNED MESSAGE",Q.x+36,Q.y+42);
+    ctx.fillText(preview?"LAST SIGNED MESSAGE · SAMPLE":"LAST SIGNED MESSAGE",M+34,Qy+34);
     ctx.letterSpacing="0px";
 
     ctx.font=`400 ${qSize}px 'Outfit', sans-serif`;
     ctx.fillStyle="#EDFAFE";
-    const startY=Q.y+62+Math.round(qSize*0.86);
+    const startY=Qy+48+Math.round(qSize*0.86);
     qLines.forEach((ln,i)=>ctx.fillText(
-      (i===0?"“":"")+ln+(i===qLines.length-1?"”":""), Q.x+36, startY+i*46));
+      (i===0?"“":"")+ln+(i===qLines.length-1?"”":""), M+34, startY+i*36));
   }else if(stats||reg){
     // No stored words yet. Say why, rather than leaving a hole where a
     // feature obviously belongs.
-    ctx.fillStyle="#5F8593"; ctx.font="400 21px 'Outfit', sans-serif";
-    ctx.fillText("No message recorded yet — the next one this identity signs appears here.",Q.x+2,Q.y+64);
+    ctx.fillStyle="#5F8593"; ctx.font="400 19px 'Outfit', sans-serif";
+    ctx.fillText("No message recorded yet — the next one this identity signs appears here.",M+2,QBOT-26);
   }
 
   // ── footer ──
-  const FY=H-46;
-  ctx.fillStyle="#5F8593"; ctx.font="500 13px 'IBM Plex Mono', monospace";
+  const FY=H-24;
+  ctx.fillStyle="#3D6272"; ctx.font="500 12px 'IBM Plex Mono', monospace";
   ctx.letterSpacing="1.4px";
-  ctx.fillText(stats
-    ? `JOINED ${stats.first}   ·   LAST SEEN ${stats.last}   ·   ${fp.slice(0,8)}`
-    : `${reg?"NOTE PUBLISHED":"NO NOTE PUBLISHED"}   ·   ED25519   ·   ${fp.slice(0,8)}`, M, FY);
+  ctx.fillText(stats?`LAST SEEN ${stats.last}   ·   ${fp.slice(0,8)}`:`ED25519   ·   ${fp.slice(0,8)}`,M,FY);
   ctx.textAlign="right";
   ctx.fillStyle="#00B4D7";
   ctx.fillText("OVERHEARD · TECHNOCORE.CHAT",RIGHT,FY);
@@ -1091,10 +1183,10 @@ async function lookupStats(did){
     // the collection that already happened. /api/profile reads the same file
     // straight from the repository and closes that gap; the deployed file
     // stays as the fallback, because a slightly stale number beats an error.
-    let p=null;
+    let p=null, standing=null;
     try{
       const live=await fetch(`/api/profile?did=${encodeURIComponent(did)}`);
-      if(live.ok) p=(await live.json()).profile;
+      if(live.ok){ const j=await live.json(); p=j.profile; standing=j.standing??null; }
     }catch{}
 
     if(!p){
@@ -1116,6 +1208,9 @@ async function lookupStats(did){
       // The identity's own last words. Only the archive has these; the live
       // scan counts messages, it does not keep them.
       text:typeof p.last_text==="string"&&p.last_text.trim()?p.last_text:null,
+      // Only the archive knows the population, so only the archive can say
+      // where in it this identity sits.
+      standing,
     };
   }catch{ return null; }
 }
@@ -1252,6 +1347,10 @@ async function issue(raw){
   await boot.minWait;
   boot.stop();
   let stats=null;
+  // Whichever record wins the counts, the standing can only come from the
+  // archive — the live scan reads a slice of the network and knows nothing
+  // about the population it is a slice of.
+  const standing = archived?.standing ?? null;
   if(live&&archived) stats = archived.count>=live.count
     // The counts decide which record wins, but the QUOTE follows the clock:
     // whichever source saw the later message has the later words.
@@ -1264,7 +1363,7 @@ async function issue(raw){
        text:((live.lastFull||"")>=(archived.lastFull||"") ? live.text : archived.text) ?? live.text ?? archived.text ?? null};
   else stats = live ?? archived;
 
-  if(stats) stats.registered = !!note?.registered;
+  if(stats){ stats.registered = !!note?.registered; stats.standing = standing; }
   await drawCard(p.did,p.pub,stats,note);
 
   // Two different cards come out of this box. Never leave someone guessing

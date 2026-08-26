@@ -48,6 +48,63 @@ async function shardOf(did) {
   return [...new Uint8Array(hash)].map((b) => b.toString(16).padStart(2, "0")).join("").slice(0, 2);
 }
 
+/* ── where this identity stands ───────────────────────────────────────────
+ * Computed here rather than in the browser because standings.json describes
+ * the whole population and there is no reason to ship it to every visitor.
+ *
+ * Every figure below is a COUNT, never an interpolation. `rank` is one plus
+ * the number of identities that wrote strictly more original messages, so it
+ * is the same answer a full sort would give. Ties share a rank, which is what
+ * anyone comparing two cards would expect.
+ *
+ * Join is the one place resolution matters. The histogram is hourly, so two
+ * identities in the same hour cannot be ordered — and rather than guess, this
+ * reports only the two things that are certain: how many were already here
+ * when your hour began, and how many arrived after it ended.
+ * ─────────────────────────────────────────────────────────────────────── */
+function standing(p, s) {
+  if (!s || !Array.isArray(s.unique)) return null;
+
+  const above = (pairs, mine) =>
+    pairs.reduce((n, [value, count]) => (value > mine ? n + count : n), 0);
+
+  const total = Number(s.identities) || 0;
+  const unique = p.unique ?? 0;
+  const rooms = Array.isArray(p.rooms) ? p.rooms.length : 0;
+  const rank = above(s.unique, unique) + 1;
+
+  const hour = String(p.first ?? "").slice(0, 13);
+  const join = Array.isArray(s.join) ? s.join : [];
+  let before = null, after = null;
+  if (hour.length === 13 && join.length) {
+    // Cumulative totals: the last hour strictly before yours, and yours.
+    const earlier = join.filter(([h]) => h < hour);
+    const upToYours = join.filter(([h]) => h <= hour);
+    before = earlier.length ? earlier[earlier.length - 1][1] : 0;
+    if (upToYours.length) after = total - upToYours[upToYours.length - 1][1];
+  }
+
+  const count = p.count ?? 0;
+  return {
+    identities: total,
+    rank,
+    percentile: total ? (rank / total) * 100 : null,
+    rooms_rank: above(s.rooms, rooms) + 1,
+    rooms_percentile: total ? ((above(s.rooms, rooms) + 1) / total) * 100 : null,
+    joined_before: before,
+    joined_after: after,
+    // Share of this identity's own messages that were not copies of a text
+    // posted all over the network. Null below the activity floor, where it
+    // would only be measuring that somebody posted once.
+    originality: count >= (s.active_min ?? 5) ? Math.round((unique / count) * 100) : null,
+    active: s.active ?? null,
+    active_min: s.active_min ?? 5,
+    active_perfect: s.active_perfect ?? null,
+    active_high: s.active_high ?? null,
+    active_low: s.active_low ?? null,
+  };
+}
+
 export default async function handler(request) {
   const url = new URL(request.url);
   const did = (url.searchParams.get("did") ?? "").trim();
@@ -57,13 +114,20 @@ export default async function handler(request) {
   }
 
   const shard = await shardOf(did);
-  const src = `https://raw.githubusercontent.com/${OWNER}/${REPO}/${BRANCH}/web/data/profiles/${shard}.json`;
+  const raw = (p) => `https://raw.githubusercontent.com/${OWNER}/${REPO}/${BRANCH}/web/data/${p}`;
+  const grab = async (p) => {
+    try {
+      const res = await fetch(raw(p), { headers: { Accept: "application/json", "User-Agent": "overheard-profile/1.0" } });
+      return res.ok ? await res.json() : null;
+    } catch { return null; }
+  };
 
-  let bucket = null;
-  try {
-    const res = await fetch(src, { headers: { Accept: "application/json", "User-Agent": "overheard-profile/1.0" } });
-    if (res.ok) bucket = await res.json();
-  } catch { /* fall through — the page still has the deployed copy */ }
+  // Both come from the same commit, so the rank and the figures it ranks
+  // always describe the same moment.
+  const [bucket, standings] = await Promise.all([
+    grab(`profiles/${shard}.json`),
+    grab("standings.json"),
+  ]);
 
   if (!bucket) {
     return json({ did, shard, source: "unavailable", profile: null,
@@ -75,6 +139,7 @@ export default async function handler(request) {
     did,
     shard,
     source: "repository",
+    standing: p && standing(p, standings),
     // Named exactly as the archiver writes them, so there is one vocabulary:
     // `unique` excludes collapsed template spam, `count` does not.
     profile: p && {

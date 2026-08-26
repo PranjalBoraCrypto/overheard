@@ -52,7 +52,7 @@
  * to avoid.
  */
 
-import { readFile, writeFile, mkdir } from "node:fs/promises";
+import { readFile, writeFile, mkdir, readdir } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { createHash } from "node:crypto";
 import path from "node:path";
@@ -407,6 +407,87 @@ function plan(rows, cursors) {
   return { queue, idle, unseen };
 }
 
+/* ── standings ────────────────────────────────────────────────────────────
+   ONE small file describing the whole population, so a card can say where an
+   identity stands without downloading 46,000 profiles.
+
+   WHY DISTRIBUTIONS AND NOT PRECOMPUTED RANKS
+
+   A rank stored on a profile would be wrong within minutes and, worse, would
+   have to be rewritten into all 256 profile shards on every pass — several
+   megabytes of git churn per commit, 144 times a day, for numbers nobody has
+   asked for yet. Distributions invert that: this one file changes, the cards
+   compute their own rank from it, and the arithmetic is exact rather than
+   interpolated.
+
+   Three of them, each answering one question a card wants to ask:
+
+     unique   how many identities wrote MORE original messages than you
+     rooms    how many were seen in more rooms
+     join     how many were already here before you
+
+   `join` is hourly because that is the finest resolution that is honest. An
+   identity's own first-seen timestamp is known to the microsecond, but two
+   identities inside the same hour cannot be ordered from a histogram — so the
+   card is only ever told "N arrived in an earlier hour" and "N arrived after
+   your hour ended", both of which are counts, not estimates.
+
+   Read from disk rather than from `state.profiles`: that Map holds only the
+   shards this pass touched, and pulling the other 250 into it would mark them
+   dirty and rewrite them for nothing.
+   ─────────────────────────────────────────────────────────────────────── */
+const ACTIVE_MIN = 5;   // below this, "100% original" only means "posted once"
+
+async function writeStandings() {
+  const dir = path.join(OUT, "profiles");
+  if (!existsSync(dir)) return null;
+
+  const uniq = new Map(), rooms = new Map(), hours = new Map();
+  let identities = 0, active = 0, activePerfect = 0, activeHigh = 0, activeLow = 0;
+
+  for (const file of (await readdir(dir)).filter((f) => f.endsWith(".json"))) {
+    const bucket = await readJson(path.join(dir, file), {});
+    for (const p of Object.values(bucket)) {
+      identities++;
+      const u = p.unique ?? 0, r = (p.rooms ?? []).length, c = p.count ?? 0;
+      uniq.set(u, (uniq.get(u) ?? 0) + 1);
+      rooms.set(r, (rooms.get(r) ?? 0) + 1);
+      const h = String(p.first ?? "").slice(0, 13);      // YYYY-MM-DDTHH
+      if (h.length === 13) hours.set(h, (hours.get(h) ?? 0) + 1);
+      if (c >= ACTIVE_MIN) {
+        active++;
+        if (u === c) activePerfect++;
+        if (u / c >= 0.7) activeHigh++;      // includes the perfect ones
+        else if (u / c < 0.2) activeLow++;
+      }
+    }
+  }
+
+  // Cumulative, so a card subtracts two numbers instead of summing a list.
+  const join = [...hours.entries()].sort((a, b) => (a[0] < b[0] ? -1 : 1));
+  let run = 0;
+  const joinCumulative = join.map(([h, n]) => { run += n; return [h, run]; });
+
+  const desc = (m) => [...m.entries()].sort((a, b) => b[0] - a[0]);
+
+  const body = {
+    updated: new Date().toISOString(),
+    identities,
+    active_min: ACTIVE_MIN,
+    active,
+    active_perfect: activePerfect,
+    active_high: activeHigh,
+    active_low: activeLow,
+    note: "unique/rooms are [value, identities-with-that-value], highest first. join is [hour, identities first seen at or before the end of that hour].",
+    unique: desc(uniq),
+    rooms: desc(rooms),
+    join: joinCumulative,
+  };
+  await writeFile(path.join(OUT, "standings.json"), JSON.stringify(body) + "\n");
+  console.log(`  standings: ${identities} identities, ${active} active, ${joinCumulative.length} join hours`);
+  return body;
+}
+
 async function main() {
   await mkdir(OUT, { recursive: true });
   const state = await loadState();
@@ -497,6 +578,10 @@ async function main() {
     .slice(0, ROSTER_SNAPSHOT);
   await writeFile(path.join(OUT, "roster.json"),
     JSON.stringify({ updated: new Date().toISOString(), listed: rows.length, network_total: total, shown: snapshot.length, rooms: snapshot }) + "\n");
+
+  // After the shards are on disk, so it counts what was just written.
+  try { await writeStandings(); }
+  catch (err) { console.error(`  standings failed (${err.message}) — cards fall back to the previous file`); }
 
   const seen = results.reduce((a, r) => a + r.seen, 0);
   const stored = results.reduce((a, r) => a + r.stored, 0);
