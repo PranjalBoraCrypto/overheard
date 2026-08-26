@@ -122,8 +122,19 @@ const NEW_ROOM_INTERVAL_MS = 20_000;
 
 const ROSTER_LIMIT = 500;
 const REPEAT_LIMIT = 5;
-const MAX_POSTERS = 250;
-const MAX_TEMPLATES = 20000;
+/* MEASURED: templates.json had reached 8.2 MB, and it was being stringified
+   and rewritten on EVERY flush. JSON.stringify is synchronous — it stops the
+   event loop dead, which means it stops the reads, and the lobby fills its
+   200-message window in eight seconds. The file was quietly buying the misses
+   that the flush fix was supposed to end. It is also committed every five
+   minutes, so 8 MB was a repository problem waiting to happen.
+
+   Two changes, neither of which loses anything the site uses: the table keeps
+   the 6,000 most-repeated texts rather than 20,000 (spam.json only ever shows
+   the top 500), and a template records 40 distinct posters rather than 250,
+   which is plenty to establish "many identities post this". */
+const MAX_POSTERS = 40;
+const MAX_TEMPLATES = 6000;
 const ROSTER_SNAPSHOT = 120;
 const DAY_BODY_MAX = Number(process.env.DAY_BODY_MAX ?? 12000);
 const MAX_GAPS_KEPT = 50;
@@ -491,22 +502,10 @@ async function flush(state, rows, total, standings = false) {
     await writeAtomic(metaFile, JSON.stringify(meta) + "\n");
   }
 
-  const pruned = pruneTemplates(state.templates);
-  state.templates.updated = new Date().toISOString();
   await writeAtomic(path.join(OUT, "cursors.json"), JSON.stringify(state.cursors) + "\n");
-  await writeAtomic(path.join(OUT, "templates.json"), JSON.stringify(state.templates) + "\n");
 
-  const top = Object.values(state.templates.texts)
-    .filter((t) => t.n > REPEAT_LIMIT)
-    .sort((a, b) => b.n - a.n)
-    .slice(0, 500)
-    .map((t) => ({ text: t.text, count: t.n, identities: t.posters.length, rooms: t.rooms, first: t.first, last: t.last }));
-  await writeAtomic(path.join(OUT, "spam.json"), JSON.stringify({
-    updated: new Date().toISOString(),
-    note: `Texts posted more than ${REPEAT_LIMIT} times. Copies past that are counted, not stored.`,
-    templates: top,
-  }, null, 1) + "\n");
-
+  // The strip on the homepage and this run's own coverage report are cheap
+  // and wanted often.
   await writeRecent(state);
 
   if (rows?.length) {
@@ -519,16 +518,46 @@ async function flush(state, rows, total, standings = false) {
       JSON.stringify({ updated: new Date().toISOString(), listed: rows.length, network_total: total, shown: snapshot.length, rooms: snapshot }) + "\n");
   }
 
+  /* ── the slow clock ───────────────────────────────────────────────────────
+     Everything below is big enough for a SYNCHRONOUS serialise to be felt,
+     and the event loop being blocked is the event loop not reading rooms.
+     None of it is read between commits, so it runs every fourth minute
+     instead of every forty-five seconds. */
+  let pruned = 0;
   if (standings) {
+    pruned = pruneTemplates(state.templates);
+    state.templates.updated = new Date().toISOString();
+    await writeAtomic(path.join(OUT, "templates.json"), JSON.stringify(state.templates) + "\n");
+
+    const top = Object.values(state.templates.texts)
+      .filter((t) => t.n > REPEAT_LIMIT)
+      .sort((a, b) => b.n - a.n)
+      .slice(0, 500)
+      .map((t) => ({ text: t.text, count: t.n, identities: t.posters.length, rooms: t.rooms, first: t.first, last: t.last }));
+    await writeAtomic(path.join(OUT, "spam.json"), JSON.stringify({
+      updated: new Date().toISOString(),
+      note: `Texts posted more than ${REPEAT_LIMIT} times. Copies past that are counted, not stored. At most ${MAX_POSTERS} distinct posters are recorded per text, so "identities" saturates there.`,
+      templates: top,
+    }, null, 1) + "\n");
+
     try { await writeStandings(); }
     catch (err) { console.error(`  standings failed (${err.message}) — cards fall back to the previous file`); }
   }
+
   if (state.sched) await writeReport(state, rows, total);
   return pruned;
 }
 
 function pruneTemplates(templates) {
   const keys = Object.keys(templates.texts);
+  // Trim arrays that grew under the older, larger caps. Without this the file
+  // never shrinks back down, whatever the caps say from now on.
+  for (const k of keys) {
+    const t = templates.texts[k];
+    if (t.posters && t.posters.length > MAX_POSTERS) t.posters.length = MAX_POSTERS;
+    if (t.rooms && t.rooms.length > 12) t.rooms.length = 12;
+    if (typeof t.text === "string" && t.text.length > 300) t.text = t.text.slice(0, 300);
+  }
   if (keys.length <= MAX_TEMPLATES) return 0;
   const sorted = keys.sort((a, b) => templates.texts[b].n - templates.texts[a].n);
   for (const k of sorted.slice(MAX_TEMPLATES)) delete templates.texts[k];
