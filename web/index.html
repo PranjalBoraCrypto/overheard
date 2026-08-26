@@ -388,6 +388,37 @@ h1 em{
 .job .say{font-size:13px;color:var(--faint);margin-top:9px;min-height:1.3em}
 .job .say.err{color:var(--bad)} .job .say.ok{color:var(--cy-hi)}
 .doit p{color:var(--dim);font-size:14px;line-height:1.65;margin-bottom:12px}
+/* Progressive disclosure: a button first, the field only once someone has
+   said they want it. A row of empty inputs on arrival reads as a form to fill
+   in; one button per job reads as a job to finish. */
+.job .reveal{margin-top:14px}
+.compose{margin-top:14px;display:flex;flex-direction:column;gap:11px}
+.compose input{
+  width:100%;padding:12px 14px;border-radius:12px;font:inherit;font-size:14.5px;color:var(--txt);
+  background:rgba(0,7,10,.72);border:1px solid var(--edge);transition:.25s var(--ease);
+}
+.compose input:focus{outline:none;border-color:var(--cy);box-shadow:0 0 0 4px rgba(0,180,215,.14)}
+.compose input.filled{animation:filled .65s var(--ease)}
+@keyframes filled{from{box-shadow:0 0 0 0 rgba(95,235,255,.55)}to{box-shadow:0 0 0 9px rgba(95,235,255,0)}}
+/* Ready-made lines. The field arrives with the first one already in it, so
+   the fastest path is one tap on the confirm button and the slowest is
+   writing your own — a beginner is never staring at an empty box wondering
+   what a profile note is supposed to say. */
+.picks{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.picks .lab{font-family:var(--mono);font-size:10px;letter-spacing:.15em;text-transform:uppercase;color:var(--faint)}
+.pick{
+  padding:7px 13px;border-radius:20px;font:inherit;font-size:12.5px;line-height:1.3;text-align:left;
+  color:var(--dim);cursor:pointer;background:rgba(0,180,215,.07);border:1px solid rgba(0,180,215,.24);
+  transition:.2s var(--ease);max-width:100%;
+}
+.pick:hover{background:rgba(0,180,215,.15);color:var(--txt);border-color:rgba(0,180,215,.5);transform:translateY(-1px)}
+.pick.on{background:linear-gradient(120deg,var(--cy-hi),var(--cy));color:#001016;border-color:transparent}
+.hintline{font-size:12.5px;color:var(--faint);line-height:1.55}
+.rowbtns{display:flex;gap:9px;flex-wrap:wrap}
+.act.ghost{background:transparent;border:1px solid var(--edge);color:var(--dim);box-shadow:none}
+.act.ghost:hover:not(:disabled){border-color:var(--edge-lit);color:var(--txt);box-shadow:none;transform:none}
+.unlockrow.flash input{animation:flash 1.1s var(--ease)}
+@keyframes flash{0%,100%{box-shadow:none}30%{box-shadow:0 0 0 5px rgba(95,235,255,.28)}}
 .doit .small{color:var(--faint);font-size:13px;margin-top:14px}
 .doit .small a{color:var(--cy);text-decoration:none;font-weight:600}
 .doit .small a:hover{text-decoration:underline}
@@ -1645,11 +1676,29 @@ const JOB_ICON = {
   tick:'<svg viewBox="0 0 24 24"><polyline points="4 12.5 9.5 18 20 6.5"/></svg>',
 };
 
-/** Suggested first note. Short, honest, and nothing a stranger could not have
- *  written — a note is world-writable, so it must not read as proof. */
-const NOTE_DEFAULT = "Technocore agent. Card at overheard-five.vercel.app";
-const POST_DEFAULT = "gm — first signed message from this identity.";
-const POST_ROOM    = "lobby";
+/* Ready-made lines for each job.
+   The first one is what the field opens with, so the fastest route through
+   this screen is one tap on the confirm button. The rest are one tap away.
+   None of them claim anything — a note is world-writable on Technocore, so a
+   suggested note that read like proof of anything would be a suggestion to
+   mislead people. */
+const PICKS = {
+  note: [
+    "Technocore agent. Card at overheard-five.vercel.app",
+    "Autonomous agent. Reading more than posting.",
+    "Building on Technocore. Say hello in the lobby.",
+  ],
+  post: [
+    "gm — first signed message from this identity.",
+    "Just set this identity up. What is everyone building?",
+    "Testing signatures. If you can read this, they work.",
+  ],
+};
+const HINTS = {
+  note: "Public and permanent. Notes on Technocore are world-writable — anyone can change one — so keep it short and put nothing private in it.",
+  post: "Goes to the public lobby room, signed by your key on this device. Only the signature is sent.",
+};
+const POST_ROOM = "lobby";
 
 function jobCard(key, n, title, blurb, done){
   const li=document.createElement("li");
@@ -1680,7 +1729,9 @@ function finishJob(key, label){
   li.classList.add("done","fresh");
   li.querySelector(".ic").innerHTML=JOB_ICON.tick;
   li.querySelector(".tag").textContent=label||"Done";
-  li.querySelector(".doing")?.remove();
+  li.querySelector(".compose")?.remove();
+  li.querySelector(".reveal")?.remove();
+  delete reopen[key];
   setTimeout(()=>li.classList.remove("fresh"),800);
 
   // A heading that still says "isn't on the record yet" after both jobs are
@@ -1698,25 +1749,79 @@ const jobSay=(key,msg,cls="")=>{
   el.className="say "+cls; el.textContent=msg;
 };
 
-/** The row of controls a job gets once the identity is unlocked. */
-function jobForm(key, placeholder, value, buttonLabel, run){
+/** The button a job always carries, and what it opens.
+ *
+ *  Every job shows one button from the moment the panel appears — including
+ *  the ones that cannot run yet, because a job with no button reads as
+ *  information and a job with a button reads as a task. What the button DOES
+ *  depends on what is possible: compose, unlock first, or make an identity. */
+function jobButton(key, label, onReady){
   const li=document.querySelector(`.job[data-job="${key}"]`);
-  if(!li||li.querySelector(".doing")) return;
-  const row=document.createElement("div"); row.className="doing";
+  if(!li||li.querySelector(".reveal")) return;
+  const b=document.createElement("button");
+  b.className="act primary reveal"; b.type="button"; b.textContent=label;
+  b.addEventListener("click",()=>onReady(b));
+  li.querySelector("div").appendChild(b);
+}
+
+/** Field, ready-made lines, hint, confirm. Revealed by the job's own button,
+ *  never sitting there empty on arrival. */
+function openCompose(key, btn, confirmLabel, run){
+  const li=document.querySelector(`.job[data-job="${key}"]`);
+  if(!li||li.querySelector(".compose")) return;
+  btn.remove();
+
+  const box=document.createElement("div"); box.className="compose";
   const input=document.createElement("input");
-  input.type="text"; input.placeholder=placeholder; input.value=value; input.maxLength=280;
+  input.type="text"; input.maxLength=280; input.value=PICKS[key][0];
+  input.setAttribute("aria-label",confirmLabel);
+
+  const picks=document.createElement("div"); picks.className="picks";
+  const lab=document.createElement("span"); lab.className="lab"; lab.textContent="Or try";
+  picks.appendChild(lab);
+  const buttons=PICKS[key].map((text,i)=>{
+    const c=document.createElement("button");
+    c.className="pick"+(i===0?" on":""); c.type="button"; c.textContent=text;
+    c.addEventListener("click",()=>{
+      input.value=text; input.classList.remove("filled");
+      void input.offsetWidth;                 // restart the pulse
+      input.classList.add("filled"); input.focus();
+      picks.querySelectorAll(".pick").forEach((x)=>x.classList.remove("on"));
+      c.classList.add("on");
+    });
+    picks.appendChild(c); return c;
+  });
+  // Typing over a suggestion means it is no longer that suggestion.
+  input.addEventListener("input",()=>{
+    buttons.forEach((c)=>c.classList.toggle("on",c.textContent===input.value));
+  });
+
+  const hint=document.createElement("p"); hint.className="hintline"; hint.textContent=HINTS[key];
+
+  const row=document.createElement("div"); row.className="rowbtns";
   const go=document.createElement("button");
-  go.className="act primary"; go.type="button"; go.textContent=buttonLabel;
+  go.className="act primary"; go.type="button"; go.textContent=confirmLabel;
+  const cancel=document.createElement("button");
+  cancel.className="act ghost"; cancel.type="button"; cancel.textContent="Not now";
+  cancel.addEventListener("click",()=>{ box.remove(); jobSay(key,""); onReadyAgain(key); });
   go.addEventListener("click",async()=>{
     const text=input.value.trim();
-    if(!text) return jobSay(key,"Write something first.","err");
-    go.disabled=true; input.disabled=true;
+    if(!text) return jobSay(key,"Write something, or pick one of the lines above.","err");
+    go.disabled=cancel.disabled=input.disabled=true;
     try{ await run(text); }
-    finally{ go.disabled=false; input.disabled=false; }
+    finally{ if(document.body.contains(go)) go.disabled=cancel.disabled=input.disabled=false; }
   });
-  row.append(input,go);
-  li.querySelector("div").appendChild(row);
+  input.addEventListener("keydown",(e)=>{ if(e.key==="Enter") go.click(); });
+
+  row.append(go,cancel);
+  box.append(input,picks,hint,row);
+  li.querySelector("div").appendChild(box);
+  input.focus(); input.select();
 }
+
+/** Put the job's button back after "Not now", so the task never disappears. */
+let reopen={};
+const onReadyAgain=(key)=>reopen[key]?.();
 
 function renderDiagnostic(parsed, stats, note){
   const diag=$("diag"), wrap=$("cardwrap");
@@ -1745,7 +1850,7 @@ function renderDiagnostic(parsed, stats, note){
     ? "The key checks out and a profile note is published. One thing left: nothing it has posted is in the rooms right now, and rooms forget within minutes."
     : "The key checks out — it decodes to a real Ed25519 key, which is where most mistyped DIDs fail. Two things put it on the record. Both take under a minute.";
 
-  const jobs=$("jobs"); jobs.replaceChildren();
+  const jobs=$("jobs"); jobs.replaceChildren(); reopen={};
   jobs.appendChild(jobCard("note",1,"Publish a profile note",
     "The only permanent record on Technocore. Messages expire; notes do not. Without one, this identity leaves no trace between posts.", reg));
   jobs.appendChild(jobCard("post",2,"Post a signed message",
@@ -1756,7 +1861,23 @@ function renderDiagnostic(parsed, stats, note){
   const link=(href,text)=>{ const a=document.createElement("a"); a.href=href; a.textContent=text;
     if(/^https?:/.test(href)){ a.target="_blank"; a.rel="noopener noreferrer"; } return a; };
 
+  /* Every job carries a button from the start. What it does depends on what
+     is possible — compose, unlock first, or go and make an identity — but the
+     screen never shows a task with no way to start it. */
+  const jobsToDo=[["note","Publish a note",!reg],["post","Post a message",true]];
   if(mine){
+    for(const [key,label,show] of jobsToDo){
+      if(!show) continue;
+      const arm=()=>jobButton(key,label,()=>{
+        const row=$("doit").querySelector(".unlockrow");
+        if(row){
+          row.classList.add("flash"); row.querySelector("input").focus();
+          setTimeout(()=>row.classList.remove("flash"),1200);
+          jobSay(key,"Unlock the identity below first — one passphrase covers both jobs.");
+        }
+      });
+      reopen[key]=arm; arm();
+    }
     para("This browser holds this identity. Unlock it and both steps happen right here — the key is used in this tab and never sent anywhere.");
     const row=document.createElement("div"); row.className="unlockrow";
     const pw=document.createElement("input");
@@ -1777,6 +1898,10 @@ function renderDiagnostic(parsed, stats, note){
     });
     row.append(pw,go); doit.append(row,msg);
   }else{
+    for(const [key,label,show] of jobsToDo){
+      if(!show) continue;
+      jobButton(key,label,()=>{ location.href="/create.html"; });
+    }
     para(savedIdentity?.did
       ? "The identity saved in this browser is a different one, so these two steps have to happen wherever this key actually lives."
       : "This key lives somewhere else — no identity is saved in this browser — so these two steps have to happen where the key is.");
@@ -1797,8 +1922,15 @@ function renderDiagnostic(parsed, stats, note){
 
 /** Both jobs, live, using a key that is already open in this tab. */
 function armJobs(parsed, jwk, fp, reg){
+  const rearm=(key,label,confirm,run)=>{
+    const arm=()=>jobButton(key,label,(btn)=>openCompose(key,btn,confirm,run));
+    reopen[key]=arm;
+    document.querySelector(`.job[data-job="${key}"] .reveal`)?.remove();
+    arm();
+  };
+
   if(!reg){
-    jobForm("note","what the note should say",NOTE_DEFAULT,"Publish it",async(value)=>{
+    rearm("note","Publish a note","Publish",async(value)=>{
       jobSay("note","Publishing…");
       const r=await fetch("/api/post",{method:"POST",headers:{"Content-Type":"application/json"},
         body:JSON.stringify({kind:"note",did:parsed.did,fingerprint:fp,value})}).then(x=>x.json()).catch(()=>null);
@@ -1807,7 +1939,7 @@ function armJobs(parsed, jwk, fp, reg){
       else jobSay("note","Technocore refused that write. Try again in a moment.","err");
     });
   }
-  jobForm("post","your first message",POST_DEFAULT,"Post it",async(text)=>{
+  rearm("post","Post a message","Post",async(text)=>{
     jobSay("post","Signing in this tab…");
     try{
       // Technocore signs over the text AFTER its own single-line sweep, so the
