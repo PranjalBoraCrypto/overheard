@@ -2081,6 +2081,17 @@ function renderDiagnostic(parsed, stats, note){
     kn.textContent="Already known from your search. You only need its backup and passphrase.";
     known.append(kk,kv,kn);
 
+    /* This box asks for the encrypted KEY FILE, and it was being mistaken for
+       a place to paste the DID — reasonably, since it had no label at all and
+       its placeholder showed a JSON sample with a "did" field in it. The DID
+       is already known and stated directly above; nothing here needs it. Said
+       plainly, and the placeholder no longer mentions a did:key. */
+    const cap=document.createElement("p"); cap.className="cap";
+    const capB=document.createElement("b"); capB.textContent="Your encrypted backup file. ";
+    const capE=document.createElement("em");
+    capE.textContent="The overheard-identity-….json this site gave you when the identity was made — it holds the key itself, encrypted. Not the DID: that is already known, above.";
+    cap.append(capB,capE);
+
     const fileBtn=document.createElement("label"); fileBtn.className="filebtn"; fileBtn.tabIndex=0;
     fileBtn.innerHTML='<svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 9 12 4 17 9"/><line x1="12" y1="4" x2="12" y2="16"/></svg>';
     const fileLabel=document.createElement("span");
@@ -2094,10 +2105,10 @@ function renderDiagnostic(parsed, stats, note){
        it, so pasting the contents is a first-class route rather than a thing
        the button refuses — plenty of people already have the JSON on their
        clipboard and no file to browse to. */
-    const or=document.createElement("div"); or.className="or"; or.textContent="or paste it";
+    const or=document.createElement("div"); or.className="or"; or.textContent="or paste its contents";
     const text=document.createElement("textarea");
     text.spellcheck=false; text.setAttribute("aria-label","Backup file contents");
-    text.placeholder='the whole file, braces and all — {"v":1,"did":"…","salt":"…","iv":"…","data":"…"}';
+    text.placeholder="paste everything inside overheard-identity-….json";
 
     const loaded=document.createElement("div");
     loaded.className="loaded"; loaded.hidden=true;
@@ -2106,7 +2117,7 @@ function renderDiagnostic(parsed, stats, note){
     const swap=document.createElement("button");
     swap.className="swap"; swap.type="button"; swap.textContent="Replace";
     swap.addEventListener("click",()=>{
-      loaded.hidden=true; fileBtn.hidden=or.hidden=text.hidden=false;
+      loaded.hidden=true; cap.hidden=fileBtn.hidden=or.hidden=text.hidden=false;
       text.value=""; text.classList.remove("good");
       file.value=""; fileBtn.classList.remove("has");
       fileLabel.textContent="Choose your backup file — overheard-identity-….json";
@@ -2156,7 +2167,7 @@ function renderDiagnostic(parsed, stats, note){
       // Fold the field away and show what is worth checking instead.
       loaded.querySelector(".txt").textContent=midTrim(raw,30,14);
       loaded.hidden=false;
-      fileBtn.hidden=or.hidden=text.hidden=true;
+      cap.hidden=fileBtn.hidden=or.hidden=text.hidden=true;
 
       if(advanced) return;
       advanced=true;
@@ -2178,7 +2189,7 @@ function renderDiagnostic(parsed, stats, note){
     go.addEventListener("click",async()=>{
       const raw=text.value.trim();
       if(!raw){
-        msg.className="small"; msg.textContent="Paste your backup file's contents, or choose the file above.";
+        msg.className="small"; msg.textContent="This needs the backup FILE, not the DID — choose it above, or paste what is inside it.";
         pointAt(box,text); return;
       }
       if(!pw.value){
@@ -2209,7 +2220,7 @@ function renderDiagnostic(parsed, stats, note){
       // folded away and put the cursor back on the thing that was wrong.
       pw.focus({preventScroll:true}); pw.select();
     });
-    box.append(known,fileBtn,or,text,loaded,pw,go,msg);
+    box.append(known,cap,fileBtn,or,text,loaded,pw,go,msg);
     doit.appendChild(box);
 
     const small=document.createElement("p"); small.className="small";
