@@ -2133,6 +2133,20 @@ function renderDiagnostic(parsed, stats, note){
       const raw=text.value.trim();
       text.classList.remove("good");
       if(!raw){ msg.className="small"; msg.textContent=""; return; }
+      /* The commonest wrong paste by a mile, and the one worth answering
+         properly: the DID itself. It is a reasonable mistake — every other
+         site in the world takes an identifier and a password — so this says
+         WHY it cannot work rather than just refusing it. A passphrase here
+         decrypts a file; it does not unlock an identity, and no passphrase
+         can turn a public key back into a private one. */
+      if(/^did:key:z6Mk[1-9A-HJ-NP-Za-km-z]{44}$/.test(raw)){
+        msg.className="small warn";
+        msg.textContent = raw===parsed.did
+          ? "That is the DID itself — public, and already known from your search. A DID plus a passphrase cannot unlock an identity: the passphrase decrypts your key FILE, and the key can never be worked back out of the DID. This box needs that file."
+          : "That is a DID, not a backup. A DID is the public half — a passphrase cannot turn it back into the key that signs. This box needs the encrypted overheard-identity file.";
+        return;
+      }
+
       let v=null; try{ v=JSON.parse(raw); }catch{}
       if(!v?.did || !v?.data){
         msg.className="small";
@@ -2184,8 +2198,10 @@ function renderDiagnostic(parsed, stats, note){
       let vault=null;
       try{ vault=JSON.parse(raw); }catch{}
       if(!vault?.did || !vault?.data){
-        msg.className="small";
-        return msg.textContent="That is not an Overheard backup — it should be the whole JSON file, braces included.";
+        msg.className="small warn";
+        return msg.textContent=/^did:key:/.test(raw)
+          ? "That is the DID, not the key. A passphrase decrypts your backup file — it cannot unlock a public identifier."
+          : "That is not an Overheard backup — it should be the whole JSON file, braces included.";
       }
       // The right file for the WRONG identity is a real mistake and worth
       // naming, rather than unlocking something and failing later.
