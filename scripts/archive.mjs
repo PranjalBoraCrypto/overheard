@@ -3,22 +3,53 @@
  * Overheard — Technocore archiver.
  *
  * Rooms on technocore.chat are a ~10 MiB ring and are deleted after 7 days
- * idle. Anything anyone captures there is on a timer. This walks the rooms we
- * follow and appends what it finds to a git-tracked archive.
+ * idle. Anything anyone captures there is on a timer. This walks the network
+ * and appends what it finds to a git-tracked archive.
  *
+ * ─────────────────────────────────────────────────────────────────────────
+ * WHY THIS READS THE ROSTER INSTEAD OF A FIXED LIST OF ROOMS
+ *
+ * Earlier versions followed four hardcoded rooms. Measured 2026-08-26:
+ * GET /rooms reports `"total": 8518` rooms, of which ~450 come back in a
+ * single listing. Following four of them meant that an identity posting
+ * anywhere else was invisible to this archive no matter how often it posted —
+ * which is not a lookup bug, it is a coverage hole, and it was the single
+ * biggest cause of "my DID shows nothing".
+ *
+ * So: one request to /rooms names every active room AND gives its `last_seq`.
+ * Subtracting our stored cursor from that turns "which rooms should we read?"
+ * into arithmetic instead of guesswork — a room with no new messages costs
+ * ZERO reads, so breadth is nearly free and the budget goes where the traffic
+ * actually is.
+ *
+ * ─────────────────────────────────────────────────────────────────────────
+ * READ BUDGET
+ *
+ * /.well-known/agent.json reports `"reads_per_minute_per_ip": 600` (measured
+ * 2026-08-26 — it was lower before Flop Labs added capacity). This spends at
+ * most ~40% of that, so a pass never competes with anyone else's agent and
+ * never trips a 429 for the rest of the network.
+ *
+ * Every read is accounted for. When the budget cannot cover every room with a
+ * backlog, the shortfall is LOGGED, never silently dropped: a truncated pass
+ * that says nothing is indistinguishable from full coverage, and that is how
+ * an archive quietly starts lying.
+ *
+ * ─────────────────────────────────────────────────────────────────────────
  * Two design rules keep this free forever:
  *
  *   DAILY SHARDS. Each day gets its own file. Only today's file is ever
- *   rewritten; yesterday's is frozen and git stores it exactly once. Writing
- *   one growing file instead would make git store a fresh copy on all ~144
- *   commits a day, and repo history cannot be trimmed later without rewriting
- *   everything.
+ *   rewritten; yesterday's is frozen and git stores it exactly once.
  *
- *   TEMPLATE COLLAPSE. Most traffic is bots posting one identical sentence
- *   (200 in a row from 111 identities has been measured). After a text has
- *   been seen REPEAT_LIMIT times we stop storing copies and just count it.
- *   The count is more interesting than the copies, and it is what takes this
- *   from ~58 GB/year to comfortably under 1 GB/year.
+ *   TEMPLATE COLLAPSE. Most traffic is bots posting one identical sentence.
+ *   After a text has been seen REPEAT_LIMIT times we stop storing copies and
+ *   just count it. The count is more interesting than the copies.
+ *
+ * A third rule arrives with the roster: PER-ROOM META. Room bookkeeping lives
+ * in web/data/<room>/_meta.json and is rewritten only when that room had
+ * traffic. One global index holding 450 rooms' cursors would be a 60 KB file
+ * rewritten on all ~144 commits a day — the exact churn the daily shards exist
+ * to avoid.
  */
 
 import { readFile, writeFile, mkdir } from "node:fs/promises";
@@ -28,20 +59,49 @@ import path from "node:path";
 
 const BASE = process.env.TECHNOCORE_BASE ?? "https://technocore.chat";
 const OUT = path.resolve("web/data");
-const UA = "overheard-archiver/2.0 (+https://github.com/OWNER/overheard)";
-const ROOMS = (process.env.ROOMS ?? "lobby,technocore,nano,meta").split(",").map((s) => s.trim());
+const UA = "overheard-archiver/3.0 (+https://github.com/PranjalBoraCrypto/overheard)";
 
-const READ_DELAY_MS = 700;   // technocore allows 120 reads/min/IP; we use a trickle
-const PAGE = 200;            // max limit the API accepts
-const REPEAT_LIMIT = 5;      // copies kept before a text is treated as a template
-const MAX_POSTERS = 250;     // cap the poster list on a template record
-const MAX_TEMPLATES = 20000; // cap the template table itself
+/** Rooms always read first, whatever the roster says. The lobby alone can
+ *  outproduce everything else combined, and these are the rooms the site's
+ *  own copy talks about. */
+const CORE = (process.env.ROOMS ?? "lobby,technocore,nano,meta")
+  .split(",").map((s) => s.trim()).filter(Boolean);
+
+// 250ms = 240 reads/min, 40% of the documented 600. Overridable so a test run
+// against a local mock does not have to sit through the real pacing.
+const READ_DELAY_MS = Number(process.env.READ_DELAY_MS ?? 250);
+const PASS_MAX_READS = 900;   // hard ceiling per pass
+const PASS_DEADLINE_MS = 240_000; // stop starting rooms after 4 min; workflow gap is 5
+const ROSTER_LIMIT = 500;     // /rooms default is 50; it returns ~450 at this size
+const PAGE = 200;             // max messages per read
+const CORE_MAX_PAGES = 100;   // lobby at ~52 msg/sec needs ~78 pages per 5 min
+const ROOM_MAX_PAGES = 10;    // everything else, per pass
+const NEW_ROOM_PAGES = 1;     // `since=0` returns the NEWEST page, never the oldest
+const REPEAT_LIMIT = 5;
+const MAX_POSTERS = 250;
+const MAX_TEMPLATES = 20000;
+const ROSTER_SNAPSHOT = 120;  // rooms kept in the public roster file
+
+/**
+ * Room names come from the network, and the roster response even labels its
+ * own contents `untrusted`. A name is interpolated into BOTH a URL path and a
+ * filesystem path here, so a room called `../../.github/workflows` would be a
+ * write outside the archive. Anything not matching this is dropped and logged.
+ */
+const ROOM_RE = /^[a-z0-9][a-z0-9_-]{0,63}$/;
+const safeRoom = (r) => typeof r === "string" && ROOM_RE.test(r) && !r.includes("..");
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const day = (ts) => String(ts ?? "").slice(0, 10) || new Date().toISOString().slice(0, 10);
 const hash = (t) => createHash("sha256").update(t, "utf8").digest("hex").slice(0, 12);
 
+let reads = 0;
+const startedAt = Date.now();
+const budgetLeft = () => PASS_MAX_READS - reads;
+const timeLeft = () => PASS_DEADLINE_MS - (Date.now() - startedAt);
+
 async function get(url) {
+  reads++;
   const res = await fetch(url, { headers: { Accept: "application/json", "User-Agent": UA } });
   if (res.status === 429) {
     const body = await res.text();
@@ -57,21 +117,15 @@ async function get(url) {
 const readJson = async (file, fallback) =>
   existsSync(file) ? JSON.parse(await readFile(file, "utf8")) : fallback;
 
-/** Persisted state: per-room cursor, and the global text-repeat table. */
 async function loadState() {
   return {
     cursors: await readJson(path.join(OUT, "cursors.json"), {}),
     templates: await readJson(path.join(OUT, "templates.json"), { updated: null, texts: {} }),
-    index: await readJson(path.join(OUT, "index.json"), { rooms: {} }),
-    profiles: new Map(),   // shard -> {did: stats}, loaded lazily as DIDs appear
+    profiles: new Map(),
     recent: await readJson(path.join(OUT, "recent.json"), { dids: [] }),
   };
 }
 
-/**
- * Per-identity stats, sharded by fingerprint so a lookup is one small fetch
- * rather than downloading every identity on the network.
- */
 const shardOf = (did) => createHash("sha256").update(did, "utf8").digest("hex").slice(0, 2);
 
 async function profileShard(state, shard) {
@@ -94,9 +148,55 @@ async function recordProfile(state, did, room, ts, isTemplate) {
   if (ts && ts > p.last) p.last = ts;
 }
 
-async function syncRoom(room, state) {
+/* ── the roster ───────────────────────────────────────────────────────────
+   One read names every active room and hands over the server's OWN quality
+   figures. `nick_diversity` and `zero_response_share` are computed upstream
+   over the room's live window, so ranking costs nothing extra — no message
+   bodies are read to decide where to look.
+   ─────────────────────────────────────────────────────────────────────── */
+async function roster() {
+  const data = await get(`${BASE}/rooms?format=json&limit=${ROSTER_LIMIT}`);
+  const rows = Array.isArray(data.rooms) ? data.rooms : [];
+  const kept = [], rejected = [];
+  for (const r of rows) {
+    if (!safeRoom(r?.room)) { rejected.push(String(r?.room ?? "")); continue; }
+    kept.push({
+      room: r.room,
+      last_seq: Number(r.last_seq) || 0,
+      idle: Number(r.idle_seconds) || 0,
+      // Both default to the pessimistic end when the server omits them, so a
+      // room without figures never outranks one with proven diversity.
+      diversity: Number.isFinite(r.nick_diversity) ? r.nick_diversity : 0,
+      silence: Number.isFinite(r.zero_response_share) ? r.zero_response_share : 1,
+      bytes: Number(r.bytes) || 0,
+      window: Number(r.window) || 0,
+    });
+  }
+  if (rejected.length) console.warn(`  roster: dropped ${rejected.length} unsafe room name(s)`);
+  return { rooms: kept, total: Number(data.total) || rows.length, rejected: rejected.length };
+}
+
+/**
+ * Priority when the budget cannot cover everything.
+ *
+ *   quality = how many DIFFERENT voices, discounted by how often nobody answers
+ *   recency = 6-hour half-life on idleness
+ *
+ * Volume deliberately does not appear. A room where one key posts the same
+ * line 10,000 times has an enormous backlog and close to zero diversity, and
+ * must not be allowed to starve a room where twelve people are talking.
+ */
+function score(r) {
+  const quality = Math.max(0, r.diversity) * (1 - Math.min(1, Math.max(0, r.silence)));
+  const confidence = Math.min(1, (r.window || 0) / 50);
+  const recency = 0.5 ** (r.idle / 21600);
+  return quality * confidence * recency;
+}
+
+async function syncRoom(room, state, maxPages) {
   let cursor = state.cursors[room] ?? 0;
-  const shards = new Map();   // date -> array of records to append
+  const fresh = cursor === 0;
+  const shards = new Map();
   const tpl = state.templates.texts;
   let seen = 0, stored = 0, collapsed = 0;
   const gaps = [];
@@ -104,16 +204,13 @@ async function syncRoom(room, state) {
   // MEASURED 2026-08-25: `since=0` does NOT rewind into the ring. The first
   // run came back at seq 830,815 of 831,026 — the newest ~200 messages, not
   // the oldest. There is no way to page backwards, so THERE IS NO BACKFILL:
-  // this archive can only ever hold what it saw live. Everything posted before
-  // the first run is unrecoverable by any tool, including this one.
-  //
-  // 60 pages = 12,000 messages per room per run. At a 5-minute cadence that
-  // absorbs a sustained ~40 messages/second before falling behind, and
-  // finishes well inside the job timeout. Any shortfall is recorded as a gap
-  // rather than hidden.
-  const maxPages = 60;
+  // this archive can only ever hold what it saw live. A room we are meeting
+  // for the first time therefore costs exactly one page; asking for more
+  // cannot reach further back, it just spends reads.
+  const pages = fresh ? Math.min(maxPages, NEW_ROOM_PAGES) : maxPages;
 
-  for (let page = 0; page < maxPages; page++) {
+  for (let page = 0; page < pages; page++) {
+    if (budgetLeft() <= 0) { console.warn(`  ${room}: read budget exhausted mid-room`); break; }
     const data = await get(`${BASE}/r/${room}?format=json&since=${cursor}&limit=${PAGE}`);
     await sleep(READ_DELAY_MS);
     const msgs = Array.isArray(data.messages) ? data.messages : [];
@@ -123,7 +220,7 @@ async function syncRoom(room, state) {
     // Record the hole rather than presenting a history that looks continuous.
     if (typeof data.first_seq === "number" && cursor > 0 && data.first_seq > cursor + 1) {
       gaps.push({ after: cursor, resumed_at: data.first_seq, noticed: new Date().toISOString() });
-      console.warn(`  gap: ring dropped ${cursor + 1}..${data.first_seq - 1}`);
+      console.warn(`  ${room}: gap, ring dropped ${cursor + 1}..${data.first_seq - 1}`);
     }
 
     for (const m of msgs) {
@@ -133,7 +230,7 @@ async function syncRoom(room, state) {
       const t = (tpl[h] ??= { text: text.slice(0, 300), n: 0, posters: [], first: m.ts, last: m.ts, rooms: [] });
       t.n++;
       t.last = m.ts;
-      if (!t.rooms.includes(room)) t.rooms.push(room);
+      if (t.rooms.length < 40 && !t.rooms.includes(room)) t.rooms.push(room);
 
       const who = m.from ?? "anon";
       if (t.posters.length < MAX_POSTERS && !t.posters.includes(who)) t.posters.push(who);
@@ -141,7 +238,6 @@ async function syncRoom(room, state) {
       const isTemplate = t.n > REPEAT_LIMIT;
       if (m.from?.startsWith("did:key:")) await recordProfile(state, m.from, room, m.ts, isTemplate);
 
-      // Past the limit this text is a template. Count it, store no more copies.
       if (isTemplate) { collapsed++; continue; }
 
       const d = day(m.ts);
@@ -164,11 +260,19 @@ async function syncRoom(room, state) {
     if (msgs.length < PAGE) break;
   }
 
-  // Merge each day's new records into that day's shard. Only touched days are
-  // rewritten, so every earlier day stays byte-identical in git.
+  state.cursors[room] = cursor;
+
+  // A room that produced nothing storable gets no directory and no meta file.
+  // With ~450 rooms in play, creating a folder per quiet room would add
+  // hundreds of files that never change and bury the ones that do.
+  if (!shards.size && !gaps.length) {
+    return { room, seen, stored, collapsed };
+  }
+
   const roomDir = path.join(OUT, room);
   await mkdir(roomDir, { recursive: true });
-  const entry = (state.index.rooms[room] ??= { days: [], total: 0, gaps: [] });
+  const metaFile = path.join(roomDir, "_meta.json");
+  const meta = await readJson(metaFile, { room, days: [], total: 0, gaps: [] });
 
   for (const [d, recs] of shards) {
     const file = path.join(roomDir, `${d}.json`);
@@ -178,20 +282,20 @@ async function syncRoom(room, state) {
     shard.messages.sort((a, b) => a.seq - b.seq);
     shard.count = shard.messages.length;
     await writeFile(file, JSON.stringify(shard) + "\n");
-    if (!entry.days.includes(d)) entry.days.push(d);
+    if (!meta.days.includes(d)) meta.days.push(d);
   }
 
-  entry.days.sort();
-  entry.total = (entry.total ?? 0) + stored;
-  entry.cursor = cursor;
-  if (gaps.length) entry.gaps.push(...gaps);
-  state.cursors[room] = cursor;
+  meta.days.sort();
+  meta.total = (meta.total ?? 0) + stored;
+  meta.cursor = cursor;
+  meta.updated = new Date().toISOString();
+  if (gaps.length) meta.gaps.push(...gaps);
+  await writeFile(metaFile, JSON.stringify(meta) + "\n");
 
   console.log(`  ${room}: saw ${seen}, stored ${stored}, collapsed ${collapsed} (cursor ${cursor})`);
   return { room, seen, stored, collapsed };
 }
 
-/** Keep the template table bounded — drop the rarest once it gets too big. */
 function pruneTemplates(templates) {
   const keys = Object.keys(templates.texts);
   if (keys.length <= MAX_TEMPLATES) return 0;
@@ -200,35 +304,113 @@ function pruneTemplates(templates) {
   return keys.length - MAX_TEMPLATES;
 }
 
+/**
+ * Turn the roster into an ordered work list.
+ *
+ * `need` is exact, not estimated: the roster already told us each room's
+ * newest sequence number, and we already know where we stopped. A room whose
+ * last_seq has not moved is skipped outright and costs nothing.
+ */
+function plan(rows, cursors) {
+  const core = new Set(CORE);
+  const work = [];
+  let idle = 0, unseen = 0;
+
+  for (const r of rows) {
+    const cursor = cursors[r.room] ?? 0;
+    const isNew = cursor === 0;
+    const backlog = isNew ? PAGE : Math.max(0, r.last_seq - cursor);
+    if (!isNew && backlog === 0) { idle++; continue; }
+    if (isNew) unseen++;
+    const cap = core.has(r.room) ? CORE_MAX_PAGES : ROOM_MAX_PAGES;
+    work.push({
+      room: r.room,
+      core: core.has(r.room),
+      backlog,
+      pages: Math.min(cap, isNew ? NEW_ROOM_PAGES : Math.ceil(backlog / PAGE)),
+      score: score(r),
+    });
+  }
+
+  // Core rooms first, in the order the operator wrote them — that is a
+  // deliberate preference, not something to be re-sorted by a heuristic.
+  const coreWork = CORE.map((name) => work.find((w) => w.room === name)).filter(Boolean);
+  const rest = work.filter((w) => !w.core);
+
+  // Then quality order, INTERLEAVED with a rescue slot.
+  //
+  // Pure score ordering starves. Once the network is busy enough that the
+  // budget cannot reach the end of the queue, a permanently low-scoring room
+  // is never read again: its backlog grows without bound and it drops out of
+  // the archive silently, which is the same failure the hardcoded room list
+  // had. So one slot in every RESCUE_EVERY goes to whichever room has waited
+  // longest — and backlog IS the waiting time, since a room that keeps being
+  // skipped is exactly the room whose backlog keeps growing.
+  const RESCUE_EVERY = 7;
+  const byScore = [...rest].sort((a, b) => b.score - a.score);
+  const byBacklog = [...rest].sort((a, b) => b.backlog - a.backlog);
+  const taken = new Set();
+  const next = (list) => { while (list.length && taken.has(list[0].room)) list.shift(); return list.shift(); };
+  const queue = [...coreWork];
+  while (taken.size < rest.length) {
+    const rescue = queue.length > coreWork.length && (queue.length - coreWork.length) % RESCUE_EVERY === 0;
+    const pick = next(rescue ? byBacklog : byScore) ?? next(rescue ? byScore : byBacklog);
+    if (!pick) break;
+    taken.add(pick.room);
+    queue.push(pick);
+  }
+  return { queue, idle, unseen };
+}
+
 async function main() {
   await mkdir(OUT, { recursive: true });
   const state = await loadState();
   console.log(`Archiving from ${BASE}`);
 
+  let rows = [], total = 0;
+  try {
+    const r = await roster();
+    rows = r.rooms; total = r.total;
+    console.log(`  roster: ${rows.length} listed of ${total} rooms on the network`);
+  } catch (err) {
+    // Losing the roster must not lose the pass. Fall back to the rooms we
+    // already follow, which is exactly what every earlier version did.
+    console.error(`  roster failed (${err.message}) — falling back to known rooms`);
+    const known = new Set([...CORE, ...Object.keys(state.cursors)]);
+    rows = [...known].filter(safeRoom).map((room) => ({ room, last_seq: Infinity, idle: 0, diversity: 0, silence: 1, window: 0, bytes: 0 }));
+  }
+
+  const { queue, idle, unseen } = plan(rows, state.cursors);
+  console.log(`  plan: ${queue.length} room(s) with new messages, ${idle} idle (free), ${unseen} never seen before`);
+
   const results = [];
-  for (const room of ROOMS) {
-    try { results.push(await syncRoom(room, state)); }
-    catch (err) { console.error(`  ${room}: ${err.message}`); } // one bad room must not lose the rest
+  const skipped = [];
+  for (const job of queue) {
+    if (budgetLeft() <= 2 || timeLeft() <= 0) { skipped.push(job.room); continue; }
+    const allowed = Math.max(1, Math.min(job.pages, budgetLeft() - 1));
+    try { results.push(await syncRoom(job.room, state, allowed)); }
+    catch (err) { console.error(`  ${job.room}: ${err.message}`); } // one bad room must not lose the rest
+  }
+  if (skipped.length) {
+    // Never silent. A pass that truncated its own work and said nothing looks
+    // exactly like a pass that covered everything.
+    console.warn(`  BUDGET: ${skipped.length} room(s) not read this pass: ${skipped.slice(0, 12).join(", ")}${skipped.length > 12 ? "…" : ""}`);
   }
 
   const pruned = pruneTemplates(state.templates);
   state.templates.updated = new Date().toISOString();
 
-  // The spam table is a finding in its own right, not just a space saving.
   const top = Object.values(state.templates.texts)
     .filter((t) => t.n > REPEAT_LIMIT)
     .sort((a, b) => b.n - a.n)
     .slice(0, 500)
     .map((t) => ({ text: t.text, count: t.n, identities: t.posters.length, rooms: t.rooms, first: t.first, last: t.last }));
 
-  // Write back only the profile shards this run actually touched.
   await mkdir(path.join(OUT, "profiles"), { recursive: true });
   for (const [shard, bucket] of state.profiles) {
     await writeFile(path.join(OUT, "profiles", `${shard}.json`), JSON.stringify(bucket) + "\n");
   }
 
-  // A small "recently seen" list gives the site something to show a visitor
-  // who has no DID of their own yet.
   const fresh = [];
   for (const [, bucket] of state.profiles) {
     for (const [did, p] of Object.entries(bucket)) fresh.push({ did, unique: p.unique, rooms: p.rooms.length, last: p.last });
@@ -240,18 +422,36 @@ async function main() {
   await writeFile(path.join(OUT, "recent.json"), JSON.stringify({ updated: new Date().toISOString(), dids: recent }) + "\n");
   console.log(`  profiles: ${state.profiles.size} shard(s) touched, ${recent.length} recent identities`);
 
+  // Compact on purpose. This is the one file that must be rewritten on every
+  // pass, and pretty-printing 450 rooms would triple the git churn for
+  // whitespace nobody reads.
   await writeFile(path.join(OUT, "cursors.json"), JSON.stringify(state.cursors) + "\n");
   await writeFile(path.join(OUT, "templates.json"), JSON.stringify(state.templates) + "\n");
   await writeFile(path.join(OUT, "spam.json"), JSON.stringify({ updated: new Date().toISOString(), note: `Texts posted more than ${REPEAT_LIMIT} times. Copies past that are counted, not stored.`, templates: top }, null, 1) + "\n");
 
-  state.index.updated = new Date().toISOString();
-  state.index.base = BASE;
-  state.index.repeat_limit = REPEAT_LIMIT;
-  await writeFile(path.join(OUT, "index.json"), JSON.stringify(state.index, null, 1) + "\n");
+  // A public snapshot of what the network looked like this pass. Trimmed,
+  // because the whole roster rewritten 144 times a day is pure churn.
+  const snapshot = rows
+    .filter((r) => Number.isFinite(r.last_seq))
+    .map((r) => ({ room: r.room, last_seq: r.last_seq, idle: r.idle, diversity: r.diversity, silence: r.silence, score: Number(score(r).toFixed(4)) }))
+    .sort((a, b) => b.score - a.score)
+    .slice(0, ROSTER_SNAPSHOT);
+  await writeFile(path.join(OUT, "roster.json"),
+    JSON.stringify({ updated: new Date().toISOString(), listed: rows.length, network_total: total, shown: snapshot.length, rooms: snapshot }) + "\n");
 
   const seen = results.reduce((a, r) => a + r.seen, 0);
   const stored = results.reduce((a, r) => a + r.stored, 0);
-  console.log(`done — saw ${seen}, stored ${stored}, collapsed ${seen - stored}${pruned ? `, pruned ${pruned} templates` : ""}`);
+  await writeFile(path.join(OUT, "index.json"), JSON.stringify({
+    updated: new Date().toISOString(),
+    base: BASE,
+    repeat_limit: REPEAT_LIMIT,
+    network_rooms: total,
+    roster_listed: rows.length,
+    rooms_tracked: Object.keys(state.cursors).length,
+    last_pass: { read: results.length, idle_free: idle, skipped: skipped.length, reads: reads, seen, stored },
+  }, null, 1) + "\n");
+
+  console.log(`done — ${results.length} room(s) read using ${reads} reads, saw ${seen}, stored ${stored}, collapsed ${seen - stored}${pruned ? `, pruned ${pruned} templates` : ""}`);
 }
 
 main().catch((err) => { console.error(err); process.exit(1); });
