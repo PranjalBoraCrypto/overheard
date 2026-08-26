@@ -168,23 +168,92 @@ footer a{color:var(--blue)}
   padding:9px 15px;border-radius:11px;transition:.25s cubic-bezier(.22,.68,.24,1);letter-spacing:0;text-transform:none}
 .tabs a:hover{color:#5FEBFF;background:rgba(0,180,215,.09)}
 .tabs a.on{color:#001016;background:linear-gradient(120deg,#5FEBFF,#00B4D7);box-shadow:0 10px 26px -14px rgba(0,180,215,1)}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   THE BAR — one implementation, four pages.
+
+   It had drifted into three: the card page used .logo at 38px inside a
+   1180px shell, Create and Verify used .glyph at 36px inside a 720px and a
+   680px shell, and Rooms used .brand at 34px. Same bar by intent, three
+   different sizes and three different left edges, because each page's
+   content column has its own width and the header was living inside it.
+
+   Two rules keep it honest from here:
+     1. Its own class names (oh-*), so no page's existing styles can reach it.
+     2. Its own full-width container OUTSIDE the content column, so the logo
+        starts at the same x on every page no matter how narrow the reading
+        column below it is.
+   Colours are literals rather than tokens, because the four pages do not
+   agree on token names and a bar that renders differently per page is the
+   exact bug this block exists to end.
+   ═══════════════════════════════════════════════════════════════════════ */
+.oh-barwrap{max-width:1180px;margin:0 auto;padding:0 26px;position:relative;z-index:3}
+/* justify-content is stated explicitly because .oh-bar IS a <header>, and
+   three of these pages still carry element-level `header{...}` rules from
+   before. A class beats an element selector on the properties it declares,
+   but says nothing about the ones it leaves out — index's
+   `justify-content:space-between` was still leaking in and wrapping the bar
+   onto a third row at phone width. Anything the old rules set, this sets. */
+.oh-bar{display:flex;align-items:center;justify-content:flex-start;gap:16px;
+  padding:22px 0;margin:0;flex-wrap:wrap;border:0;background:none}
+.oh-brand{
+  display:flex;align-items:center;gap:12px;text-decoration:none;
+  font-family:"Outfit",system-ui,sans-serif;font-weight:700;font-size:22px;
+  letter-spacing:-.02em;color:#EDFAFE;line-height:1;
+}
+.oh-glyph{width:36px;height:36px;flex:none;position:relative;display:block}
+.oh-glyph svg{width:100%;height:100%;display:block;filter:drop-shadow(0 0 15px rgba(0,180,215,.7))}
+.oh-glyph::after{
+  content:"";position:absolute;inset:-7px;border-radius:16px;z-index:-1;filter:blur(5px);opacity:.7;
+  background:conic-gradient(from 0deg,transparent,rgba(0,180,215,.55),transparent 55%);
+  animation:oh-spin 6s linear infinite;
+}
+@keyframes oh-spin{to{transform:rotate(360deg)}}
+.oh-tabs{display:flex;gap:6px;margin-left:auto;flex-wrap:wrap}
+.oh-tabs a{
+  font-family:"Outfit",system-ui,sans-serif;font-size:13.5px;font-weight:600;line-height:1;
+  color:#9CBFCB;text-decoration:none;padding:10px 15px;border-radius:11px;
+  letter-spacing:0;text-transform:none;border:0;transition:.25s cubic-bezier(.22,.68,.24,1);
+  /* The card page styles its nav links with `header nav a`, and this bar is a
+     <header> containing a <nav>, so those rules were still reaching in. A
+     class wins only the properties it declares: the inherited margin-left:26px
+     made four links 104px wider than they are anywhere else and wrapped them
+     onto a second row on a phone. Declare the lot. */
+  margin:0;position:static;display:inline-block;
+}
+.oh-tabs a::after,.oh-tabs a::before{content:none}
+.oh-tabs a:hover{color:#5FEBFF;background:rgba(0,180,215,.09)}
+.oh-tabs a.on{color:#001016;background:linear-gradient(120deg,#5FEBFF,#00B4D7);box-shadow:0 10px 26px -14px rgba(0,180,215,1)}
+@media (prefers-reduced-motion:reduce){.oh-glyph::after{animation:none}}
+@media (max-width:560px){
+  .oh-bar{gap:10px}
+  .oh-tabs{margin-left:0;width:100%}
+  .oh-tabs a{padding:9px 12px;font-size:13px}
+}
 </style>
 </head>
 <body>
 <div class="sky" aria-hidden="true"><i></i><i></i></div>
 <div class="spot" aria-hidden="true"></div>
 <div class="cur-ring" aria-hidden="true"></div><div class="cur" aria-hidden="true"></div>
-<div class="shell">
-  <header><span class="glyph"><svg viewBox="0 0 48 48" aria-hidden="true">
-        <defs><linearGradient id="og" x1="0" y1="0" x2="1" y2="1">
+<div class="oh-barwrap">
+  <header class="oh-bar">
+    <a class="oh-brand" href="/">
+      <span class="oh-glyph"><svg viewBox="0 0 48 48" aria-hidden="true">
+        <defs><linearGradient id="ohg" x1="0" y1="0" x2="1" y2="1">
           <stop offset="0" stop-color="#5FEBFF"/><stop offset=".55" stop-color="#00B4D7"/><stop offset="1" stop-color="#0080A6"/>
         </linearGradient></defs>
-        <rect x="1" y="1" width="46" height="46" rx="14" fill="url(#og)"/>
+        <rect x="1" y="1" width="46" height="46" rx="14" fill="url(#ohg)"/>
         <rect x="16" y="16" width="16" height="16" rx="5" fill="#00070A"/>
-      </svg></span><a href="/">Overheard</a>
-    <div class="tabs">
+      </svg></span>Overheard
+    </a>
+    <nav class="oh-tabs">
       <a href="/">Card</a><a href="/rooms">Rooms</a><a href="/create.html">Create</a><a href="/v" class="on">Verify</a>
-    </div></header>
+    </nav>
+  </header>
+</div>
+
+<div class="shell">
 
   <h1 id="title">Checking this proof…</h1>
   <p class="lede" id="lede">Reading the proof out of the link and testing the signature on this device.</p>
