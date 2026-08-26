@@ -39,7 +39,7 @@ jobs:
       - name: Pull new messages
         run: node scripts/archive.mjs
         env:
-          ROOMS: lobby,technocore,nano,meta
+          ROOMS: lobby,technocore,nano,meta,ca-cxxphyiwazuwwxd9agjca3l6gjjj4wmxogyyjczkpump
 
       - name: Commit if anything changed
         env:
@@ -67,6 +67,24 @@ jobs:
           fi
           git commit -m "$MSG"
 
-          # The archive job races with your own pushes; rebase rather than fail.
-          git pull --rebase --autostash origin "${GITHUB_REF_NAME}"
-          git push
+          # Runs overlap: a 5-minute schedule plus your own pushes means two
+          # commits can target the same branch. Retry, and on a conflict in the
+          # generated data keep THIS run's version — it read the rooms later, so
+          # it is strictly newer. A lost push is never fatal: the cursor lives in
+          # the repo, so the next run simply re-reads from where this one began.
+          for attempt in 1 2 3; do
+            if git push; then
+              echo "pushed on attempt $attempt"
+              exit 0
+            fi
+            echo "push rejected, rebasing (attempt $attempt)"
+            git fetch origin "${GITHUB_REF_NAME}"
+            if ! git rebase "origin/${GITHUB_REF_NAME}"; then
+              git checkout --ours web/data 2>/dev/null || true
+              git add web/data 2>/dev/null || true
+              GIT_EDITOR=true git rebase --continue || git rebase --abort || true
+            fi
+            sleep 5
+          done
+          echo "could not push this run; the next one will pick up the same range"
+          exit 0
