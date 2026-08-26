@@ -72,12 +72,7 @@ const CORE = (process.env.ROOMS ?? "lobby,technocore,nano,meta")
 const READ_DELAY_MS = Number(process.env.READ_DELAY_MS ?? 250);
 const PASS_MAX_READS = 900;   // hard ceiling per pass
 const PASS_DEADLINE_MS = 240_000; // stop starting rooms after 4 min; workflow gap is 5
-// /rooms defaults to 50. Asking for more is free, but MEASURED 2026-08-26 the
-// server returns at most 200 however large `limit` is. That is fine: the
-// listing is ordered by newest activity, so the rooms beyond the window are
-// the ones with nothing to collect, and cursors persist -- the tracked set
-// grows past 200 as rooms rotate through it.
-const ROSTER_LIMIT = 500;
+const ROSTER_LIMIT = 500;     // /rooms default is 50; it returns ~450 at this size
 const PAGE = 200;             // max messages per read
 const CORE_MAX_PAGES = 100;   // lobby at ~52 msg/sec needs ~78 pages per 5 min
 const ROOM_MAX_PAGES = 10;    // everything else, per pass
@@ -321,11 +316,33 @@ function plan(rows, cursors) {
   const work = [];
   let idle = 0, unseen = 0;
 
-  for (const r of rows) {
+  // A CORE room must be read whether or not the roster mentions it.
+  //
+  // GET /rooms only returns the 200 most recently active rooms, and a quiet
+  // core room drops out of that window the moment 200 busier rooms exist.
+  // The old code built its work list purely from the roster, so a core room
+  // outside the window was silently never read — the exact coverage hole the
+  // roster was introduced to close, reopened for the rooms that matter most.
+  // MEASURED: a message posted at 13:00 was not collected until 13:25.
+  //
+  // last_seq is unknown for these, so it is left null and syncRoom simply
+  // reads from the stored cursor. An unlisted core room is quiet by
+  // definition, so this costs one request and usually returns nothing.
+  const listed = new Set(rows.map((r) => r.room));
+  const rowsPlus = [...rows];
+  for (const name of CORE) {
+    if (listed.has(name) || !safeRoom(name)) continue;
+    rowsPlus.push({ room: name, last_seq: null, idle: 0, diversity: 0, silence: 1, window: 0, bytes: 0 });
+    console.log(`  core room ${name} is not in the roster window — reading it anyway`);
+  }
+
+  for (const r of rowsPlus) {
     const cursor = cursors[r.room] ?? 0;
     const isNew = cursor === 0;
-    const backlog = isNew ? PAGE : Math.max(0, r.last_seq - cursor);
-    if (!isNew && backlog === 0) { idle++; continue; }
+    // last_seq null means "not listed, so we do not know" — never "nothing new".
+    const known = Number.isFinite(r.last_seq);
+    const backlog = isNew ? PAGE : known ? Math.max(0, r.last_seq - cursor) : PAGE;
+    if (!isNew && known && backlog === 0) { idle++; continue; }
     if (isNew) unseen++;
     const cap = core.has(r.room) ? CORE_MAX_PAGES : ROOM_MAX_PAGES;
     work.push({

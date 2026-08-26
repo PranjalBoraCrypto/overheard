@@ -701,11 +701,24 @@ async function lookupNote(did){
 
 async function lookupStats(did){
   try{
-    const h=[...new Uint8Array(await crypto.subtle.digest("SHA-256",new TextEncoder().encode(did)))]
-      .map(b=>b.toString(16).padStart(2,"0")).join("").slice(0,2);
-    const r=await fetch(`./data/profiles/${h}.json`,{cache:"no-cache"});
-    if(!r.ok) return null;
-    const p=(await r.json())[did];
+    // The archive is committed every ~5 minutes but only DEPLOYED twice an
+    // hour, so the static copy under /data can be up to half an hour behind
+    // the collection that already happened. /api/profile reads the same file
+    // straight from the repository and closes that gap; the deployed file
+    // stays as the fallback, because a slightly stale number beats an error.
+    let p=null;
+    try{
+      const live=await fetch(`/api/profile?did=${encodeURIComponent(did)}`);
+      if(live.ok) p=(await live.json()).profile;
+    }catch{}
+
+    if(!p){
+      const h=[...new Uint8Array(await crypto.subtle.digest("SHA-256",new TextEncoder().encode(did)))]
+        .map(b=>b.toString(16).padStart(2,"0")).join("").slice(0,2);
+      const r=await fetch(`./data/profiles/${h}.json`,{cache:"no-cache"});
+      if(!r.ok) return null;
+      p=(await r.json())[did];
+    }
     if(!p||!p.unique) return null;
     return {
       // `unique` excludes template spam on purpose — the headline number
