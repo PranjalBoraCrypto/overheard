@@ -1,25 +1,23 @@
 name: archive
 
-# Rooms on technocore.chat are a ring that drops old messages, and anything
-# unwritten for 7 days is deleted outright. This job is the archive.
+# Records technocore.chat before it forgets itself.
 #
-# Cost: GitHub Actions minutes are unlimited on public repositories, and the
-# committed JSON is served by GitHub Pages / Cloudflare Pages for free.
+# WHY THIS IS SHAPED ODDLY: GitHub openly deprioritises short cron schedules on
+# free repositories. A "*/5 * * * *" schedule was measured firing once in 27
+# minutes instead of five times — so more than half of everything would have
+# been lost, silently. Hourly schedules are honoured far more reliably.
+#
+# So the cron fires HOURLY, and the job then loops internally every 5 minutes
+# for ~55 minutes before exiting, just as the next hour's run begins.
+# One reliable trigger, twelve actual collections.
+#
+# Actions minutes are unlimited on public repositories, so a job that runs
+# almost continuously costs nothing.
 
 on:
   schedule:
-    # MEASURED 2026-08-25: lobby is taking ~52 messages/second. Its 10 MiB ring
-    # holds about 52,000 messages, so the whole room empties in ~17 MINUTES.
-    # Anything slower than that loses history permanently, which is why this
-    # runs as often as GitHub allows rather than on a comfortable cadence.
-    - cron: "*/5 * * * *"
-    # Collection is cheap; PUBLISHING costs a Vercel deploy, and the free plan
-    # allows 100/day. Publishing twice an hour is 48 — safe, and it means the
-    # archive the site can actually read is never more than 30 minutes stale.
-    # A daily publish (the earlier design) left the site a day behind, which
-    # made recently-seen identities look like they had never posted at all.
-    - cron: "0,30 * * * *"
-  workflow_dispatch: {} # lets you trigger a run by hand from the Actions tab
+    - cron: "0 * * * *"
+  workflow_dispatch: {} # run it by hand any time from the Actions tab
 
 concurrency:
   group: archive
@@ -31,7 +29,8 @@ permissions:
 jobs:
   archive:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 70 # the loop stops itself at ~55; this is the backstop
+
     steps:
       - uses: actions/checkout@v4
 
@@ -39,58 +38,60 @@ jobs:
         with:
           node-version: "22"
 
-      - name: Pull new messages
-        run: node scripts/archive.mjs
+      - name: Collect for the hour
         env:
           ROOMS: lobby,technocore,nano,meta,ca-cxxphyiwazuwwxd9agjca3l6gjjj4wmxogyyjczkpump
-
-      - name: Commit if anything changed
-        env:
-          # Empty for manual runs; the cron string for scheduled ones.
-          WHICH_CRON: ${{ github.event.schedule }}
         run: |
           git config user.name  "overheard-archiver"
           git config user.email "archiver@users.noreply.github.com"
-          git add web/data
-          if git diff --staged --quiet; then
-            echo "no new messages"
-            exit 0
-          fi
 
-          # Running every 5 minutes means 288 commits a day, and Vercel's free
-          # plan allows only 100 DEPLOYS a day. "[skip ci]" tells Vercel not to
-          # build this commit, so collecting data costs no deploys at all. The
-          # daily 03:00 run omits it, publishing everything accumulated since.
-          # Your own pushes publish it too, so the site is never far behind.
-          STAMP="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
-          # "[skip ci]" tells Vercel not to build this commit. Only the
-          # half-hourly run omits it, so data reaches the site regularly
-          # without burning the deploy budget.
-          if [ "$WHICH_CRON" = "0,30 * * * *" ] || [ -z "$WHICH_CRON" ]; then
-            MSG="archive: publish $STAMP"
-          else
-            MSG="archive: $STAMP [skip ci]"
-          fi
-          git commit -m "$MSG"
+          # The lobby has been measured at ~52 messages/second, and a 10 MiB
+          # room empties in about 17 minutes. Five-minute passes keep roughly
+          # 3x margin against losing history.
+          PASSES=11
+          GAP=300
 
-          # Runs overlap: a 5-minute schedule plus your own pushes means two
-          # commits can target the same branch. Retry, and on a conflict in the
-          # generated data keep THIS run's version — it read the rooms later, so
-          # it is strictly newer. A lost push is never fatal: the cursor lives in
-          # the repo, so the next run simply re-reads from where this one began.
-          for attempt in 1 2 3; do
-            if git push; then
-              echo "pushed on attempt $attempt"
-              exit 0
+          for pass in $(seq 1 $PASSES); do
+            echo "::group::pass $pass of $PASSES"
+            node scripts/archive.mjs || echo "collection failed this pass; continuing"
+
+            git add web/data
+            if git diff --staged --quiet; then
+              echo "no new messages"
+            else
+              STAMP="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+              # Collecting is free; PUBLISHING costs a Vercel deploy and the
+              # free plan allows 100 a day. Publishing on passes 1 and 7 is
+              # twice an hour — 48 deploys a day, and the site is never more
+              # than ~30 minutes behind.
+              if [ "$pass" = "1" ] || [ "$pass" = "7" ]; then
+                MSG="archive: publish $STAMP"
+              else
+                MSG="archive: $STAMP [skip ci]"
+              fi
+              git commit -m "$MSG"
+
+              # Your own pushes race with this loop. Retry, and on a conflict in
+              # the generated data keep THIS pass's version — it read the rooms
+              # later, so it is strictly newer. A lost push is never fatal: the
+              # cursor lives in the repo, so the next pass re-reads the same range.
+              for attempt in 1 2 3; do
+                git push && break
+                echo "push rejected, rebasing (attempt $attempt)"
+                git fetch origin "${GITHUB_REF_NAME}"
+                if ! git rebase "origin/${GITHUB_REF_NAME}"; then
+                  git checkout --ours web/data 2>/dev/null || true
+                  git add web/data 2>/dev/null || true
+                  GIT_EDITOR=true git rebase --continue || git rebase --abort || true
+                fi
+                sleep 5
+              done
             fi
-            echo "push rejected, rebasing (attempt $attempt)"
-            git fetch origin "${GITHUB_REF_NAME}"
-            if ! git rebase "origin/${GITHUB_REF_NAME}"; then
-              git checkout --ours web/data 2>/dev/null || true
-              git add web/data 2>/dev/null || true
-              GIT_EDITOR=true git rebase --continue || git rebase --abort || true
-            fi
-            sleep 5
+            echo "::endgroup::"
+
+            # Don't sleep after the final pass — exit and let the next hourly
+            # trigger start a fresh job.
+            if [ "$pass" -lt "$PASSES" ]; then sleep $GAP; fi
           done
-          echo "could not push this run; the next one will pick up the same range"
-          exit 0
+
+          echo "hour complete: $PASSES passes"
