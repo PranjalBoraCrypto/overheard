@@ -164,6 +164,20 @@ footer a{color:var(--blue)}
       </div>
     </div>
 
+    <div class="field">
+      <div class="flabel"><span class="pub">Proof link</span><span>optional — makes your card checkable</span></div>
+      <p class="hint" style="margin-top:0">Anyone can screenshot a card and edit the numbers. This signs a short line with your key, so a reader can confirm the card really belongs to whoever holds this identity.</p>
+      <div class="row"><button class="go ghost" id="makeProof">Create proof link</button></div>
+      <div id="proofOut" hidden>
+        <div class="val pub" id="proofLink" style="margin-top:12px"></div>
+        <div class="row">
+          <button class="go ghost" data-copy="proof">Copy proof link</button>
+          <a class="go ghost" id="openProof" target="_blank" rel="noopener noreferrer">Open it</a>
+        </div>
+      </div>
+      <div class="msg" id="m-proof"></div>
+    </div>
+
     <details class="field" id="encBox">
       <summary style="cursor:pointer;color:var(--blue);font-size:14.5px;font-weight:500;padding:6px 0">Also save an encrypted backup file (recommended)</summary>
       <p class="hint">A <code>.json</code> locked with a passphrase you choose. Safer to keep on a laptop than the raw seed, and this page can restore from it later. Encrypted here — it never leaves your device.</p>
@@ -306,9 +320,57 @@ $("revealSeed").addEventListener("click", ()=>{
   $("revealSeed").textContent = on ? "Reveal" : "Hide";
 });
 
+/* ── proof link ───────────────────────────────────────────────────────────
+   A card is a picture, and pictures can be edited. This signs one short line
+   with the identity's own key and packs the result into a link, so a reader
+   can check it rather than trust it.
+
+   The proof rides in the URL FRAGMENT, after the #. Browsers never send that
+   to a server, so verifying costs no request and leaks nothing — not to this
+   site either.
+
+   The same line is also posted to Technocore, which anchors the claim publicly
+   and is a real signed message like any other. If that post fails the link is
+   still valid: verification is arithmetic on the signature, not a lookup.
+   ─────────────────────────────────────────────────────────────────────── */
+let PROOF=null;
+
+$("makeProof").addEventListener("click", async ()=>{
+  if(!ID) return;
+  const btn=$("makeProof"); btn.disabled=true;
+  say("proof","Signing on this device…");
+  try{
+    const room="overheard-proofs";
+    const text=sweep(`Overheard card proof. I hold the key for ${ID.did}.`);
+    const nonce=nextNonce();
+    const sig=await signFor(room,nonce,text);
+    const bundle={v:1,did:ID.did,room,nonce,sig,text};
+    PROOF=`${location.origin}/v#b=${b64u(enc.encode(JSON.stringify(bundle)))}`;
+
+    $("proofLink").textContent=PROOF;
+    $("openProof").href=PROOF;
+    $("proofOut").hidden=false;
+    btn.textContent="Regenerate";
+
+    // Publishing is a bonus, not the proof. Say which happened rather than
+    // implying the link depends on it.
+    say("proof","Signed. Publishing a copy to Technocore…");
+    const d=await post({kind:"message",did:ID.did,room,sig,nonce,text});
+    say("proof", d.ok
+      ? "Signed, and published to the overheard-proofs room. Share the link — anyone can check it."
+      : "Signed. The link works and verifies offline; publishing a public copy failed, which changes nothing about the proof.", "ok");
+  }catch(err){
+    say("proof","Could not sign: "+err.message,"err");
+  }
+  btn.disabled=false;
+});
+
 document.addEventListener("click", async (e)=>{
   const btn=e.target.closest("[data-copy]"); if(!btn||!ID) return;
-  const text = btn.dataset.copy==="seed" ? ID.seed : ID.did;
+  const text = btn.dataset.copy==="seed" ? ID.seed
+             : btn.dataset.copy==="proof" ? (PROOF||"")
+             : ID.did;
+  if(!text) return;
   try{ await navigator.clipboard.writeText(text); }
   catch{ const ta=document.createElement("textarea"); ta.value=text; document.body.appendChild(ta);
          ta.select(); document.execCommand("copy"); ta.remove(); }

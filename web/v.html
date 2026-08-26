@@ -1,0 +1,310 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="description" content="Check that an Overheard card was really signed by the key it names. Verification happens in your browser.">
+<title>Verify a card</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --navy-0:#080E1B; --navy-1:#0B1424; --navy-2:#111C30;
+  --edge:#1E2D48; --edge-lit:#2A3F63;
+  --white:#FFFFFF; --dim:#8FA3BF; --faint:#5C6E8C;
+  --mint:#2DD4A7; --blue:#4C8DFF; --gold:#F5C542; --red:#FF8B8B;
+  --display:"Outfit",system-ui,sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+  --ease:cubic-bezier(.22,.68,.24,1);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+[hidden]{display:none !important}
+body{
+  background:radial-gradient(900px 520px at 80% -8%,rgba(45,212,167,.09),transparent 60%),
+             linear-gradient(178deg,var(--navy-1),var(--navy-0) 60%) fixed;
+  color:var(--white);font-family:var(--display);font-size:16px;line-height:1.6;
+  -webkit-font-smoothing:antialiased;
+}
+.shell{max-width:680px;margin:0 auto;padding:0 22px 90px}
+header{display:flex;align-items:center;gap:12px;padding:26px 0 0}
+.glyph{width:32px;height:32px;border-radius:10px;position:relative;background:linear-gradient(145deg,var(--blue),var(--mint))}
+.glyph:after{content:"";position:absolute;inset:9px;border-radius:4px;background:var(--navy-0)}
+header a{color:var(--white);text-decoration:none;font-weight:700;font-size:20px;letter-spacing:-.02em}
+h1{font-weight:800;font-size:clamp(30px,5vw,42px);line-height:1.05;letter-spacing:-.035em;margin:34px 0 10px;text-wrap:balance}
+.lede{color:var(--dim);font-size:17px;max-width:54ch}
+
+.verdict{border-radius:18px;padding:26px 28px;margin-top:26px;border:1px solid var(--edge)}
+.verdict.pass{background:rgba(45,212,167,.08);border-color:rgba(45,212,167,.45)}
+.verdict.fail{background:rgba(255,139,139,.07);border-color:rgba(255,139,139,.4)}
+.verdict.wait{background:var(--navy-2)}
+.badge{display:flex;align-items:center;gap:13px}
+.seal{width:44px;height:44px;border-radius:50%;display:grid;place-items:center;font-size:22px;flex:none}
+.pass .seal{background:var(--mint);color:#04120C}
+.fail .seal{background:var(--red);color:#2A0A0A}
+.wait .seal{background:var(--edge-lit);color:var(--dim)}
+.verdict h2{font-weight:800;font-size:23px;letter-spacing:-.025em}
+.verdict p{color:var(--dim);font-size:15px;margin-top:12px}
+.didline{font-family:var(--mono);font-size:12.5px;background:var(--navy-0);border:1px solid var(--edge);
+  border-radius:10px;padding:12px 14px;word-break:break-all;color:var(--mint);margin-top:16px}
+
+.checks{margin-top:20px;display:flex;flex-direction:column;gap:8px}
+.check{display:grid;grid-template-columns:26px 1fr;gap:12px;align-items:start;
+  background:var(--navy-2);border:1px solid var(--edge);border-radius:12px;padding:13px 15px}
+.check .mark{width:22px;height:22px;border-radius:50%;display:grid;place-items:center;font-size:12px;font-weight:700}
+.check.yes .mark{background:rgba(45,212,167,.16);color:var(--mint)}
+.check.no .mark{background:rgba(255,139,139,.16);color:var(--red)}
+.check .what{font-weight:600;font-size:14.5px}
+.check .what small{display:block;color:var(--faint);font-weight:400;font-size:13px;margin-top:3px;line-height:1.5}
+.check .what code{font-family:var(--mono);font-size:12px;color:var(--dim)}
+
+.note{background:rgba(245,197,66,.07);border:1px solid rgba(245,197,66,.3);border-radius:13px;
+  padding:16px 18px;margin-top:22px;font-size:14px;line-height:1.65;color:var(--dim)}
+.note b{display:block;color:var(--gold);font-weight:600;margin-bottom:6px}
+.row{display:flex;gap:10px;flex-wrap:wrap;margin-top:20px}
+.go{font-family:var(--display);font-size:14px;font-weight:600;padding:11px 20px;border-radius:10px;border:0;cursor:pointer;
+  background:linear-gradient(120deg,var(--mint),#5FE3C0);color:#04120C;text-decoration:none;display:inline-block;transition:.2s var(--ease)}
+.go:hover{filter:brightness(1.08)}
+.go.ghost{background:var(--navy-0);border:1px solid var(--edge);color:var(--dim);font-weight:500}
+.go.ghost:hover{border-color:var(--edge-lit);color:var(--white)}
+footer{color:var(--faint);font-size:13.5px;margin-top:36px;border-top:1px solid var(--edge);padding-top:20px}
+footer a{color:var(--blue)}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+</head>
+<body>
+<div class="shell">
+  <header><span class="glyph"></span><a href="/">Overheard</a></header>
+
+  <h1 id="title">Checking this proof…</h1>
+  <p class="lede" id="lede">Reading the proof out of the link and testing the signature on this device.</p>
+
+  <div class="verdict wait" id="verdict">
+    <div class="badge"><div class="seal" id="seal">…</div><h2 id="headline">Working</h2></div>
+    <p id="detail">Nothing has been sent anywhere. The proof travels in the part of the URL after the <code>#</code>, which browsers never transmit — so this page is checking it without the server ever seeing it.</p>
+    <div class="didline" id="didline" hidden></div>
+  </div>
+
+  <div class="checks" id="checks"></div>
+
+  <div class="note" id="scope" hidden>
+    <b>What this does and does not prove</b>
+    <span id="scopeText"></span>
+  </div>
+
+  <div class="row" id="actions" hidden>
+    <a class="go" id="seeCard" href="/">See this card →</a>
+    <a class="go ghost" href="/create.html">Make your own</a>
+  </div>
+
+  <footer>
+    Independent, not affiliated with Flop Labs.
+    <a href="https://github.com/PranjalBoraCrypto/overheard/blob/main/web/v.html" target="_blank" rel="noopener noreferrer">Read the code that made this decision</a> —
+    it runs in your browser, so you can check it yourself.
+  </footer>
+</div>
+
+<script type="module">
+const $=(id)=>document.getElementById(id);
+const enc=new TextEncoder();
+
+/* ── decoding ────────────────────────────────────────────────────────────
+   Everything here is deliberately strict about the two things that break
+   Technocore verifiers, both proven in scripts/test-verify.mjs:
+
+   1. The nonce is a nanosecond clock (~1.7e18) and exceeds
+      Number.MAX_SAFE_INTEGER by ~200x. Passing one through a JS number
+      changes it, and the signature then never verifies. It stays a STRING
+      from the URL to the verify call, and is never arithmetic.
+
+   2. A 64-byte signature has SIXTEEN valid base64url spellings, because the
+      final character carries 2 unused bits. Decoding to bytes accepts all
+      sixteen; comparing signature strings would reject fifteen.
+   ─────────────────────────────────────────────────────────────────────── */
+const fromB64u=(t)=>{
+  const p=String(t).replace(/-/g,"+").replace(/_/g,"/");
+  const b=atob(p+"=".repeat((4-p.length%4)%4));
+  const o=new Uint8Array(b.length);
+  for(let i=0;i<b.length;i++) o[i]=b.charCodeAt(i);
+  return o;
+};
+
+const B58="123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
+function b58decode(str){
+  let n=0n;
+  for(const ch of str){
+    const i=B58.indexOf(ch);
+    if(i<0) throw new Error("not base58");
+    n=n*58n+BigInt(i);
+  }
+  const out=[];
+  while(n>0n){ out.unshift(Number(n%256n)); n/=256n; }
+  for(const ch of str){ if(ch!=="1") break; out.unshift(0); }
+  return new Uint8Array(out);
+}
+
+/** did:key -> raw 32-byte Ed25519 public key, or null if it is not one. */
+function pubkeyFromDid(did){
+  try{
+    if(!/^did:key:z[1-9A-HJ-NP-Za-km-z]+$/.test(did)) return null;
+    const bytes=b58decode(did.slice("did:key:z".length));
+    // multicodec prefix 0xed 0x01 marks Ed25519; anything else is a different
+    // key type and must not be waved through as if it verified.
+    if(bytes.length!==34 || bytes[0]!==0xed || bytes[1]!==0x01) return null;
+    return bytes.slice(2);
+  }catch{ return null; }
+}
+
+/* Technocore replaces every invisible character with a space before storing a
+   message, and the signature covers the STORED text. Normalising the same way
+   is what makes an offline check agree with the server. */
+const sweep=(t)=>[...t].map(c=>/\p{Cc}|\p{Cf}|\p{Zl}|\p{Zp}/u.test(c)?" ":c).join("").trim();
+
+const rows=[];
+const addRow=(ok,what,sub)=>rows.push({ok,what,sub});
+function paint(){
+  $("checks").innerHTML="";
+  for(const r of rows){
+    const el=document.createElement("div");
+    el.className="check "+(r.ok?"yes":"no");
+    const mark=document.createElement("div");
+    mark.className="mark"; mark.textContent=r.ok?"✓":"✕";
+    const what=document.createElement("div");
+    what.className="what";
+    // Everything below can contain attacker-chosen text, so it is set as text,
+    // never as markup. A proof link is a stranger's input by definition.
+    what.textContent=r.what;
+    const small=document.createElement("small");
+    small.textContent=r.sub;
+    what.appendChild(small);
+    el.append(mark,what);
+    $("checks").appendChild(el);
+  }
+}
+
+function verdict(kind,headline,detail,seal){
+  $("verdict").className="verdict "+kind;
+  $("seal").textContent=seal;
+  $("headline").textContent=headline;
+  $("detail").textContent=detail;
+}
+
+function fail(headline,detail){
+  $("title").textContent="This proof does not check out";
+  $("lede").textContent="Below is exactly which step failed, so you can tell a broken link from a forged one.";
+  verdict("fail",headline,detail,"✕");
+  paint();
+}
+
+/** Nonces are nanosecond clocks. Divide as BigInt — never as a JS number. */
+function nonceTime(nonce){
+  try{
+    const ms=BigInt(nonce)/1000000n;
+    if(ms<1600000000000n || ms>4000000000000n) return null;  // not a plausible clock
+    return new Date(Number(ms));
+  }catch{ return null; }
+}
+
+/* Paste a different proof into the address bar and only the fragment changes,
+   which does NOT reload the page. On a verification page that is the worst
+   possible bug: the previous "Verified" would still be on screen for a proof
+   nobody has checked. So every run starts from a blank slate, and a fragment
+   change re-runs the whole check. */
+function reset(){
+  rows.length=0;
+  $("checks").innerHTML="";
+  $("actions").hidden=true;
+  $("scope").hidden=true;
+  $("didline").hidden=true;
+  $("didline").textContent="";
+  $("title").textContent="Checking this proof…";
+  $("lede").textContent="Reading the proof out of the link and testing the signature on this device.";
+  verdict("wait","Working","Nothing has been sent anywhere. The proof travels in the part of the URL after the #, which browsers never transmit — so this page is checking it without the server ever seeing it.","…");
+}
+
+async function main(){
+  reset();
+  const frag=new URLSearchParams(location.hash.slice(1));
+  const raw=frag.get("b");
+  if(!raw){
+    $("title").textContent="Nothing to verify";
+    $("lede").textContent="This page checks a proof link made on the setup page. Open one, or make your own.";
+    verdict("wait","No proof in this link","A proof link looks like /v#b=… — the part after the # is the proof itself.","?");
+    $("actions").hidden=false;
+    return;
+  }
+
+  let bundle;
+  try{ bundle=JSON.parse(new TextDecoder().decode(fromB64u(raw))); }
+  catch{
+    addRow(false,"The link could not be read","The proof is not valid base64url JSON. Links break most often by being cut short when copied — check you have the whole thing, right to the end.");
+    return fail("Unreadable link","The proof could not be decoded at all, so there is nothing to check.");
+  }
+
+  const did=String(bundle.did??"");
+  const room=String(bundle.room??"");
+  const text=sweep(String(bundle.text??""));
+  const nonce=String(bundle.nonce??"");   // STRING, always
+  const sig=String(bundle.sig??"");
+
+  const pub=pubkeyFromDid(did);
+  addRow(!!pub,
+    pub?"The DID is a real Ed25519 key":"The DID is not a usable Ed25519 key",
+    pub?"It decodes to 32 bytes behind the 0xed01 multicodec prefix, which is what did:key uses for Ed25519."
+       :"It does not decode to an Ed25519 public key, so there is no key to check a signature against.");
+  if(!pub){ return fail("Not a verifiable identity","The DID in this proof is not an Ed25519 did:key."); }
+
+  let sigBytes=null;
+  try{ sigBytes=fromB64u(sig); }catch{}
+  const sigOk=sigBytes && sigBytes.length===64;
+  addRow(!!sigOk,
+    sigOk?"The signature is 64 bytes":"The signature is not a 64-byte Ed25519 signature",
+    sigOk?"Decoded from base64url. All sixteen valid spellings of the same signature decode identically, and all sixteen are accepted here."
+        :`Expected 64 bytes after decoding, got ${sigBytes?sigBytes.length:"nothing"}.`);
+  if(!sigOk){ return fail("Malformed signature","The signature is the wrong length, so it cannot be an Ed25519 signature."); }
+
+  const payload=`${room}|${nonce}|${text}`;
+  let ok=false;
+  try{
+    const key=await crypto.subtle.importKey("raw",pub,{name:"Ed25519"},false,["verify"]);
+    ok=await crypto.subtle.verify({name:"Ed25519"},key,sigBytes,enc.encode(payload));
+  }catch{
+    addRow(false,"This browser cannot check Ed25519","Try Chrome, Edge, Safari 17+ or Firefox 129+. The proof may be perfectly good — this browser just has no way to test it.");
+    return fail("Cannot check here","Your browser has no Ed25519 support, so this page refuses to give a verdict either way.");
+  }
+
+  addRow(ok,
+    ok?"The signature matches this key":"The signature does not match this key",
+    ok?`Verified over room|nonce|text, exactly the payload Technocore signs — for room "${room}".`
+      :"The bytes do not verify. Either the key did not sign this, or something in the proof was altered afterwards.");
+
+  if(!ok){
+    paint();
+    return fail("Signature does not verify","Nobody holding this key produced this signature over this text. Treat the card as unproven.");
+  }
+
+  const when=nonceTime(nonce);
+  addRow(true,"Signed with a Technocore nonce",
+    when?`The nonce is a nanosecond clock reading ${when.toISOString().replace("T"," ").slice(0,19)} UTC. The signer picked it, so treat it as claimed rather than proven.`
+        :"The nonce is carried as text and never as a number, because rounding one through a JS number breaks the signature forever.");
+
+  paint();
+  $("title").textContent="This card is genuine";
+  $("lede").textContent="The signature checks out against the key the card names. Nothing was sent to any server to establish that.";
+  verdict("pass","Verified","Whoever made this proof was holding the private key for the identity below.","✓");
+  $("didline").hidden=false;
+  $("didline").textContent=did;
+
+  $("scopeText").textContent =
+    "It proves that someone holding this key signed this text. It does not prove who that person is, that anything on the card is true, or that the signer is the one who sent you the link — a proof can be copied, and it stays valid for the identity it names. Judge the DID, not the messenger.";
+  $("scope").hidden=false;
+  $("seeCard").href="/?did="+encodeURIComponent(did);
+  $("actions").hidden=false;
+}
+
+const run=()=>main().catch((e)=>fail("Something went wrong",String(e&&e.message||e)));
+window.addEventListener("hashchange",run);
+run();
+</script>
+</body>
+</html>
