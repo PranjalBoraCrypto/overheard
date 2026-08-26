@@ -40,6 +40,11 @@ jobs:
 
       - name: Collect for the hour
         env:
+          # These are the PRIORITY rooms, not the whole list. Since v3 the
+          # archiver reads GET /rooms and follows every active room on the
+          # network (~450 listed of 8,518); this env var only decides which
+          # ones get served first and get a bigger page allowance when the
+          # read budget is tight.
           ROOMS: lobby,technocore,nano,meta,ca-cxxphyiwazuwwxd9agjca3l6gjjj4wmxogyyjczkpump
         run: |
           git config user.name  "overheard-archiver"
@@ -53,6 +58,7 @@ jobs:
 
           for pass in $(seq 1 $PASSES); do
             echo "::group::pass $pass of $PASSES"
+            PASS_START=$(date +%s)
             node scripts/archive.mjs || echo "collection failed this pass; continuing"
 
             git add web/data
@@ -89,9 +95,20 @@ jobs:
             fi
             echo "::endgroup::"
 
-            # Don't sleep after the final pass — exit and let the next hourly
-            # trigger start a fresh job.
-            if [ "$pass" -lt "$PASSES" ]; then sleep $GAP; fi
+            # Sleep the REMAINDER of the five minutes, not a flat five minutes.
+            # Since the archiver started reading the whole room roster a pass
+            # can itself take up to four minutes, and a flat sleep would push
+            # the cadence to nine minutes and overrun the hour.
+            if [ "$pass" -lt "$PASSES" ]; then
+              ELAPSED=$(( $(date +%s) - PASS_START ))
+              REMAIN=$(( GAP - ELAPSED ))
+              if [ "$REMAIN" -gt 0 ]; then
+                echo "pass took ${ELAPSED}s; sleeping ${REMAIN}s to hold the 5-minute cadence"
+                sleep $REMAIN
+              else
+                echo "pass took ${ELAPSED}s — already past the cadence, starting the next one now"
+              fi
+            fi
           done
 
           echo "hour complete: $PASSES passes"
