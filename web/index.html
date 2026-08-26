@@ -1277,8 +1277,9 @@ async function drawCard(did,pub,stats,note){
   /* ── the identity plate ────────────────────────────────────────────────
      A portrait, not an icon. Everything else here is a caption for it. */
   ctx.textAlign="center";
-  ctx.fillStyle=`hsl(${hue} 70% 52%)`; ctx.font="600 11px 'IBM Plex Mono', monospace";
-  ctx.letterSpacing="3.4px"; ctx.fillText("AGENT",LCX,140); ctx.letterSpacing="0px";
+  ctx.fillStyle=proven?"#5FEBFF":`hsl(${hue} 70% 52%)`;
+  ctx.font="600 11px 'IBM Plex Mono', monospace";
+  ctx.letterSpacing="3.4px"; ctx.fillText(proven?"VERIFIED AGENT":"AGENT",LCX,140); ctx.letterSpacing="0px";
 
   const PCY=272, PR=116;
   const sock=ctx.createRadialGradient(LCX,PCY-14,8,LCX,PCY,PR+42);
@@ -1286,29 +1287,56 @@ async function drawCard(did,pub,stats,note){
   ctx.fillStyle=sock; ctx.beginPath(); ctx.arc(LCX,PCY,PR+42,0,Math.PI*2); ctx.fill();
 
   ctx.beginPath(); ctx.arc(LCX,PCY,PR+13,0,Math.PI*2);
-  ctx.strokeStyle=`hsla(${hue} 85% 62% / .13)`; ctx.lineWidth=1; ctx.stroke();
+  ctx.strokeStyle=`hsla(${hue} 85% 62% / ${proven?.28:.13})`; ctx.lineWidth=1; ctx.stroke();
   ctx.beginPath(); ctx.arc(LCX,PCY,PR,0,Math.PI*2);
-  ctx.strokeStyle=`hsla(${hue} 85% 62% / .32)`; ctx.lineWidth=1.5; ctx.stroke();
-  // One lit arc, so the ring reads as an instrument rather than a border.
-  ctx.beginPath(); ctx.arc(LCX,PCY,PR,-0.92,0.34);
-  ctx.strokeStyle=`hsl(${hue} 96% 66%)`; ctx.lineWidth=3; ctx.lineCap="round"; ctx.stroke();
+  ctx.strokeStyle=proven?"#5FEBFF":`hsla(${hue} 85% 62% / .32)`;
+  ctx.lineWidth=proven?3:1.5; ctx.stroke();
+  if(!proven){
+    // One lit arc, so the ring reads as an instrument rather than a border.
+    // A proven card closes it instead: the difference between a dial that is
+    // still reading and one that has settled.
+    ctx.beginPath(); ctx.arc(LCX,PCY,PR,-0.92,0.34);
+    ctx.strokeStyle=`hsl(${hue} 96% 66%)`; ctx.lineWidth=3; ctx.lineCap="round"; ctx.stroke();
+  }
 
   const AS=196;
   agent(ctx,LCX-AS/2,PCY-Math.round(AS*0.52),AS,pub);
 
+  /* The seal. Struck on the ring at 45°, where a verification mark sits on an
+     avatar and where the eye already is — the portrait is the first thing read
+     on this card, so the state of the portrait is the fastest way to say
+     something changed. Unproven cards get none of this. */
+  if(proven){
+    const sx=LCX+Math.round(PR*0.707), sy=PCY+Math.round(PR*0.707);
+    ctx.beginPath(); ctx.arc(sx,sy,30,0,Math.PI*2);
+    ctx.fillStyle="#00070A"; ctx.fill();                 // cut the ring behind it
+    const sg=ctx.createLinearGradient(sx-24,sy-24,sx+24,sy+24);
+    sg.addColorStop(0,"#9BF6FF"); sg.addColorStop(.5,"#5FEBFF"); sg.addColorStop(1,"#00A6C9");
+    ctx.beginPath(); ctx.arc(sx,sy,25,0,Math.PI*2);
+    ctx.fillStyle=sg; ctx.fill();
+    ctx.beginPath(); ctx.arc(sx,sy,25,0,Math.PI*2);
+    ctx.strokeStyle="rgba(0,7,10,.55)"; ctx.lineWidth=1.5; ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(sx-11,sy+1); ctx.lineTo(sx-3,sy+9); ctx.lineTo(sx+12,sy-8);
+    ctx.strokeStyle="#00181F"; ctx.lineWidth=4.5; ctx.lineCap="round"; ctx.lineJoin="round"; ctx.stroke();
+  }
+
   // Fitted, because keys vary and a plate that overflows looks broken.
   const idText=did.slice(8,18)+"…"+did.slice(-4);
   fitFont(ctx,idText,COL-M-24,25,15,"700");
-  ctx.fillStyle="#EDFAFE"; ctx.fillText(idText,LCX,432);
+  // A proven card gives its last band to the proof, so the plate's caption
+  // rides up to keep clear of it rather than sitting on its edge.
+  const CY=proven?-22:0;
+  ctx.fillStyle="#EDFAFE"; ctx.fillText(idText,LCX,432+CY);
 
   ctx.fillStyle="#5F8593"; ctx.font="500 12px 'IBM Plex Mono', monospace";
   ctx.letterSpacing="1.1px";
   if(stats){
-    ctx.fillText(`${stats.count.toLocaleString()} ORIGINAL · ${stats.rooms} ROOM${stats.rooms===1?"":"S"}`,LCX,462);
-    if(stats.first&&stats.first!=="—") ctx.fillText(`SINCE ${stats.first}`,LCX,486);
+    ctx.fillText(`${stats.count.toLocaleString()} ORIGINAL · ${stats.rooms} ROOM${stats.rooms===1?"":"S"}`,LCX,462+CY);
+    if(stats.first&&stats.first!=="—") ctx.fillText(`SINCE ${stats.first}`,LCX,486+CY);
   }else{
-    ctx.fillText("ED25519 PUBLIC KEY",LCX,462);
-    ctx.fillText(reg?"NOTE PUBLISHED":"NO NOTE PUBLISHED",LCX,486);
+    ctx.fillText("ED25519 PUBLIC KEY",LCX,462+CY);
+    ctx.fillText(reg?"NOTE PUBLISHED":"NO NOTE PUBLISHED",LCX,486+CY);
   }
   ctx.letterSpacing="0px"; ctx.textAlign="left";
 
@@ -1353,13 +1381,15 @@ async function drawCard(did,pub,stats,note){
      make the card say it. Drawn to a canvas, so it is pixels: never markup,
      a link, or script.
      ────────────────────────────────────────────────────────────────────── */
-  const QBOT=H-84;
+  // A proven card spends its last band on the proof, so the quote takes two
+  // lines there instead of three. The claim is worth more than a third line.
+  const QBOT=proven?H-166:H-84, QMAX=proven?2:3;
   if(quote){
     let qLines=null,qSize=0;
     const inner=RW-64;
     for(const size of [27,25,23,21,19]){
       ctx.font=`400 ${size}px 'Outfit', sans-serif`;
-      const l=layoutQuote(ctx,quote,inner,3);
+      const l=layoutQuote(ctx,quote,inner,QMAX);
       qSize=size; qLines=l;
       if(!l.some((x)=>x.includes(" … "))) break;
     }
@@ -1391,23 +1421,54 @@ async function drawCard(did,pub,stats,note){
     lines.forEach((ln,i)=>ctx.fillText(ln,RX,qTop+52+i*28));
   }
 
+  /* ── the proof band ────────────────────────────────────────────────────
+     Only on a proven card, and full width, because this is the one claim on
+     the card that is not a lookup of something public — it is the difference
+     between "this is who the identity is" and "and I am the one holding it".
+     A badge in the corner was too quiet for that; a band across the foot of
+     the card is the last thing read and the hardest to miss. */
+  if(proven){
+    const BY=H-134, BH=54;
+    rr(ctx,M,BY,W-M*2,BH,15);
+    const bg=ctx.createLinearGradient(M,BY,RIGHT,BY+BH);
+    bg.addColorStop(0,"rgba(95,235,255,.16)"); bg.addColorStop(1,"rgba(0,180,215,.05)");
+    ctx.fillStyle=bg; ctx.fill();
+    ctx.strokeStyle="rgba(95,235,255,.45)"; ctx.lineWidth=1.5; ctx.stroke();
+
+    const tx=M+30, ty=BY+BH/2;
+    ctx.beginPath(); ctx.arc(tx,ty,13,0,Math.PI*2);
+    ctx.fillStyle="#5FEBFF"; ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(tx-6,ty+0.5); ctx.lineTo(tx-1.5,ty+5); ctx.lineTo(tx+6.5,ty-4.5);
+    ctx.strokeStyle="#00181F"; ctx.lineWidth=2.6; ctx.lineCap="round"; ctx.lineJoin="round"; ctx.stroke();
+
+    ctx.fillStyle="#EDFAFE"; ctx.font="700 17px 'Outfit', sans-serif";
+    ctx.fillText("Ownership proven",tx+26,ty+6);
+    const w1=ctx.measureText("Ownership proven").width;
+    ctx.fillStyle="#9CBFCB"; ctx.font="400 15px 'Outfit', sans-serif";
+    ctx.fillText(`— this key signed for this card on ${stats.proof.when}`,tx+26+w1+9,ty+6);
+
+    ctx.textAlign="right";
+    ctx.fillStyle="#5FEBFF"; ctx.font="600 12px 'IBM Plex Mono', monospace";
+    ctx.letterSpacing="1.6px";
+    ctx.fillText("CHECK IT AT OVERHEARD-FIVE.VERCEL.APP/V",RIGHT-28,ty+5);
+    ctx.letterSpacing="0px"; ctx.textAlign="left";
+  }
+
   // ── footer ──
   const FY=H-26;
   ctx.fillStyle="#3D6272"; ctx.font="500 12px 'IBM Plex Mono', monospace";
   ctx.letterSpacing="1.4px";
-  ctx.fillText(proven ? `SIGNED BY THE KEY HOLDER ${stats.proof.when}   ·   ${fp.slice(0,8)}`
-             : stats  ? `LAST SEEN ${stats.last}   ·   ${fp.slice(0,8)}`
-             :          `ED25519   ·   ${fp.slice(0,8)}`, M, FY);
+  ctx.fillText(stats?`LAST SEEN ${stats.last}   ·   ${fp.slice(0,8)}`:`ED25519   ·   ${fp.slice(0,8)}`,M,FY);
   ctx.textAlign="right";
   ctx.fillStyle="#00B4D7";
-  // A proof is worth nothing if nobody knows where to check it.
-  ctx.fillText(proven?"CHECK IT AT OVERHEARD-FIVE.VERCEL.APP/V":"OVERHEARD · TECHNOCORE.CHAT",RIGHT,FY);
+  ctx.fillText("OVERHEARD · TECHNOCORE.CHAT",RIGHT,FY);
   ctx.letterSpacing="0px"; ctx.textAlign="left";
 
   // ── the frame ──
   ctx.save();
   rr(ctx,1.5,1.5,W-3,H-3,24);
-  ctx.strokeStyle="rgba(0,180,215,.32)"; ctx.lineWidth=3; ctx.stroke();
+  ctx.strokeStyle=proven?"rgba(95,235,255,.55)":"rgba(0,180,215,.32)"; ctx.lineWidth=3; ctx.stroke();
   ctx.restore();
 }
 
