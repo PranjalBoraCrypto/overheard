@@ -659,6 +659,168 @@ function layoutQuote(ctx,text,maxWidth,maxLines){
   return lines.slice(0,maxLines);
 }
 
+/* ── ISSUING ──────────────────────────────────────────────────────────────
+   The wait was a row of grey chips under the input, while the card sat
+   greyed out somewhere below the fold. Two problems: nobody saw the thing
+   they had just asked for, and the wait was dead time.
+
+   Now the page goes to the card and the card boots. It is the agent waking
+   up: the frame draws itself, the key's own 32 bytes stream in and light up,
+   the agent assembles and its visor comes on, and three checks tick off.
+
+   THE CHECKS ARE REAL. Each row is wired to one of the three lookups this
+   page actually makes and ticks when that promise resolves. A progress bar
+   that is really a timer is a small lie told to someone who is trusting you
+   with an identity, and it is the kind of lie that gets noticed on the one
+   day the network is slow.
+
+   Deliberately capped: MIN_MS keeps it on screen long enough to be watched
+   even when everything is cached, and after that it hands over the moment
+   the data lands. Nobody loves an animation the third time if it costs them
+   a second.
+   ─────────────────────────────────────────────────────────────────────── */
+const BOOT_MIN_MS = 1900;
+
+function bootCard(pub, progress){
+  const cv=$("card"), ctx=cv.getContext("2d");
+  const t0=performance.now();
+  const bytes=[...pub].map((b)=>b.toString(16).padStart(2,"0"));
+  const hue=189+((pub[0]/255)*84-42);
+  const rows=[
+    {k:"rooms",   label:"Reading the rooms as they are now"},
+    {k:"archive", label:"Searching the archive"},
+    {k:"note",    label:"Checking the permanent note"},
+  ];
+  let raf=0, live=true;
+
+  const cl=(x)=>Math.max(0,Math.min(1,x));
+  const outCubic=(x)=>1-Math.pow(1-x,3);
+  const outBack=(x)=>1+2.2*Math.pow(x-1,3)+1.4*Math.pow(x-1,2);
+
+  function draw(t){
+    ctx.fillStyle="#000000"; ctx.fillRect(0,0,W,H);
+
+    // the ground the finished card also uses, so the hand-over is seamless
+    const glow=ctx.createRadialGradient(W/2,250,0,W/2,250,520);
+    const pulse=0.16+0.07*Math.sin(t/420);
+    glow.addColorStop(0,`rgba(0,180,215,${pulse})`); glow.addColorStop(1,"transparent");
+    ctx.fillStyle=glow; ctx.fillRect(0,0,W,H);
+    ctx.strokeStyle="rgba(0,180,215,.055)"; ctx.lineWidth=1;
+    for(let gx=W/4;gx<W;gx+=W/4){ ctx.beginPath(); ctx.moveTo(gx,0); ctx.lineTo(gx,H); ctx.stroke(); }
+    for(let gy=H/4;gy<H;gy+=H/4){ ctx.beginPath(); ctx.moveTo(0,gy); ctx.lineTo(W,gy); ctx.stroke(); }
+
+    // a scan sweep, the one thing that never stops moving
+    const sy=((t/1500)%1)*H;
+    const sw=ctx.createLinearGradient(0,sy-70,0,sy+70);
+    sw.addColorStop(0,"rgba(0,180,215,0)"); sw.addColorStop(.5,"rgba(0,180,215,.13)");
+    sw.addColorStop(1,"rgba(0,180,215,0)");
+    ctx.fillStyle=sw; ctx.fillRect(0,sy-70,W,140);
+
+    // the frame draws itself
+    const fp=outCubic(cl(t/620));
+    ctx.save();
+    ctx.setLineDash([ (W+H)*2, (W+H)*2 ]);
+    ctx.lineDashOffset=(W+H)*2*(1-fp);
+    rr(ctx,1.5,1.5,W-3,H-3,24);
+    ctx.strokeStyle="rgba(0,180,215,.5)"; ctx.lineWidth=3; ctx.stroke();
+    ctx.restore();
+
+    ctx.textAlign="center";
+    ctx.fillStyle="#00B4D7"; ctx.font="600 13px 'IBM Plex Mono', monospace";
+    ctx.letterSpacing="4px";
+    ctx.globalAlpha=cl(t/400);
+    ctx.fillText("ISSUING CREDENTIAL",W/2,74);
+    ctx.globalAlpha=1; ctx.letterSpacing="0px";
+
+    // orbit — one arc per lookup still running, so it visibly thins out
+    const cx=W/2, cy=214;
+    const pending=rows.filter((r)=>!progress[r.k]).length;
+    for(let i=0;i<3;i++){
+      const r=120+i*11;
+      if(progress[rows[i].k]){
+        // Finished: the ring closes. A settled circle reads as "this one is
+        // resolved" far more clearly than a shorter arc still going round.
+        ctx.beginPath(); ctx.arc(cx,cy,r,0,Math.PI*2);
+        ctx.strokeStyle=`hsla(${hue} 85% 60% / .18)`; ctx.lineWidth=1.5; ctx.stroke();
+      }else{
+        const sp=(t/820)*(i%2?-1:1)+i*2.1;
+        ctx.beginPath(); ctx.arc(cx,cy,r,sp,sp+1.25);
+        ctx.strokeStyle=`hsla(${hue} 100% 66% / .85)`; ctx.lineWidth=3; ctx.lineCap="round"; ctx.stroke();
+      }
+    }
+
+    // the agent assembles
+    const ap=cl((t-320)/620);
+    if(ap>0){
+      const sc=outBack(ap);
+      ctx.save();
+      ctx.translate(cx,cy); ctx.scale(sc,sc); ctx.translate(-cx,-cy);
+      ctx.globalAlpha=cl(ap*1.4);
+      agent(ctx,cx-70,cy-72,140,pub);
+      ctx.restore(); ctx.globalAlpha=1;
+    }
+
+    // the key's own bytes, lighting up left to right
+    const bx=W/2-((bytes.length*30)/2);
+    ctx.font="500 15px 'IBM Plex Mono', monospace"; ctx.textAlign="left";
+    bytes.forEach((h,i)=>{
+      const on=cl((t-260-i*26)/240);
+      ctx.globalAlpha=.12+on*.88;
+      ctx.fillStyle=on>=1?`hsl(${hue} 90% 66%)`:"#2A6B80";
+      ctx.fillText(h,bx+i*30,376);
+    });
+    ctx.globalAlpha=1;
+    ctx.textAlign="center";
+    ctx.fillStyle="#5F8593"; ctx.font="500 12px 'IBM Plex Mono', monospace";
+    ctx.letterSpacing="2.4px"; ctx.fillText("YOUR PUBLIC KEY, 32 BYTES",W/2,404); ctx.letterSpacing="0px";
+
+    // real checks, real ticks
+    ctx.textAlign="left";
+    rows.forEach((r,i)=>{
+      const y=452+i*40, x=W/2-250;
+      const shown=cl((t-700-i*130)/300);
+      if(shown<=0) return;
+      ctx.globalAlpha=shown;
+      const done=progress[r.k];
+      if(done){
+        ctx.strokeStyle=`hsl(${hue} 90% 62%)`; ctx.lineWidth=3; ctx.lineCap="round";
+        ctx.beginPath(); ctx.moveTo(x-2,y-4); ctx.lineTo(x+5,y+3); ctx.lineTo(x+16,y-11); ctx.stroke();
+      }else{
+        const a=(t/260)%(Math.PI*2);
+        ctx.strokeStyle=`hsla(${hue} 100% 66% / .9)`; ctx.lineWidth=2.5; ctx.lineCap="round";
+        ctx.beginPath(); ctx.arc(x+7,y-4,8,a,a+2.2); ctx.stroke();
+      }
+      ctx.fillStyle=done?"#EDFAFE":"#7FA6B4";
+      ctx.font=`${done?600:400} 18px 'Outfit', sans-serif`;
+      ctx.fillText(r.label,x+34,y+2);
+      ctx.globalAlpha=1;
+    });
+
+    ctx.textAlign="center";
+    ctx.fillStyle="#3D6272"; ctx.font="500 12px 'IBM Plex Mono', monospace";
+    ctx.letterSpacing="1.6px";
+    ctx.fillText(pending?"NOTHING ABOUT YOUR KEY IS SENT ANYWHERE":"READY",W/2,H-46);
+    ctx.letterSpacing="0px"; ctx.textAlign="left";
+  }
+
+  if(calm){
+    // No animation, but never a blank card: one honest frame.
+    draw(BOOT_MIN_MS);
+    return { stop(){}, minWait: Promise.resolve() };
+  }
+
+  (function loop(now){
+    if(!live) return;
+    draw(now-t0);
+    raf=requestAnimationFrame(loop);
+  })(performance.now());
+
+  return {
+    stop(){ live=false; cancelAnimationFrame(raf); },
+    minWait: new Promise((r)=>setTimeout(r,BOOT_MIN_MS)),
+  };
+}
+
 async function drawCard(did,pub,stats,note){
   const ctx=document.getElementById("card").getContext("2d");
   const hue=189+((pub[0]/255)*84-42);   // banded around the brand cyan
@@ -1036,13 +1198,33 @@ async function issue(raw){
   try{ await crypto.subtle.importKey("raw",p.pub,{name:"Ed25519"},false,["verify"]); }catch{}
 
   current=p;
-  await runSteps();
+  $("steps").innerHTML="";
   await document.fonts.ready;
+
+  // Show the stage and go to it BEFORE the work starts, so the boot animation
+  // happens where the person is looking instead of below the fold.
+  $("stage").classList.remove("idle");
+  $("cardwrap").hidden=false; $("diag").hidden=true;
+  document.querySelector(".actions").hidden=true;
+  $("status").textContent=""; $("previewBtn").hidden=true;
+  $("stage").scrollIntoView({behavior:calm?"auto":"smooth",block:"center"});
+
+  const progress={rooms:false,archive:false,note:false};
+  const boot=bootCard(p.pub,progress);
   // Known identities get their real activity; unseen keys show the fingerprint.
   // Two sources, tried in order. The proxy reads the rooms as they are right
   // now; the archive remembers further back than the rooms themselves do.
   // Whichever knows more about this identity wins.
-  const [live,archived,note]=await Promise.all([lookupLive(p.did),lookupStats(p.did),lookupNote(p.did)]);
+  // Each promise flips its own flag as it lands, so the ticks on screen are
+  // the actual lookups finishing rather than a timer pretending to be one.
+  const [live,archived,note]=await Promise.all([
+    lookupLive(p.did).then((r)=>{ progress.rooms=true; return r; },   ()=>{ progress.rooms=true; return null; }),
+    lookupStats(p.did).then((r)=>{ progress.archive=true; return r; },()=>{ progress.archive=true; return null; }),
+    lookupNote(p.did).then((r)=>{ progress.note=true; return r; },    ()=>{ progress.note=true; return null; }),
+  ]);
+  // Let it finish its sentence when the data beat it, then hand over.
+  await boot.minWait;
+  boot.stop();
   let stats=null;
   if(live&&archived) stats = archived.count>=live.count
     // The counts decide which record wins, but the QUOTE follows the clock:
@@ -1079,8 +1261,6 @@ async function issue(raw){
     for(const id of ["save","copy","post"]) $(id).disabled=true;
   };
 
-  $("stage").classList.remove("idle");
-  $("cardwrap").hidden=false; $("diag").hidden=true;
   document.querySelector(".actions").hidden=false;
 
   // Must run after the reset above, or the reset hides what it just showed.
@@ -1090,7 +1270,6 @@ async function issue(raw){
   renderDiagnostic(p, stats, note);
   const w=$("cardwrap"); w.classList.remove("reveal"); void w.offsetWidth; w.classList.add("reveal");
   for(const id of ["save","copy","post"]) $(id).disabled=false;
-  $("stage").scrollIntoView({behavior:calm?"auto":"smooth",block:"center"});
 }
 
 $("form").addEventListener("submit",e=>{ e.preventDefault(); issue($("did").value); });
