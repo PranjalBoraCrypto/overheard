@@ -381,7 +381,13 @@ if(stored){
   $("storedBox").hidden=false;
   $("storedDid").textContent=stored.did;
   if(wanted && wanted!==stored.did){
-    $("unlockWho").innerHTML=`You asked about <code>${wanted.slice(0,20)}…</code> but this browser holds a different identity. Unlock the one below, or restore the right backup file.`;
+    // Built as text nodes, never innerHTML. `wanted` is a URL parameter, so it
+    // is attacker-controlled: on a page that holds a seed and an encrypted
+    // vault, one injected <img onerror> would be enough to read both.
+    const who=$("unlockWho"); who.textContent="You asked about ";
+    const c=document.createElement("code"); c.textContent=wanted.slice(0,20)+"…";
+    who.appendChild(c);
+    who.appendChild(document.createTextNode(" but this browser holds a different identity. Unlock the one below, or restore the right backup file."));
   }
 }else if(wanted){
   $("unlockWho").textContent="This browser has no saved identity. Restore your backup file below, or make a new one above.";
