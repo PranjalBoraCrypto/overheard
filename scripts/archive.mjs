@@ -548,6 +548,11 @@ async function main() {
       fresh.push({
         did,
         unique: p.unique,
+        // Carried so the strip can tell an identity that writes from one that
+        // repeats: `unique` alone cannot, and the strip is sorted by recency,
+        // which is exactly the sort that surfaces the highest-frequency
+        // posters on the network.
+        count: p.count,
         rooms: p.rooms.length,
         last: p.last,
         room: p.last_room ?? p.rooms[p.rooms.length - 1] ?? null,

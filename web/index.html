@@ -316,6 +316,67 @@ h1 em{
 }
 .chip .said.none{color:var(--faint);font-style:italic}
 .chip .where{font-family:var(--mono);font-size:11px;color:var(--faint);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.seenhead{display:flex;align-items:flex-start;justify-content:space-between;gap:20px;flex-wrap:wrap}
+.act.refresh{padding:11px 17px;font-size:13.5px;align-self:flex-start}
+.act.refresh svg{transition:transform .5s var(--ease)}
+.act.refresh:hover:not(:disabled) svg{transform:rotate(-90deg)}
+.act.refresh.busy svg{animation:spin 700ms linear infinite}
+.act.refresh.busy{pointer-events:none}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* The reload, as a sequence rather than a flicker.
+   Old rows collapse left-to-right, a light passes over the empty grid, and
+   the new rows rise in on the same stagger. The point is not decoration: a
+   list that swaps contents instantly cannot be told apart from a list that
+   did nothing, and this section's whole claim is that it just went and
+   looked. */
+.chips{position:relative}
+.chip{--i:0}
+.chip.out{animation:chipout .34s var(--ease) forwards;animation-delay:calc(var(--i) * 22ms)}
+.chip.enterrow{animation:chipin .48s var(--spring) backwards;animation-delay:calc(var(--i) * 34ms)}
+@keyframes chipout{to{opacity:0;transform:translateY(10px) scale(.96);filter:blur(3px)}}
+@keyframes chipin{from{opacity:0;transform:translateY(18px) scale(.97)}}
+.chips::after{
+  content:"";position:absolute;inset:0;pointer-events:none;opacity:0;border-radius:16px;
+  background:linear-gradient(105deg,transparent 42%,rgba(0,180,215,.16) 50%,transparent 58%);
+  background-size:260% 100%;
+}
+.chips.sweeping::after{opacity:1;animation:sweep .78s var(--ease)}
+@keyframes sweep{from{background-position:180% 0}to{background-position:-80% 0}}
+@media (prefers-reduced-motion:reduce){
+  .chip.out,.chip.enterrow,.chips.sweeping::after,.act.refresh.busy svg{animation:none}
+  .chip.out{opacity:0}
+}
+
+/* A chip is now two controls, so it can no longer be one button: a button
+   inside a button is invalid and browsers resolve it by dropping one. */
+.chip .kebab{
+  position:absolute;top:9px;right:9px;width:28px;height:28px;border-radius:9px;
+  display:grid;place-items:center;border:0;background:transparent;color:var(--faint);
+  cursor:pointer;opacity:0;transition:.2s var(--ease);z-index:2;
+}
+.chip:hover .kebab,.chip .kebab:focus-visible,.chip .kebab[aria-expanded="true"]{opacity:1}
+.chip .kebab:hover,.chip .kebab[aria-expanded="true"]{background:rgba(0,180,215,.14);color:var(--cy-hi)}
+.chip .kebab svg{width:15px;height:15px;fill:currentColor}
+.chip .body{
+  display:grid;grid-template-columns:auto 1fr;gap:14px;align-items:start;text-align:left;
+  border:0;background:transparent;padding:0;margin:0;font:inherit;color:inherit;cursor:pointer;width:100%;
+}
+.chip .body:focus-visible{outline:2px solid var(--cy-hi);outline-offset:6px;border-radius:10px}
+.menu{
+  position:absolute;z-index:80;min-width:214px;padding:6px;border-radius:14px;
+  background:linear-gradient(rgba(4,20,28,.97),rgba(4,20,28,.97)) padding-box,var(--bevel) border-box;
+  border:1px solid transparent;box-shadow:0 24px 48px -20px rgba(0,0,0,.9);
+  animation:menuin .18s var(--ease);
+}
+@keyframes menuin{from{opacity:0;transform:translateY(-6px)}}
+.menu button{
+  display:flex;align-items:center;gap:10px;width:100%;padding:10px 12px;border:0;border-radius:10px;
+  background:transparent;color:var(--dim);font:inherit;font-size:13.5px;text-align:left;cursor:pointer;
+}
+.menu button:hover,.menu button:focus-visible{background:rgba(0,180,215,.12);color:var(--txt);outline:none}
+.menu button svg{width:15px;height:15px;flex:none;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.menu .sep{height:1px;margin:5px 8px;background:rgba(16,57,74,.9)}
 .plain{max-width:64ch}
 .plain p{color:var(--dim);margin-bottom:15px;font-size:15.5px}
 .plain strong{color:var(--txt);font-weight:600}
@@ -452,9 +513,16 @@ footer a:hover{color:var(--cy-hi)}
   </section>
 
   <section class="band rise" id="seen" hidden>
-    <h2>Seen recently on the network</h2>
-    <p class="sub">Real identities, real lines, straight out of the archive — <span id="freshness">updating</span>.
-      Click one to see its card.</p>
+    <div class="seenhead">
+      <div>
+        <h2>Seen recently on the network</h2>
+        <p class="sub">Identities writing their own lines, straight out of the archive — <span id="freshness">updating</span>.
+          Click one to see its card.</p>
+      </div>
+      <button class="act refresh" id="refresh" type="button" aria-label="Reload the archive strip">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.6-6.4"/><polyline points="21 3 21 9 15 9"/></svg><span>Refresh</span>
+      </button>
+    </div>
     <div class="chips" id="chips"></div>
   </section>
 
@@ -1452,6 +1520,21 @@ async function issue(raw){
 }
 
 $("form").addEventListener("submit",e=>{ e.preventDefault(); issue($("did").value); });
+
+/* A card you can link to. ?did=… fills the field and runs the lookup, which
+   is what makes "Copy a link to its card" worth having.
+
+   The value is a query parameter, so it is attacker-controlled: it goes into
+   an input's .value and into parseDid, and nowhere near innerHTML. That is
+   deliberate — an earlier version of the create page interpolated ?did= into
+   markup on the one screen that also held a seed. */
+(()=>{
+  const q=new URLSearchParams(location.search).get("did");
+  if(!q) return;
+  try{ parseDid(q); }catch{ return; }      // silently ignore a junk link
+  $("did").value=q;
+  issue(q);
+})();
 $("demo").addEventListener("click",()=>{ const v=EXAMPLES[pick++%EXAMPLES.length]; $("did").value=v; issue(v); });
 
 const wrap=$("cardwrap");
@@ -1552,63 +1635,256 @@ $("post").addEventListener("click",async()=>{
   window.open(`https://x.com/intent/tweet?text=${encodeURIComponent(shareText(lastStats))}`,"_blank","noopener");
 });
 
-/* Recently seen — stays hidden until the archive has actually found someone,
-   so a fresh deployment shows nothing rather than an empty promise. */
-(async()=>{
+/* ── seen recently ─────────────────────────────────────────────────────────
+   WHERE IT READS FROM
+
+   It used to read ./data/recent.json — the DEPLOYED copy. The archiver commits
+   that file every ~5 minutes but the site deploys twice an hour, so a strip
+   whose entire claim is "straight out of the archive" was routinely announcing
+   that it last collected anything 40 minutes ago. /api/recent reads the same
+   file from the repository, which closes the gap to the commit cadence; the
+   deployed file stays as the fallback, because older lines beat none.
+
+   WHICH IDENTITIES IT SHOWS
+
+   Sorted by recency, this strip was showing the network's spam layer, and it
+   is the one section on the site arguing that the spam layer is not the
+   network. Measured across the archive: 0.4% of stored messages open with an
+   emoji, but 315 of the 500 most-repeated templates do — and the most RECENTLY
+   active identities are, by definition, the ones posting most often. Recency
+   alone selects for exactly the wrong thing.
+
+   So a row has to have written more than one distinct line AND have at least
+   half its output be its own words. Rows from before the archiver carried
+   `count` cannot be judged and are kept — an unknown is not a strike. If the
+   filter leaves too few to fill the grid it steps aside entirely, because a
+   half-empty strip is a worse lie than a mixed one.
+   ──────────────────────────────────────────────────────────────────────── */
+const SEEN_MAX = 18, SEEN_MIN = 6;
+
+function seenWorthShowing(rows){
+  const strong = rows.filter((d) =>
+    d.unique > 1 && (typeof d.count !== "number" || d.count <= 0 || d.unique / d.count >= 0.5));
+  return (strong.length >= SEEN_MIN ? strong : rows.filter((d) => d.unique > 0)).slice(0, SEEN_MAX);
+}
+
+async function fetchRecent(){
+  // The repository copy first, the deployed copy second. `no-store` on the
+  // proxy call because the whole point of the Refresh button is to go and ask.
   try{
-    const r=await fetch("./data/recent.json",{cache:"no-cache"});
-    if(!r.ok) return;
-    const j=await r.json();
-    const dids=Array.isArray(j.dids)?j.dids:[];
-    const live=dids.filter(d=>d.unique>0).slice(0,18);
-    if(!live.length) return;
-    const box=$("chips");
-    for(const d of live){
-      let pub; try{ pub=parseDid(d.did).pub; }catch{ continue; }
-      const b=document.createElement("button");
-      b.className="chip"; b.type="button";
-
-      // The same agent as the card, at thumbnail size. A row of these is the
-      // section's real draw: you scroll past a colour swatch, you stop for a
-      // face. Drawn at 2x and scaled down, or it goes soft on a retina screen.
-      const sq=document.createElement("canvas");
-      sq.className="sq"; sq.width=88; sq.height=88;
-      agent(sq.getContext("2d"),4,2,80,pub);
-
-      const col=document.createElement("div"); col.className="col";
-
-      const top=document.createElement("div"); top.className="top";
-      const id=document.createElement("span"); id.className="id";
-      // Network-supplied, so it is set as text. parseDid already rejected
-      // anything malformed, but the rule is the rule.
-      id.textContent=`${d.did.slice(8,16)}…${d.did.slice(-4)}`;
-      const n=document.createElement("span"); n.className="n";
-      n.textContent=`${Number(d.unique||0).toLocaleString()} signed`;
-      top.append(id,n);
-
-      // What they actually said. Written by a stranger — set as text, never
-      // markup, and clamped to two lines by CSS rather than cut here, so the
-      // words are never altered.
-      const said=document.createElement("div");
-      said.className="said"+(d.text?"":" none");
-      said.textContent=d.text ? `“${d.text}”` : "no message recorded yet";
-
-      const where=document.createElement("div"); where.className="where";
-      where.textContent=[d.room?`in ${d.room}`:null, ago(d.last)].filter(Boolean).join("  ·  ");
-
-      col.append(top,said,where);
-      b.append(sq,col);
-      b.addEventListener("click",()=>{ $("did").value=d.did; issue(d.did); });
-      box.appendChild(b);
+    const r = await fetch("/api/recent", { cache: "no-store" });
+    if(r.ok){
+      const j = await r.json();
+      if(Array.isArray(j.dids) && j.dids.length) return j;
     }
+  }catch{}
+  try{
+    const r = await fetch("./data/recent.json", { cache: "no-cache" });
+    if(r.ok) return await r.json();
+  }catch{}
+  return null;
+}
+
+function chipFor(d, i){
+  let pub; try{ pub = parseDid(d.did).pub; }catch{ return null; }
+
+  const wrap = document.createElement("div");
+  wrap.className = "chip"; wrap.style.setProperty("--i", i);
+
+  const body = document.createElement("button");
+  body.className = "body"; body.type = "button";
+
+  // The same agent as the card, at thumbnail size. A row of these is the
+  // section's real draw: you scroll past a colour swatch, you stop for a face.
+  // Drawn at 2x and scaled down, or it goes soft on a retina screen.
+  const sq = document.createElement("canvas");
+  sq.className = "sq"; sq.width = 88; sq.height = 88;
+  agent(sq.getContext("2d"), 4, 2, 80, pub);
+
+  const col = document.createElement("div"); col.className = "col";
+
+  const top = document.createElement("div"); top.className = "top";
+  const id = document.createElement("span"); id.className = "id";
+  // Network-supplied, so it is set as text. parseDid already rejected anything
+  // malformed, but the rule is the rule.
+  id.textContent = `${d.did.slice(8,16)}…${d.did.slice(-4)}`;
+  const n = document.createElement("span"); n.className = "n";
+  n.textContent = `${Number(d.unique||0).toLocaleString()} signed`;
+  top.append(id, n);
+
+  // What they actually said. Written by a stranger — set as text, never
+  // markup, and clamped to two lines by CSS rather than cut here, so the words
+  // are never altered.
+  const said = document.createElement("div");
+  said.className = "said" + (d.text ? "" : " none");
+  said.textContent = d.text ? `“${d.text}”` : "no message recorded yet";
+
+  const where = document.createElement("div"); where.className = "where";
+  where.textContent = [d.room ? `in ${d.room}` : null, ago(d.last)].filter(Boolean).join("  ·  ");
+
+  col.append(top, said, where);
+  body.append(sq, col);
+  body.addEventListener("click", () => { $("did").value = d.did; issue(d.did); });
+
+  const kebab = document.createElement("button");
+  kebab.className = "kebab"; kebab.type = "button";
+  kebab.setAttribute("aria-label", "More actions for this identity");
+  kebab.setAttribute("aria-expanded", "false");
+  kebab.innerHTML = '<svg viewBox="0 0 16 16"><circle cx="8" cy="3" r="1.5"/><circle cx="8" cy="8" r="1.5"/><circle cx="8" cy="13" r="1.5"/></svg>';
+  kebab.addEventListener("click", (e) => { e.stopPropagation(); openMenu(kebab, d); });
+
+  wrap.append(body, kebab);
+  return wrap;
+}
+
+/* ── the row menu ──────────────────────────────────────────────────────────
+   One menu element for the whole page rather than one per row: eighteen
+   hidden menus is eighteen things to keep in sync, and only one can ever be
+   open. It is positioned against the button that opened it and closed by
+   anything that would move it — outside click, Escape, scroll, resize.
+   ──────────────────────────────────────────────────────────────────────── */
+let openMenuEl = null, openMenuBtn = null;
+
+function closeMenu(){
+  if(!openMenuEl) return;
+  openMenuEl.remove();
+  openMenuBtn?.setAttribute("aria-expanded", "false");
+  openMenuEl = openMenuBtn = null;
+}
+
+const ICON = {
+  card:'<svg viewBox="0 0 24 24"><rect x="2" y="5" width="20" height="14" rx="2.5"/><path d="M2 10h20"/></svg>',
+  copy:'<svg viewBox="0 0 24 24"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>',
+  link:'<svg viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7"/><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"/></svg>',
+  room:'<svg viewBox="0 0 24 24"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><path d="M15 3h6v6M10 14 21 3"/></svg>',
+};
+
+function openMenu(btn, d){
+  const reopen = openMenuBtn === btn;
+  closeMenu();
+  if(reopen) return;                       // second click on the same row shuts it
+
+  const m = document.createElement("div");
+  m.className = "menu"; m.setAttribute("role", "menu");
+
+  const item = (icon, label, run) => {
+    const b = document.createElement("button");
+    b.type = "button"; b.setAttribute("role", "menuitem");
+    b.innerHTML = icon;                    // our own markup, no outside input
+    b.appendChild(document.createTextNode(label));
+    b.addEventListener("click", async () => { closeMenu(); await run(b); });
+    return b;
+  };
+  const sep = () => { const s = document.createElement("div"); s.className = "sep"; return s; };
+
+  m.appendChild(item(ICON.card, "See its card", () => {
+    $("did").value = d.did; issue(d.did);
+  }));
+  m.appendChild(item(ICON.copy, "Copy this DID", async () => {
+    try{ await navigator.clipboard.writeText(d.did); toast("DID copied"); }
+    catch{ toast("Could not copy"); }
+  }));
+  m.appendChild(item(ICON.link, "Copy a link to its card", async () => {
+    const url = `${location.origin}/?did=${encodeURIComponent(d.did)}`;
+    try{ await navigator.clipboard.writeText(url); toast("Link copied"); }
+    catch{ toast("Could not copy"); }
+  }));
+
+  // Room names come off the network. Only a plain one is ever put in a URL,
+  // and the link opens with no referrer and no window handle back to us.
+  if(typeof d.room === "string" && /^[a-z0-9][a-z0-9_-]{0,63}$/.test(d.room)){
+    m.appendChild(sep());
+    m.appendChild(item(ICON.room, `Open ${d.room} on Technocore`, () => {
+      window.open(`https://technocore.chat/r/${d.room}`, "_blank", "noopener,noreferrer");
+    }));
+  }
+
+  document.body.appendChild(m);
+  const r = btn.getBoundingClientRect();
+  const w = m.offsetWidth, h = m.offsetHeight;
+  // Flip rather than overflow: near the right edge or the bottom of the
+  // viewport the menu opens the other way instead of off-screen.
+  const x = Math.min(r.right + scrollX - w, scrollX + innerWidth - w - 10);
+  const below = r.bottom + h + 10 < innerHeight;
+  m.style.left = `${Math.max(scrollX + 10, x)}px`;
+  m.style.top  = `${(below ? r.bottom + 6 : r.top - h - 6) + scrollY}px`;
+
+  btn.setAttribute("aria-expanded", "true");
+  openMenuEl = m; openMenuBtn = btn;
+  m.querySelector("button")?.focus();
+}
+
+addEventListener("click", (e) => { if(openMenuEl && !openMenuEl.contains(e.target)) closeMenu(); });
+addEventListener("keydown", (e) => { if(e.key === "Escape") closeMenu(); });
+// NOT closed on scroll. The obvious rule — "a menu positioned against a
+// button must close when the page moves" — was wrong twice over here. The
+// menu is absolutely positioned in DOCUMENT coordinates, so it already
+// travels with its row; and a smooth scroll keeps emitting scroll events for
+// a few hundred milliseconds after the click that opened it, so the rule shut
+// the menu the instant it appeared. Caught by a test that clicked a kebab the
+// browser had to scroll to first.
+addEventListener("resize", closeMenu);
+
+/** A one-line confirmation that does not need a element reserved for it. */
+function toast(msg){
+  const t = document.createElement("div");
+  t.className = "menu"; t.style.cssText =
+    "left:50%;top:auto;bottom:26px;transform:translateX(-50%);padding:12px 18px;font-size:13.5px;color:var(--txt);min-width:0;position:fixed";
+  t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(() => t.remove(), 1800);
+}
+
+/* ── render ─────────────────────────────────────────────────────────────── */
+const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+
+async function loadSeen(animate){
+  const box = $("chips"), btn = $("refresh");
+  closeMenu();
+  if(animate){
+    btn?.classList.add("busy");
+    // Out, then the sweep — started together so the light crosses a grid that
+    // is already emptying rather than one that has already gone.
+    [...box.children].forEach((c) => c.classList.add("out"));
+    box.classList.add("sweeping");
+    if(!calm) await wait(420);
+  }
+
+  const j = await fetchRecent();
+  const rows = Array.isArray(j?.dids) ? seenWorthShowing(j.dids) : [];
+
+  if(rows.length){
+    box.replaceChildren();
+    rows.forEach((d, i) => {
+      const c = chipFor(d, i);
+      if(!c) return;
+      if(animate && !calm) c.classList.add("enterrow");
+      box.appendChild(c);
+    });
     // Freshness stated plainly. "Real data" that could be from last week is
     // indistinguishable from invented data.
-    const stamp=$("freshness");
+    const stamp = $("freshness");
     if(stamp) stamp.textContent = j.updated ? `last collected ${ago(j.updated)}` : "collected continuously";
+    $("seen").hidden = false;
+  }else if(animate){
+    // Nothing came back. Put the rows we already had back rather than leaving
+    // a hole where a working section was a moment ago.
+    [...box.children].forEach((c) => c.classList.remove("out"));
+    toast("Could not reach the archive");
+  }
 
-    $("seen").hidden=false;
-  }catch{ /* no archive yet — the section simply stays hidden */ }
-})();
+  if(animate){
+    await wait(calm ? 0 : 380);
+    box.classList.remove("sweeping");
+    btn?.classList.remove("busy");
+  }
+}
+
+$("refresh")?.addEventListener("click", () => loadSeen(true));
+
+/* Fresh on arrival: every load and every reload asks the archive rather than
+   showing whatever shipped with the deployment. */
+loadSeen(false);
 
 const io=new IntersectionObserver(es=>es.forEach(e=>e.isIntersecting&&e.target.classList.add("in")),{threshold:.15});
 document.querySelectorAll(".rise").forEach(el=>io.observe(el));
