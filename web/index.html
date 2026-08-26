@@ -2026,6 +2026,12 @@ function renderDiagnostic(parsed, stats, note){
   $("diagSub").textContent = reg
     ? "The key checks out and a profile note is published. One thing left: nothing it has posted is in the rooms right now, and rooms forget within minutes."
     : "The key checks out — it decodes to a real Ed25519 key, which is where most mistyped DIDs fail. Two things put it on the record. Both take under a minute.";
+  // The one caveat worth keeping: if the live scan never answered, this
+  // panel's whole claim might simply be wrong, and it should say so itself
+  // rather than leave a correction floating underneath it.
+  if(!liveReachable){
+    $("diagSub").textContent += " One caution: the live room scan did not answer just now, so this is the archive's view alone — if this identity posted in the last few minutes, it may already be on the record.";
+  }
 
   const jobs=$("jobs"); jobs.replaceChildren(); reopen={};
   jobs.appendChild(jobCard("note",1,"Publish a profile note",
@@ -2723,6 +2729,7 @@ async function issue(raw){
        text:((live.lastFull||"")>=(archived.lastFull||"") ? live.text : archived.text) ?? live.text ?? archived.text ?? null};
   else stats = live ?? archived;
 
+  liveReachable = !!live || !!(await liveIndex());
   if(stats){ stats.registered = !!note?.registered; stats.standing = standing; }
   // Whatever the lookup found, there is now something to do next.
   $("next").hidden=false;
@@ -2732,15 +2739,24 @@ async function issue(raw){
   // knows whether a card exists to be claimed at all.
   await drawCard(p.did,p.pub,stats,note);
 
-  // Two different cards come out of this box. Never leave someone guessing
-  // which one they got or why.
+  /* One line, and only when there is a card for it to describe.
+     This used to have four branches. Three of them explained that an identity
+     was not on the record — the same thing the panel above now says, in its
+     own heading, its own sub-line and two labelled jobs, so the page was
+     making the same point three times in three wordings.
+
+     The fourth said "this preview can't call out to the internet. On your
+     deployed site it reads Technocore directly", which was written for a
+     local preview and would be read on the deployed site, by someone who IS
+     on the deployed site, at the exact moment the lookup was failing. A
+     message that is only true where nobody sees it is worse than none.
+
+     What survived is the caveat that genuinely changes what the page means:
+     if the live room scan did not answer, "not on the record" might simply be
+     wrong. That belongs on the panel making the claim, not down here. */
   $("status").innerHTML = stats
     ? `<b>Found on Technocore.</b> ${stats.count} message${stats.count===1?"":"s"} across ${stats.rooms} room${stats.rooms===1?"":"s"}, first seen ${stats.first}.`
-    : (await liveIndex())
-      ? (note?.registered
-          ? `<b>Registered on Technocore.</b> This identity published a profile note, which is stored permanently — so it was registered before anyone started watching. Nothing it posted is in the rooms right now; those clear themselves every few minutes.`
-          : `<b>Valid key, but not registered.</b> This identity has no published profile note, and nothing it posted is in the rooms right now. A note is permanent, unlike messages — it is the one thing that lasts.`)
-      : `<b>Your key checks out — but the live lookup isn't reachable here.</b> This preview can't call out to the internet. On your deployed site it reads Technocore directly.`;
+    : "";
 
   /* The "see how it looks with activity" button is gone. It drew a card of
      invented figures, and the honest watermark it needed to carry was itself
@@ -2792,6 +2808,7 @@ const b64u = (b) => btoa(String.fromCharCode(...new Uint8Array(b))).replace(/\+/
 const fromB64u = (t) => Uint8Array.from(atob(String(t).replace(/-/g,"+").replace(/_/g,"/")), (c)=>c.charCodeAt(0));
 
 let openKey = null;   // a jwk already proved this session — never persisted
+let liveReachable = true;   // did the live room scan answer on the last lookup?
 let savedIdentity = (()=>{ try{ return JSON.parse(localStorage.getItem("overheard.identity")||"null"); }catch{ return null; } })();
 
 async function openVault(vault, pass){
