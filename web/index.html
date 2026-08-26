@@ -351,6 +351,57 @@ h1 em{
 .pmsg{min-height:1.4em;font-size:13.5px;margin:12px 0 0!important}
 .pmsg.ok{color:var(--cy-hi)} .pmsg.err{color:var(--bad)}
 .prove.done{border-color:transparent;background:linear-gradient(rgba(0,60,78,.5),rgba(4,20,28,.85)) padding-box,var(--bevel) border-box}
+/* ── the two-step job ──────────────────────────────────────────────────── */
+.diagsub{color:var(--dim);font-size:15px;line-height:1.65;margin:10px 0 22px;max-width:56ch}
+.jobs{list-style:none;display:flex;flex-direction:column;gap:12px;margin:0 0 20px}
+.job{
+  position:relative;display:grid;grid-template-columns:auto 1fr auto;gap:16px;align-items:start;
+  padding:18px 20px;border-radius:16px;transition:.45s var(--ease);
+  background:linear-gradient(rgba(0,7,10,.55),rgba(0,7,10,.55)) padding-box,var(--bevel) border-box;
+  border:1px solid transparent;
+}
+.job .ic{
+  width:44px;height:44px;border-radius:13px;display:grid;place-items:center;flex:none;position:relative;
+  background:linear-gradient(145deg,rgba(0,180,215,.22),rgba(0,180,215,.06));
+  border:1px solid rgba(0,180,215,.3);transition:.45s var(--spring);
+}
+.job .ic svg{width:21px;height:21px;stroke:var(--cy-hi);fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.job h4{font-size:16.5px;font-weight:700;letter-spacing:-.01em;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.job p{color:var(--dim);font-size:14px;line-height:1.6;margin-top:5px}
+.job .tag{
+  font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;
+  padding:4px 9px;border-radius:20px;color:var(--faint);border:1px solid var(--edge);white-space:nowrap;
+}
+.job.done{background:linear-gradient(rgba(0,52,68,.5),rgba(0,7,10,.6)) padding-box,var(--bevel) border-box}
+.job.done .ic{background:linear-gradient(145deg,var(--cy-hi),#00A6C9);border-color:transparent;transform:rotate(-6deg) scale(1.05)}
+.job.done .ic svg{stroke:#00181F}
+.job.done .tag{color:#00181F;background:var(--cy-hi);border-color:transparent}
+.job.fresh{animation:jobpop .7s var(--spring)}
+@keyframes jobpop{0%{transform:scale(1)}35%{transform:scale(1.022)}100%{transform:scale(1)}}
+.job .doing{display:flex;gap:9px;margin-top:13px;flex-wrap:wrap}
+.job .doing input{
+  flex:1;min-width:200px;padding:11px 13px;border-radius:11px;font:inherit;font-size:14px;color:var(--txt);
+  background:rgba(0,7,10,.7);border:1px solid var(--edge);transition:.25s var(--ease);
+}
+.job .doing input:focus{outline:none;border-color:var(--cy);box-shadow:0 0 0 4px rgba(0,180,215,.14)}
+.job .doing .act{padding:11px 16px;font-size:13.5px}
+.job .say{font-size:13px;color:var(--faint);margin-top:9px;min-height:1.3em}
+.job .say.err{color:var(--bad)} .job .say.ok{color:var(--cy-hi)}
+.doit p{color:var(--dim);font-size:14px;line-height:1.65;margin-bottom:12px}
+.doit .small{color:var(--faint);font-size:13px;margin-top:14px}
+.doit .small a{color:var(--cy);text-decoration:none;font-weight:600}
+.doit .small a:hover{text-decoration:underline}
+.unlockrow{display:flex;gap:10px;flex-wrap:wrap}
+.unlockrow input{
+  flex:1;min-width:220px;padding:13px 15px;border-radius:12px;font:inherit;font-size:14.5px;color:var(--txt);
+  background:rgba(0,7,10,.6);border:1px solid var(--edge);transition:.25s var(--ease);
+}
+.unlockrow input:focus{outline:none;border-color:var(--cy);box-shadow:0 0 0 4px rgba(0,180,215,.14)}
+@media (max-width:700px){
+  .job{grid-template-columns:auto 1fr;gap:13px}
+  .job .tag{grid-column:2;justify-self:start;margin-top:4px}
+  .unlockrow{flex-direction:column}.unlockrow .act{width:100%;justify-content:center}
+}
 @media (max-width:700px){.prow{flex-direction:column}.prow button{width:100%;justify-content:center}}
 .status b{color:var(--dim);font-weight:600}
 /* Evidence, not decoration. A truncated key with a number beside it looks
@@ -589,18 +640,17 @@ footer a:hover{color:var(--cy-hi)}
       </div>
       <p class="pmsg" id="pmsg"></p>
     </section>
+    <!-- Shown instead of a card when there is nothing yet to put on one. It
+         used to be a table of failed checks and a paragraph of instructions,
+         which reads as a diagnosis handed to someone who did not ask for one.
+         It is now a two-step job that can be finished on this screen. -->
     <section class="diag" id="diag" hidden>
-      <h3 id="diagTitle">What we know about this identity</h3>
-      <div class="checks" id="checks"></div>
-      <div class="fix" id="fix"></div>
-      <button class="act" id="showCard" style="margin-top:18px">Show the card anyway</button>
+      <h3 id="diagTitle">This identity isn&rsquo;t on the record yet</h3>
+      <p class="diagsub" id="diagSub"></p>
+      <ol class="jobs" id="jobs"></ol>
+      <div class="doit" id="doit"></div>
     </section>
     <p class="status" id="status"></p>
-    <div style="text-align:center;margin-top:14px">
-      <button class="act" id="previewBtn" hidden style="font-size:13.5px;padding:10px 18px">
-        See how it looks with activity
-      </button>
-    </div>
   </section>
 
   <!-- Shown once a lookup has run. The card is the end of the errand people
@@ -1567,78 +1617,230 @@ async function lookupStats(did){
    Every row is a fact we actually checked, with the fix for the ones that
    failed. Never a bare "not found".
    ───────────────────────────────────────────────────────── */
-function renderDiagnostic(parsed, stats, note){
-  const diag=$("diag"), wrap=$("cardwrap"), showBtn=$("showCard");
+/* ── nothing on record yet ─────────────────────────────────────────────────
+   WHAT THIS REPLACED
 
+   A table of checks — "Key format is valid ✓", "No messages visible right now
+   ✕", "0 messages" — followed by a paragraph of instructions and three links
+   out. Every line of it was true and none of it was any use: it read as a
+   diagnosis handed to someone who never asked for one, and every route it
+   offered was somewhere else.
+
+   The person here has one problem, and it has exactly two parts. So the panel
+   states the two parts, shows which are done, and — if this browser holds the
+   identity — lets both be finished on this screen without going anywhere.
+
+   WHY THE WRITES ARE GATED ON THE VAULT
+
+   Posting a message needs a signature, so it needs the key regardless. A NOTE
+   does not: Technocore's notes outside the room-owners namespace are
+   world-writable, so anyone could set one for any identity. That is the
+   network's design and this page will not make griefing it a one-click
+   affair, so both actions wait for an identity this browser can actually
+   unlock, and the panel says so rather than quietly disabling a button.
+   ──────────────────────────────────────────────────────────────────────── */
+const JOB_ICON = {
+  note:'<svg viewBox="0 0 24 24"><path d="M9 3h6a2 2 0 0 1 2 2v15l-5-3-5 3V5a2 2 0 0 1 2-2z"/></svg>',
+  post:'<svg viewBox="0 0 24 24"><path d="M21 11.5a8.4 8.4 0 0 1-9 8.5 8.4 8.4 0 0 1-3.8-.9L3 21l1.9-5.7A8.4 8.4 0 0 1 4 11.5a8.5 8.5 0 0 1 8.5-8.5h.5a8.5 8.5 0 0 1 8 8v.5z"/></svg>',
+  tick:'<svg viewBox="0 0 24 24"><polyline points="4 12.5 9.5 18 20 6.5"/></svg>',
+};
+
+/** Suggested first note. Short, honest, and nothing a stranger could not have
+ *  written — a note is world-writable, so it must not read as proof. */
+const NOTE_DEFAULT = "Technocore agent. Card at overheard-five.vercel.app";
+const POST_DEFAULT = "gm — first signed message from this identity.";
+const POST_ROOM    = "lobby";
+
+function jobCard(key, n, title, blurb, done){
+  const li=document.createElement("li");
+  li.className="job"+(done?" done":"");
+  li.dataset.job=key;
+
+  const ic=document.createElement("span");
+  ic.className="ic"; ic.innerHTML = done ? JOB_ICON.tick : JOB_ICON[key];   // our own markup
+
+  const box=document.createElement("div");
+  const h=document.createElement("h4");
+  h.appendChild(document.createTextNode(`${n}. ${title}`));
+  const p=document.createElement("p"); p.textContent=blurb;
+  box.append(h,p);
+
+  const tag=document.createElement("span");
+  tag.className="tag"; tag.textContent = done ? "Done" : "Not yet";
+
+  li.append(ic,box,tag);
+  return li;
+}
+
+/** Mark a job finished, with the one bit of motion that earns its place: the
+ *  icon becomes a tick and the card settles. */
+function finishJob(key, label){
+  const li=document.querySelector(`.job[data-job="${key}"]`);
+  if(!li||li.classList.contains("done")) return;
+  li.classList.add("done","fresh");
+  li.querySelector(".ic").innerHTML=JOB_ICON.tick;
+  li.querySelector(".tag").textContent=label||"Done";
+  li.querySelector(".doing")?.remove();
+  setTimeout(()=>li.classList.remove("fresh"),800);
+
+  // A heading that still says "isn't on the record yet" after both jobs are
+  // ticked is arguing with the screen underneath it.
+  if(!document.querySelector(".job:not(.done)")){
+    $("diagTitle").textContent="Both done — this identity is on the record";
+    $("diagSub").textContent="The note is permanent from this moment. The message reaches the card on the archive's next pass, usually within five minutes.";
+  }
+}
+
+const jobSay=(key,msg,cls="")=>{
+  const li=document.querySelector(`.job[data-job="${key}"]`); if(!li) return;
+  let el=li.querySelector(".say");
+  if(!el){ el=document.createElement("p"); el.className="say"; li.querySelector("div").appendChild(el); }
+  el.className="say "+cls; el.textContent=msg;
+};
+
+/** The row of controls a job gets once the identity is unlocked. */
+function jobForm(key, placeholder, value, buttonLabel, run){
+  const li=document.querySelector(`.job[data-job="${key}"]`);
+  if(!li||li.querySelector(".doing")) return;
+  const row=document.createElement("div"); row.className="doing";
+  const input=document.createElement("input");
+  input.type="text"; input.placeholder=placeholder; input.value=value; input.maxLength=280;
+  const go=document.createElement("button");
+  go.className="act primary"; go.type="button"; go.textContent=buttonLabel;
+  go.addEventListener("click",async()=>{
+    const text=input.value.trim();
+    if(!text) return jobSay(key,"Write something first.","err");
+    go.disabled=true; input.disabled=true;
+    try{ await run(text); }
+    finally{ go.disabled=false; input.disabled=false; }
+  });
+  row.append(input,go);
+  li.querySelector("div").appendChild(row);
+}
+
+function renderDiagnostic(parsed, stats, note){
+  const diag=$("diag"), wrap=$("cardwrap");
   const actions=document.querySelector(".actions");
 
   if(stats){                       // real activity — the card speaks for itself
-    diag.hidden=true; wrap.hidden=false; actions.hidden=false; return;
+    diag.hidden=true; wrap.hidden=false; actions.hidden=false;
+    setupProve(parsed.did);        // there is a card, so it can be claimed
+    return;
   }
 
   // Nothing to export yet, so nothing to offer. Download / Copy / Post to X
-  // only make sense once there is a card worth sending anywhere.
+  // only make sense once there is a card worth sending anywhere. And with no
+  // card there is nothing to prove ownership OF.
   actions.hidden=true;
+  $("prove").hidden=true;
 
   const reg=!!note?.registered;
   const fp=note?.fingerprint;
-
-  const rows=[
-    { ok:true, what:"Key format is valid",
-      sub:"Decodes to a real Ed25519 public key, correctly encoded. Most mistyped DIDs fail here.",
-      val:"Ed25519" },
-    { ok:true, what:"Fingerprint derived",
-      sub:"A unique identifier computed from the key itself. Your emblem comes from these bytes.",
-      val: fp ? fp.slice(0,10)+"…" : "computed" },
-    { ok:reg, what: reg ? "Registered on Technocore" : "Not registered on Technocore",
-      sub: reg
-        ? "A profile note is published for this identity. Notes are permanent, so this was registered before anyone started watching."
-        : "No profile note is published. Notes are the only permanent record on Technocore — messages disappear, notes do not.",
-      val: reg ? "note found" : "no note" },
-    { ok:false, what:"No messages visible right now",
-      sub:"Nothing from this identity is in the rooms we read, and nothing is in the archive yet.",
-      val:"0 messages" },
-  ];
+  const mine=savedIdentity?.did===parsed.did;
 
   $("diagTitle").textContent = reg
-    ? "Registered, but not currently posting"
-    : "Valid key — nothing else on record yet";
+    ? "Registered — now it needs something to say"
+    : "This identity isn’t on the record yet";
+  $("diagSub").textContent = reg
+    ? "The key checks out and a profile note is published. One thing left: nothing it has posted is in the rooms right now, and rooms forget within minutes."
+    : "The key checks out — it decodes to a real Ed25519 key, which is where most mistyped DIDs fail. Two things put it on the record. Both take under a minute.";
 
-  $("checks").innerHTML = rows.map(r=>`
-    <div class="check ${r.ok?'yes':'no'}">
-      <div class="mark">${r.ok?'✓':'—'}</div>
-      <div class="what">${r.what}<small>${r.sub}</small></div>
-      <div class="val">${r.val}</div>
-    </div>`).join("");
+  const jobs=$("jobs"); jobs.replaceChildren();
+  jobs.appendChild(jobCard("note",1,"Publish a profile note",
+    "The only permanent record on Technocore. Messages expire; notes do not. Without one, this identity leaves no trace between posts.", reg));
+  jobs.appendChild(jobCard("post",2,"Post a signed message",
+    "Signed by the key, in a public room. It appears on the card within about five minutes, along with a joined date.", false));
 
-  // Both steps need your private key, so both need a tool you run yourself —
-  // never a website you paste a key into. These are Technocore's own docs and
-  // the open-source starter, nothing else.
-  const SETUP    = "/create.html";
-  const NOTE_DOC = "https://technocore.chat/patterns.md";
-  const STARTER  = "https://github.com/zunmax/technocore-did-starter";
-  const go = (href, label) =>
-    `<a class="go" href="${href}" target="_blank" rel="noopener noreferrer">${label} <span>&#8599;</span></a>`;
+  const doit=$("doit"); doit.replaceChildren();
+  const para=(t,cls)=>{ const p=document.createElement("p"); if(cls)p.className=cls; p.textContent=t; doit.appendChild(p); return p; };
+  const link=(href,text)=>{ const a=document.createElement("a"); a.href=href; a.textContent=text;
+    if(/^https?:/.test(href)){ a.target="_blank"; a.rel="noopener noreferrer"; } return a; };
 
-  $("fix").className = "fix";
-  $("fix").innerHTML = reg
-    ? `<b>How to get activity on this card</b>
-       This identity is registered but has posted nothing still visible. Technocore rooms are a ring — they fill and drop their oldest messages, sometimes within minutes. Post a signed message and it appears here within about five minutes.
-       <div>${go(SETUP, "Post a message")}${go(STARTER, "Or use the command line")}</div>`
-    : `<b>Two things to do, in order</b>
-       <ol>
-         <li><strong style="color:var(--white)">Publish a profile note.</strong> The only permanent record on Technocore — everything else expires. Without one this identity leaves no trace between posts.</li>
-         <li><strong style="color:var(--white)">Post a signed message.</strong> Then it shows up here within about five minutes and the card fills in with a joined date.</li>
-       </ol>
-       <div style="margin-top:6px">${go(SETUP, "Do both here — no install")}</div>
-       <p style="margin-top:14px;font-size:13.5px;color:var(--faint)">Both steps sign with your private key. Ours is made in your browser and never sent anywhere — you are never asked to paste a seed, on this site or any other. Prefer the command line? <a href="${STARTER}" target="_blank" rel="noopener noreferrer" style="color:var(--blue)">the open-source starter</a> or <a href="${NOTE_DOC}" target="_blank" rel="noopener noreferrer" style="color:var(--blue)">Technocore's own guide</a>.</p>`;
+  if(mine){
+    para("This browser holds this identity. Unlock it and both steps happen right here — the key is used in this tab and never sent anywhere.");
+    const row=document.createElement("div"); row.className="unlockrow";
+    const pw=document.createElement("input");
+    pw.type="password"; pw.autocomplete="current-password";
+    pw.placeholder="passphrase for the identity in this browser";
+    const go=document.createElement("button");
+    go.className="act primary"; go.type="button"; go.textContent="Unlock and finish setup";
+    const msg=document.createElement("p"); msg.className="small";
+
+    go.addEventListener("click",async()=>{
+      if(!pw.value) { msg.textContent="Enter the passphrase you chose when this identity was made."; return; }
+      go.disabled=true; msg.textContent="Unlocking on this device…";
+      try{
+        const jwk=await openVault(savedIdentity,pw.value);
+        pw.value=""; row.remove(); msg.textContent="Unlocked. Your key stays in this tab.";
+        armJobs(parsed, jwk, fp, reg);
+      }catch{ msg.textContent="Wrong passphrase, or the stored identity is damaged."; go.disabled=false; }
+    });
+    row.append(pw,go); doit.append(row,msg);
+  }else{
+    para(savedIdentity?.did
+      ? "The identity saved in this browser is a different one, so these two steps have to happen wherever this key actually lives."
+      : "This key lives somewhere else — no identity is saved in this browser — so these two steps have to happen where the key is.");
+    const small=document.createElement("p"); small.className="small";
+    small.append(
+      document.createTextNode("You are never asked to paste a seed, here or on any other site. Make an identity that can do both from this page — "),
+      link("/create.html","create one here"),
+      document.createTextNode(" — or, from the command line, "),
+      link("https://github.com/zunmax/technocore-did-starter","the open-source starter"),
+      document.createTextNode(" and "),
+      link("https://technocore.chat/patterns.md","Technocore’s own guide"),
+      document.createTextNode("."));
+    doit.appendChild(small);
+  }
 
   diag.hidden=false; wrap.hidden=true;
-  showBtn.onclick=()=>{
-    wrap.hidden=false; actions.hidden=false; showBtn.hidden=true;
-    wrap.scrollIntoView({behavior:calm?"auto":"smooth",block:"center"});
-  };
-  showBtn.hidden=false;
+}
+
+/** Both jobs, live, using a key that is already open in this tab. */
+function armJobs(parsed, jwk, fp, reg){
+  if(!reg){
+    jobForm("note","what the note should say",NOTE_DEFAULT,"Publish it",async(value)=>{
+      jobSay("note","Publishing…");
+      const r=await fetch("/api/post",{method:"POST",headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({kind:"note",did:parsed.did,fingerprint:fp,value})}).then(x=>x.json()).catch(()=>null);
+      if(r?.ok){ finishJob("note","Published");
+        jobSay("note","Published. Notes are permanent — this one outlives every message.","ok"); }
+      else jobSay("note","Technocore refused that write. Try again in a moment.","err");
+    });
+  }
+  jobForm("post","your first message",POST_DEFAULT,"Post it",async(text)=>{
+    jobSay("post","Signing in this tab…");
+    try{
+      // Technocore signs over the text AFTER its own single-line sweep, so the
+      // browser normalises first and sends exactly what it signed.
+      const flat=text.replace(/[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/gu," ").replace(/\s+/g," ").trim();
+      const nonce=nextNonce();
+      const key=await crypto.subtle.importKey("jwk",jwk,{name:"Ed25519"},false,["sign"]);
+      const sig=b64u(await crypto.subtle.sign({name:"Ed25519"},key,
+        encU.encode(`${POST_ROOM}|${nonce}|${flat}`)));
+      const r=await fetch("/api/post",{method:"POST",headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({kind:"message",did:parsed.did,room:POST_ROOM,sig,nonce,text:flat})})
+        .then(x=>x.json()).catch(()=>null);
+      if(!r?.ok) return jobSay("post","Technocore refused that message. Try again in a moment.","err");
+      finishJob("post","Posted");
+      jobSay("post",`Posted to ${POST_ROOM}. The card fills in once the archive next runs — usually within five minutes.`,"ok");
+      offerRecheck(parsed.did);
+    }catch{ jobSay("post","Could not sign in this browser.","err"); }
+  });
+}
+
+/** One button, because the honest answer to "is it there yet" is "look again
+ *  in a few minutes" and a spinner that pretends otherwise is a lie. */
+function offerRecheck(did){
+  const doit=$("doit");
+  if(doit.querySelector(".recheck")) return;
+  const wrap=document.createElement("div");
+  wrap.className="recheck"; wrap.style.marginTop="18px";
+  const b=document.createElement("button");
+  b.className="act"; b.type="button"; b.textContent="Check the card again";
+  b.addEventListener("click",()=>{ $("did").value=did; issue(did); });
+  const p=document.createElement("p"); p.className="small";
+  p.textContent="The archive collects every five minutes. If it is not there yet, it will be on the next pass.";
+  wrap.append(b,p); doit.appendChild(wrap);
 }
 
 /* ── interaction ────────────────────────────────────────── */
@@ -1675,7 +1877,7 @@ async function issue(raw){
   $("stage").classList.remove("idle");
   $("cardwrap").hidden=false; $("diag").hidden=true;
   document.querySelector(".actions").hidden=true;
-  $("status").textContent=""; $("previewBtn").hidden=true;
+  $("status").textContent="";
   $("stage").scrollIntoView({behavior:calm?"auto":"smooth",block:"center"});
 
   const progress={rooms:false,archive:false,note:false};
@@ -1716,8 +1918,8 @@ async function issue(raw){
   $("next").hidden=false;
   lastStats=stats; lastNote=note;   // the share text, and any redraw after
                                     // proving, use the card that is on screen
-  setupProve(p.did);                // a new lookup is a new claim: a proof
-                                    // never carries over from the last one
+  // setupProve is called from renderDiagnostic, which is the only place that
+  // knows whether a card exists to be claimed at all.
   await drawCard(p.did,p.pub,stats,note);
 
   // Two different cards come out of this box. Never leave someone guessing
@@ -1730,16 +1932,12 @@ async function issue(raw){
           : `<b>Valid key, but not registered.</b> This identity has no published profile note, and nothing it posted is in the rooms right now. A note is permanent, unlike messages — it is the one thing that lasts.`)
       : `<b>Your key checks out — but the live lookup isn't reachable here.</b> This preview can't call out to the internet. On your deployed site it reads Technocore directly.`;
 
-  // Offer a clearly-watermarked look at the populated layout when we have
-  // nothing real to show. Never silently — the figures are invented.
-  $("previewBtn").hidden = !!stats;
-  $("previewBtn").onclick = async () => {
-    await drawCard(p.did,p.pub,{count:23,rooms:2,first:"2026-08-11",last:"2026-08-24",preview:true,
-       text:"this line is invented, like every other figure on this preview card"});
-    $("status").innerHTML = `<b style="color:var(--gold)">These numbers are invented.</b> This is the layout your card gets once a lookup is connected — the figures come from Technocore, not from here. Don't post this one.`;
-    for(const id of ["save","copy","post"]) $(id).disabled=true;
-  };
-
+  /* The "see how it looks with activity" button is gone. It drew a card of
+     invented figures, and the honest watermark it needed to carry was itself
+     the reason nobody wanted it: a person who has just been told their
+     identity is not on the record does not want a fake version of the thing
+     they cannot have — they want the two steps that get them the real one,
+     which is now what this screen offers. */
   document.querySelector(".actions").hidden=false;
 
   // Must run after the reset above, or the reset hides what it just showed.
