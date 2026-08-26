@@ -2,26 +2,46 @@ name: archive
 
 # Records technocore.chat before it forgets itself.
 #
-# WHY THIS IS SHAPED ODDLY: GitHub openly deprioritises short cron schedules on
-# free repositories. A "*/5 * * * *" schedule was measured firing once in 27
-# minutes instead of five times — so more than half of everything would have
-# been lost, silently. Hourly schedules are honoured far more reliably.
+# WHY THIS IS SHAPED ODDLY: GitHub openly deprioritises cron on free repos, and
+# it is far worse than "short schedules are unreliable". Measured over one day
+# of an HOURLY cron on this repo, the gaps between actual firings were:
 #
-# So the cron fires HOURLY, and the job then loops internally every 5 minutes
-# for ~55 minutes before exiting, just as the next hour's run begins.
-# One reliable trigger, twelve actual collections.
+#   144, 91, 52, 49, 78, 56, 58, 58, 51, 55, 86, 60, 141 minutes
+#
+# — and then a 115-minute silence with nothing queued. The cron is a request,
+# not a promise.
+#
+# The first version covered ~55 minutes per run and assumed the next hour's run
+# would pick it up. Every gap above 60 minutes was therefore DEAD AIR, and on
+# the measured day that was four of them, one nearly two and a half hours long.
+# Rooms are a ring buffer; dead air is history that no longer exists anywhere.
+#
+# So the job no longer tries to hand over neatly. Each run collects for ~5.5
+# hours — comfortably longer than the worst observed gap and inside GitHub's
+# 6-hour job ceiling — and the cron simply restarts the chain whenever it
+# remembers to. Coverage now survives the scheduler forgetting for two hours,
+# because it usually will.
 #
 # Actions minutes are unlimited on public repositories, so a job that runs
 # almost continuously costs nothing.
 
 on:
   schedule:
+    # Two entries, not one. They are not two schedules so much as two chances:
+    # concurrency below means a firing that lands while a run is going becomes
+    # at most one pending run, never a pile-up, so asking twice costs nothing
+    # and misses less.
     - cron: "0 * * * *"
+    - cron: "30 * * * *"
   workflow_dispatch: {} # run it by hand any time from the Actions tab
 
 concurrency:
   group: archive
-  cancel-in-progress: false # never interrupt a run mid-commit
+  # Never interrupt a run mid-commit. GitHub keeps at most ONE pending run per
+  # group, so a long collection plus a queued successor is the whole worst
+  # case — and that successor starting the moment this one ends is exactly the
+  # continuous coverage we want.
+  cancel-in-progress: false
 
 permissions:
   contents: write
@@ -29,7 +49,7 @@ permissions:
 jobs:
   archive:
     runs-on: ubuntu-latest
-    timeout-minutes: 70 # the loop stops itself at ~55; this is the backstop
+    timeout-minutes: 350 # the loop stops itself at ~330; this is the backstop
 
     steps:
       - uses: actions/checkout@v4
@@ -53,7 +73,8 @@ jobs:
           # The lobby has been measured at ~52 messages/second, and a 10 MiB
           # room empties in about 17 minutes. Five-minute passes keep roughly
           # 3x margin against losing history.
-          PASSES=11
+          # 66 passes x 5 minutes = 5.5 hours of continuous collection.
+          PASSES=66
           GAP=300
 
           for pass in $(seq 1 $PASSES); do
@@ -67,10 +88,15 @@ jobs:
             else
               STAMP="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
               # Collecting is free; PUBLISHING costs a Vercel deploy and the
-              # free plan allows 100 a day. Publishing on passes 1 and 7 is
-              # twice an hour — 48 deploys a day, and the site is never more
-              # than ~30 minutes behind.
-              if [ "$pass" = "1" ] || [ "$pass" = "7" ]; then
+              # free plan allows 100 a day. Every 6th pass is twice an hour —
+              # about 48 deploys a day, unchanged by the longer run, and the
+              # site is never more than ~30 minutes behind.
+              #
+              # The pages that matter most no longer wait for a deploy anyway:
+              # /api/profile and /api/recent read the archive straight from the
+              # repository, so a card and the archive strip are current within
+              # a commit of the collection itself.
+              if [ $(( (pass - 1) % 6 )) -eq 0 ]; then
                 MSG="archive: publish $STAMP"
               else
                 MSG="archive: $STAMP [skip ci]"
@@ -111,4 +137,4 @@ jobs:
             fi
           done
 
-          echo "hour complete: $PASSES passes"
+          echo "collection window complete: $PASSES passes"

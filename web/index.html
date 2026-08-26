@@ -1661,6 +1661,7 @@ $("post").addEventListener("click",async()=>{
    half-empty strip is a worse lie than a mixed one.
    ──────────────────────────────────────────────────────────────────────── */
 const SEEN_MAX = 18, SEEN_MIN = 6;
+let seenStamp = null;   // the archive timestamp currently on screen
 
 function seenWorthShowing(rows){
   const strong = rows.filter((d) =>
@@ -1866,6 +1867,20 @@ async function loadSeen(animate){
     const stamp = $("freshness");
     if(stamp) stamp.textContent = j.updated ? `last collected ${ago(j.updated)}` : "collected continuously";
     $("seen").hidden = false;
+
+    /* Say whether the archive actually moved.
+       Without this the button looked broken during a collection gap: it went
+       and asked, got the same answer, and redrew the same rows — which is
+       indistinguishable from a button wired to nothing. The archive is
+       collected by a scheduled job that GitHub runs when it feels like it, so
+       "nothing new yet" is a normal answer and deserves to be said out loud
+       rather than mistaken for a bug. */
+    if(animate){
+      const moved = j.updated && j.updated !== seenStamp;
+      toast(moved ? "Updated from the archive"
+                  : `No new collection yet — the archive last moved ${ago(j.updated)}`);
+    }
+    seenStamp = j.updated || seenStamp;
   }else if(animate){
     // Nothing came back. Put the rows we already had back rather than leaving
     // a hole where a working section was a moment ago.
