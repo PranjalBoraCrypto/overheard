@@ -67,8 +67,12 @@ async function getJson(url) {
   if (reads >= READ_CEILING) return null;
   reads++;
   try {
+    // A per-read deadline, because without one a single room that hangs takes
+    // the whole scan down with it — and a scan that returns nothing is
+    // indistinguishable from an identity that has posted nothing.
     const res = await fetch(url, {
       headers: { Accept: "application/json", "User-Agent": "overheard/2.0" },
+      signal: AbortSignal.timeout(6000),
     });
     if (!res.ok) return null;            // 429 or upstream hiccup: keep what we have
     return await res.json();
@@ -116,27 +120,43 @@ export default async function handler() {
   const byDid = new Map();
   const scanned = [];
 
-  for (const room of plan) {
+  /* ── read the rooms in parallel ────────────────────────────────────────
+     One at a time, ~50 rooms at a few hundred milliseconds each ran past the
+     edge function's limit and the request TIMED OUT — which the page reads
+     as "the live scan found nothing", which the panel reads as "this
+     identity is not on the record". The slowest possible answer and the
+     wrongest possible answer were the same answer.
+
+     Eight at a time turns half a minute into a few seconds. The rooms are
+     independent, and the upstream allowance is per minute, not per instant.
+     ──────────────────────────────────────────────────────────────────── */
+  const LANES = 8;
+  const batches = [];
+  for (let i = 0; i < plan.length; i += LANES) batches.push(plan.slice(i, i + LANES));
+
+  for (const batch of batches) {
     if (reads >= READ_CEILING) break;
-    const messages = await readRoom(room);
-    if (!messages.length) continue;
-    scanned.push(room);
-    for (const m of messages) {
-      const did = m.from;
-      if (typeof did !== "string" || !did.startsWith("did:key:")) continue; // nicknames prove nothing
-      const e = byDid.get(did) ?? { n: 0, rooms: [], first: null, last: null, texts: new Set(), lastText: null };
-      e.n++;
-      const body = String(m.text ?? "");
-      e.texts.add(body);
-      if (!e.rooms.includes(room)) e.rooms.push(room);
-      if (m.ts && (!e.first || m.ts < e.first)) e.first = m.ts;
-      if (m.ts && (!e.last || m.ts >= e.last)) {
-        e.last = m.ts;
-        // Flattened the same way the archiver does, so the card quotes the
-        // same string whichever source answered first.
-        e.lastText = body.replace(/[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/gu, " ").replace(/\s+/g, " ").trim().slice(0, 180);
+    const got = await Promise.all(batch.map(async (room) => ({ room, messages: await readRoom(room) })));
+    for (const { room, messages } of got) {
+      if (!messages.length) continue;
+      scanned.push(room);
+      for (const m of messages) {
+        const did = m.from;
+        if (typeof did !== "string" || !did.startsWith("did:key:")) continue; // nicknames prove nothing
+        const e = byDid.get(did) ?? { n: 0, rooms: [], first: null, last: null, texts: new Set(), lastText: null };
+        e.n++;
+        const body = String(m.text ?? "");
+        e.texts.add(body);
+        if (!e.rooms.includes(room)) e.rooms.push(room);
+        if (m.ts && (!e.first || m.ts < e.first)) e.first = m.ts;
+        if (m.ts && (!e.last || m.ts >= e.last)) {
+          e.last = m.ts;
+          // Flattened the same way the archiver does, so the card quotes the
+          // same string whichever source answered first.
+          e.lastText = body.replace(/[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/gu, " ").replace(/\s+/g, " ").trim().slice(0, 180);
+        }
+        byDid.set(did, e);
       }
-      byDid.set(did, e);
     }
   }
 
