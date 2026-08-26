@@ -445,7 +445,7 @@ h1 em{
      single long line of JSON, so a tall box was reserving space for nothing —
      and it made the field look like the main event rather than one of two
      equal inputs. Draggable if anyone wants to read what they pasted. */
-  height:48px;min-height:48px;line-height:1.4;white-space:pre;overflow:auto;
+  height:48px;min-height:48px;line-height:1.4;white-space:pre;overflow:hidden;
 }
 .restore textarea:focus{outline:none;border-color:var(--cy);box-shadow:0 0 0 4px rgba(0,180,215,.14)}
 .restore .or{font-family:var(--mono);font-size:10.5px;letter-spacing:.15em;text-transform:uppercase;color:var(--faint);text-align:center;margin:-2px 0}
@@ -459,6 +459,35 @@ h1 em{
 .known .k{font-family:var(--mono);font-size:10px;letter-spacing:.15em;text-transform:uppercase;color:var(--faint)}
 .known .v{font-family:var(--mono);font-size:13px;color:var(--cy-hi)}
 .known .note{font-size:12.5px;color:var(--faint);flex:1;min-width:180px}
+.restore textarea.good{border-color:var(--cy);box-shadow:0 0 0 3px rgba(0,180,215,.14)}
+/* Once the backup is recognised there is nothing to read in it and nothing
+   to edit — it is 400 characters of base64. A scrolling box of it is worse
+   than useless, so the field is replaced by what a person would actually want
+   to check: that something loaded, which identity it is for, and a way to
+   swap it. The middle of the string is cut rather than the end, because both
+   ends are the parts you would recognise. */
+.loaded{
+  display:flex;align-items:center;gap:12px;padding:12px 15px;border-radius:12px;
+  background:rgba(0,180,215,.08);border:1px solid rgba(0,180,215,.34);
+}
+.loaded .tick{
+  width:20px;height:20px;flex:none;border-radius:50%;background:var(--cy-hi);position:relative;
+}
+.loaded .tick::after{
+  content:"";position:absolute;left:6px;top:3.5px;width:5px;height:9px;
+  border:solid #00181F;border-width:0 2px 2px 0;transform:rotate(42deg);
+}
+.loaded .txt{
+  flex:1;min-width:0;font-family:var(--mono);font-size:12px;color:var(--dim);
+  white-space:nowrap;overflow:hidden;
+}
+.loaded .swap{
+  border:0;background:transparent;color:var(--cy);font:inherit;font-size:13px;font-weight:600;
+  cursor:pointer;padding:4px 6px;border-radius:8px;flex:none;
+}
+.loaded .swap:hover{color:var(--cy-hi);background:rgba(0,180,215,.12)}
+.doit .small.ok{color:var(--cy-hi)}
+.doit .small.warn{color:var(--warn)}
 
 /* ── importing ─────────────────────────────────────────────────────────────
    Real steps, and one of them genuinely takes time: deriving a key from a
@@ -2070,6 +2099,22 @@ function renderDiagnostic(parsed, stats, note){
     text.spellcheck=false; text.setAttribute("aria-label","Backup file contents");
     text.placeholder='the whole file, braces and all — {"v":1,"did":"…","salt":"…","iv":"…","data":"…"}';
 
+    const loaded=document.createElement("div");
+    loaded.className="loaded"; loaded.hidden=true;
+    const tick=document.createElement("span"); tick.className="tick";
+    const ltxt=document.createElement("span"); ltxt.className="txt";
+    const swap=document.createElement("button");
+    swap.className="swap"; swap.type="button"; swap.textContent="Replace";
+    swap.addEventListener("click",()=>{
+      loaded.hidden=true; fileBtn.hidden=or.hidden=text.hidden=false;
+      text.value=""; text.classList.remove("good");
+      file.value=""; fileBtn.classList.remove("has");
+      fileLabel.textContent="Choose your backup file — overheard-identity-….json";
+      advanced=false; msg.className="small"; msg.textContent="";
+      text.focus();
+    });
+    loaded.append(tick,ltxt,swap);
+
     const pw=document.createElement("input");
     pw.type="password"; pw.autocomplete="current-password";
     pw.placeholder="the passphrase you set for it";
@@ -2077,36 +2122,94 @@ function renderDiagnostic(parsed, stats, note){
     go.className="act primary"; go.type="button"; go.textContent="Bring it into this browser";
     const msg=document.createElement("p"); msg.className="small";
 
+    /* Recognise the backup the moment it lands and move the cursor on.
+       Making someone paste a file, then find the next box themselves, then
+       remember what that box wanted, is three steps where there is one real
+       decision. The DID inside the file is checked here rather than at submit
+       time, so a wrong backup is caught while it is still obvious what was
+       just pasted. */
+    const short=(d)=>`${d.slice(8,16)}…${d.slice(-4)}`;
+    /** Cut the middle, never the end: both ends of a backup are the parts
+     *  someone might actually recognise. */
+    const midTrim=(t,head,tail)=>
+      t.length<=head+tail+5 ? t : `${t.slice(0,head)} …… ${t.slice(-tail)}`;
+    let advanced=false;
+    const recognise=()=>{
+      const raw=text.value.trim();
+      text.classList.remove("good");
+      if(!raw){ msg.className="small"; msg.textContent=""; return; }
+      let v=null; try{ v=JSON.parse(raw); }catch{}
+      if(!v?.did || !v?.data){
+        msg.className="small";
+        msg.textContent="Not an Overheard backup yet — it should be the whole file, braces included.";
+        return;
+      }
+      if(v.did!==parsed.did){
+        msg.className="small warn";
+        msg.textContent=`That backup holds ${short(v.did)}, which is a different identity from the one on this page.`;
+        return;
+      }
+      text.classList.add("good");
+      msg.className="small ok";
+      msg.textContent=`Backup recognised for ${short(parsed.did)}. Now the passphrase you set for it.`;
+
+      // Fold the field away and show what is worth checking instead.
+      loaded.querySelector(".txt").textContent=midTrim(raw,30,14);
+      loaded.hidden=false;
+      fileBtn.hidden=or.hidden=text.hidden=true;
+
+      if(advanced) return;
+      advanced=true;
+      pw.focus({preventScroll:true});
+      pw.classList.add("beckon");
+      pw.addEventListener("input",()=>pw.classList.remove("beckon"),{once:true});
+      pw.addEventListener("blur",()=>pw.classList.remove("beckon"),{once:true});
+    };
+    text.addEventListener("input",recognise);
+    text.addEventListener("paste",()=>setTimeout(recognise,0));
+
     file.addEventListener("change",async()=>{
       const f=file.files?.[0];
       fileBtn.classList.toggle("has",!!f);
       fileLabel.textContent=f?f.name:"Choose your backup file — overheard-identity-….json";
-      if(f){ try{ text.value=(await f.text()).trim(); msg.textContent=""; }catch{} }
+      if(f){ try{ text.value=(await f.text()).trim(); recognise(); }catch{} }
     });
 
     go.addEventListener("click",async()=>{
       const raw=text.value.trim();
-      if(!raw) return msg.textContent="Paste your backup file's contents, or choose the file above.";
-      if(!pw.value) return msg.textContent="Enter the passphrase you set when you made this identity.";
+      if(!raw){
+        msg.className="small"; msg.textContent="Paste your backup file's contents, or choose the file above.";
+        pointAt(box,text); return;
+      }
+      if(!pw.value){
+        msg.className="small"; msg.textContent="Enter the passphrase you set when you made this identity.";
+        pw.focus({preventScroll:true}); return;
+      }
 
       let vault=null;
       try{ vault=JSON.parse(raw); }catch{}
       if(!vault?.did || !vault?.data){
+        msg.className="small";
         return msg.textContent="That is not an Overheard backup — it should be the whole JSON file, braces included.";
       }
       // The right file for the WRONG identity is a real mistake and worth
       // naming, rather than unlocking something and failing later.
       if(vault.did!==parsed.did){
-        return msg.textContent=`That backup holds ${vault.did.slice(8,16)}…${vault.did.slice(-4)}, which is a different identity from the one on this page.`;
+        msg.className="small warn";
+        return msg.textContent=`That backup holds ${short(vault.did)}, which is a different identity from the one on this page.`;
       }
 
-      go.disabled=pw.disabled=text.disabled=true; msg.textContent="";
+      go.disabled=pw.disabled=text.disabled=true; msg.className="small"; msg.textContent="";
       const done=await runImport(box,vault,pw.value,parsed);
       if(done) return;                              // renderDiagnostic took over
       go.disabled=pw.disabled=text.disabled=false;
+      msg.className="small warn";
       msg.textContent="That did not open — wrong passphrase, or the backup is damaged.";
+      // The backup is almost certainly fine — it was recognised — so leave it
+      // folded away and put the cursor back on the thing that was wrong.
+      pw.focus({preventScroll:true}); pw.select();
     });
-    box.append(known,fileBtn,or,text,pw,go,msg);
+    box.append(known,fileBtn,or,text,loaded,pw,go,msg);
     doit.appendChild(box);
 
     const small=document.createElement("p"); small.className="small";
