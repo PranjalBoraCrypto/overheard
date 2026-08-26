@@ -440,10 +440,25 @@ h1 em{
 .restore input[type=password]:focus{outline:none;border-color:var(--cy);box-shadow:0 0 0 4px rgba(0,180,215,.14)}
 .restore textarea{
   padding:13px 15px;border-radius:12px;font-family:var(--mono);font-size:12.5px;line-height:1.5;color:var(--txt);
-  background:rgba(0,7,10,.6);border:1px solid var(--edge);min-height:88px;resize:vertical;transition:.25s var(--ease);
+  background:rgba(0,7,10,.6);border:1px solid var(--edge);resize:vertical;transition:.25s var(--ease);
+  /* One line tall, matching the passphrase box beside it. A backup file is a
+     single long line of JSON, so a tall box was reserving space for nothing —
+     and it made the field look like the main event rather than one of two
+     equal inputs. Draggable if anyone wants to read what they pasted. */
+  height:48px;min-height:48px;line-height:1.4;white-space:pre;overflow:auto;
 }
 .restore textarea:focus{outline:none;border-color:var(--cy);box-shadow:0 0 0 4px rgba(0,180,215,.14)}
 .restore .or{font-family:var(--mono);font-size:10.5px;letter-spacing:.15em;text-transform:uppercase;color:var(--faint);text-align:center;margin:-2px 0}
+/* The DID is already known — it is what was typed at the top of the page —
+   so this states it instead of leaving a placeholder that reads like a field
+   waiting to be filled in. Shown, never asked for. */
+.known{
+  display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;padding:12px 15px;border-radius:12px;
+  background:rgba(0,180,215,.06);border:1px solid rgba(0,180,215,.2);
+}
+.known .k{font-family:var(--mono);font-size:10px;letter-spacing:.15em;text-transform:uppercase;color:var(--faint)}
+.known .v{font-family:var(--mono);font-size:13px;color:var(--cy-hi)}
+.known .note{font-size:12.5px;color:var(--faint);flex:1;min-width:180px}
 
 /* ── importing ─────────────────────────────────────────────────────────────
    Real steps, and one of them genuinely takes time: deriving a key from a
@@ -488,6 +503,15 @@ h1 em{
   100%{box-shadow:0 0 0 0 rgba(95,235,255,0)}
 }
 @media (prefers-reduced-motion:reduce){.act.beckon::before{animation:none;box-shadow:0 0 0 3px rgba(95,235,255,.4)}}
+/* Inputs cannot carry a pseudo-element, so they pulse directly. Same rhythm
+   as the button, so "this is the next thing" reads the same wherever it is. */
+input.beckon,textarea.beckon{animation:beckonin 2.3s var(--ease) infinite}
+@keyframes beckonin{
+  0%{box-shadow:0 0 0 0 rgba(95,235,255,.5)}
+  70%{box-shadow:0 0 0 12px rgba(95,235,255,0)}
+  100%{box-shadow:0 0 0 0 rgba(95,235,255,0)}
+}
+@media (prefers-reduced-motion:reduce){input.beckon,textarea.beckon{animation:none;box-shadow:0 0 0 3px rgba(95,235,255,.4)}}
 
 /* ── all done, now wait ────────────────────────────────────────────────── */
 .allset{
@@ -1974,9 +1998,8 @@ function renderDiagnostic(parsed, stats, note){
       const arm=()=>jobButton(key,label,()=>{
         const row=$("doit").querySelector(".unlockrow");
         if(row){
-          row.classList.add("flash"); row.querySelector("input").focus();
-          setTimeout(()=>row.classList.remove("flash"),1200);
           jobSay(key,"Unlock the identity below first — one passphrase covers both jobs.");
+          pointAt(row,row.querySelector("input"));
         }
       });
       reopen[key]=arm; arm();
@@ -2006,9 +2029,9 @@ function renderDiagnostic(parsed, stats, note){
     for(const [key,label,show] of jobsToDo){
       if(!show) continue;
       const arm=()=>jobButton(key,label,()=>{
-        $("doit").querySelector(".restore")?.scrollIntoView({behavior:calm?"auto":"smooth",block:"center"});
-        $("doit").querySelector(".restore .filebtn")?.focus();
+        const box=$("doit").querySelector(".restore");
         jobSay(key,"Bring this identity into this browser first — the box below.");
+        pointAt(box,box?.querySelector("textarea"));
       });
       reopen[key]=arm; arm();
     }
@@ -2019,6 +2042,16 @@ function renderDiagnostic(parsed, stats, note){
        A file plus its passphrase brings the key into this tab — no seed, no
        navigation, and the same vault format the Rooms page already uses. */
     const box=document.createElement("div"); box.className="restore";
+
+    const known=document.createElement("div"); known.className="known";
+    const kk=document.createElement("span"); kk.className="k"; kk.textContent="Identity";
+    const kv=document.createElement("span"); kv.className="v";
+    kv.textContent=`${parsed.did.slice(8,20)}…${parsed.did.slice(-6)}`;
+    kv.title=parsed.did;
+    const kn=document.createElement("span"); kn.className="note";
+    kn.textContent="Already known from your search. You only need its backup and passphrase.";
+    known.append(kk,kv,kn);
+
     const fileBtn=document.createElement("label"); fileBtn.className="filebtn"; fileBtn.tabIndex=0;
     fileBtn.innerHTML='<svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 9 12 4 17 9"/><line x1="12" y1="4" x2="12" y2="16"/></svg>';
     const fileLabel=document.createElement("span");
@@ -2035,7 +2068,7 @@ function renderDiagnostic(parsed, stats, note){
     const or=document.createElement("div"); or.className="or"; or.textContent="or paste it";
     const text=document.createElement("textarea");
     text.spellcheck=false; text.setAttribute("aria-label","Backup file contents");
-    text.placeholder='{"v":1,"did":"did:key:z6Mk…","salt":"…","iv":"…","data":"…"}';
+    text.placeholder='the whole file, braces and all — {"v":1,"did":"…","salt":"…","iv":"…","data":"…"}';
 
     const pw=document.createElement("input");
     pw.type="password"; pw.autocomplete="current-password";
@@ -2073,7 +2106,7 @@ function renderDiagnostic(parsed, stats, note){
       go.disabled=pw.disabled=text.disabled=false;
       msg.textContent="That did not open — wrong passphrase, or the backup is damaged.";
     });
-    box.append(fileBtn,or,text,pw,go,msg);
+    box.append(known,fileBtn,or,text,pw,go,msg);
     doit.appendChild(box);
 
     const small=document.createElement("p"); small.className="small";
@@ -2147,6 +2180,24 @@ async function runImport(box, vault, pass, parsed){
     box.replaceChildren(...form);
     return false;
   }
+}
+
+/** Scroll to a control and put the cursor in it. Focusing alone was not
+ *  enough: the browser scrolls the field into view at the edge of the screen,
+ *  which is technically "visible" and easy to miss. This centres it, waits for
+ *  the scroll to settle so the focus ring is not animating past, then focuses
+ *  and pulses until the person starts typing. */
+function pointAt(box, input){
+  if(!box) return;
+  box.scrollIntoView({behavior:calm?"auto":"smooth",block:"center"});
+  setTimeout(()=>{
+    if(!input) return;
+    input.focus({preventScroll:true});
+    input.classList.add("beckon");
+    const stop=()=>input.classList.remove("beckon");
+    input.addEventListener("input",stop,{once:true});
+    input.addEventListener("blur",stop,{once:true});
+  }, calm?0:420);
 }
 
 /** Draw the eye to the next thing that needs doing, and keep drawing it until
