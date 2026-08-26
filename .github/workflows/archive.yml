@@ -96,7 +96,7 @@ jobs:
               # /api/profile and /api/recent read the archive straight from the
               # repository, so a card and the archive strip are current within
               # a commit of the collection itself.
-              if [ $(( (pass - 1) % 6 )) -eq 0 ]; then
+              if [ $(( (pass - 1) % 12 )) -eq 0 ]; then
                 MSG="archive: publish $STAMP"
               else
                 MSG="archive: $STAMP [skip ci]"
