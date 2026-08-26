@@ -274,16 +274,28 @@ h1 em{
 .fix .go span{color:var(--warn)}
 .status{text-align:center;color:var(--faint);font-size:14px;margin-top:20px;max-width:58ch;margin-inline:auto;line-height:1.7}
 .status b{color:var(--dim);font-weight:600}
-.chips{display:flex;flex-wrap:wrap;gap:11px}
+/* Evidence, not decoration. A truncated key with a number beside it looks
+   exactly like placeholder data — it was mistaken for it — so each of these
+   now shows what the identity actually said, where, and how long ago. */
+.chips{display:grid;grid-template-columns:repeat(auto-fill,minmax(330px,1fr));gap:12px}
 .chip{
-  position:relative;overflow:hidden;display:inline-flex;align-items:center;gap:11px;border-radius:14px;
-  padding:11px 16px;cursor:pointer;font:inherit;color:var(--txt);transition:.3s var(--ease);
+  position:relative;overflow:hidden;display:grid;grid-template-columns:auto 1fr;gap:13px;
+  align-items:start;text-align:left;border-radius:15px;padding:15px 17px;cursor:pointer;
+  font:inherit;color:var(--txt);transition:.3s var(--ease);
   background:linear-gradient(rgba(7,34,48,.85),rgba(7,34,48,.85)) padding-box,var(--bevel) border-box;border:1px solid transparent;
 }
 .chip:hover{transform:translateY(-3px);box-shadow:0 18px 34px -20px rgba(0,180,215,.95)}
-.chip .sq{width:27px;height:27px;border-radius:9px;flex:none;box-shadow:0 4px 14px -5px rgba(0,180,215,.9),inset 0 1px 0 rgba(255,255,255,.25)}
-.chip .id{font-family:var(--mono);font-size:12.5px}
-.chip .n{color:var(--cy-hi);font-weight:700;font-size:13px;font-variant-numeric:tabular-nums}
+.chip .sq{width:30px;height:30px;border-radius:10px;flex:none;box-shadow:0 4px 14px -5px rgba(0,180,215,.9),inset 0 1px 0 rgba(255,255,255,.25)}
+.chip .col{min-width:0;display:flex;flex-direction:column;gap:5px}
+.chip .top{display:flex;align-items:baseline;gap:9px;flex-wrap:wrap}
+.chip .id{font-family:var(--mono);font-size:12px;color:var(--cy)}
+.chip .n{color:var(--faint);font-family:var(--mono);font-size:11px;font-variant-numeric:tabular-nums}
+.chip .said{
+  font-size:14.5px;line-height:1.45;color:var(--txt);
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;
+}
+.chip .said.none{color:var(--faint);font-style:italic}
+.chip .where{font-family:var(--mono);font-size:11px;color:var(--faint);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .plain{max-width:64ch}
 .plain p{color:var(--dim);margin-bottom:15px;font-size:15.5px}
 .plain strong{color:var(--txt);font-weight:600}
@@ -390,7 +402,8 @@ footer a:hover{color:var(--cy-hi)}
 
   <section class="band rise" id="seen" hidden>
     <h2>Seen recently on the network</h2>
-    <p class="sub">Identities the archive has picked up. Click one to see its card.</p>
+    <p class="sub">Real identities, real lines, straight out of the archive — <span id="freshness">updating</span>.
+      Click one to see its card.</p>
     <div class="chips" id="chips"></div>
   </section>
 
@@ -515,6 +528,21 @@ function fitMiddle(ctx,text,maxWidth){
     if(ctx.measureText(cand).width<=maxWidth) return cand;
   }
   return text.slice(0,8).trimEnd()+ell;
+}
+
+/** "4 minutes ago" — plain English beats an ISO timestamp for judging whether
+ *  a page is alive. Clock skew is real, so anything in the future reads as
+ *  "just now" rather than a negative number. */
+function ago(iso){
+  const t=Date.parse(iso||"");
+  if(!Number.isFinite(t)) return "";
+  const s=Math.max(0,(Date.now()-t)/1000);
+  if(s<45) return "just now";
+  const m=Math.round(s/60);
+  if(m<60) return `${m} minute${m===1?"":"s"} ago`;
+  const h=Math.round(m/60);
+  if(h<36) return `${h} hour${h===1?"":"s"} ago`;
+  return `${Math.round(h/24)} days ago`;
 }
 
 /** Greedy word wrap into at most `maxLines`. The final line absorbs whatever
@@ -1014,7 +1042,8 @@ $("post").addEventListener("click",()=>{
   try{
     const r=await fetch("./data/recent.json",{cache:"no-cache"});
     if(!r.ok) return;
-    const {dids=[]}=await r.json();
+    const j=await r.json();
+    const dids=Array.isArray(j.dids)?j.dids:[];
     const live=dids.filter(d=>d.unique>0).slice(0,18);
     if(!live.length) return;
     const box=$("chips");
@@ -1026,20 +1055,42 @@ $("post").addEventListener("click",()=>{
       const hue=189+((pub[0]/255)*84-42);
       const b=document.createElement("button");
       b.className="chip"; b.type="button";
+
       const sq=document.createElement("span");
       sq.className="sq";
       sq.style.background=`linear-gradient(145deg,hsl(${hue} 88% 52%),hsl(${hue-26} 92% 34%))`;
-      const id=document.createElement("span");
-      id.className="id";
+
+      const col=document.createElement("div"); col.className="col";
+
+      const top=document.createElement("div"); top.className="top";
+      const id=document.createElement("span"); id.className="id";
       // Network-supplied, so it is set as text. parseDid already rejected
       // anything malformed, but the rule is the rule.
       id.textContent=`${d.did.slice(8,16)}…${d.did.slice(-4)}`;
-      const n=document.createElement("span");
-      n.className="n"; n.textContent=String(d.unique);
-      b.append(sq,id,n);
+      const n=document.createElement("span"); n.className="n";
+      n.textContent=`${Number(d.unique||0).toLocaleString()} signed`;
+      top.append(id,n);
+
+      // What they actually said. Written by a stranger — set as text, never
+      // markup, and clamped to two lines by CSS rather than cut here, so the
+      // words are never altered.
+      const said=document.createElement("div");
+      said.className="said"+(d.text?"":" none");
+      said.textContent=d.text ? `“${d.text}”` : "no message recorded yet";
+
+      const where=document.createElement("div"); where.className="where";
+      where.textContent=[d.room?`in ${d.room}`:null, ago(d.last)].filter(Boolean).join("  ·  ");
+
+      col.append(top,said,where);
+      b.append(sq,col);
       b.addEventListener("click",()=>{ $("did").value=d.did; issue(d.did); });
       box.appendChild(b);
     }
+    // Freshness stated plainly. "Real data" that could be from last week is
+    // indistinguishable from invented data.
+    const stamp=$("freshness");
+    if(stamp) stamp.textContent = j.updated ? `last collected ${ago(j.updated)}` : "collected continuously";
+
     $("seen").hidden=false;
   }catch{ /* no archive yet — the section simply stays hidden */ }
 })();

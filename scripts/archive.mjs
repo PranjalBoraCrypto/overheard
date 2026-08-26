@@ -164,7 +164,11 @@ async function recordProfile(state, did, room, ts, isTemplate, text) {
   // The last message wins only if it is genuinely later. Rooms are read in
   // sequence order, but a pass can cover several rooms and their clocks are
   // independent, so comparing timestamps is the only ordering that holds.
-  if (ts && ts >= p.last) { p.last = ts; const f = flatten(text); if (f) p.last_text = f; }
+  if (ts && ts >= p.last) {
+    p.last = ts;
+    p.last_room = room;
+    const f = flatten(text); if (f) p.last_text = f;
+  }
 }
 
 /* ── the roster ───────────────────────────────────────────────────────────
@@ -452,9 +456,23 @@ async function main() {
     await writeFile(path.join(OUT, "profiles", `${shard}.json`), JSON.stringify(bucket) + "\n");
   }
 
+  // The homepage's "seen recently" row is built from this, and a row of
+  // truncated keys with a number beside them is indistinguishable from
+  // placeholder data — which is exactly what it was mistaken for. Carrying
+  // the words and the room makes it self-evidently real: a stranger can read
+  // what was said, see where, and go check.
   const fresh = [];
   for (const [, bucket] of state.profiles) {
-    for (const [did, p] of Object.entries(bucket)) fresh.push({ did, unique: p.unique, rooms: p.rooms.length, last: p.last });
+    for (const [did, p] of Object.entries(bucket)) {
+      fresh.push({
+        did,
+        unique: p.unique,
+        rooms: p.rooms.length,
+        last: p.last,
+        room: p.last_room ?? p.rooms[p.rooms.length - 1] ?? null,
+        text: p.last_text ?? null,
+      });
+    }
   }
   fresh.sort((a, b) => (a.last < b.last ? 1 : -1));
   const merged = [...fresh, ...(state.recent.dids ?? [])];
