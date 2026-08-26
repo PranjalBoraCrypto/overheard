@@ -665,8 +665,15 @@ function layoutQuote(ctx,text,maxWidth,maxLines){
    they had just asked for, and the wait was dead time.
 
    Now the page goes to the card and the card boots. It is the agent waking
-   up: the frame draws itself, the key's own 32 bytes stream in and light up,
-   the agent assembles and its visor comes on, and three checks tick off.
+   up: the frame draws itself, the agent assembles inside its rings, the ID
+   being looked up types itself in, and three checks tick off.
+
+   EVERYTHING ON IT IS LEGIBLE TO SOMEONE WHO IS NOT A DEVELOPER. It used to
+   stream the key's 32 bytes as hex, which looked the part and told the person
+   watching precisely nothing — "7a 2e bf 7f" is not information, it is set
+   dressing. The line is now the actual ID being checked, captioned as such,
+   so the one thing on screen that could be mistaken for jargon is the one
+   thing the person typed in themselves.
 
    THE CHECKS ARE REAL. Each row is wired to one of the three lookups this
    page actually makes and ticks when that promise resolves. A progress bar
@@ -681,15 +688,18 @@ function layoutQuote(ctx,text,maxWidth,maxLines){
    ─────────────────────────────────────────────────────────────────────── */
 const BOOT_MIN_MS = 1900;
 
-function bootCard(pub, progress){
+function bootCard(pub, did, progress){
   const cv=$("card"), ctx=cv.getContext("2d");
   const t0=performance.now();
-  const bytes=[...pub].map((b)=>b.toString(16).padStart(2,"0"));
+  const chars=[...String(did||"")];
   const hue=189+((pub[0]/255)*84-42);
+  // Each row names WHAT is being looked for, not the machinery. "Searching
+  // the archive" left the person wondering for what; "Searching the archive
+  // for this ID" is the same length and answers it.
   const rows=[
-    {k:"rooms",   label:"Reading the rooms as they are now"},
-    {k:"archive", label:"Searching the archive"},
-    {k:"note",    label:"Checking the permanent note"},
+    {k:"rooms",   label:"Looking for this ID in the live rooms"},
+    {k:"archive", label:"Searching the archive of past messages"},
+    {k:"note",    label:"Checking for a note signed by this ID"},
   ];
   let raf=0, live=true;
 
@@ -725,18 +735,21 @@ function bootCard(pub, progress){
     ctx.strokeStyle="rgba(0,180,215,.5)"; ctx.lineWidth=3; ctx.stroke();
     ctx.restore();
 
+    // The title sits ABOVE the orbit, not on it. At the old radius the
+    // outermost ring passed through the lettering, which is the kind of
+    // near-miss that makes a careful design look careless.
     ctx.textAlign="center";
     ctx.fillStyle="#00B4D7"; ctx.font="600 13px 'IBM Plex Mono', monospace";
     ctx.letterSpacing="4px";
     ctx.globalAlpha=cl(t/400);
-    ctx.fillText("ISSUING CREDENTIAL",W/2,74);
+    ctx.fillText("ISSUING CREDENTIAL",W/2,52);
     ctx.globalAlpha=1; ctx.letterSpacing="0px";
 
     // orbit — one arc per lookup still running, so it visibly thins out
-    const cx=W/2, cy=214;
+    const cx=W/2, cy=208;
     const pending=rows.filter((r)=>!progress[r.k]).length;
     for(let i=0;i<3;i++){
-      const r=120+i*11;
+      const r=104+i*12;
       if(progress[rows[i].k]){
         // Finished: the ring closes. A settled circle reads as "this one is
         // resolved" far more clearly than a shorter arc still going round.
@@ -756,28 +769,41 @@ function bootCard(pub, progress){
       ctx.save();
       ctx.translate(cx,cy); ctx.scale(sc,sc); ctx.translate(-cx,-cy);
       ctx.globalAlpha=cl(ap*1.4);
-      agent(ctx,cx-70,cy-72,140,pub);
+      agent(ctx,cx-68,cy-70,136,pub);
       ctx.restore(); ctx.globalAlpha=1;
     }
 
-    // the key's own bytes, lighting up left to right
-    const bx=W/2-((bytes.length*30)/2);
-    ctx.font="500 15px 'IBM Plex Mono', monospace"; ctx.textAlign="left";
-    bytes.forEach((h,i)=>{
-      const on=cl((t-260-i*26)/240);
-      ctx.globalAlpha=.12+on*.88;
-      ctx.fillStyle=on>=1?`hsl(${hue} 90% 66%)`:"#2A6B80";
-      ctx.fillText(h,bx+i*30,376);
+    /* The ID types itself in, character by character.
+       The reveal is the same effect the hex row had, pointed at something the
+       person can actually read back: this is the ID they pasted, and seeing it
+       land confirms the page is checking the right one. `did:key:` stays dim —
+       it is the same on every identity and carries no information; the part
+       that differs is the part that lights up. */
+    ctx.font="500 16px 'IBM Plex Mono', monospace"; ctx.textAlign="left";
+    const cw=ctx.measureText("M").width;
+    const bx=W/2-(chars.length*cw)/2;
+    chars.forEach((c,i)=>{
+      const on=cl((t-260-i*14)/220);
+      const boiler=i<9;                       // "did:key:z"
+      ctx.globalAlpha=.10+on*(boiler?.55:.90);
+      ctx.fillStyle=on>=1?(boiler?"#4E7A8B":`hsl(${hue} 90% 68%)`):"#2A6B80";
+      ctx.fillText(c,bx+i*cw,380);
     });
     ctx.globalAlpha=1;
     ctx.textAlign="center";
     ctx.fillStyle="#5F8593"; ctx.font="500 12px 'IBM Plex Mono', monospace";
-    ctx.letterSpacing="2.4px"; ctx.fillText("YOUR PUBLIC KEY, 32 BYTES",W/2,404); ctx.letterSpacing="0px";
+    ctx.letterSpacing="2.4px"; ctx.fillText("THE PUBLIC ID WE ARE CHECKING",W/2,408); ctx.letterSpacing="0px";
 
-    // real checks, real ticks
+    /* Real checks, real ticks — and the block is centred on the widest ROW,
+       not on a guessed left edge. A fixed x looked centred only for the label
+       lengths it was picked for; measuring means the column stays balanced
+       under the agent whatever the wording becomes. */
     ctx.textAlign="left";
+    ctx.font="600 18px 'Outfit', sans-serif";
+    const widest=Math.max(...rows.map((r)=>ctx.measureText(r.label).width));
+    const rowX=W/2-(34+widest)/2;
     rows.forEach((r,i)=>{
-      const y=452+i*40, x=W/2-250;
+      const y=464+i*46, x=rowX;
       const shown=cl((t-700-i*130)/300);
       if(shown<=0) return;
       ctx.globalAlpha=shown;
@@ -799,7 +825,7 @@ function bootCard(pub, progress){
     ctx.textAlign="center";
     ctx.fillStyle="#3D6272"; ctx.font="500 12px 'IBM Plex Mono', monospace";
     ctx.letterSpacing="1.6px";
-    ctx.fillText(pending?"NOTHING ABOUT YOUR KEY IS SENT ANYWHERE":"READY",W/2,H-46);
+    ctx.fillText(pending?"READING PUBLIC ROOMS ONLY  ·  NOTHING IS POSTED":"READY",W/2,H-32);
     ctx.letterSpacing="0px"; ctx.textAlign="left";
   }
 
@@ -1210,7 +1236,7 @@ async function issue(raw){
   $("stage").scrollIntoView({behavior:calm?"auto":"smooth",block:"center"});
 
   const progress={rooms:false,archive:false,note:false};
-  const boot=bootCard(p.pub,progress);
+  const boot=bootCard(p.pub,p.did,progress);
   // Known identities get their real activity; unseen keys show the fingerprint.
   // Two sources, tried in order. The proxy reads the rooms as they are right
   // now; the archive remembers further back than the rooms themselves do.
