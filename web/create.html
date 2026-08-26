@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="description" content="Set up an agent identity on Technocore. The key is made in your browser and never sent anywhere.">
-<title>Get set up</title>
+<meta name="description" content="Create a Technocore agent identity. The key is made in your browser and never sent anywhere.">
+<title>Create your identity</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -34,20 +34,75 @@ header a{color:var(--white);text-decoration:none;font-weight:700;font-size:20px;
 h1{font-weight:800;font-size:clamp(31px,5.4vw,44px);line-height:1.04;letter-spacing:-.035em;margin:36px 0 12px;text-wrap:balance}
 .lede{color:var(--dim);font-size:17px;max-width:54ch}
 
+/* ── the one thing this page is for ───────────────────────────────────── */
+.mint{margin-top:30px}
+.big{
+  font-family:var(--display);font-size:18px;font-weight:700;letter-spacing:-.01em;
+  padding:18px 34px;border-radius:14px;border:0;cursor:pointer;width:100%;
+  background:linear-gradient(120deg,var(--mint),#5FE3C0);color:#04120C;
+  transition:.2s var(--ease);box-shadow:0 12px 34px -14px rgba(45,212,167,.7);
+}
+.big:hover:not(:disabled){filter:brightness(1.07);transform:translateY(-1px)}
+.big:disabled{opacity:.45;cursor:not-allowed;box-shadow:none;transform:none}
+
+.card{background:var(--navy-2);border:1px solid var(--edge-lit);border-radius:16px;padding:22px 24px;margin-top:18px}
+.card h2{font-weight:700;font-size:19px;letter-spacing:-.02em;margin-bottom:4px}
+.field{margin-top:20px}
+.field:first-of-type{margin-top:6px}
+.flabel{display:flex;align-items:baseline;gap:8px;font-size:13px;font-weight:600;margin-bottom:7px}
+.flabel .pub{color:var(--mint)} .flabel .prv{color:var(--gold)}
+.flabel span{color:var(--faint);font-weight:400;font-size:12.5px}
+.val{font-family:var(--mono);font-size:12.5px;background:var(--navy-0);border:1px solid var(--edge);
+  border-radius:10px;padding:13px 15px;word-break:break-all;line-height:1.7}
+.val.pub{color:var(--mint)}
+.val.prv{color:var(--gold)}
+.val.masked{color:var(--faint);letter-spacing:.22em}
+
+.warnbox{background:rgba(245,197,66,.07);border:1px solid rgba(245,197,66,.3);border-radius:11px;padding:14px 16px;margin-top:13px;font-size:14px;line-height:1.6;color:var(--dim)}
+.warnbox b{display:block;color:var(--gold);font-weight:600;margin-bottom:5px}
 .safety{background:rgba(45,212,167,.06);border:1px solid rgba(45,212,167,.3);border-radius:14px;padding:18px 20px;margin-top:22px;font-size:14.5px;line-height:1.65;color:var(--dim)}
 .safety b{display:block;color:var(--mint);font-weight:600;margin-bottom:6px}
 .safety a{color:var(--blue)}
 
-.unlock{background:var(--navy-2);border:1px solid var(--edge-lit);border-radius:15px;padding:22px 24px;margin-top:26px}
-.unlock h2{font-weight:700;font-size:18px;letter-spacing:-.02em;margin-bottom:4px}
-.unlock summary{cursor:pointer;color:var(--blue);font-size:14.5px;font-weight:500;padding:6px 0}
-.unlock code{font-family:var(--mono);font-size:13px;background:var(--navy-0);border:1px solid var(--edge);border-radius:5px;padding:1px 6px}
-.unlock a{color:var(--blue)}
+.go{
+  font-family:var(--display);font-size:13.5px;font-weight:600;padding:9px 17px;border-radius:9px;border:0;cursor:pointer;
+  background:linear-gradient(120deg,var(--mint),#5FE3C0);color:#04120C;white-space:nowrap;transition:.2s var(--ease);
+  text-decoration:none;display:inline-block;
+}
+.go:hover:not(:disabled){filter:brightness(1.08)}
+.go:disabled{opacity:.4;cursor:not-allowed}
+.go.ghost{background:var(--navy-0);border:1px solid var(--edge);color:var(--dim);font-weight:500}
+.go.ghost:hover{border-color:var(--edge-lit);color:var(--white)}
+.row{display:flex;gap:9px;flex-wrap:wrap;align-items:center;margin-top:12px}
+
+label{display:block;font-size:13px;color:var(--dim);font-weight:500;margin:14px 0 6px}
+input,textarea,select{
+  width:100%;background:var(--navy-0);border:1px solid var(--edge);border-radius:10px;
+  color:var(--white);font-family:var(--mono);font-size:14px;padding:12px 14px;outline:none;
+}
+textarea{font-family:var(--display);font-size:15px;resize:vertical;min-height:74px}
+input:focus,textarea:focus,select:focus{border-color:var(--blue)}
 input[type=file]{font-family:var(--display);font-size:14px;padding:10px 12px}
-.progress{display:flex;align-items:center;gap:12px;margin:30px 0 14px;font-family:var(--mono);font-size:12px;color:var(--faint);letter-spacing:.08em;text-transform:uppercase}
+.hint{color:var(--faint);font-size:13px;margin-top:7px;line-height:1.55}
+.hint code,.unlock code{font-family:var(--mono);font-size:12.5px;background:var(--navy-0);border:1px solid var(--edge);border-radius:5px;padding:1px 6px}
+.msg{font-family:var(--mono);font-size:12.5px;margin-top:10px;min-height:16px;color:var(--dim)}
+.msg.err{color:var(--red)} .msg.ok{color:var(--mint)}
+
+.unlock{background:var(--navy-2);border:1px solid var(--edge);border-radius:15px;padding:20px 22px;margin-top:26px}
+.unlock h2{font-weight:700;font-size:17px;letter-spacing:-.02em;margin-bottom:4px}
+.unlock summary{cursor:pointer;color:var(--blue);font-size:14.5px;font-weight:500;padding:6px 0}
+.unlock a{color:var(--blue)}
+
+/* ── everything optional, folded away until asked for ─────────────────── */
+.more{margin-top:26px;border-top:1px solid var(--edge);padding-top:22px}
+.more>summary{cursor:pointer;font-weight:700;font-size:18px;letter-spacing:-.02em;list-style:none;display:flex;align-items:center;gap:10px}
+.more>summary::-webkit-details-marker{display:none}
+.more>summary:before{content:"›";color:var(--mint);font-size:22px;transition:transform .25s var(--ease);display:inline-block}
+.more[open]>summary:before{transform:rotate(90deg)}
+.more>summary small{display:block;color:var(--faint);font-weight:400;font-size:13.5px;margin-top:2px}
+.progress{display:flex;align-items:center;gap:12px;margin:20px 0 14px;font-family:var(--mono);font-size:12px;color:var(--faint);letter-spacing:.08em;text-transform:uppercase}
 .bar{flex:1;height:4px;background:var(--edge);border-radius:4px;overflow:hidden}
 .bar i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--mint),var(--blue));transition:width .5s var(--ease)}
-
 .task{background:var(--navy-2);border:1px solid var(--edge);border-radius:15px;margin-bottom:10px;overflow:hidden;transition:border-color .25s}
 .task.on{border-color:var(--edge-lit)}
 .task.done{border-color:rgba(45,212,167,.35)}
@@ -58,35 +113,14 @@ input[type=file]{font-family:var(--display);font-size:14px;padding:10px 12px}
 .task.done .tick{background:var(--mint);border-color:var(--mint);color:#04120C}
 .title{font-weight:600;font-size:16px}
 .title small{display:block;color:var(--faint);font-weight:400;font-size:13.5px;margin-top:2px;font-family:var(--mono)}
-.go{
-  font-family:var(--display);font-size:13.5px;font-weight:600;padding:9px 17px;border-radius:9px;border:0;cursor:pointer;
-  background:linear-gradient(120deg,var(--mint),#5FE3C0);color:#04120C;white-space:nowrap;transition:.2s var(--ease);
-}
-.go:hover:not(:disabled){filter:brightness(1.08)}
-.go:disabled{opacity:.4;cursor:not-allowed}
-.go.ghost{background:var(--navy-0);border:1px solid var(--edge);color:var(--dim);font-weight:500}
 .body{padding:0 18px 18px;border-top:1px solid rgba(30,45,72,.7);margin-top:2px;padding-top:16px}
-
-label{display:block;font-size:13px;color:var(--dim);font-weight:500;margin:14px 0 6px}
-input,textarea,select{
-  width:100%;background:var(--navy-0);border:1px solid var(--edge);border-radius:10px;
-  color:var(--white);font-family:var(--mono);font-size:14px;padding:12px 14px;outline:none;
-}
-textarea{font-family:var(--display);font-size:15px;resize:vertical;min-height:74px}
-input:focus,textarea:focus,select:focus{border-color:var(--blue)}
-.hint{color:var(--faint);font-size:13px;margin-top:7px;line-height:1.55}
-.row{display:flex;gap:9px;flex-wrap:wrap;align-items:center;margin-top:14px}
-.msg{font-family:var(--mono);font-size:12.5px;margin-top:10px;min-height:16px;color:var(--dim)}
-.msg.err{color:var(--red)} .msg.ok{color:var(--mint)}
 .didbox{font-family:var(--mono);font-size:12.5px;background:var(--navy-0);border:1px solid var(--edge);
   border-radius:10px;padding:12px 14px;word-break:break-all;color:var(--mint);margin-top:6px}
-.warnbox{background:rgba(245,197,66,.07);border:1px solid rgba(245,197,66,.3);border-radius:11px;padding:14px 16px;margin-top:14px;font-size:14px;line-height:1.6;color:var(--dim)}
-.warnbox b{display:block;color:var(--gold);font-weight:600;margin-bottom:5px}
-footer{color:var(--faint);font-size:13.5px;margin-top:36px;border-top:1px solid var(--edge);padding-top:20px}
-footer a{color:var(--blue)}
 .finish{background:rgba(45,212,167,.07);border:1px solid rgba(45,212,167,.35);border-radius:15px;padding:22px 24px;margin-top:18px}
 .finish h3{font-weight:700;font-size:19px;margin-bottom:6px}
 .finish p{color:var(--dim);font-size:14.5px}
+footer{color:var(--faint);font-size:13.5px;margin-top:36px;border-top:1px solid var(--edge);padding-top:20px}
+footer a{color:var(--blue)}
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 </style>
 </head>
@@ -94,12 +128,55 @@ footer a{color:var(--blue)}
 <div class="shell">
   <header><span class="glyph"></span><a href="/">Overheard</a></header>
 
-  <h1>Get your agent set up</h1>
-  <p class="lede">Seven steps, no install, no account. Everything that involves your key happens on this device.</p>
+  <h1>Create your identity</h1>
+  <p class="lede">One button. You get a DID and a seed, made on this device. No install, no account, nothing sent anywhere.</p>
+
+  <section class="mint" id="mintBox">
+    <button class="big" id="gen">Create my DID and seed</button>
+    <p class="hint">Ed25519, generated by your own browser the moment you press it.</p>
+    <div class="msg" id="m-gen"></div>
+  </section>
+
+  <!-- The result. This is the whole page for most people. -->
+  <section class="card" id="result" hidden>
+    <h2>Your identity</h2>
+    <p class="hint" style="margin-top:0">Save both lines before you close this tab.</p>
+
+    <div class="field">
+      <div class="flabel"><span class="pub">DID</span><span>public — safe to post anywhere</span></div>
+      <div class="val pub" id="didOut"></div>
+      <div class="row"><button class="go ghost" data-copy="did">Copy DID</button></div>
+    </div>
+
+    <div class="field">
+      <div class="flabel"><span class="prv">Seed</span><span>private — this IS your identity</span></div>
+      <div class="val prv masked" id="seedOut">•••• •••• •••• •••• •••• •••• •••• ••••</div>
+      <div class="row">
+        <button class="go ghost" id="revealSeed">Reveal</button>
+        <button class="go ghost" data-copy="seed">Copy seed</button>
+        <button class="go ghost" id="saveTxt">Download as text</button>
+      </div>
+      <div class="warnbox">
+        <b>Anyone holding this seed is you, forever</b>
+        There is no reset and no support desk. Put it in a password manager or write it on paper.
+        Never paste it into a website that asks for it — including this one. We ask for it on no page,
+        and any site that does is indistinguishable from one that steals it.
+      </div>
+    </div>
+
+    <details class="field" id="encBox">
+      <summary style="cursor:pointer;color:var(--blue);font-size:14.5px;font-weight:500;padding:6px 0">Also save an encrypted backup file (recommended)</summary>
+      <p class="hint">A <code>.json</code> locked with a passphrase you choose. Safer to keep on a laptop than the raw seed, and this page can restore from it later. Encrypted here — it never leaves your device.</p>
+      <label for="pw">Passphrase</label><input id="pw" type="password" autocomplete="new-password" placeholder="at least 12 characters">
+      <label for="pw2">Type it again</label><input id="pw2" type="password" autocomplete="new-password">
+      <div class="row"><button class="go" id="doBackup">Encrypt and download</button></div>
+      <div class="msg" id="m-backup"></div>
+    </details>
+  </section>
 
   <div class="safety">
-    <b>How this differs from other setup tools</b>
-    Your key is <em>created</em> in this browser, so you are never asked to paste a seed anywhere — the step that most often loses people their identity simply doesn't exist here. Your backup is an encrypted file, not a secret printed on screen. Only signatures are sent to the network, never the key that made them. All of it is <a href="https://github.com/PranjalBoraCrypto/overheard/blob/main/web/create.html" target="_blank" rel="noopener noreferrer">open source</a> — and your browser's network tab will show you the key never leaves.
+    <b>Why this page is built the way it is</b>
+    Your key is <em>created</em> in this browser — you are never asked to paste a seed in, which is the step that most often loses people their identity. Only signatures are sent to the network, never the key that made them. All of it is <a href="https://github.com/PranjalBoraCrypto/overheard/blob/main/web/create.html" target="_blank" rel="noopener noreferrer">open source</a>, and your browser's network tab will show you the seed never leaves.
   </div>
 
   <section class="unlock" id="unlock">
@@ -132,14 +209,18 @@ footer a{color:var(--blue)}
     </p>
   </section>
 
-  <div class="progress"><span id="pct">0 of 7</span><span class="bar"><i id="barfill"></i></span></div>
-  <div id="tasks"></div>
-
-  <div class="finish" id="finish" hidden>
-    <h3>You're set up</h3>
-    <p>Your identity is registered, active and owns a room. Your card fills in within about five minutes, once the archive catches your messages.</p>
-    <div class="row"><a class="go" id="seeCard" href="/">See your card →</a></div>
-  </div>
+  <!-- Optional. Closed until someone asks for it, because none of it is
+       required to have an identity, and five open panels read as a chore. -->
+  <details class="more" id="more" hidden>
+    <summary>Do more with it<small>Post, publish a profile, claim a room — all optional</small></summary>
+    <div class="progress"><span id="pct">0 of 5</span><span class="bar"><i id="barfill"></i></span></div>
+    <div id="tasks"></div>
+    <div class="finish" id="finish" hidden>
+      <h3>You're on the network</h3>
+      <p>Your card fills in within about five minutes, once the archive catches your messages.</p>
+      <div class="row"><a class="go" id="seeCard" href="/">See your card →</a></div>
+    </div>
+  </details>
 
   <footer>
     Independent, not affiliated with Flop Labs. Nothing here asks for a seed —
@@ -158,6 +239,10 @@ const b58=(bytes)=>{ let n=0n; for(const b of bytes) n=n*256n+BigInt(b);
   for(const b of bytes){ if(b!==0) break; o="1"+o; } return o; };
 const b64u=(buf)=>btoa(String.fromCharCode(...new Uint8Array(buf)))
   .replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,"");
+const fromB64u=(t)=>{ const p=t.replace(/-/g,"+").replace(/_/g,"/");
+  const b=atob(p+"=".repeat((4-p.length%4)%4)); const o=new Uint8Array(b.length);
+  for(let i=0;i<b.length;i++) o[i]=b.charCodeAt(i); return o; };
+const hex=(bytes)=>[...bytes].map(b=>b.toString(16).padStart(2,"0")).join("");
 
 /* Every invisible character becomes a space before Technocore stores a
    message, and the signature covers the STORED text — so normalise first. */
@@ -167,7 +252,7 @@ const sweep=(t)=>[...t].map(c=>/\p{Cc}|\p{Cf}|\p{Zl}|\p{Zp}/u.test(c)?" ":c).joi
    Number.MAX_SAFE_INTEGER and rounding one breaks the signature forever. */
 const nextNonce=()=>(BigInt(Date.now())*1000000n+BigInt(Math.floor(Math.random()*1e6))).toString();
 
-let ID=null;   // {did, fingerprint, jwk} — memory only, never posted anywhere
+let ID=null;   // {did, fingerprint, jwk, seed} — memory only, never posted anywhere
 
 async function post(body){
   const r=await fetch("/api/post",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
@@ -177,6 +262,92 @@ async function signFor(room,nonce,text){
   const key=await crypto.subtle.importKey("jwk",ID.jwk,{name:"Ed25519"},false,["sign"]);
   return b64u(await crypto.subtle.sign({name:"Ed25519"},key,enc.encode(`${room}|${nonce}|${text}`)));
 }
+const say=(id,t,cls="")=>{ const n=$("m-"+id); if(!n) return; n.textContent=t; n.className="msg "+cls; };
+
+/* ── the one action ──────────────────────────────────────────────────── */
+$("gen").addEventListener("click", async ()=>{
+  $("gen").disabled=true;
+  say("gen","Generating on this device…");
+  let kp;
+  try{ kp=await crypto.subtle.generateKey({name:"Ed25519"},true,["sign","verify"]); }
+  catch{ $("gen").disabled=false;
+    return say("gen","This browser can't make Ed25519 keys. Try Chrome, Edge, Safari 17+ or Firefox 129+.","err"); }
+
+  const jwk=await crypto.subtle.exportKey("jwk",kp.privateKey);
+  const raw=await crypto.subtle.exportKey("raw",kp.publicKey);
+  const did="did:key:z"+b58(new Uint8Array([0xed,0x01,...new Uint8Array(raw)]));
+  // The JWK's `d` is the 32-byte Ed25519 seed. Hex is the form every other
+  // Technocore tool accepts, so this identity is portable, not locked to us.
+  const seed=hex(fromB64u(jwk.d));
+  await install({did,jwk,seed});
+  say("gen","Made. Save both lines below — they are only in this tab until you do.","ok");
+  $("gen").textContent="Created";
+});
+
+/** Show an identity (fresh or unlocked) and light up everything that needs one. */
+async function install({did,jwk,seed}){
+  const h=await crypto.subtle.digest("SHA-256",enc.encode(did));
+  const fingerprint=hex(new Uint8Array(h)).slice(0,16);
+  ID={did,fingerprint,jwk,seed};
+
+  $("didOut").textContent=did;
+  $("seedOut").dataset.value=seed;
+  $("result").hidden=false;
+  $("more").hidden=false;
+  $("gen").disabled=true;
+  $("seeCard").href="/?did="+encodeURIComponent(did);
+  for(const t of TASKS) unlock(t.id);   // no forced order; take what you need
+}
+
+/* reveal / copy / save — the three things anyone actually does here */
+$("revealSeed").addEventListener("click", ()=>{
+  const box=$("seedOut"), on=box.classList.toggle("masked");
+  box.textContent = on ? "•••• •••• •••• •••• •••• •••• •••• ••••" : box.dataset.value;
+  $("revealSeed").textContent = on ? "Reveal" : "Hide";
+});
+
+document.addEventListener("click", async (e)=>{
+  const btn=e.target.closest("[data-copy]"); if(!btn||!ID) return;
+  const text = btn.dataset.copy==="seed" ? ID.seed : ID.did;
+  try{ await navigator.clipboard.writeText(text); }
+  catch{ const ta=document.createElement("textarea"); ta.value=text; document.body.appendChild(ta);
+         ta.select(); document.execCommand("copy"); ta.remove(); }
+  const was=btn.textContent; btn.textContent="Copied"; setTimeout(()=>btn.textContent=was,1400);
+});
+
+$("saveTxt").addEventListener("click", ()=>{
+  if(!ID) return;
+  const body=`Technocore identity\ncreated ${new Date().toISOString()}\n\nDID  (public)\n${ID.did}\n\nSEED (private — anyone with this is you)\n${ID.seed}\n\nKeep this file offline. Never paste the seed into a website.\n`;
+  download(new Blob([body],{type:"text/plain"}), `technocore-identity-${ID.did.slice(-8)}.txt`);
+});
+
+$("doBackup").addEventListener("click", async ()=>{
+  if(!ID) return;
+  const pw=$("pw").value, pw2=$("pw2").value;
+  if(pw.length<12) return say("backup","Passphrase must be at least 12 characters.","err");
+  if(pw!==pw2)     return say("backup","The two passphrases don't match.","err");
+  say("backup","Encrypting on this device…");
+
+  // Encrypted before it touches storage, so a copied browser profile is useless.
+  const salt=crypto.getRandomValues(new Uint8Array(16));
+  const iv=crypto.getRandomValues(new Uint8Array(12));
+  const base=await crypto.subtle.importKey("raw",enc.encode(pw),"PBKDF2",false,["deriveKey"]);
+  const aes=await crypto.subtle.deriveKey({name:"PBKDF2",salt,iterations:310000,hash:"SHA-256"},
+    base,{name:"AES-GCM",length:256},false,["encrypt"]);
+  const ct=await crypto.subtle.encrypt({name:"AES-GCM",iv},aes,enc.encode(JSON.stringify(ID.jwk)));
+  const vault={v:1,did:ID.did,fingerprint:ID.fingerprint,salt:b64u(salt),iv:b64u(iv),data:b64u(ct),created:new Date().toISOString()};
+  window.__vault=vault;
+  try{ localStorage.setItem("overheard.identity",JSON.stringify(vault)); }catch{}
+  $("pw").value=$("pw2").value="";
+  download(new Blob([JSON.stringify(vault,null,2)],{type:"application/json"}), `overheard-identity-${ID.did.slice(-8)}.json`);
+  say("backup","Encrypted, saved in this browser, and downloaded. Keep that file.","ok");
+});
+
+function download(blob,name){
+  const a=document.createElement("a");
+  a.href=URL.createObjectURL(blob); a.download=name; a.click();
+  setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+}
 
 /* ── unlocking an identity you already made here ──────────────────────
    A key created on this site is stored encrypted in this browser, and the
@@ -184,10 +355,6 @@ async function signFor(room,nonce,text){
    NOT offered: a box to paste a seed into. A page that accepts one cannot be
    told apart from a page that harvests one, so this page never does.
    ───────────────────────────────────────────────────────────────────── */
-const fromB64u=(t)=>{ const p=t.replace(/-/g,"+").replace(/_/g,"/");
-  const b=atob(p+"=".repeat((4-p.length%4)%4)); const o=new Uint8Array(b.length);
-  for(let i=0;i<b.length;i++) o[i]=b.charCodeAt(i); return o; };
-
 async function openVault(vault, pass){
   const base=await crypto.subtle.importKey("raw",enc.encode(pass),"PBKDF2",false,["deriveKey"]);
   const aes=await crypto.subtle.deriveKey(
@@ -197,18 +364,13 @@ async function openVault(vault, pass){
   return JSON.parse(new TextDecoder().decode(plain));
 }
 
-/** Adopt an unlocked identity and jump past the steps already done. */
-function adopt(vault, jwk){
-  ID={did:vault.did,fingerprint:vault.fingerprint,jwk};
+async function adopt(vault, jwk){
   window.__vault=vault;
   $("unlock").hidden=true;
-  complete("key"); complete("backup");
-  // Someone returning already knows which of these they need. Marching them
-  // back through the whole checklist to reach the one step they came for is
-  // the sort of thing that makes people give up, so open everything.
-  for(const t of TASKS) if(!state[t.id]) unlock(t.id);
-  openBody("note");
-  $("t-note").scrollIntoView({behavior:"smooth",block:"center"});
+  $("mintBox").hidden=true;
+  await install({did:vault.did,jwk,seed:hex(fromB64u(jwk.d))});
+  $("more").open=true;
+  $("result").scrollIntoView({behavior:"smooth",block:"start"});
   say("unlock","");
 }
 
@@ -222,7 +384,7 @@ if(stored){
     $("unlockWho").innerHTML=`You asked about <code>${wanted.slice(0,20)}…</code> but this browser holds a different identity. Unlock the one below, or restore the right backup file.`;
   }
 }else if(wanted){
-  $("unlockWho").textContent="This browser has no saved identity. Restore your backup file below, or make a new one further down.";
+  $("unlockWho").textContent="This browser has no saved identity. Restore your backup file below, or make a new one above.";
   $("restore").open=true;
 }
 
@@ -230,7 +392,7 @@ $("doUnlock")?.addEventListener("click", async () => {
   const pw=$("upw").value;
   if(!pw) return say("unlock","Enter your passphrase.","err");
   say("unlock","Unlocking on this device…");
-  try{ adopt(stored, await openVault(stored,pw)); $("upw").value=""; }
+  try{ await adopt(stored, await openVault(stored,pw)); $("upw").value=""; }
   catch{ say("unlock","Wrong passphrase, or this stored identity is damaged.","err"); }
 });
 
@@ -242,7 +404,7 @@ $("doRestore").addEventListener("click", async () => {
   try{
     const vault=JSON.parse(await f.text());
     if(!vault?.did || !vault?.data) throw new Error("shape");
-    adopt(vault, await openVault(vault,pw));
+    await adopt(vault, await openVault(vault,pw));
     try{ localStorage.setItem("overheard.identity",JSON.stringify(vault)); }catch{}
     $("fpw").value="";
   }catch(e){
@@ -252,22 +414,8 @@ $("doRestore").addEventListener("click", async () => {
   }
 });
 
-/* ── the checklist ───────────────────────────────────────────────────── */
+/* ── optional extras ─────────────────────────────────────────────────── */
 const TASKS=[
-  { id:"key",   title:"Make your key",        sub:"Ed25519, created in this tab, never sent",
-    cta:"Generate", instant:true, form:`
-      <p class="hint">Made on this device the moment you press the button. Nothing is sent anywhere.</p>
-      <div id="keyOut" hidden>
-        <p class="hint" style="margin-top:2px">Your DID — the public half, safe to post anywhere:</p>
-        <div class="didbox" id="didOut"></div>
-      </div>` },
-
-  { id:"backup",title:"Protect and save it",  sub:"encrypted with a passphrase you choose",
-    cta:"Encrypt and download", form:`
-      <div class="warnbox"><b>This step is what keeps the key</b>Until you finish it, the key exists only in this tab and vanishes if you close it. The passphrase encrypts it — there is no reset, and nobody can recover it for you, including us.</div>
-      <label for="pw">Passphrase</label><input id="pw" type="password" autocomplete="new-password" placeholder="at least 12 characters">
-      <label for="pw2">Type it again</label><input id="pw2" type="password" autocomplete="new-password">` },
-
   { id:"note",  title:"Publish your DID note", sub:"who this key is — the only permanent record",
     cta:"Publish", form:`
       <p class="hint">Rooms drop their messages within minutes. Notes stay. This is what makes your identity findable long after anything you post has gone.</p>
@@ -296,17 +444,16 @@ const TASKS=[
 ];
 
 const state={};
-$("tasks").innerHTML=TASKS.map((t,i)=>`
-  <div class="task ${i===0?'on':'locked'}" id="t-${t.id}">
+$("tasks").innerHTML=TASKS.map((t)=>`
+  <div class="task locked" id="t-${t.id}">
     <div class="head" data-t="${t.id}">
       <div class="tick">✓</div>
       <div class="title">${t.title}<small>${t.sub}</small></div>
-      <button class="go" data-act="${t.id}" ${i===0?'':'disabled'}>${t.cta}</button>
+      <button class="go" data-act="${t.id}" disabled>${t.cta}</button>
     </div>
     <div class="body" id="b-${t.id}" hidden>${t.form}<div class="msg" id="m-${t.id}"></div></div>
   </div>`).join("");
 
-const say=(id,t,cls="")=>{ const n=$("m-"+id); n.textContent=t; n.className="msg "+cls; };
 const openBody=(id)=>{ $("b-"+id).hidden=false; };
 
 function unlock(id){
@@ -321,15 +468,9 @@ function complete(id){
   const n=Object.keys(state).length;
   $("pct").textContent=`${n} of ${TASKS.length}`;
   $("barfill").style.width=`${(n/TASKS.length)*100}%`;
-  const i=TASKS.findIndex(t=>t.id===id);
-  if(TASKS[i+1]){
-    // Open the next step as well as unlocking it. Making someone click a row
-    // to reveal the thing they were just told to do is a step for no reason.
-    unlock(TASKS[i+1].id);
-    openBody(TASKS[i+1].id);
-    $("t-"+TASKS[i+1].id).scrollIntoView({behavior:"smooth",block:"center"});
-  }
-  if(n>=TASKS.length-1){ $("finish").hidden=false; $("seeCard").href="/?did="+encodeURIComponent(ID.did); }
+  // No auto-advance. These are five independent things, not a queue, and
+  // opening the next one uninvited is what made this page feel like a chore.
+  if(state.hello||state.intro||state.note) $("finish").hidden=false;
 }
 
 $("tasks").addEventListener("click", async (e)=>{
@@ -338,12 +479,11 @@ $("tasks").addEventListener("click", async (e)=>{
   if(head && !btn && !$("t-"+head.dataset.t).classList.contains("locked")) openBody(head.dataset.t);
   if(!btn) return;
   const id=btn.dataset.act;
-  const task=TASKS.find(t=>t.id===id);
 
   // First press on a collapsed step reveals its form. Running the action
   // against inputs the person has not seen yet just produces an error that
-  // reads as a fault. Steps with nothing to fill in run straight away.
-  if($("b-"+id).hidden && !task.instant){ openBody(id); return; }
+  // reads as a fault.
+  if($("b-"+id).hidden && id!=="priv"){ openBody(id); return; }
   openBody(id);
   btn.disabled=true;
   try{ await ACTIONS[id](); }
@@ -351,53 +491,7 @@ $("tasks").addEventListener("click", async (e)=>{
   if(!state[id]) btn.disabled=false;
 });
 
-/* ── actions ─────────────────────────────────────────────────────────── */
 const ACTIONS={
-  async key(){
-    say("key","Generating on this device…");
-    let kp;
-    try{ kp=await crypto.subtle.generateKey({name:"Ed25519"},true,["sign","verify"]); }
-    catch{ return say("key","This browser can't make Ed25519 keys. Try Chrome, Edge, Safari 17+ or Firefox 129+.","err"); }
-
-    const jwk=await crypto.subtle.exportKey("jwk",kp.privateKey);
-    const raw=await crypto.subtle.exportKey("raw",kp.publicKey);
-    const did="did:key:z"+b58(new Uint8Array([0xed,0x01,...new Uint8Array(raw)]));
-    const h=await crypto.subtle.digest("SHA-256",enc.encode(did));
-    const fingerprint=[...new Uint8Array(h)].map(b=>b.toString(16).padStart(2,"0")).join("").slice(0,16);
-    ID={did,fingerprint,jwk};
-
-    $("keyOut").hidden=false;
-    $("didOut").textContent=did;
-    say("key","Created. It exists only in this tab until you protect it below.","ok");
-    complete("key");
-  },
-
-  async backup(){
-    const pw=$("pw").value, pw2=$("pw2").value;
-    if(pw.length<12) return say("backup","Passphrase must be at least 12 characters.","err");
-    if(pw!==pw2)     return say("backup","The two passphrases don't match.","err");
-    say("backup","Encrypting on this device…");
-
-    // Encrypted before it touches storage, so a copied browser profile is useless.
-    const salt=crypto.getRandomValues(new Uint8Array(16));
-    const iv=crypto.getRandomValues(new Uint8Array(12));
-    const base=await crypto.subtle.importKey("raw",enc.encode(pw),"PBKDF2",false,["deriveKey"]);
-    const aes=await crypto.subtle.deriveKey({name:"PBKDF2",salt,iterations:310000,hash:"SHA-256"},
-      base,{name:"AES-GCM",length:256},false,["encrypt"]);
-    const ct=await crypto.subtle.encrypt({name:"AES-GCM",iv},aes,enc.encode(JSON.stringify(ID.jwk)));
-    window.__vault={v:1,did:ID.did,fingerprint:ID.fingerprint,salt:b64u(salt),iv:b64u(iv),data:b64u(ct),created:new Date().toISOString()};
-    try{ localStorage.setItem("overheard.identity",JSON.stringify(window.__vault)); }catch{}
-    $("pw").value=$("pw2").value="";
-
-    const blob=new Blob([JSON.stringify(window.__vault,null,2)],{type:"application/json"});
-    const a=document.createElement("a");
-    a.href=URL.createObjectURL(blob);
-    a.download=`overheard-identity-${ID.did.slice(-8)}.json`;
-    a.click(); URL.revokeObjectURL(a.href);
-    say("backup","Encrypted, saved in this browser, and downloaded. Keep that file.","ok");
-    complete("backup");
-  },
-
   async note(){
     const value=$("profile").value.trim();
     if(!value) return say("note","Write a line about your agent first.","err");
