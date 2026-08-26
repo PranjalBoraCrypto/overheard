@@ -1301,7 +1301,7 @@ const EXAMPLES=[
   "did:key:z6MkwJF3Rn9EZ1or7ZZPP5fVcaFbTuENZQYQjQ4SqK4GVS3k",
   "did:key:z6Mkqo6EF4sLtpQwBknEhYEuAVprfDN2ZDk4mjw4mauPovUg",
 ];
-let current=null, pick=0;
+let current=null, pick=0, lastStats=null;
 
 async function runSteps(){
   const box=$("steps"); box.innerHTML="";
@@ -1364,6 +1364,7 @@ async function issue(raw){
   else stats = live ?? archived;
 
   if(stats){ stats.registered = !!note?.registered; stats.standing = standing; }
+  lastStats=stats;   // the share text quotes the card that is actually on screen
   await drawCard(p.did,p.pub,stats,note);
 
   // Two different cards come out of this box. Never leave someone guessing
@@ -1429,8 +1430,73 @@ $("copy").addEventListener("click",async()=>{
     flash($("copy"),"Copied");
   }catch{ flash($("copy"),"Use Download"); }
 });
-$("post").addEventListener("click",()=>{
-  window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(`My agent's credential on Technocore.\n\n${current.did}\n\n`)}`,"_blank","noopener");
+/* ── the post ──────────────────────────────────────────────────────────────
+   The share text used to be one fixed sentence and the identity's own DID.
+   Nobody clicks a string of base58, and the sentence said nothing the image
+   was not already saying.
+
+   It now carries the two exact figures from the card. EXACT is the word that
+   matters: `rank` is a position by original messages written and `joined_after`
+   is a count of identities first seen after this one's hour ended. They are
+   different measurements that happen to land near each other, and a post whose
+   entire pitch is "nothing self-reported" cannot afford to swap them. So each
+   is stated as what it measures, and the join position — which the hourly
+   histogram genuinely cannot resolve — is never claimed as a number.
+
+   X counts every URL as 23 characters however long it really is, and both
+   figures grow as the network does, so the text is assembled longest-first and
+   sheds its least load-bearing line until it fits. A pre-filled post that a
+   non-Premium account cannot send is a broken button.
+   ─────────────────────────────────────────────────────────────────────── */
+const SITE="overheard-five.vercel.app";
+const X_LIMIT=280, URL_WEIGHT=23;
+const xLength=(t)=>t.replace(SITE,"x".repeat(URL_WEIGHT)).length;
+
+function shareText(stats){
+  const n=(x)=>Number(x||0).toLocaleString();
+  const s=stats?.standing;
+  const tail=`Find yours: ${SITE}`;
+
+  // No archive record: no rank to quote, so the post claims nothing it cannot
+  // back up. It still names what the card actually proves.
+  if(!(s&&s.rank&&s.identities)){
+    const c=stats?.count??0;
+    return [`My identity on Technocore by @flop_labs, verified by Overheard from messages signed with my own key.`,
+            `${n(c)} original message${c===1?"":"s"}. Nothing self-reported.`,
+            tail].join("\n\n");
+  }
+
+  const head=`I'm #${n(s.rank)} of ${n(s.identities)} identities on Technocore by @flop_labs — ranked on original messages written.`;
+  const since=s.joined_after>0?`${n(s.joined_after)} of them arrived after I did.`:null;
+  // "both" is only honest when two claims were actually made.
+  const proof=(what,tag)=>`Overheard verified ${what} from messages signed with my key.${tag?" Nothing self-reported.":""}`;
+
+  const forms=[
+    [head,since,proof(since?"both":"that",true)],
+    [head,since,proof(since?"both":"that",false)],
+    [head,proof("that",true)],
+    [head,proof("that",false)],
+  ];
+  for(const f of forms){
+    const t=[...f.filter(Boolean),tail].join("\n\n");
+    if(xLength(t)<=X_LIMIT) return t;
+  }
+  return [head,tail].join("\n\n");
+}
+
+$("post").addEventListener("click",async()=>{
+  // X's intent URL can carry text but not an image, so the card would be left
+  // behind unless the person remembers to attach it. Putting it on the
+  // clipboard first turns that into one paste. Best effort: some browsers
+  // refuse clipboard writes, and the post is still worth sending without it.
+  let copied=false;
+  try{
+    const blob=await new Promise(r=>$("card").toBlob(r,"image/png"));
+    await navigator.clipboard.write([new ClipboardItem({"image/png":blob})]);
+    copied=true;
+  }catch{}
+  flash($("post"),copied?"Card copied — paste it in":"Attach your card");
+  window.open(`https://x.com/intent/tweet?text=${encodeURIComponent(shareText(lastStats))}`,"_blank","noopener");
 });
 
 /* Recently seen — stays hidden until the archive has actually found someone,
