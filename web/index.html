@@ -70,11 +70,7 @@ body{
    A dot that tracks exactly and a ring that lags behind it. The lag is the
    whole effect: it reads as weight. Pointer-fine only — on a touch screen
    there is no cursor to decorate and the elements would just be litter. */
-.cur,.cur-ring{position:fixed;top:0;left:0;z-index:9999;pointer-events:none;border-radius:50%;mix-blend-mode:screen}
-.cur{width:7px;height:7px;background:var(--cy-hi);box-shadow:0 0 14px var(--cy)}
-.cur-ring{width:34px;height:34px;border:1.5px solid rgba(0,180,215,.75);transition:width .28s var(--spring),height .28s var(--spring),border-color .28s,background .28s}
-.cur-ring.hot{width:56px;height:56px;border-color:var(--cy-hi);background:rgba(0,180,215,.12)}
-@media (hover:none),(pointer:coarse){.cur,.cur-ring{display:none}}
+@media (hover:none),(pointer:coarse){}
 
 /* ── header ── */
 header{display:flex;align-items:center;justify-content:space-between;padding:26px 0;gap:18px;flex-wrap:wrap}
@@ -307,8 +303,7 @@ footer a:hover{color:var(--cy-hi)}
 @media (prefers-reduced-motion:reduce){
   *,*::before,*::after{animation-duration:.001ms!important;animation-iteration-count:1!important;transition-duration:.001ms!important}
   .rise,.stagger>*,h1 .w,.lede,.enter{opacity:1;transform:none}
-  .cur,.cur-ring{display:none}
-}
+  }
 @media (max-width:1050px){.traces{display:none}}
 @media (max-width:700px){.field{flex-direction:column}.field button{padding:16px}}
 
@@ -390,7 +385,6 @@ html{scrollbar-gutter:stable}
 <div class="sky" aria-hidden="true"><i></i><i></i><i></i></div>
 <div class="grid-l" aria-hidden="true"></div>
 <div class="spot" aria-hidden="true"></div>
-<div class="cur-ring" aria-hidden="true"></div><div class="cur" aria-hidden="true"></div>
 
 <div class="oh-barwrap">
   <header class="oh-bar">
@@ -1064,27 +1058,26 @@ const finePointer=matchMedia("(hover: hover) and (pointer: fine)").matches;
   h.querySelectorAll(".w").forEach((w,i)=>w.style.animationDelay=`${.05+i*.055}s`);
 })();
 
-/* Pointer position drives the page's light. One rAF-throttled write per frame;
-   writing on every pointermove event pins a CPU core for nothing. */
+/* Pointer position drives the page's light — and only the light.
+   There was a custom cursor here: a dot with a ring lagging behind it. It is
+   a decade-old portfolio trick, it competes with the real pointer for
+   attention, and on a page whose job is reading a DID and pressing one
+   button, a second thing chasing your hand is noise. The environment still
+   answers the pointer — the spotlight, the grid mask, the lit surfaces, the
+   magnetic buttons — but the cursor is the one the operating system drew. */
 (()=>{
   if(!finePointer) return;
-  const dot=document.querySelector(".cur"), ring=document.querySelector(".cur-ring");
-  let x=innerWidth/2,y=innerHeight/2, rx=x, ry=y, queued=false;
-  const HOT="a,button,input,.chip,.tile,.meter,summary,label";
+  let x=innerWidth/2, y=innerHeight/2, cx=x, cy=y, running=false;
   addEventListener("pointermove",(e)=>{
     x=e.clientX; y=e.clientY;
-    if(!queued){ queued=true; requestAnimationFrame(paint); }
-    ring.classList.toggle("hot", !!e.target.closest?.(HOT));
+    if(!running){ running=true; requestAnimationFrame(paint); }
   },{passive:true});
   function paint(){
-    queued=false;
-    // the ring chases the dot with a fixed easing — the lag IS the effect
-    rx+=(x-rx)*.18; ry+=(y-ry)*.18;
-    dot.style.transform=`translate(${x-3.5}px,${y-3.5}px)`;
-    ring.style.transform=`translate(${rx-17}px,${ry-17}px)`;
-    document.documentElement.style.setProperty("--px",`${(x/innerWidth)*100}%`);
-    document.documentElement.style.setProperty("--py",`${(y/innerHeight)*100}%`);
-    if(Math.abs(x-rx)>.4||Math.abs(y-ry)>.4) requestAnimationFrame(paint); else queued=false;
+    // eased, so the light glides instead of snapping frame to frame
+    cx+=(x-cx)*.16; cy+=(y-cy)*.16;
+    document.documentElement.style.setProperty("--px",`${(cx/innerWidth)*100}%`);
+    document.documentElement.style.setProperty("--py",`${(cy/innerHeight)*100}%`);
+    if(Math.abs(x-cx)>.5||Math.abs(y-cy)>.5) requestAnimationFrame(paint); else running=false;
   }
   requestAnimationFrame(paint);
 })();

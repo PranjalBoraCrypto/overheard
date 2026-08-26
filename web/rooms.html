@@ -30,11 +30,7 @@ body{background:var(--void);color:var(--txt);font-family:var(--display);font-siz
 @keyframes d1{50%{transform:translate(110px,80px) scale(1.15)}}
 @keyframes d2{50%{transform:translate(-80px,130px) scale(1.1)}}
 .spot{position:fixed;inset:0;z-index:0;pointer-events:none;background:radial-gradient(520px circle at var(--px,50%) var(--py,30%),rgba(0,180,215,.1),transparent 62%)}
-.cur,.cur-ring{position:fixed;top:0;left:0;z-index:9999;pointer-events:none;border-radius:50%;mix-blend-mode:screen}
-.cur{width:7px;height:7px;background:var(--cy-hi);box-shadow:0 0 14px var(--cy)}
-.cur-ring{width:34px;height:34px;border:1.5px solid rgba(0,180,215,.7);transition:width .28s cubic-bezier(.34,1.56,.64,1),height .28s cubic-bezier(.34,1.56,.64,1),background .28s}
-.cur-ring.hot{width:54px;height:54px;background:rgba(0,180,215,.12)}
-@media (hover:none),(pointer:coarse){.cur,.cur-ring{display:none}}
+@media (hover:none),(pointer:coarse){}
 
 .shell{max-width:1180px;margin:0 auto;padding:0 26px 70px;position:relative;z-index:2}
 nav.top{display:flex;align-items:center;gap:18px;padding:22px 0;flex-wrap:wrap}
@@ -135,7 +131,7 @@ h1{font-weight:800;font-size:clamp(30px,4.4vw,44px);letter-spacing:-.035em;margi
 .note b{display:block;color:var(--warn);font-weight:700;margin-bottom:5px}
 footer{color:var(--faint);font-size:13.5px;margin-top:34px;border-top:1px solid rgba(16,57,74,.9);padding-top:20px}
 footer a{color:var(--cy);text-decoration:none}
-@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}.cur,.cur-ring{display:none}}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 
 /* ═══════════════════════════════════════════════════════════════════════
    THE BAR — one implementation, four pages.
@@ -210,7 +206,6 @@ html{scrollbar-gutter:stable}
 <body>
 <div class="sky" aria-hidden="true"><i></i><i></i></div>
 <div class="spot" aria-hidden="true"></div>
-<div class="cur-ring" aria-hidden="true"></div><div class="cur" aria-hidden="true"></div>
 
 <div class="oh-barwrap">
   <header class="oh-bar">
@@ -511,24 +506,28 @@ $("say").addEventListener("keydown",e=>{ if(e.key==="Enter"&&(e.metaKey||e.ctrlK
 
 loadRooms(); switchRoom(room);
 
-/* ── cursor, presentation only ────────────────────────────────────────── */
+/* The light follows the pointer; the pointer stays the one the OS drew.
+   A dot-and-ring follower used to live here — dated, and a second thing
+   chasing your hand while you are typing a passphrase is a distraction. */
 (()=>{
   if(!matchMedia("(hover: hover) and (pointer: fine)").matches) return;
   if(matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-  const dot=document.querySelector(".cur"), ring=document.querySelector(".cur-ring");
-  let x=innerWidth/2,y=innerHeight/2,rx=x,ry=y;
+  let x=innerWidth/2,y=innerHeight/2,cx=x,cy=y,running=false;
   addEventListener("pointermove",e=>{
     x=e.clientX;y=e.clientY;
-    ring.classList.toggle("hot",!!e.target.closest?.("a,button,input,textarea,.msg"));
+    const el=e.target.closest?.(".go,.keep,.rbtn");
+    if(el){ const r=el.getBoundingClientRect();
+      el.style.setProperty("--bx",`${((e.clientX-r.left)/r.width)*100}%`);
+      el.style.setProperty("--by",`${((e.clientY-r.top)/r.height)*100}%`); }
+    if(!running){ running=true; requestAnimationFrame(paint); }
   },{passive:true});
-  (function paint(){
-    rx+=(x-rx)*.18; ry+=(y-ry)*.18;
-    dot.style.transform=`translate(${x-3.5}px,${y-3.5}px)`;
-    ring.style.transform=`translate(${rx-17}px,${ry-17}px)`;
-    document.documentElement.style.setProperty("--px",`${(x/innerWidth)*100}%`);
-    document.documentElement.style.setProperty("--py",`${(y/innerHeight)*100}%`);
-    requestAnimationFrame(paint);
-  })();
+  function paint(){
+    cx+=(x-cx)*.16; cy+=(y-cy)*.16;
+    document.documentElement.style.setProperty("--px",`${(cx/innerWidth)*100}%`);
+    document.documentElement.style.setProperty("--py",`${(cy/innerHeight)*100}%`);
+    if(Math.abs(x-cx)>.5||Math.abs(y-cy)>.5) requestAnimationFrame(paint); else running=false;
+  }
+  requestAnimationFrame(paint);
 })();
 </script>
 </body>
