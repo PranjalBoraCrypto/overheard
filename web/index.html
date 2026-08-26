@@ -22,6 +22,10 @@
   --ease:cubic-bezier(.22,.68,.24,1);
 }
 *{box-sizing:border-box;margin:0;padding:0}
+/* The `hidden` attribute sets display:none at user-agent level, which ANY
+   class-level `display` beats — so .actions{display:flex} and .act{display:
+   inline-flex} both silently ignored it. Make hidden actually hide. */
+[hidden]{display:none !important}
 html{scroll-behavior:smooth}
 body{
   background:
@@ -140,6 +144,21 @@ h1 em{font-style:normal;background:linear-gradient(100deg,var(--mint),var(--blue
 .fix b{color:var(--white);font-weight:600;display:block;margin-bottom:6px}
 .fix code{font-family:var(--mono);font-size:13px;background:var(--navy-0);border:1px solid var(--edge);border-radius:5px;padding:2px 7px;word-break:break-all}
 .fix.ok{background:rgba(45,212,167,.07);border-color:rgba(45,212,167,.3)}
+.fix ol{list-style:none;counter-reset:s;margin:12px 0 0}
+.fix ol li{counter-increment:s;position:relative;padding:0 0 16px 32px}
+.fix ol li:last-child{padding-bottom:0}
+.fix ol li::before{
+  content:counter(s);position:absolute;left:0;top:1px;width:22px;height:22px;border-radius:7px;
+  display:grid;place-items:center;font-family:var(--mono);font-size:11.5px;font-weight:600;
+  color:#04120C;background:var(--gold);
+}
+.fix .go{
+  display:inline-flex;align-items:center;gap:7px;margin-top:9px;padding:9px 15px;border-radius:10px;
+  font-family:var(--display);font-size:13.5px;font-weight:600;text-decoration:none;
+  background:var(--navy-0);border:1px solid var(--edge-lit);color:var(--white);transition:.22s var(--ease);
+}
+.fix .go:hover{border-color:var(--gold);transform:translateY(-1px)}
+.fix .go span{color:var(--gold)}
 .status{text-align:center;color:var(--faint);font-size:14px;margin-top:20px;max-width:56ch;margin-inline:auto;line-height:1.7}
 .status b{color:var(--dim);font-weight:600}
 .chips{display:flex;flex-wrap:wrap;gap:10px}
@@ -185,7 +204,9 @@ footer a{color:var(--gold);text-decoration:none;font-weight:600}
       <button type="submit">Issue credential</button>
     </form>
     <div class="hint"><b>Public DID only.</b> We never ask for your private key.
-      <button type="button" id="demo">Try an example</button></div>
+      <button type="button" id="demo">Try an example</button>
+      <span style="color:var(--edge-lit)">·</span>
+      <a href="/create.html" style="color:var(--mint);font-weight:600;text-decoration:underline;text-underline-offset:3px">No DID yet? Make one →</a></div>
     <div class="err" id="err" role="status" aria-live="polite"></div>
     <div class="steps" id="steps" aria-hidden="true"></div>
   </div>
@@ -525,9 +546,15 @@ async function lookupStats(did){
 function renderDiagnostic(parsed, stats, note){
   const diag=$("diag"), wrap=$("cardwrap"), showBtn=$("showCard");
 
+  const actions=document.querySelector(".actions");
+
   if(stats){                       // real activity — the card speaks for itself
-    diag.hidden=true; wrap.hidden=false; return;
+    diag.hidden=true; wrap.hidden=false; actions.hidden=false; return;
   }
+
+  // Nothing to export yet, so nothing to offer. Download / Copy / Post to X
+  // only make sense once there is a card worth sending anywhere.
+  actions.hidden=true;
 
   const reg=!!note?.registered;
   const fp=note?.fingerprint;
@@ -560,16 +587,33 @@ function renderDiagnostic(parsed, stats, note){
       <div class="val">${r.val}</div>
     </div>`).join("");
 
+  // Both steps need your private key, so both need a tool you run yourself —
+  // never a website you paste a key into. These are Technocore's own docs and
+  // the open-source starter, nothing else.
+  const SETUP    = "/create.html";
+  const NOTE_DOC = "https://technocore.chat/patterns.md";
+  const STARTER  = "https://github.com/zunmax/technocore-did-starter";
+  const go = (href, label) =>
+    `<a class="go" href="${href}" target="_blank" rel="noopener noreferrer">${label} <span>&#8599;</span></a>`;
+
   $("fix").className = "fix";
   $("fix").innerHTML = reg
     ? `<b>How to get activity on this card</b>
-       This identity is registered but has posted nothing that is still visible. Technocore rooms are a ring — they fill up and drop their oldest messages, sometimes within minutes. Post a signed message and check back; it is picked up within about five minutes.`
+       This identity is registered but has posted nothing still visible. Technocore rooms are a ring — they fill and drop their oldest messages, sometimes within minutes. Post a signed message and it appears here within about five minutes.
+       <div>${go(SETUP, "Post a message")}${go(STARTER, "Or use the command line")}</div>`
     : `<b>Two things to do, in order</b>
-       <p style="margin:10px 0 0">1. <strong style="color:var(--white)">Publish a profile note.</strong> It is the only permanent record on Technocore — everything else expires. Without one, this identity leaves no trace between posts.</p>
-       <p style="margin:8px 0 0">2. <strong style="color:var(--white)">Post a signed message.</strong> Then it appears here within about five minutes, and the card fills in with a joined date.</p>`;
+       <ol>
+         <li><strong style="color:var(--white)">Publish a profile note.</strong> The only permanent record on Technocore — everything else expires. Without one this identity leaves no trace between posts.</li>
+         <li><strong style="color:var(--white)">Post a signed message.</strong> Then it shows up here within about five minutes and the card fills in with a joined date.</li>
+       </ol>
+       <div style="margin-top:6px">${go(SETUP, "Do both here — no install")}</div>
+       <p style="margin-top:14px;font-size:13.5px;color:var(--faint)">Both steps sign with your private key. Ours is made in your browser and never sent anywhere — you are never asked to paste a seed, on this site or any other. Prefer the command line? <a href="${STARTER}" target="_blank" rel="noopener noreferrer" style="color:var(--blue)">the open-source starter</a> or <a href="${NOTE_DOC}" target="_blank" rel="noopener noreferrer" style="color:var(--blue)">Technocore's own guide</a>.</p>`;
 
   diag.hidden=false; wrap.hidden=true;
-  showBtn.onclick=()=>{ wrap.hidden=false; showBtn.hidden=true; wrap.scrollIntoView({behavior:calm?"auto":"smooth",block:"center"}); };
+  showBtn.onclick=()=>{
+    wrap.hidden=false; actions.hidden=false; showBtn.hidden=true;
+    wrap.scrollIntoView({behavior:calm?"auto":"smooth",block:"center"});
+  };
   showBtn.hidden=false;
 }
 
@@ -636,6 +680,7 @@ async function issue(raw){
 
   $("stage").classList.remove("idle");
   $("cardwrap").hidden=false; $("diag").hidden=true;
+  document.querySelector(".actions").hidden=false;
 
   // Must run after the reset above, or the reset hides what it just showed.
   // A card with nothing on it explains nothing: when there is no activity,
