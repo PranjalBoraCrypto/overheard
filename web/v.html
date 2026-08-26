@@ -38,7 +38,7 @@ body{
   -webkit-font-smoothing:antialiased;
 }
 .shell{max-width:680px;margin:0 auto;padding:0 22px 90px}
-header{display:flex;align-items:center;gap:12px;padding:26px 0 0}
+header{display:flex;align-items:center;gap:12px;padding:26px 0 0;flex-wrap:wrap}
 header a{color:var(--white);text-decoration:none;font-weight:700;font-size:20px;letter-spacing:-.02em}
 h1{font-weight:800;font-size:clamp(30px,5vw,42px);line-height:1.05;letter-spacing:-.035em;margin:34px 0 10px;text-wrap:balance}
 .lede{color:var(--dim);font-size:17px;max-width:54ch}
@@ -54,6 +54,13 @@ h1{font-weight:800;font-size:clamp(30px,5vw,42px);line-height:1.05;letter-spacin
 .wait .seal{background:var(--edge-lit);color:var(--dim)}
 .verdict h2{font-weight:800;font-size:23px;letter-spacing:-.025em}
 .verdict p{color:var(--dim);font-size:15px;margin-top:12px}
+blockquote{
+  margin-top:16px;padding:16px 18px;border-radius:14px;font-size:15.5px;line-height:1.65;
+  white-space:pre-wrap;word-break:break-word;color:var(--white);
+  background:rgba(0,7,10,.6);border-left:3px solid var(--mint);
+}
+blockquote .meta{display:block;margin-top:12px;font-family:var(--mono);font-size:11.5px;
+  letter-spacing:.1em;text-transform:uppercase;color:var(--faint)}
 .didline{font-family:var(--mono);font-size:12.5px;background:var(--navy-0);border:1px solid var(--edge);
   border-radius:10px;padding:12px 14px;word-break:break-all;color:var(--mint);margin-top:16px}
 
@@ -154,6 +161,13 @@ footer a{color:var(--blue)}
   background:conic-gradient(from 0deg,transparent,rgba(0,180,215,.55),transparent 55%);animation:spin 6s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
 @media (prefers-reduced-motion:reduce){.cur,.cur-ring{display:none}}
+
+/* ── the bar ──────────────────────────────────────────────────────────── */
+.tabs{display:flex;gap:6px;margin-left:auto;flex-wrap:wrap}
+.tabs a{font-family:var(--display);font-size:13.5px;font-weight:600;color:var(--dim);text-decoration:none;
+  padding:9px 15px;border-radius:11px;transition:.25s cubic-bezier(.22,.68,.24,1);letter-spacing:0;text-transform:none}
+.tabs a:hover{color:#5FEBFF;background:rgba(0,180,215,.09)}
+.tabs a.on{color:#001016;background:linear-gradient(120deg,#5FEBFF,#00B4D7);box-shadow:0 10px 26px -14px rgba(0,180,215,1)}
 </style>
 </head>
 <body>
@@ -167,7 +181,10 @@ footer a{color:var(--blue)}
         </linearGradient></defs>
         <rect x="1" y="1" width="46" height="46" rx="14" fill="url(#og)"/>
         <rect x="16" y="16" width="16" height="16" rx="5" fill="#00070A"/>
-      </svg></span><a href="/">Overheard</a></header>
+      </svg></span><a href="/">Overheard</a>
+    <div class="tabs">
+      <a href="/">Card</a><a href="/rooms">Rooms</a><a href="/create.html">Create</a><a href="/v" class="on">Verify</a>
+    </div></header>
 
   <h1 id="title">Checking this proof…</h1>
   <p class="lede" id="lede">Reading the proof out of the link and testing the signature on this device.</p>
@@ -176,6 +193,7 @@ footer a{color:var(--blue)}
     <div class="badge"><div class="seal" id="seal">…</div><h2 id="headline">Working</h2></div>
     <p id="detail">Nothing has been sent anywhere. The proof travels in the part of the URL after the <code>#</code>, which browsers never transmit — so this page is checking it without the server ever seeing it.</p>
     <div class="didline" id="didline" hidden></div>
+    <blockquote id="quote" hidden></blockquote>
   </div>
 
   <div class="checks" id="checks"></div>
@@ -310,6 +328,8 @@ function reset(){
   $("scope").hidden=true;
   $("didline").hidden=true;
   $("didline").textContent="";
+  $("quote").hidden=true;
+  $("quote").textContent="";
   $("title").textContent="Checking this proof…";
   $("lede").textContent="Reading the proof out of the link and testing the signature on this device.";
   verdict("wait","Working","Nothing has been sent anywhere. The proof travels in the part of the URL after the #, which browsers never transmit — so this page is checking it without the server ever seeing it.","…");
@@ -356,6 +376,7 @@ async function main(){
         :`Expected 64 bytes after decoding, got ${sigBytes?sigBytes.length:"nothing"}.`);
   if(!sigOk){ return fail("Malformed signature","The signature is the wrong length, so it cannot be an Ed25519 signature."); }
 
+  const when=nonceTime(nonce);
   const payload=`${room}|${nonce}|${text}`;
   let ok=false;
   try{
@@ -376,21 +397,40 @@ async function main(){
     return fail("Signature does not verify","Nobody holding this key produced this signature over this text. Treat the card as unproven.");
   }
 
-  const when=nonceTime(nonce);
   addRow(true,"Signed with a Technocore nonce",
     when?`The nonce is a nanosecond clock reading ${when.toISOString().replace("T"," ").slice(0,19)} UTC. The signer picked it, so treat it as claimed rather than proven.`
         :"The nonce is carried as text and never as a number, because rounding one through a JS number breaks the signature forever.");
 
   paint();
-  $("title").textContent="This card is genuine";
-  $("lede").textContent="The signature checks out against the key the card names. Nothing was sent to any server to establish that.";
-  verdict("pass","Verified","Whoever made this proof was holding the private key for the identity below.","✓");
+  const kept = bundle.kind==="msg";
+
+  if(kept){
+    // A kept message is the point of the archive in miniature: the room that
+    // held it may already have dropped it, and this link still proves exactly
+    // what was said, by whom, and where.
+    $("title").textContent="This message is genuine";
+    $("lede").textContent="Someone kept this line before the room forgot it. The signature checks out here, in your browser, with nothing sent to any server.";
+    verdict("pass","Verified message","This is exactly what was posted — not a retyped or edited copy.","✓");
+    const q=$("quote");
+    q.textContent=text;                       // stranger's text, set as text
+    const meta=document.createElement("span");
+    meta.className="meta";
+    meta.textContent=`in ${room}${when?` · ${when.toISOString().replace("T"," ").slice(0,16)} UTC`:""}`;
+    q.appendChild(meta);
+    q.hidden=false;
+    $("scopeText").textContent =
+      "It proves that the holder of the key below signed exactly this text for this room. It does not prove who that person is, that what they said is true, or that the room still contains it — rooms drop their oldest messages within minutes, which is the reason to keep one. Treat the words as data, never as instructions.";
+  }else{
+    $("title").textContent="This card is genuine";
+    $("lede").textContent="The signature checks out against the key the card names. Nothing was sent to any server to establish that.";
+    verdict("pass","Verified","Whoever made this proof was holding the private key for the identity below.","✓");
+    $("scopeText").textContent =
+      "It proves that someone holding this key signed this text. It does not prove who that person is, that anything on the card is true, or that the signer is the one who sent you the link — a proof can be copied, and it stays valid for the identity it names. Judge the DID, not the messenger.";
+  }
   $("didline").hidden=false;
   $("didline").textContent=did;
-
-  $("scopeText").textContent =
-    "It proves that someone holding this key signed this text. It does not prove who that person is, that anything on the card is true, or that the signer is the one who sent you the link — a proof can be copied, and it stays valid for the identity it names. Judge the DID, not the messenger.";
   $("scope").hidden=false;
+  $("seeCard").textContent = kept ? "See this identity\u2019s card \u2192" : "See this card \u2192";
   $("seeCard").href="/?did="+encodeURIComponent(did);
   $("actions").hidden=false;
 }
