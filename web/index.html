@@ -499,6 +499,24 @@ function emblem(ctx,x,y,size,pub,hue){
   ctx.restore();
 }
 
+/** Fit a line by removing the MIDDLE, so both ends survive.
+ *
+ *  A tail-truncated quote loses the punchline, and these are one-liners where
+ *  the end is usually the point. Measured against the real font rather than
+ *  counted in characters, because a card that overflows looks broken and
+ *  "i" and "W" are not the same width. */
+function fitMiddle(ctx,text,maxWidth){
+  if(ctx.measureText(text).width<=maxWidth) return text;
+  const ell=" … ";
+  for(let n=text.length-1;n>10;n-=2){
+    const head=Math.max(6,Math.round(n*0.66));
+    const tail=Math.max(4,n-head);
+    const cand=text.slice(0,head).trimEnd()+ell+text.slice(-tail).trimStart();
+    if(ctx.measureText(cand).width<=maxWidth) return cand;
+  }
+  return text.slice(0,8).trimEnd()+ell;
+}
+
 async function drawCard(did,pub,stats,note){
   const ctx=document.getElementById("card").getContext("2d");
   const hue=189+((pub[0]/255)*84-42);   // banded around the brand cyan
@@ -610,7 +628,10 @@ async function drawCard(did,pub,stats,note){
   }
 
   // ── stats strip ──
-  const S={x:40,y:420,w:W-80,h:110};
+  // The quote band, when there is one, takes the space below. Both layouts
+  // are laid out from the same two numbers so they cannot drift apart.
+  const quote = typeof stats?.text==="string" && stats.text.trim() ? stats.text.trim() : null;
+  const S = quote ? {x:40,y:404,w:W-80,h:96} : {x:40,y:420,w:W-80,h:110};
   rr(ctx,S.x,S.y,S.w,S.h,20);
   ctx.fillStyle="rgba(4,20,26,.85)"; ctx.fill();
   ctx.strokeStyle="rgba(14,58,71,1)"; ctx.lineWidth=1.5; ctx.stroke();
@@ -633,6 +654,34 @@ async function drawCard(did,pub,stats,note){
     }
   });
   ctx.textAlign="left";
+
+  // ── what they last said ──
+  //
+  // This is the only text on the card written by someone else, so it is
+  // framed as a quotation and never as the card's own voice: its own panel,
+  // its own label, real quotation marks, and a quieter weight than anything
+  // around it. Someone whose last message is "VERIFIED BY OVERHEARD" must not
+  // be able to make the card appear to say it.
+  //
+  // It is drawn to a canvas, so it is pixels: it cannot be markup, a link, or
+  // script, whatever it contains. The archiver already flattened control and
+  // invisible characters to spaces, which is what stops a message faking line
+  // breaks or hiding text inside the quote.
+  if(quote){
+    const Q={x:40,y:508,w:W-80,h:70};
+    rr(ctx,Q.x,Q.y,Q.w,Q.h,16);
+    ctx.fillStyle="rgba(0,180,215,.07)"; ctx.fill();
+    ctx.strokeStyle="rgba(0,180,215,.28)"; ctx.lineWidth=1.5; ctx.stroke();
+
+    ctx.fillStyle="#00B4D7"; ctx.font="600 12px 'IBM Plex Mono', monospace";
+    ctx.letterSpacing="2px";
+    ctx.fillText(stats.preview ? "LAST SIGNED MESSAGE · SAMPLE" : "LAST SIGNED MESSAGE", Q.x+22, Q.y+26);
+    ctx.letterSpacing="0px";
+
+    ctx.font="500 21px 'Outfit', sans-serif";
+    ctx.fillStyle="#EDFAFE";
+    ctx.fillText("\u201C"+fitMiddle(ctx,quote,Q.w-58)+"\u201D", Q.x+22, Q.y+55);
+  }
 
   // ── the frame ──
   // Rounded to match the page, and drawn INTO the canvas so the exported PNG
@@ -686,6 +735,10 @@ async function lookupLive(did){
     rooms:(e.rooms||[]).length,
     first:(e.first||"").slice(0,10)||"—",
     last:(e.last||"").slice(0,10)||"—",
+    lastFull:e.last||"",
+    // The live scan can quote too, so a message posted a minute ago shows its
+    // words without waiting for the archiver's next pass.
+    text:typeof e.last_text==="string"&&e.last_text.trim()?e.last_text:null,
     live:true,
   };
 }
@@ -727,6 +780,10 @@ async function lookupStats(did){
       rooms:(p.rooms||[]).length,
       first:(p.first||"").slice(0,10)||"—",
       last:(p.last||"").slice(0,10)||"—",
+      lastFull:p.last||"",
+      // The identity's own last words. Only the archive has these; the live
+      // scan counts messages, it does not keep them.
+      text:typeof p.last_text==="string"&&p.last_text.trim()?p.last_text:null,
     };
   }catch{ return null; }
 }
@@ -844,8 +901,15 @@ async function issue(raw){
   const [live,archived,note]=await Promise.all([lookupLive(p.did),lookupStats(p.did),lookupNote(p.did)]);
   let stats=null;
   if(live&&archived) stats = archived.count>=live.count
-    ? {...archived,first:[archived.first,live.first].filter(x=>x&&x!=="—").sort()[0],last:[archived.last,live.last].sort().pop()}
-    : {...live,first:[archived.first,live.first].filter(x=>x&&x!=="—").sort()[0]};
+    // The counts decide which record wins, but the QUOTE follows the clock:
+    // whichever source saw the later message has the later words.
+    ? {...archived,first:[archived.first,live.first].filter(x=>x&&x!=="—").sort()[0],last:[archived.last,live.last].sort().pop(),
+       // Compared on the FULL timestamps: `last` is trimmed to a date for the
+       // card, and two messages on the same day compare equal, which silently
+       // pinned the quote to whichever source happened to be checked first.
+       text:((live.lastFull||"")>(archived.lastFull||"") ? live.text : archived.text) ?? archived.text ?? live.text ?? null}
+    : {...live,first:[archived.first,live.first].filter(x=>x&&x!=="—").sort()[0],
+       text:((live.lastFull||"")>=(archived.lastFull||"") ? live.text : archived.text) ?? live.text ?? archived.text ?? null};
   else stats = live ?? archived;
 
   if(stats) stats.registered = !!note?.registered;
@@ -865,7 +929,8 @@ async function issue(raw){
   // nothing real to show. Never silently — the figures are invented.
   $("previewBtn").hidden = !!stats;
   $("previewBtn").onclick = async () => {
-    await drawCard(p.did,p.pub,{count:23,rooms:2,first:"2026-08-11",last:"2026-08-24",preview:true});
+    await drawCard(p.did,p.pub,{count:23,rooms:2,first:"2026-08-11",last:"2026-08-24",preview:true,
+       text:"this line is invented, like every other figure on this preview card"});
     $("status").innerHTML = `<b style="color:var(--gold)">These numbers are invented.</b> This is the layout your card gets once a lookup is connected — the figures come from Technocore, not from here. Don't post this one.`;
     for(const id of ["save","copy","post"]) $(id).disabled=true;
   };

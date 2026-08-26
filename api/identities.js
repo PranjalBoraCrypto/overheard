@@ -126,12 +126,18 @@ export default async function handler() {
     for (const m of messages) {
       const did = m.from;
       if (typeof did !== "string" || !did.startsWith("did:key:")) continue; // nicknames prove nothing
-      const e = byDid.get(did) ?? { n: 0, rooms: [], first: null, last: null, texts: new Set() };
+      const e = byDid.get(did) ?? { n: 0, rooms: [], first: null, last: null, texts: new Set(), lastText: null };
       e.n++;
-      e.texts.add(String(m.text ?? ""));
+      const body = String(m.text ?? "");
+      e.texts.add(body);
       if (!e.rooms.includes(room)) e.rooms.push(room);
       if (m.ts && (!e.first || m.ts < e.first)) e.first = m.ts;
-      if (m.ts && (!e.last || m.ts > e.last)) e.last = m.ts;
+      if (m.ts && (!e.last || m.ts >= e.last)) {
+        e.last = m.ts;
+        // Flattened the same way the archiver does, so the card quotes the
+        // same string whichever source answered first.
+        e.lastText = body.replace(/[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/gu, " ").replace(/\s+/g, " ").trim().slice(0, 180);
+      }
       byDid.set(did, e);
     }
   }
@@ -146,6 +152,7 @@ export default async function handler() {
       rooms: e.rooms,
       first: e.first,
       last: e.last,
+      last_text: e.lastText || null,
     };
   }
 

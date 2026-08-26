@@ -135,7 +135,23 @@ async function profileShard(state, shard) {
   return state.profiles.get(shard);
 }
 
-async function recordProfile(state, did, room, ts, isTemplate) {
+/** What the identity last said, trimmed for storage.
+ *
+ *  Kept short on purpose. At ~37,000 identities, every extra 100 characters
+ *  here is several megabytes across the profile shards and it is rewritten
+ *  every pass, so this stores enough for a card to quote and no more. The
+ *  sweep matches Technocore's own: it replaces control and formatting
+ *  characters with spaces, which also removes the invisible ones a message
+ *  could use to fake line breaks or hide text inside a quote. */
+const LAST_TEXT_MAX = 180;
+const flatten = (t) =>
+  String(t ?? "")
+    .replace(/[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, LAST_TEXT_MAX);
+
+async function recordProfile(state, did, room, ts, isTemplate, text) {
   const bucket = await profileShard(state, shardOf(did));
   const p = (bucket[did] ??= { count: 0, unique: 0, templates: 0, rooms: [], first: ts, last: ts });
   p.count++;
@@ -145,7 +161,10 @@ async function recordProfile(state, did, room, ts, isTemplate) {
   if (isTemplate) p.templates++; else p.unique++;
   if (!p.rooms.includes(room)) p.rooms.push(room);
   if (ts && ts < p.first) p.first = ts;
-  if (ts && ts > p.last) p.last = ts;
+  // The last message wins only if it is genuinely later. Rooms are read in
+  // sequence order, but a pass can cover several rooms and their clocks are
+  // independent, so comparing timestamps is the only ordering that holds.
+  if (ts && ts >= p.last) { p.last = ts; const f = flatten(text); if (f) p.last_text = f; }
 }
 
 /* ── the roster ───────────────────────────────────────────────────────────
@@ -236,7 +255,7 @@ async function syncRoom(room, state, maxPages) {
       if (t.posters.length < MAX_POSTERS && !t.posters.includes(who)) t.posters.push(who);
 
       const isTemplate = t.n > REPEAT_LIMIT;
-      if (m.from?.startsWith("did:key:")) await recordProfile(state, m.from, room, m.ts, isTemplate);
+      if (m.from?.startsWith("did:key:")) await recordProfile(state, m.from, room, m.ts, isTemplate, text);
 
       if (isTemplate) { collapsed++; continue; }
 

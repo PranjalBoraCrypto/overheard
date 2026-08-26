@@ -84,6 +84,10 @@ export default async function handler(request) {
       rooms: Array.isArray(p.rooms) ? p.rooms : [],
       first: p.first ?? null,
       last: p.last ?? null,
+      // The identity's own words. Passed through untouched apart from the
+      // archiver's flattening — the card renders it on a canvas, where it is
+      // pixels and can never be markup, and labels it as a quotation.
+      last_text: typeof p.last_text === "string" ? p.last_text : null,
     },
     checked: new Date().toISOString(),
   });
