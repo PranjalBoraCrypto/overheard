@@ -198,6 +198,13 @@ footer a{color:var(--cy);text-decoration:none}
   .oh-tabs{margin-left:0;width:100%}
   .oh-tabs a{padding:9px 12px;font-size:13px}
 }
+
+/* Right-aligned tabs move if the viewport width moves, and the viewport width
+   moves when a page is long enough to need a scrollbar. Card and Rooms are
+   long, Verify is short — so the bar sat ~15px further right on the short one
+   through no fault of its own. Reserving the gutter on every page makes the
+   layout width independent of how much content is below it. */
+html{scrollbar-gutter:stable}
 </style>
 </head>
 <body>

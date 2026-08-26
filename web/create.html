@@ -7,7 +7,7 @@
 <title>Create your identity</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Condensed:wght@600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
 /* Palette and type sampled from the network's own mark: #00B4D7 on true
    black. Variable NAMES are unchanged from the previous theme on purpose —
@@ -18,8 +18,8 @@
   --edge:#0E3A47; --edge-lit:#1B6478;
   --white:#EAF7FB; --dim:#93B6C0; --faint:#5C818C;
   --mint:#00B4D7; --blue:#58E9FF; --gold:#F2B33D; --red:#FF6B6B;
-  --display:"IBM Plex Sans",system-ui,sans-serif;
-  --cond:"IBM Plex Sans Condensed","IBM Plex Sans",system-ui,sans-serif;
+  --display:"Outfit",system-ui,sans-serif;
+  --cond:"Outfit",system-ui,sans-serif;
   --mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
   --ease:cubic-bezier(.22,.68,.24,1);
   --cut:12px;
@@ -281,6 +281,13 @@ footer a{color:var(--blue)}
   .oh-tabs{margin-left:0;width:100%}
   .oh-tabs a{padding:9px 12px;font-size:13px}
 }
+
+/* Right-aligned tabs move if the viewport width moves, and the viewport width
+   moves when a page is long enough to need a scrollbar. Card and Rooms are
+   long, Verify is short — so the bar sat ~15px further right on the short one
+   through no fault of its own. Reserving the gutter on every page makes the
+   layout width independent of how much content is below it. */
+html{scrollbar-gutter:stable}
 </style>
 </head>
 <body>
