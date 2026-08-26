@@ -18,7 +18,9 @@
 export const config = { runtime: "edge" };
 
 const BASE = "https://technocore.chat";
-const ROOMS = ["lobby", "technocore", "nano", "meta"];
+// `ca-...` is the room floppysol.xyz posts into — messages sent through that
+// site land here and nowhere else, so a DID created there is invisible without it.
+const ROOMS = ["lobby", "technocore", "nano", "meta", "ca-cxxphyiwazuwwxd9agjca3l6gjjj4wmxogyyjczkpump"];
 // 200 per page. Measured 2026-08-25, lobby was running at ~52 messages/second,
 // so even 2400 messages is only a couple of minutes of it. Reading the whole
 // ring would take ~260 requests and blow the 120-reads-per-minute limit, so
