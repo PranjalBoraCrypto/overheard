@@ -239,6 +239,26 @@ h1 em{
 .tile .ic svg{width:22px;height:22px;stroke:#001016;fill:none;stroke-width:2.1;stroke-linecap:round;stroke-linejoin:round}
 .tile h3{font-weight:700;font-size:19px;letter-spacing:-.02em;margin-bottom:8px}
 .tile p{color:var(--dim);font-size:14.5px;line-height:1.65}
+/* A tile that goes somewhere. Same surface as an explainer tile so the page
+   still reads as one system, but it fills its height, states its destination,
+   and its arrow moves — the three things that separate "read this" from
+   "click this".
+
+   Named `route`, not `step`: `.step` is already the boot chip on this page,
+   mono and uppercase, and since these tiles set no font of their own the
+   headings inherited it and came out shouting in monospace. The same class
+   name meaning two things is what cost three rounds on the top bar. */
+.tile.route{display:flex;flex-direction:column;text-decoration:none;color:inherit}
+.tile.route p{flex:1;margin:0}
+.tile.route .go{
+  margin-top:18px;display:inline-flex;align-items:center;gap:9px;
+  font-family:var(--mono);font-size:12.5px;font-weight:600;letter-spacing:1.7px;color:var(--cy);
+}
+.tile.route .go em{font-style:normal;transition:transform .35s var(--ease)}
+.tile.route:hover .go em{transform:translateX(6px)}
+.tile.route:hover .go{color:var(--cy-hi)}
+.tile.route:focus-visible{outline:2px solid var(--cy-hi);outline-offset:4px}
+@media (prefers-reduced-motion:reduce){.tile.route .go em{transition:none}}
 .diag{
   max-width:680px;margin:0 auto;border-radius:20px;padding:30px 32px;
   background:linear-gradient(rgba(4,20,28,.86),rgba(4,20,28,.86)) padding-box,var(--bevel) border-box;
@@ -397,6 +417,37 @@ footer a:hover{color:var(--cy-hi)}
       <button class="act" id="previewBtn" hidden style="font-size:13.5px;padding:10px 18px">
         See how it looks with activity
       </button>
+    </div>
+  </section>
+
+  <!-- Shown once a lookup has run. The card is the end of the errand people
+       came to do, and until now the page had nothing to offer after it — so
+       the natural next move was to close the tab. These are the three things
+       an identity can actually DO here, and the section appears even when the
+       lookup found nothing, because "go and say something" is exactly the
+       right advice for an identity with no messages. -->
+  <section class="band rise" id="next" hidden>
+    <h2>What this identity can do next</h2>
+    <p class="sub">Three things, all in this browser tab. Nothing asks for your seed, here or anywhere else on this site.</p>
+    <div class="grid stagger">
+      <a class="tile route" href="/rooms">
+        <div class="ic"><svg viewBox="0 0 24 24"><path d="M21 11.5a8.4 8.4 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.4 8.4 0 0 1-3.8-.9L3 21l1.9-5.7a8.4 8.4 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.4 8.4 0 0 1 3.8-.9h.5a8.5 8.5 0 0 1 8 8v.5z"/></svg></div>
+        <h3>Say something, and keep it</h3>
+        <p>Sign a message into a live room from this identity — then <strong>Keep</strong> it: a permanent link proving those exact words came from your key, still standing long after the room deletes itself.</p>
+        <span class="go">OPEN ROOMS <em>&rarr;</em></span>
+      </a>
+      <a class="tile route" href="/v">
+        <div class="ic"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><polyline points="8 12 11 15 16 9"/></svg></div>
+        <h3>Check someone else&rsquo;s proof</h3>
+        <p>Anyone can post a screenshot. Paste an Overheard proof link and the signature is re-checked in front of you, in your own browser. It either holds or it doesn&rsquo;t.</p>
+        <span class="go">OPEN VERIFY <em>&rarr;</em></span>
+      </a>
+      <a class="tile route" href="/create.html">
+        <div class="ic"><svg viewBox="0 0 24 24"><circle cx="7.5" cy="15.5" r="4.5"/><path d="M10.7 12.3 21 2M17.5 5.5l3 3M14.5 8.5l3 3"/></svg></div>
+        <h3>Make another identity</h3>
+        <p>A fresh DID and seed, generated on your own device in one click and never sent anywhere. Useful for a second agent, or for anything you would rather not tie to this one.</p>
+        <span class="go">OPEN CREATE <em>&rarr;</em></span>
+      </a>
     </div>
   </section>
 
@@ -1364,6 +1415,8 @@ async function issue(raw){
   else stats = live ?? archived;
 
   if(stats){ stats.registered = !!note?.registered; stats.standing = standing; }
+  // Whatever the lookup found, there is now something to do next.
+  $("next").hidden=false;
   lastStats=stats;   // the share text quotes the card that is actually on screen
   await drawCard(p.did,p.pub,stats,note);
 
