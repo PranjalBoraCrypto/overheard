@@ -1874,7 +1874,17 @@ const HINTS = {
   note: "Public and permanent. Notes on Technocore are world-writable — anyone can change one — so keep it short and put nothing private in it.",
   post: "Goes to the public lobby room, signed by your key on this device. Only the signature is sent.",
 };
-const POST_ROOM = "lobby";
+/* WHY NOT THE LOBBY.
+   The live scan reads the most recent 2,000 messages of a room. Measured from
+   the archive over 22 hours: the lobby runs at 25 messages/second, so 2,000
+   messages is the last 1.3 MINUTES of it — a message posted five minutes ago
+   is already outside the window the card can see. technocore runs at 4.7/sec,
+   which is 7.1 minutes, comfortably longer than the wait after posting.
+
+   This was not a copy problem. A first message went into the lobby, vanished
+   from the live scan before the timer finished, and the card correctly
+   reported nothing — which read as the post having failed. */
+const POST_ROOM = "technocore";
 
 function jobCard(key, n, title, blurb, done){
   const li=document.createElement("li");
@@ -2004,6 +2014,7 @@ function renderDiagnostic(parsed, stats, note){
   const actions=document.querySelector(".actions");
 
   if(stats){                       // real activity — the card speaks for itself
+    try{ localStorage.removeItem(postedKey(parsed.did)); }catch{}
     diag.hidden=true; wrap.hidden=false; actions.hidden=false;
     setupProve(parsed.did);        // there is a card, so it can be claimed
     return;
@@ -2018,12 +2029,17 @@ function renderDiagnostic(parsed, stats, note){
   const reg=!!note?.registered;
   const fp=note?.fingerprint;
   const mine=savedIdentity?.did===parsed.did;
+  const donePost=(()=>{ try{ return !!localStorage.getItem(postedKey(parsed.did)); }catch{ return false; } })();
   if(openKey && !mine) openKey=null;   // a key only ever belongs to its own DID
 
-  $("diagTitle").textContent = reg
-    ? "Registered — now it needs something to say"
-    : "This identity isn’t on the record yet";
-  $("diagSub").textContent = reg
+  $("diagTitle").textContent = donePost
+    ? "Posted — the archive hasn’t caught up yet"
+    : reg ? "Registered — now it needs something to say"
+    :       "This identity isn’t on the record yet";
+  $("diagSub").textContent = donePost
+    ? "Your message is on Technocore. The card reads two sources — a live scan of the rooms and the archive — and neither has it yet. That is normal: the archive sweeps every few minutes."
+      + (reg ? "" : " The profile note is still open below — it is the permanent half, and worth doing while you wait.")
+    : reg
     ? "The key checks out and a profile note is published. One thing left: nothing it has posted is in the rooms right now, and rooms forget within minutes."
     : "The key checks out — it decodes to a real Ed25519 key, which is where most mistyped DIDs fail. Two things put it on the record. Both take under a minute.";
   // The one caveat worth keeping: if the live scan never answered, this
@@ -2037,9 +2053,20 @@ function renderDiagnostic(parsed, stats, note){
   jobs.appendChild(jobCard("note",1,"Publish a profile note",
     "The only permanent record on Technocore. Messages expire; notes do not. Without one, this identity leaves no trace between posts.", reg));
   jobs.appendChild(jobCard("post",2,"Post a signed message",
-    "Signed by the key, in a public room. It appears on the card within about five minutes, along with a joined date.", false));
+    `Signed by the key, into ${POST_ROOM} — quieter than the lobby, so it stays visible long enough to be collected. Your card fills in a minute or two later.`, donePost));
 
   const doit=$("doit"); doit.replaceChildren();
+
+  /* Posted AND registered means there is genuinely nothing left to ask for:
+     wait, then look again. Posted but NOT registered still has a job — the
+     note is the permanent half — so that case keeps its controls and gets the
+     timer as well. Taking the shortcut in both cases stranded anyone who
+     happened to post before publishing. */
+  if(donePost && reg){
+    offerRecheck(parsed.did);
+    diag.hidden=false; wrap.hidden=true;
+    return;
+  }
   const para=(t,cls)=>{ const p=document.createElement("p"); if(cls)p.className=cls; p.textContent=t; doit.appendChild(p); return p; };
   const link=(href,text)=>{ const a=document.createElement("a"); a.href=href; a.textContent=text;
     if(/^https?:/.test(href)){ a.target="_blank"; a.rel="noopener noreferrer"; } return a; };
@@ -2047,7 +2074,9 @@ function renderDiagnostic(parsed, stats, note){
   /* Every job carries a button from the start. What it does depends on what
      is possible — compose, unlock first, or go and make an identity — but the
      screen never shows a task with no way to start it. */
-  const jobsToDo=[["note","Publish a note",!reg],["post","Post a message",true]];
+  // A job that is already done gets no button. The post one was unconditional,
+  // which put "Post a message" under a card already ticked DONE.
+  const jobsToDo=[["note","Publish a note",!reg],["post","Post a message",!donePost]];
   if(mine && openKey){
     // Already unlocked this session — go straight to the work, and point at
     // the first thing that needs doing.
@@ -2393,6 +2422,7 @@ function renderDiagnostic(parsed, stats, note){
     doit.appendChild(small);
   }
 
+  if(donePost) offerRecheck(parsed.did);   // posted, but the note is still open
   diag.hidden=false; wrap.hidden=true;
 }
 
@@ -2576,6 +2606,7 @@ function armJobs(parsed, jwk, fp, reg){
         body:JSON.stringify({kind:"message",did:parsed.did,room:POST_ROOM,sig,nonce,text:flat})})
         .then(x=>x.json()).catch(()=>null);
       if(!r?.ok) return jobSay("post","Technocore refused that message. Try again in a moment.","err");
+      try{ localStorage.setItem(postedKey(parsed.did),String(Date.now())); }catch{}
       finishJob("post","Posted");
       jobSay("post",`Posted to ${POST_ROOM}. The card fills in once the archive next runs — usually within five minutes.`,"ok");
       offerRecheck(parsed.did);
@@ -2594,8 +2625,19 @@ function armJobs(parsed, jwk, fp, reg){
    the DID — reload, or come back later, and the timer picks up where it
    actually is rather than restarting because the page did.
    ──────────────────────────────────────────────────────────────────────── */
-const WAIT_MS = 5*60*1000;
-const waitKey = (did)=>`overheard.wait.${did.slice(-12)}`;
+/* Two minutes, not five. The five was chosen from the archive's commit
+   cadence, but the card reads the LIVE scan first, and a message in
+   technocore stays inside that scan's window for about seven minutes. Two
+   minutes clears the sixty-second edge cache with room to spare, and if it is
+   somehow still not there the panel simply waits again rather than pretending
+   the post never happened. */
+const WAIT_MS = 2*60*1000;
+const waitKey  = (did)=>`overheard.wait.${did.slice(-12)}`;
+/* Posting is a thing that HAPPENED. Re-running the lookup used to rebuild
+   this panel from scratch, so someone who had posted and come back was shown
+   the same two jobs and told to do them again — the page forgetting what it
+   had just watched them do. */
+const postedKey = (did)=>`overheard.posted.${did.slice(-12)}`;
 
 function offerRecheck(did){
   const doit=$("doit");
@@ -2609,9 +2651,9 @@ function offerRecheck(did){
   }
 
   const box=document.createElement("div"); box.className="allset";
-  const h=document.createElement("h4"); h.textContent="All done — now the archive has to catch up";
+  const h=document.createElement("h4"); h.textContent="All done — now give it a moment";
   const p=document.createElement("p");
-  p.textContent="It sweeps the rooms every five minutes. When this reaches zero your message has been collected and the card has something to show.";
+  p.textContent="Your message is posted. The card reads the rooms a beat behind, so this is the wait for it to come round.";
 
   const R=54, C=2*Math.PI*R;
   const dial=document.createElement("div"); dial.className="dial";
@@ -2656,7 +2698,12 @@ function offerRecheck(did){
     run.setAttribute("stroke-dashoffset","0");
     dial.classList.add("ready"); time.textContent="0:00";
     go.disabled=false; go.classList.add("live");
-    foot.textContent="Ready — this issues the card from the archive as it stands now.";
+    // The heading counted down with it, so it changes with it. Leaving "now
+    // give it a moment" above a finished timer is the page ignoring its own
+    // clock.
+    h.textContent="Ready — go and look";
+    p.textContent="Enough time has passed for your message to come round. Issue the credential and see what the card says.";
+    foot.textContent="If it is still empty, nothing is wrong — come back in another minute or two.";
     try{ localStorage.removeItem(waitKey(did)); }catch{}
   };
   tick();
