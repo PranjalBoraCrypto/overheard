@@ -63,7 +63,7 @@ const ROOM_RE = /^[a-z0-9][a-z0-9_-]{0,63}$/;
 
 let reads = 0;
 
-async function getJson(url) {
+async function getJson(url, deadlineMs = 6000) {
   if (reads >= READ_CEILING) return null;
   reads++;
   try {
@@ -72,7 +72,7 @@ async function getJson(url) {
     // indistinguishable from an identity that has posted nothing.
     const res = await fetch(url, {
       headers: { Accept: "application/json", "User-Agent": "overheard/2.0" },
-      signal: AbortSignal.timeout(6000),
+      signal: AbortSignal.timeout(deadlineMs),
     });
     if (!res.ok) return null;            // 429 or upstream hiccup: keep what we have
     return await res.json();
@@ -92,7 +92,11 @@ function score(r) {
 }
 
 async function pickRooms() {
-  const data = await getJson(`${BASE}/rooms?format=json&limit=${ROSTER_LIMIT}`);
+  /* The roster is one big response describing hundreds of rooms and it is
+     reliably the slowest read here — measured returning nothing under the
+     6-second per-read deadline, which quietly reduced the whole scan to the
+     five core rooms. It gets its own, longer deadline. */
+  const data = await getJson(`${BASE}/rooms?format=json&limit=${ROSTER_LIMIT}`, 14000);
   const rows = Array.isArray(data?.rooms) ? data.rooms : [];
   const others = rows
     .filter((r) => ROOM_RE.test(String(r?.room ?? "")) && !CORE.includes(r.room))
