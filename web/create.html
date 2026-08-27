@@ -550,6 +550,9 @@ footer a:hover{color:var(--blue)}
 </div>
 
 <script type="module">
+/* Finishing here signs this browser in, so Rooms and the bar already know
+   who you are instead of asking for the passphrase you just set. */
+import { signIn } from "/session.js";
 const $=(id)=>document.getElementById(id);
 const enc=new TextEncoder();
 const calmMotion=matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -1090,6 +1093,7 @@ $("doBackup").addEventListener("click", async ()=>{
   try{ localStorage.setItem("overheard.identity",JSON.stringify(vault)); }catch{}
   $("pw").value=$("pw2").value="";
   download(new Blob([JSON.stringify(vault,null,2)],{type:"application/json"}), `overheard-identity-${ID.did.slice(-8)}.json`);
+  signIn(ID.did,ID.jwk);
   say("backup","Encrypted, saved in this browser, and downloaded. Keep that file.","ok");
   armGate("Backup file downloaded.");
   $("gateBox").scrollIntoView({behavior:"smooth",block:"center"});

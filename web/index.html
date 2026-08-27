@@ -1316,6 +1316,9 @@ footer a:hover{color:var(--cy-hi)}
 </div>
 
 <script type="module">
+/* One identity, one session, every page. Unlocking here signs this browser
+   in, so the Rooms page and the bar do not ask again. */
+import { signIn } from "/session.js";
 /* ── did:key → Ed25519 public key ───────────────────────── */
 const B58="123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
 function b58decode(s){
@@ -2880,8 +2883,9 @@ function renderDiagnostic(parsed, stats, note){
       go.disabled=true; msg.textContent="Unlocking on this device…";
       try{
         const jwk=await openVault(savedIdentity,pw.value);
-        pw.value=""; row.remove(); msg.textContent="Unlocked. Your key stays in this tab.";
+        pw.value=""; row.remove(); msg.textContent="Unlocked. You stay signed in until you sign out.";
         openKey=jwk;
+        signIn(savedIdentity.did,jwk);
         armJobs(parsed, jwk, fp, reg);
         beckonNext();
       }catch{ msg.textContent="Wrong passphrase, or the stored identity is damaged."; go.disabled=false; }
@@ -3619,6 +3623,10 @@ async function issue(raw){
   try{ await crypto.subtle.importKey("raw",p.pub,{name:"Ed25519"},false,["verify"]); }catch{}
 
   current=p;
+  /* Remembered for one purpose: the Rooms page offers to bring an identity
+     into that browser, and the DID it should suggest is the one just looked
+     up here. Public information, and the field stays editable. */
+  try{ localStorage.setItem("overheard.lastdid",p.did); }catch{}
   await document.fonts.ready;
 
   // Show the stage and go to it BEFORE the work starts, so the boot animation
@@ -4000,6 +4008,7 @@ function keepVault(vault, jwk){
   if(savedIdentity?.did && savedIdentity.did!==vault.did) return;
   try{ localStorage.setItem("overheard.identity",JSON.stringify(vault)); }catch{}
   savedIdentity=vault; openKey=jwk;
+  signIn(vault.did,jwk);
 }
 
 /** Sign the card line and check our own work before claiming anything. A

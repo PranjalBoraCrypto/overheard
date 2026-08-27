@@ -22,6 +22,8 @@
  * the tabs; leaving that to each page to remember is how it broke last time.
  */
 
+import { getSession, signOut, onSession, shortDid, hueOf } from "/session.js";
+
 const FONT_HREF =
   "https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap";
 
@@ -87,11 +89,68 @@ const CSS = `
   box-shadow:0 10px 26px -14px rgba(0,180,215,1);
 }
 .tabs a:focus-visible,.brand:focus-visible{outline:2px solid #5FEBFF;outline-offset:3px}
-@media (prefers-reduced-motion:reduce){.glyph::after{animation:none}}
+
+/* ── who you are, on every page ────────────────────────────────────────────
+   The identity was legible on exactly one screen — the compose box of the
+   Rooms page, and only while you were looking at it. Everywhere else a signed
+   in browser looked identical to a signed out one, which is how somebody ends
+   up entering a passphrase they had already entered.
+
+   So the bar carries it: the face from the card, the two ends of the DID, and
+   a menu with the whole thing, a copy, the way to the card and a sign out. It
+   is present only when there IS a session, and it takes no room at all
+   otherwise. */
+.me{position:relative;margin-left:10px;flex:none}
+.chip{
+  display:flex;align-items:center;gap:9px;padding:5px 11px 5px 5px;border-radius:999px;cursor:pointer;
+  font-family:inherit;font-size:12.5px;font-weight:600;line-height:1;color:#CDEAF3;
+  background:rgba(0,180,215,.10);border:1px solid rgba(0,180,215,.28);
+  transition:border-color .25s cubic-bezier(.22,.68,.24,1),background .25s cubic-bezier(.22,.68,.24,1),transform .25s cubic-bezier(.22,.68,.24,1);
+}
+.chip:hover{background:rgba(0,180,215,.17);border-color:rgba(95,235,255,.5);transform:translateY(-1px)}
+.chip:focus-visible{outline:2px solid #5FEBFF;outline-offset:3px}
+.chip .face{width:28px;height:28px;border-radius:9px;flex:none;display:block}
+.chip .nm{font-family:"IBM Plex Mono",ui-monospace,Menlo,monospace;font-size:11.5px;letter-spacing:.02em;white-space:nowrap}
+.chip .car{width:9px;height:9px;flex:none;opacity:.6;transition:transform .3s cubic-bezier(.22,.68,.24,1)}
+.me.open .chip .car{transform:rotate(180deg)}
+.menu{
+  position:absolute;top:calc(100% + 10px);right:0;width:300px;z-index:60;
+  padding:15px;border-radius:16px;
+  background:linear-gradient(rgba(5,24,33,.98),rgba(3,15,21,.98));
+  border:1px solid rgba(0,180,215,.30);
+  box-shadow:0 30px 70px -30px rgba(0,0,0,.95),0 0 0 1px rgba(0,0,0,.4);
+  transform-origin:top right;
+  animation:pop .28s cubic-bezier(.2,.9,.3,1.2) both;
+}
+@keyframes pop{from{opacity:0;transform:scale(.92) translateY(-6px)}}
+.menu h3{
+  font-family:"IBM Plex Mono",ui-monospace,Menlo,monospace;font-size:9.5px;font-weight:600;
+  letter-spacing:.16em;text-transform:uppercase;color:#5F8593;margin-bottom:8px;
+}
+.did{
+  font-family:"IBM Plex Mono",ui-monospace,Menlo,monospace;font-size:10.5px;line-height:1.65;
+  color:#9CBFCB;word-break:break-all;background:rgba(0,0,0,.42);
+  border:1px solid rgba(0,180,215,.16);border-radius:10px;padding:9px 11px;
+}
+.menu button.row,.menu a.row{
+  display:flex;align-items:center;gap:10px;width:100%;margin-top:6px;padding:10px 11px;border-radius:11px;
+  background:none;border:0;cursor:pointer;text-decoration:none;text-align:left;
+  font-family:inherit;font-size:13px;font-weight:600;line-height:1;color:#CDEAF3;
+  transition:background .2s cubic-bezier(.22,.68,.24,1),color .2s cubic-bezier(.22,.68,.24,1);
+}
+.menu .row:first-of-type{margin-top:11px}
+.menu .row svg{width:15px;height:15px;flex:none;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round;opacity:.75}
+.menu .row:hover{background:rgba(0,180,215,.12);color:#5FEBFF}
+.menu .row.out{color:#9CBFCB;margin-top:9px;border-top:1px solid rgba(0,180,215,.14);border-radius:0 0 11px 11px;padding-top:12px}
+.menu .row.out:hover{background:rgba(255,107,107,.10);color:#FF9B9B}
+.menu .fine{font-size:11px;line-height:1.5;color:#5F8593;margin-top:10px}
+@media (prefers-reduced-motion:reduce){.glyph::after{animation:none}.menu{animation:none}}
 @media (max-width:560px){
   .bar{gap:10px}
   .tabs{margin-left:0;width:100%}
   .tabs a{padding:9px 12px;font-size:13px}
+  .me{margin-left:0;order:-1}
+  .menu{width:min(300px,calc(100vw - 52px))}
 }
 `;
 
@@ -103,6 +162,40 @@ const GLYPH = `
   <rect x="1" y="1" width="46" height="46" rx="14" fill="url(#g)"/>
   <rect x="16" y="16" width="16" height="16" rx="5" fill="#00070A"/>
 </svg>`;
+
+/* The face from the card, small enough for a chip: the same rounded head,
+   visor and ears, tinted by the same hue the card and the message stream
+   derive from the key. Two identities are never the same colour by accident,
+   and yours is the one you learn to recognise. */
+let faceSeq = 0;
+function faceSVG(hue) {
+  const id = `f${++faceSeq}`;
+  return `<svg class="face" viewBox="0 0 40 40" aria-hidden="true">
+  <defs>
+    <linearGradient id="${id}a" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="hsl(${hue.toFixed(0)} 90% 68%)"/>
+      <stop offset="1" stop-color="hsl(${(hue - 22).toFixed(0)} 92% 40%)"/>
+    </linearGradient>
+    <linearGradient id="${id}b" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="hsl(${hue.toFixed(0)} 100% 78%)"/>
+      <stop offset="1" stop-color="hsl(${hue.toFixed(0)} 100% 62%)"/>
+    </linearGradient>
+  </defs>
+  <rect x="2" y="9" width="4" height="12" rx="2" fill="url(#${id}a)" opacity=".75"/>
+  <rect x="34" y="9" width="4" height="12" rx="2" fill="url(#${id}a)" opacity=".75"/>
+  <rect x="5" y="4" width="30" height="30" rx="10" fill="url(#${id}a)"/>
+  <rect x="10" y="11" width="20" height="13" rx="6" fill="#031015" opacity=".92"/>
+  <rect x="13.5" y="16" width="13" height="3" rx="1.5" fill="url(#${id}b)"/>
+</svg>`;
+}
+
+const ICONS = {
+  copy: '<svg viewBox="0 0 24 24"><rect x="9" y="9" width="12" height="12" rx="2.5"/><path d="M6 15H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v1"/></svg>',
+  card: '<svg viewBox="0 0 24 24"><rect x="2.5" y="5" width="19" height="14" rx="3"/><path d="M7 10h4M7 14h7"/></svg>',
+  rooms: '<svg viewBox="0 0 24 24"><path d="M21 12a8 8 0 1 1-3.2-6.4"/><path d="M8 20l-4 1 1-4"/><path d="M9 11h6M9 15h4"/></svg>',
+  out: '<svg viewBox="0 0 24 24"><path d="M15 17l5-5-5-5"/><path d="M20 12H9"/><path d="M12 4H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h6"/></svg>',
+  caret: '<svg class="car" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>',
+};
 
 /** Load the bar's typeface if the host page has not. Document-level, because
  *  @font-face inside a shadow root does not apply to it. */
@@ -163,10 +256,113 @@ class OverheardBar extends HTMLElement {
       nav.appendChild(a);
     }
 
-    bar.append(brand, nav);
+    const me = document.createElement("div");
+    me.className = "me";
+    me.hidden = true;
+
+    bar.append(brand, nav, me);
     wrap.appendChild(bar);
     root.append(style, wrap);
+
+    this._paintMe = () => paintMe(me, root);
+    this._paintMe();
+    this._off = onSession(this._paintMe);
   }
+
+  disconnectedCallback() { this._off?.(); }
+}
+
+/* One place decides whether there is anybody to show, so the chip cannot
+   drift out of step with the session — sign out in another tab and this is
+   repainted by the same call that repaints the page under it. */
+function paintMe(me, root) {
+  const s = getSession();
+  me.replaceChildren();
+  me.classList.remove("open");
+  me.hidden = !s;
+  if (!s) return;
+
+  const chip = document.createElement("button");
+  chip.className = "chip";
+  chip.type = "button";
+  chip.setAttribute("aria-haspopup", "menu");
+  chip.setAttribute("aria-expanded", "false");
+  chip.innerHTML = faceSVG(hueOf(s.did)) + ICONS.caret;   // our own markup only
+  const nm = document.createElement("span");
+  nm.className = "nm";
+  nm.textContent = shortDid(s.did);
+  chip.insertBefore(nm, chip.lastChild);
+  chip.title = s.did;
+  me.appendChild(chip);
+
+  let menu = null;
+  const close = () => {
+    menu?.remove(); menu = null;
+    me.classList.remove("open");
+    chip.setAttribute("aria-expanded", "false");
+    removeEventListener("pointerdown", away, true);
+    removeEventListener("keydown", esc, true);
+  };
+  const away = (e) => { if (!e.composedPath().includes(me)) close(); };
+  const esc = (e) => { if (e.key === "Escape") { close(); chip.focus(); } };
+
+  const open = () => {
+    menu = document.createElement("div");
+    menu.className = "menu";
+    menu.setAttribute("role", "menu");
+
+    const h = document.createElement("h3");
+    h.textContent = "Signed in as";
+    const did = document.createElement("div");
+    did.className = "did";
+    did.textContent = s.did;                 // text, never markup
+
+    const copy = document.createElement("button");
+    copy.className = "row"; copy.type = "button"; copy.setAttribute("role", "menuitem");
+    copy.innerHTML = ICONS.copy;
+    const clabel = document.createElement("span");
+    clabel.textContent = "Copy this DID";
+    copy.appendChild(clabel);
+    copy.addEventListener("click", async () => {
+      try { await navigator.clipboard.writeText(s.did); } catch {}
+      clabel.textContent = "Copied";
+      setTimeout(() => { clabel.textContent = "Copy this DID"; }, 1600);
+    });
+
+    const card = document.createElement("a");
+    card.className = "row"; card.setAttribute("role", "menuitem");
+    card.href = "/?did=" + encodeURIComponent(s.did);
+    card.innerHTML = ICONS.card;
+    card.appendChild(Object.assign(document.createElement("span"), { textContent: "See my card" }));
+
+    const rooms = document.createElement("a");
+    rooms.className = "row"; rooms.setAttribute("role", "menuitem");
+    rooms.href = "/rooms";
+    rooms.innerHTML = ICONS.rooms;
+    rooms.appendChild(Object.assign(document.createElement("span"), { textContent: "Go to rooms" }));
+
+    const out = document.createElement("button");
+    out.className = "row out"; out.type = "button"; out.setAttribute("role", "menuitem");
+    out.innerHTML = ICONS.out;
+    out.appendChild(Object.assign(document.createElement("span"), { textContent: "Sign out" }));
+    out.addEventListener("click", () => { close(); signOut(); });
+
+    /* The honest half of staying signed in. This browser is holding the key
+       unlocked so a refresh does not ask again — worth saying on the menu
+       that ends in the button which undoes it. */
+    const fine = document.createElement("p");
+    fine.className = "fine";
+    fine.textContent = "This browser is holding your key unlocked so you stay signed in. Sign out when you are done on a shared computer.";
+
+    menu.append(h, did, copy, card, rooms, out, fine);
+    me.appendChild(menu);
+    me.classList.add("open");
+    chip.setAttribute("aria-expanded", "true");
+    addEventListener("pointerdown", away, true);
+    addEventListener("keydown", esc, true);
+  };
+
+  chip.addEventListener("click", () => (menu ? close() : open()));
 }
 
 customElements.define("overheard-bar", OverheardBar);

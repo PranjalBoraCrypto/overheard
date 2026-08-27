@@ -1,0 +1,99 @@
+/**
+ * session.js — who this browser is signed in as, shared by every page.
+ *
+ * WHAT IS STORED, AND THE TRADE THAT WAS MADE
+ *
+ * Two separate things live in localStorage and they are not the same:
+ *
+ *   overheard.identity   the VAULT — the key encrypted under a passphrase,
+ *                        310,000 PBKDF2 rounds. Useless to anyone who copies
+ *                        it without the passphrase. This is the backup.
+ *
+ *   overheard.session    the key UNLOCKED, so a refresh does not ask for the
+ *                        passphrase again. This is a convenience, and it is
+ *                        the weaker of the two by design: anything that can
+ *                        run script on this origin can read it while it is
+ *                        there, and it survives closing the tab.
+ *
+ * That was a deliberate choice — being asked for a passphrase after every
+ * reload is the thing that makes people keep a seed in a text file — but it
+ * is a real trade and the UI says so, in the profile menu, next to a sign-out
+ * that removes it. It is never written by anything except an explicit unlock,
+ * and it never leaves the browser.
+ *
+ * Pages do not read localStorage directly. They call these, and they listen
+ * for the `overheard:session` event so a sign-out in one tab is a sign-out in
+ * the bar, the compose box and the claim panel at the same moment.
+ */
+
+const VAULT_KEY = "overheard.identity";
+const SESSION_KEY = "overheard.session";
+const EVENT = "overheard:session";
+
+const DID_RE = /^did:key:z6Mk[1-9A-HJ-NP-Za-km-z]{44}$/;
+
+const read = (k) => { try { const r = localStorage.getItem(k); return r && r[0] === "{" ? JSON.parse(r) : null; } catch { return null; } };
+
+/** The signed-in identity, or null. Validated on every read: a half-written
+ *  or hand-edited record is treated as signed out rather than trusted. */
+export function getSession() {
+  const s = read(SESSION_KEY);
+  if (!s || !DID_RE.test(String(s.did || "")) || !s.jwk || s.jwk.kty !== "OKP" || !s.jwk.d) return null;
+  return { did: s.did, jwk: s.jwk };
+}
+
+/** The encrypted backup this browser holds, whether or not anyone is signed
+ *  in. Its presence is what makes "enter your passphrase" a sensible thing to
+ *  ask; without it the answer is "make one first". */
+export function getVault() {
+  const v = read(VAULT_KEY);
+  return v && DID_RE.test(String(v.did || "")) && v.data ? v : null;
+}
+
+export function signIn(did, jwk) {
+  if (!DID_RE.test(String(did || "")) || !jwk) return null;
+  try { localStorage.setItem(SESSION_KEY, JSON.stringify({ did, jwk, at: new Date().toISOString() })); } catch {}
+  announce();
+  return { did, jwk };
+}
+
+/** Sign out clears the unlocked key and NOTHING else. The vault stays: this
+ *  is a lock, not a delete, and somebody who signs out on a shared machine
+ *  must still be able to get back in with their passphrase. */
+export function signOut() {
+  try { localStorage.removeItem(SESSION_KEY); } catch {}
+  announce();
+}
+
+function announce() {
+  try { dispatchEvent(new CustomEvent(EVENT, { detail: getSession() })); } catch {}
+}
+
+/** Subscribe. Fires on sign-in and sign-out here, and on `storage` — which is
+ *  how a sign-out in another tab reaches this one. Returns an unsubscribe. */
+export function onSession(fn) {
+  const local = () => fn(getSession());
+  addEventListener(EVENT, local);
+  const cross = (e) => { if (!e.key || e.key === SESSION_KEY) fn(getSession()); };
+  addEventListener("storage", cross);
+  return () => { removeEventListener(EVENT, local); removeEventListener("storage", cross); };
+}
+
+/** did:key:z6Mkab…wxyz — enough of both ends to recognise, short enough for a
+ *  chip. Cutting the middle and never an end is deliberate: both ends are the
+ *  parts somebody might actually know by sight. */
+export const shortDid = (did, head = 6, tail = 4) => {
+  const body = String(did || "").replace(/^did:key:/, "");
+  return body.length <= head + tail + 2 ? body : `${body.slice(0, head)}…${body.slice(-tail)}`;
+};
+
+/** A hue derived from the key itself, banded around the brand cyan, so the
+ *  same identity is the same colour on the card, in the stream and in the
+ *  bar. Copied rather than imported by the pages that already had it —
+ *  this is the one definition now. */
+const B58 = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
+export function hueOf(did) {
+  let n = 0;
+  for (let i = 9; i < 15; i++) n = (n * 58 + Math.max(0, B58.indexOf(did[i]))) % 1000;
+  return 189 + ((n / 1000) * 84 - 42);
+}
