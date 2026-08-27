@@ -215,7 +215,15 @@ h1 em{
    mid-animation. */
 .cardwrap{position:relative;max-width:960px;margin:0 auto;border-radius:22px;overflow:hidden;
   transition:transform .5s var(--ease);will-change:transform}
-.cardwrap.reveal{animation:deal 1.05s var(--ease) both}
+/* BACKWARDS, NOT BOTH. `both` keeps the deal's last keyframe applied for
+   good, and an animation's applied value beats an inline style — so from the
+   moment the finished card was dealt in, `transform:none` won every frame and
+   the pointer tilt below silently stopped working. It was only ever alive
+   during the boot animation, before .reveal went on. The card needs the
+   animation's FIRST frame held before it starts, which is `backwards`; its
+   last frame is transform:none and opacity:1, which is where the element
+   lands anyway. */
+.cardwrap.reveal{animation:deal 1.05s var(--ease) backwards}
 @keyframes deal{0%{opacity:0;transform:rotateX(24deg) translateY(54px) scale(.93)}100%{opacity:1;transform:none}}
 #card{
   display:block;width:100%;height:auto;border-radius:22px;
@@ -3514,6 +3522,12 @@ function showFreshness(did, stats){
       };
       await drawCard(did, current.pub, lastStats, lastNote);
       say.innerHTML = `<b>Found a newer one</b> in <code>${hit.room.replace(/[^a-z0-9_-]/gi,"")}</code> — the card now quotes it.`;
+      // The card is what changed, and the button that changed it sits below
+      // it — on a phone the card is entirely off-screen at this point. Go to
+      // it, or the redraw happens where nobody is looking. Only on a hit:
+      // yanking the page around to show an unchanged card would be worse
+      // than saying nothing.
+      $("cardwrap").scrollIntoView({behavior:calm?"auto":"smooth",block:"center"});
     }else{
       say.innerHTML = `<b>Nothing newer just now.</b> If you have just posted, wait a few seconds and look again.`;
     }
