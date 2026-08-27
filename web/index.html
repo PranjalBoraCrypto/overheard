@@ -626,6 +626,13 @@ input.beckon,textarea.beckon{animation:beckonin 2.3s var(--ease) infinite}
   .sealtick::after,.act.beckon{animation:none}
 }
 @keyframes flash{0%,100%{box-shadow:none}30%{box-shadow:0 0 0 5px rgba(95,235,255,.28)}}
+/* ── how fresh is this, really ─────────────────────────────────────────── */
+.fresh{margin-top:14px;display:flex;gap:12px;align-items:center;flex-wrap:wrap;justify-content:center}
+.fresh p{margin:0;color:var(--faint);font-size:13px;line-height:1.6;max-width:62ch;text-align:left}
+.fresh p b{color:var(--dim);font-weight:600}
+.fresh .act{flex:0 0 auto}
+.fresh.busy .act{opacity:.55;pointer-events:none}
+@media (max-width:560px){ .fresh{justify-content:flex-start} .fresh .act{width:100%} }
 .doit .small{color:var(--faint);font-size:13px;margin-top:14px}
 .doit .small a{color:var(--cy);text-decoration:none;font-weight:600}
 .doit .small a:hover{text-decoration:underline}
@@ -888,6 +895,10 @@ footer a:hover{color:var(--cy-hi)}
       <div class="doit" id="doit"></div>
     </section>
     <p class="status" id="status"></p>
+    <div class="fresh" id="fresh" hidden>
+      <button class="act" type="button" id="lookagain">Look again</button>
+      <p id="freshsay"></p>
+    </div>
   </section>
 
   <!-- Shown once a lookup has run. The card is the end of the errand people
@@ -1961,13 +1972,44 @@ async function drawCard(did,pub,stats,note){
 const API = "/api/identities";
 let indexPromise = null;
 
+let indexUpdated=null;
 async function liveIndex(){
   if(!indexPromise){
     indexPromise = fetch(API)
       .then(r => r.ok ? r.json() : null)
+      .then((j)=>{ indexUpdated = j?.updated ?? null; return j; })
       .catch(() => null);
   }
   return indexPromise;
+}
+
+/* ── LOOKING AGAIN, WITHOUT ASKING ANYONE TO HARD-REFRESH ──────────────────
+   The card quotes the last signed message, so of course people post one and
+   come straight back. What they hit is a CDN cache — and the honest fix is
+   not a sentence telling them to press ctrl-shift-R, it is a button that
+   actually goes and looks.
+
+   It does NOT rebuild the whole live index. That costs ~45 upstream reads
+   against an allowance of 600 a minute shared by everyone, and giving every
+   impatient visitor a 45-read button is how the note lookups started losing
+   their race earlier tonight. Instead it reads the ROOMS THIS IDENTITY IS
+   ALREADY KNOWN TO POST IN — one to three reads, uncached — and looks for
+   anything newer than what is on screen. Precise, cheap, and it answers the
+   only question being asked. */
+async function freshLook(did, rooms){
+  const list=(rooms&&rooms.length?rooms:["lobby","technocore"]).slice(0,3);
+  let best=null;
+  for(const r of list){
+    try{
+      const res=await fetch(`/api/room?room=${encodeURIComponent(r)}&since=0&limit=200&t=${Date.now()}`,{cache:"no-store"});
+      if(!res.ok) continue;
+      const j=await res.json();
+      for(const m of (Array.isArray(j.messages)?j.messages:[])){
+        if(m && m.from===did && (!best || String(m.ts||"")>String(best.ts||""))) best={ts:m.ts,text:String(m.text??""),room:r};
+      }
+    }catch{}
+  }
+  return best;
 }
 
 async function lookupLive(did){
@@ -1977,6 +2019,7 @@ async function lookupLive(did){
   return {
     count:e.messages,
     rooms:(e.rooms||[]).length,
+    roomNames:(e.rooms||[]).slice(0,6),
     first:(e.first||"").slice(0,10)||"—",
     last:(e.last||"").slice(0,10)||"—",
     lastFull:e.last||"",
@@ -2034,6 +2077,7 @@ async function lookupStats(did){
       // cannot be inflated by posting the same sentence a thousand times.
       count:p.unique,
       rooms:(p.rooms||[]).length,
+      roomNames:(p.rooms||[]).slice(0,6),
       first:(p.first||"").slice(0,10)||"—",
       last:(p.last||"").slice(0,10)||"—",
       lastFull:p.last||"",
@@ -3226,6 +3270,8 @@ async function issue(raw){
       }</code>. Rooms forget within minutes; notes do not.`
     : "";
 
+  showFreshness(p.did, stats);
+
   /* The "see how it looks with activity" button is gone. It drew a card of
      invented figures, and the honest watermark it needed to carry was itself
      the reason nobody wanted it: a person who has just been told their
@@ -3241,6 +3287,54 @@ async function issue(raw){
   renderDiagnostic(p, stats, note);
   const w=$("cardwrap"); w.classList.remove("reveal"); void w.offsetWidth; w.classList.add("reveal");
   for(const id of ["save","copy","post"]) $(id).disabled=false;
+}
+
+/* ── SAYING HOW OLD THIS IS, AND OFFERING TO GO AND LOOK ───────────────────
+   The card quotes the last signed message, so people post one and come
+   straight back — and land on a cached answer. The instinct is to tell them
+   to hard-refresh. That is us making our caching somebody else's problem.
+
+   Instead the page says plainly what it is showing and how old it is, and
+   the button reads the rooms this identity actually posts in, right now,
+   uncached. One to three upstream reads instead of the ~45 a full rescan
+   costs, which matters: giving every impatient visitor a 45-read button is
+   precisely how the note lookups started losing their race against our own
+   traffic tonight.
+   ──────────────────────────────────────────────────────────────────────── */
+function showFreshness(did, stats){
+  const box=$("fresh"), say=$("freshsay"), btn=$("lookagain");
+  if(!stats){ box.hidden=true; return; }
+  box.hidden=false;
+
+  const seen=ago(indexUpdated);
+  say.innerHTML = `<b>Two sources, two clocks.</b> The rooms were scanned <b>${seen||"a moment ago"}</b>, and that scan refreshes about once a minute — a message you have just sent usually appears within one or two. Rank, first seen and originality come from the archive instead, which trails by five to ten minutes. A missing newest line is not a fault; it is on its way.`;
+
+  btn.disabled=false; btn.textContent="Look again";
+  btn.onclick=async()=>{
+    box.classList.add("busy"); btn.textContent="Reading the rooms…";
+    const rooms = lastStats?.roomNames?.length ? lastStats.roomNames : null;
+    const hit = await freshLook(did, rooms);
+    box.classList.remove("busy"); btn.textContent="Look again";
+
+    const known = String(lastStats?.lastFull || "");
+    if(hit && String(hit.ts||"") > known){
+      // Newer than anything either source had. Update what the card SHOWS
+      // without inventing figures: the quote and the clock are things we
+      // just read; the count is not, and the archive still owns it.
+      lastStats = {...lastStats,
+        text: hit.text || lastStats.text,
+        lastFull: hit.ts,
+        last: String(hit.ts||"").slice(0,10) || lastStats.last,
+        count: Math.max(lastStats.count||0, 1),
+      };
+      await drawCard(did, current.pub, lastStats, lastNote);
+      say.innerHTML = `<b>Found a newer one</b> in <code>${hit.room.replace(/[^a-z0-9_-]/gi,"")}</code>, and the card now quotes it. The counts and rank still come from the archive and will catch up in a few minutes.`;
+    }else{
+      say.innerHTML = `<b>Nothing newer in the rooms just now.</b> A read returns only a room's most recent messages, so a busy room forgets quickly — but the archive keeps what it saw. If you have just posted, give it a minute and look again.`;
+    }
+    // Cheap, but not free. One look every ten seconds is plenty.
+    btn.disabled=true; setTimeout(()=>{ btn.disabled=false; }, 10000);
+  };
 }
 
 /* ── proving the card is yours ─────────────────────────────────────────────
@@ -3468,10 +3562,16 @@ $("post").addEventListener("click",async()=>{
   // behind unless the person remembers to attach it. Putting it on the
   // clipboard first turns that into one paste. Best effort: some browsers
   // refuse clipboard writes, and the post is still worth sending without it.
+  /* Bounded, because this step is a convenience and the POST is the point.
+     A clipboard write that neither resolves nor rejects — a browser sitting
+     on a permission decision, which is normal — left this handler awaiting
+     forever, so the button did nothing at all and the intent never opened.
+     Two seconds, then go regardless. */
   let copied=false;
   try{
-    const blob=await new Promise(r=>$("card").toBlob(r,"image/png"));
-    await navigator.clipboard.write([new ClipboardItem({"image/png":blob})]);
+    const race=(p,ms)=>Promise.race([p,new Promise((_,rej)=>setTimeout(()=>rej(new Error("slow")),ms))]);
+    const blob=await race(new Promise(r=>$("card").toBlob(r,"image/png")),2000);
+    await race(navigator.clipboard.write([new ClipboardItem({"image/png":blob})]),2000);
     copied=true;
   }catch{}
   flash($("post"),copied?"Card copied — paste it in":"Attach your card");
