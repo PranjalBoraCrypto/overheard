@@ -326,31 +326,83 @@ h1 em{
 .fix .go:hover{transform:translateY(-2px);box-shadow:0 14px 30px -16px rgba(242,179,61,.8)}
 .fix .go span{color:var(--warn)}
 .status{text-align:center;color:var(--faint);font-size:14px;margin-top:20px;max-width:58ch;margin-inline:auto;line-height:1.7}
-.prove{
-  max-width:660px;margin:26px auto 0;border-radius:18px;padding:24px 26px;text-align:left;
-  background:linear-gradient(rgba(4,20,28,.82),rgba(4,20,28,.82)) padding-box,var(--bevel) border-box;
-  border:1px solid transparent;backdrop-filter:blur(8px);
+/* ── prove it is yours ─────────────────────────────────────────────────────
+   One line above the buttons, and a dialog behind it. The passphrase field
+   used to sit open on the page for everyone, wanted or not — which is both
+   noise for the many and a bad habit to teach the few, since a permanently
+   open credential box is exactly what a clone of this page would show. */
+.provebar{
+  display:flex;align-items:center;gap:16px;width:100%;max-width:660px;
+  margin:22px auto 4px;padding:15px 18px;border-radius:16px;text-align:left;cursor:pointer;
+  background:linear-gradient(rgba(4,20,28,.8),rgba(4,20,28,.8)) padding-box,var(--bevel) border-box;
+  border:1px solid transparent;color:var(--txt);
+  transition:transform .22s var(--ease),box-shadow .22s var(--ease),background .22s var(--ease);
 }
+.provebar:hover{transform:translateY(-2px);box-shadow:0 16px 34px -20px rgba(0,180,215,.75)}
+.provebar:focus-visible{outline:2px solid var(--cy);outline-offset:3px}
+.pb-ic{flex:0 0 auto;width:38px;height:38px;border-radius:11px;display:grid;place-items:center;
+  background:radial-gradient(circle at 34% 28%,rgba(95,235,255,.28),rgba(0,120,150,.14));
+  box-shadow:inset 0 0 0 1px rgba(95,235,255,.34)}
+.pb-ic svg{width:20px;height:20px;color:var(--cy-hi)}
+.pb-txt{flex:1;min-width:0;display:block}
+.pb-txt b{display:block;font-size:15px;font-weight:700;letter-spacing:-.01em}
+.pb-txt span{display:block;color:var(--faint);font-size:12.5px;line-height:1.5;margin-top:2px}
+.pb-go{flex:0 0 auto;color:var(--cy)}
+.pb-go svg{width:20px;height:20px;display:block}
+.provebar.done .pb-ic{background:radial-gradient(circle at 34% 28%,rgba(95,235,255,.4),rgba(0,140,175,.2))}
+.provebar.done .pb-txt b::after{content:"  ·  proven";color:var(--cy-hi);font-weight:600}
+
+.pmodal{
+  width:min(560px,calc(100vw - 32px));padding:26px;border:0;border-radius:20px;color:var(--txt);
+  background:linear-gradient(rgba(6,24,32,.98),rgba(3,12,17,.99)) padding-box,var(--bevel) border-box;
+  border:1px solid transparent;box-shadow:0 40px 90px -30px rgba(0,0,0,.9);
+}
+.pmodal::backdrop{background:rgba(0,6,9,.72);backdrop-filter:blur(6px)}
+.pclose{position:absolute;top:14px;right:14px;width:32px;height:32px;border-radius:9px;
+  display:grid;place-items:center;background:transparent;border:0;color:var(--faint);cursor:pointer}
+.pclose:hover{color:var(--txt);background:rgba(255,255,255,.06)}
+.pclose svg{width:17px;height:17px}
 .phead{display:flex;align-items:center;gap:11px;margin-bottom:12px;flex-wrap:wrap}
-.phead h3{font-size:18px;font-weight:700;letter-spacing:-.02em}
+.phead h3{font-size:19px;font-weight:700;letter-spacing:-.02em}
 .ptag{
   font-family:var(--mono);font-size:10px;letter-spacing:.16em;text-transform:uppercase;
   color:var(--cy-hi);padding:5px 11px;border-radius:30px;border:1px solid rgba(0,180,215,.4);
   background:rgba(0,180,215,.1);
 }
-.prove p{color:var(--dim);font-size:14.5px;line-height:1.65;margin-bottom:12px}
-.prove .psafe{color:var(--faint);font-size:13.5px}
-.prove .psafe b{color:var(--dim)}
-.prow{display:flex;gap:10px;margin-top:16px;flex-wrap:wrap}
+.pmodal p{color:var(--dim);font-size:14px;line-height:1.65;margin-bottom:11px}
+.pmodal .psafe{color:var(--faint);font-size:13px}
+.pmodal .psafe b{color:var(--dim)}
+.phint{color:var(--faint);font-size:12.5px;line-height:1.55;margin:0 0 8px!important}
+.pcaution{color:var(--warn)!important;font-size:13px!important;line-height:1.6;
+  background:rgba(242,179,61,.07);border:1px solid rgba(242,179,61,.28);
+  border-radius:12px;padding:12px 14px;margin:0 0 14px!important}
+.pcaution b{color:#FFD98A}
+
+.ptabs{display:flex;gap:6px;margin:18px 0 14px;padding:4px;border-radius:12px;background:rgba(0,7,10,.55)}
+.ptab{flex:1;padding:9px 12px;border-radius:9px;border:0;cursor:pointer;font:inherit;font-size:13.5px;
+  font-weight:600;color:var(--faint);background:transparent;transition:.2s var(--ease)}
+.ptab:hover{color:var(--dim)}
+.ptab.on{color:var(--txt);background:rgba(0,180,215,.16);box-shadow:inset 0 0 0 1px rgba(0,180,215,.3)}
+.ptab:disabled{opacity:.4;cursor:not-allowed}
+
+.prow{display:flex;gap:10px;margin-top:4px;flex-wrap:wrap}
 .prow input{
-  flex:1;min-width:220px;padding:13px 15px;border-radius:12px;font:inherit;font-size:14.5px;color:var(--txt);
+  flex:1;min-width:180px;padding:13px 15px;border-radius:12px;font:inherit;font-size:14.5px;color:var(--txt);
   background:rgba(0,7,10,.6);border:1px solid var(--edge);transition:.25s var(--ease);
 }
 .prow input:focus{outline:none;border-color:var(--cy);box-shadow:0 0 0 4px rgba(0,180,215,.14)}
 .prow input:disabled{opacity:.45}
+.pmodal textarea{
+  width:100%;padding:12px 14px;border-radius:12px;resize:vertical;margin-bottom:12px;
+  font-family:var(--mono);font-size:13px;line-height:1.6;color:var(--txt);
+  background:rgba(0,7,10,.6);border:1px solid var(--edge);
+}
+.pmodal textarea:focus{outline:none;border-color:var(--cy);box-shadow:0 0 0 4px rgba(0,180,215,.14)}
+.act.wide{width:100%;justify-content:center;margin-top:12px}
 .pmsg{min-height:1.4em;font-size:13.5px;margin:12px 0 0!important}
-.pmsg.ok{color:var(--cy-hi)} .pmsg.err{color:var(--bad)}
-.prove.done{border-color:transparent;background:linear-gradient(rgba(0,60,78,.5),rgba(4,20,28,.85)) padding-box,var(--bevel) border-box}
+.pmsg.ok{color:var(--cy-hi)} .pmsg.err{color:var(--bad)} .pmsg.warn{color:var(--warn)}
+@media (max-width:520px){ .pmodal{padding:22px 18px} .prow input{min-width:100%} }
+
 /* ── the two-step job ──────────────────────────────────────────────────── */
 .diagsub{color:var(--dim);font-size:15px;line-height:1.65;margin:10px 0 22px;max-width:56ch}
 .jobs{list-style:none;display:flex;flex-direction:column;gap:12px;margin:0 0 20px}
@@ -857,6 +909,29 @@ footer a:hover{color:var(--cy-hi)}
       <canvas id="card" width="1200" height="630"></canvas>
       <div class="sheen"></div><div class="glare"></div>
     </div>
+    <!-- OPTIONAL, and it has to read as optional. The card is a public
+         lookup: anyone can paste anyone's DID, which is what public means.
+         This is the one thing that turns it from a nameplate into a claim.
+
+         It used to be a whole section unfolded below the card, with a
+         passphrase box sitting open on the page whether or not anybody
+         wanted it. A permanently-open credential field is a bad habit to
+         teach — it is exactly what a typosquatted clone of this page would
+         show — so it is now one line that opens a dialog, and the field only
+         exists while somebody is deliberately using it. -->
+    <button class="provebar" id="provebar" type="button" hidden>
+      <span class="pb-ic" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 4 5.5v6c0 5 3.4 9.3 8 10.5 4.6-1.2 8-5.5 8-10.5v-6z"/><polyline points="8.6 11.8 11.2 14.4 15.6 9.6"/></svg>
+      </span>
+      <span class="pb-txt">
+        <b>Prove this card is yours</b>
+        <span>Optional. Sign one line with your key — nothing leaves this device.</span>
+      </span>
+      <span class="pb-go" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h13"/><polyline points="12 6 18 12 12 18"/></svg>
+      </span>
+    </button>
+
     <div class="actions">
       <button class="act primary" id="save" disabled>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>Download</button>
@@ -868,22 +943,42 @@ footer a:hover{color:var(--cy-hi)}
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7"/><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"/></svg>Copy proof link</button>
     </div>
 
-    <!-- OPTIONAL, and it has to read as optional. The card is a public lookup:
-         anyone can paste anyone's DID, which is what public means. This is the
-         one thing that turns it from a nameplate into a claim, and it is worth
-         nothing if people feel pushed into it — so it sits below the card,
-         after the thing they came for, and says plainly what it does and what
-         never moves. -->
-    <section class="prove" id="prove" hidden>
-      <div class="phead"><span class="ptag">Optional</span><h3>Prove this card is yours</h3></div>
-      <p class="pbody">Anyone can look up any public DID, including someone else&rsquo;s — so a card on its own says who the identity is, never who is holding it. Sign one line with this identity and the card says so instead, with a link anyone can check for themselves.</p>
-      <p class="psafe"><b>Nothing leaves this device.</b> The signing happens in this tab and only the signature is ever shown. The box below unlocks the identity this browser already holds — no seed is needed or asked for here.</p>
-      <div class="prow" id="proveRow">
-        <input id="ppw" type="password" autocomplete="current-password" placeholder="passphrase for the identity in this browser">
-        <button class="act primary" id="proveGo">Prove it&rsquo;s mine</button>
+    <dialog class="pmodal" id="pmodal" aria-labelledby="pmtitle">
+      <button class="pclose" id="pclose" type="button" aria-label="Close">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      </button>
+
+      <div class="phead"><span class="ptag">Optional</span><h3 id="pmtitle">Prove this card is yours</h3></div>
+      <p class="pbody">Anyone can look up any public DID, including someone else&rsquo;s — so a card on its own says who the identity <em>is</em>, never who is holding it. Sign one line with this identity and the card says so instead, with a link anyone can check for themselves.</p>
+      <p class="psafe"><b>Nothing leaves this device.</b> The signing happens in this tab, and only the signature is ever shown.</p>
+
+      <div class="ptabs" role="tablist">
+        <button class="ptab on" id="tabPass" type="button" role="tab" aria-selected="true">Passphrase</button>
+        <button class="ptab" id="tabSeed" type="button" role="tab" aria-selected="false">Seed</button>
       </div>
-      <p class="pmsg" id="pmsg"></p>
-    </section>
+
+      <div class="ppane" id="panePass">
+        <p class="phint" id="passHint">Unlocks the identity this browser already holds. No seed is needed or asked for here.</p>
+        <div class="prow">
+          <input id="ppw" type="password" autocomplete="current-password" placeholder="passphrase for the identity in this browser">
+          <button class="act primary" id="proveGo" type="button">Prove it&rsquo;s mine</button>
+        </div>
+        <p class="pmsg" id="pmsg"></p>
+      </div>
+
+      <div class="ppane" id="paneSeed" hidden>
+        <p class="pcaution"><b>A seed is the key itself.</b> This is the only place on this site that ever asks for one, and it asks once: it derives the key, checks it really belongs to this card, encrypts it with a passphrase you choose, hands you the encrypted file, and never wants the seed again.</p>
+        <textarea id="pseed" rows="2" spellcheck="false" autocomplete="off" placeholder="64 hex characters, or 43 of base64url"></textarea>
+        <p class="phint">Choose a passphrase to encrypt it with. You will need this to use the identity again — it is not recoverable.</p>
+        <div class="prow">
+          <input id="pnp1" type="password" autocomplete="new-password" placeholder="new passphrase">
+          <input id="pnp2" type="password" autocomplete="new-password" placeholder="again">
+        </div>
+        <button class="act primary wide" id="seedGo" type="button">Import, prove, and download my backup</button>
+        <p class="pmsg" id="smsg"></p>
+      </div>
+    </dialog>
+
     <!-- Shown instead of a card when there is nothing yet to put on one. It
          used to be a table of failed checks and a paragraph of instructions,
          which reads as a diagnosis handed to someone who did not ask for one.
@@ -2320,7 +2415,7 @@ function renderDiagnostic(parsed, stats, note){
   // only make sense once there is a card worth sending anywhere. And with no
   // card there is nothing to prove ownership OF.
   actions.hidden=true;
-  $("prove").hidden=true;
+  $("provebar").hidden=true;   // nothing to prove ownership OF
 
   const reg = note?.registered === true;
   const noteUnknown = note?.registered === null || note?.known === false || !note;
@@ -3390,52 +3485,136 @@ const pmsg = (t, cls="") => { $("pmsg").textContent = t; $("pmsg").className = "
 
 /** Which of the four states this identity is in, said in full rather than by
  *  greying a button out and leaving the person to guess why. */
-function setupProve(did){
-  const box = $("prove"), row = $("proveRow"), pw = $("ppw"), go = $("proveGo");
-  box.hidden = false; box.classList.remove("done");
-  row.hidden = false; pw.value = ""; pmsg("");
-  $("proofBtn").hidden = true;
+/* ── prove it is yours ─────────────────────────────────────────────────────
+   Two routes into the same act, and they are genuinely different situations
+   rather than two spellings of one:
 
-  const ok = savedIdentity?.did === did;
-  pw.disabled = go.disabled = !ok;
-  if(ok) return;
-  pmsg(savedIdentity?.did
-    ? `The identity saved in this browser is ${savedIdentity.did.slice(8,16)}…${savedIdentity.did.slice(-4)}, which is not the one on this card. Prove it from the browser that holds this key.`
-    : "No identity is saved in this browser, so there is nothing here to sign with. If you made one in another browser, prove it from there.");
+     PASSPHRASE  this browser already holds the identity. Nothing new is
+                 learned; the vault is opened and one line is signed.
+     SEED        the key lives somewhere else — another browser, another
+                 machine, Floppy. The seed IS the key, so this is the only
+                 place on the site that ever asks for one and it asks ONCE:
+                 derive, check it really belongs to this card, encrypt it
+                 under a passphrase of their choosing, HAND BACK THE
+                 ENCRYPTED FILE, and never want the seed again.
+
+   The file matters more than it looks. Someone arriving by the seed route is
+   usually holding their key in a text file or a password manager; they leave
+   holding an encrypted backup and a browser that can sign, which is the
+   whole upgrade.
+   ──────────────────────────────────────────────────────────────────────── */
+function setupProve(did){
+  const bar=$("provebar");
+  bar.hidden=false;
+  bar.classList.toggle("done", !!lastStats?.proof);
+  $("proofBtn").hidden = !lastStats?.proof;
+}
+
+const smsg=(t,cls="")=>{ const el=$("smsg"); el.textContent=t; el.className="pmsg "+cls; };
+
+function proveTab(which){
+  const pass=which==="pass";
+  $("tabPass").classList.toggle("on",pass);  $("tabPass").setAttribute("aria-selected",String(pass));
+  $("tabSeed").classList.toggle("on",!pass); $("tabSeed").setAttribute("aria-selected",String(!pass));
+  $("panePass").hidden=!pass; $("paneSeed").hidden=pass;
+  setTimeout(()=>{ (pass?$("ppw"):$("pseed")).focus(); },60);
+}
+$("tabPass").addEventListener("click",()=>proveTab("pass"));
+$("tabSeed").addEventListener("click",()=>proveTab("seed"));
+$("pclose").addEventListener("click",()=>$("pmodal").close());
+
+$("provebar").addEventListener("click",()=>{
+  const did=current?.did; if(!did) return;
+  const mine = savedIdentity?.did === did;
+
+  $("ppw").value=""; $("pseed").value=""; $("pnp1").value=""; $("pnp2").value="";
+  pmsg(""); smsg("");
+
+  // The tab that CAN work is the one that opens. Presenting a passphrase box
+  // to somebody whose key is not in this browser is an invitation to type a
+  // passphrase that cannot possibly be right.
+  $("tabPass").disabled=!mine;
+  $("passHint").textContent = mine
+    ? "Unlocks the identity this browser already holds. No seed is needed or asked for here."
+    : savedIdentity?.did
+    ? `The identity saved in this browser is ${savedIdentity.did.slice(8,16)}…${savedIdentity.did.slice(-4)}, which is not the one on this card.`
+    : "No identity is saved in this browser, so there is nothing here to unlock.";
+  proveTab(mine ? "pass" : "seed");
+  $("pmodal").showModal();
+});
+
+/** Sign the card line and check our own work before claiming anything. A
+ *  vault holding the wrong key would otherwise produce a proof that fails
+ *  later, on someone else's screen. */
+async function proveWith(jwk){
+  const nonce=nextNonce();
+  const key=await crypto.subtle.importKey("jwk",jwk,{name:"Ed25519"},false,["sign"]);
+  const sig=new Uint8Array(await crypto.subtle.sign({name:"Ed25519"},key,
+    encU.encode(`${CARD_ROOM}|${nonce}|${CARD_LINE}`)));
+  const pub=await crypto.subtle.importKey("raw",parseDid(current.did).pub,{name:"Ed25519"},false,["verify"]);
+  if(!(await crypto.subtle.verify({name:"Ed25519"},pub,sig,encU.encode(`${CARD_ROOM}|${nonce}|${CARD_LINE}`)))) return false;
+
+  const bundle={ v:1, kind:"card", did:current.did, room:CARD_ROOM, nonce, sig:b64u(sig), text:CARD_LINE };
+  lastStats=lastStats||{};
+  lastStats.proof={ ...bundle, link:`${location.origin}/v#b=${b64u(encU.encode(JSON.stringify(bundle)))}`,
+                    when:new Date().toISOString().slice(0,10) };
+  $("provebar").classList.add("done");
+  $("proofBtn").hidden=false;
+  await drawCard(current.did,current.pub,lastStats,lastNote);
+  return true;
 }
 
 $("proveGo").addEventListener("click", async () => {
-  const pass = $("ppw").value;
-  if(!pass) return pmsg("Enter the passphrase for the identity in this browser.", "err");
+  const pass=$("ppw").value;
+  if(!pass) return pmsg("Enter the passphrase for the identity in this browser.","err");
   pmsg("Unlocking on this device…");
   try{
-    const jwk = await openVault(savedIdentity, pass);
-    const nonce = nextNonce();
-    const key = await crypto.subtle.importKey("jwk", jwk, { name:"Ed25519" }, false, ["sign"]);
-    const sig = new Uint8Array(await crypto.subtle.sign({ name:"Ed25519" }, key,
-      encU.encode(`${CARD_ROOM}|${nonce}|${CARD_LINE}`)));
-
-    // Check our own work against the PUBLIC key from the DID before claiming
-    // anything. A vault holding the wrong key would otherwise produce a proof
-    // that only fails later, on someone else's screen.
-    const pub = await crypto.subtle.importKey("raw", parseDid(current.did).pub, { name:"Ed25519" }, false, ["verify"]);
-    const good = await crypto.subtle.verify({ name:"Ed25519" }, pub, sig,
-      encU.encode(`${CARD_ROOM}|${nonce}|${CARD_LINE}`));
-    if(!good) return pmsg("That identity did not produce a valid signature for this DID.", "err");
-
-    const bundle = { v:1, kind:"card", did:current.did, room:CARD_ROOM, nonce, sig:b64u(sig), text:CARD_LINE };
-    lastStats = lastStats || {};
-    lastStats.proof = { ...bundle, link:`${location.origin}/v#b=${b64u(encU.encode(JSON.stringify(bundle)))}`,
-                        when:new Date().toISOString().slice(0,10) };
-
-    $("ppw").value = "";
-    $("proveRow").hidden = true;
-    $("prove").classList.add("done");
-    $("proofBtn").hidden = false;
-    pmsg("Proven. The card now says so, and the proof link checks out in any browser without contacting us.", "ok");
-    await drawCard(current.did, current.pub, lastStats, lastNote);
+    const jwk=await openVault(savedIdentity,pass);
+    if(!(await proveWith(jwk))) return pmsg("That identity did not produce a valid signature for this DID.","err");
+    $("ppw").value="";
+    pmsg("Proven. The card says so now.","ok");
+    setTimeout(()=>$("pmodal").close(),900);
   }catch{
-    pmsg("Wrong passphrase, or the identity stored in this browser is damaged.", "err");
+    pmsg("Wrong passphrase, or the identity stored in this browser is damaged.","err");
+  }
+});
+
+$("seedGo").addEventListener("click", async () => {
+  const seed=parseSeed($("pseed").value);
+  const p1=$("pnp1").value, p2=$("pnp2").value;
+  if(!seed) return smsg("That is not a 32-byte seed. Expect 64 hex characters, or 43 of base64url.","err");
+  if(p1.length<8) return smsg("Choose a passphrase of at least 8 characters — it is the only thing protecting the file.","err");
+  if(p1!==p2) return smsg("The two passphrases do not match.","err");
+
+  const btn=$("seedGo"); btn.disabled=true;
+  smsg("Deriving the key from your seed…");
+  try{
+    // Derive AND prove against the DID on the card before anything is stored.
+    const jwk=await keyFromSeed(seed,parseDid(current.did).pub).catch(()=>null);
+    if(!jwk){ btn.disabled=false; return smsg("That seed does not belong to this identity.","err"); }
+
+    smsg("Encrypting it with your passphrase…");
+    const vault=await makeVault(current.did,jwk,p1);
+
+    // Hand back a copy before anything else can go wrong. This browser can be
+    // cleared; the file is the only other place this key now exists.
+    try{
+      const a=document.createElement("a");
+      a.href=URL.createObjectURL(new Blob([JSON.stringify(vault,null,2)],{type:"application/json"}));
+      a.download=`overheard-identity-${current.did.slice(-8)}.json`;
+      a.click(); URL.revokeObjectURL(a.href);
+    }catch{}
+
+    try{ localStorage.setItem("overheard.identity",JSON.stringify(vault)); }catch{}
+    savedIdentity=vault; openKey=jwk;
+
+    if(!(await proveWith(jwk))){ btn.disabled=false; return smsg("The key derived, but its signature did not verify.","err"); }
+    $("pseed").value=$("pnp1").value=$("pnp2").value="";
+    smsg("Proven, and your encrypted backup has been downloaded. Keep that file — the seed is not needed here again.","ok");
+    setTimeout(()=>{ $("pmodal").close(); btn.disabled=false; },1800);
+  }catch{
+    btn.disabled=false;
+    smsg("That did not complete. Nothing was saved.","err");
   }
 });
 
