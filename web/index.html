@@ -2650,7 +2650,7 @@ function armJobs(parsed, jwk, fp, reg){
       if(!r?.ok) return jobSay("post","Technocore refused that message. Try again in a moment.","err");
       finishJob("post","Posted");
       jobSay("post",`Posted to ${POST_ROOM}. Reading the room back to check it landed…`);
-      const hit=await confirmPost(POST_ROOM,sig,nonce);
+      const hit=await confirmPost(POST_ROOM,parsed.did,flat,sig,nonce);
       if(hit){
         saveWitness(parsed.did,{room:POST_ROOM,ts:hit.ts||new Date().toISOString(),
           text:flat,sig,seq:String(hit.seq??"")});
@@ -2767,18 +2767,30 @@ function saveWitness(did, w){
    be. That is why this runs IMMEDIATELY after posting rather than after a
    countdown: the moment right after the send is the only moment when finding
    it is guaranteed, and finding it once is enough forever. */
-async function confirmPost(room, sig, nonce){
+async function confirmPost(room, did, text, sig, nonce){
   const waits=[900,1500,2500,3500,3500,4000,4000,4000];
   for(const w of waits){
     await new Promise((r)=>setTimeout(r,w));
     try{
       const r=await fetch(`/api/room?room=${encodeURIComponent(room)}&since=0&limit=200`,{cache:"no-store"});
-      if(r.ok){
-        const j=await r.json();
-        const hit=(Array.isArray(j.messages)?j.messages:[])
-          .find((m)=>m && (m.sig===sig || String(m.nonce)===String(nonce)));
-        if(hit) return hit;
-      }
+      if(!r.ok) continue;
+      const j=await r.json();
+      const msgs=Array.isArray(j.messages)?j.messages:[];
+      /* MEASURED against the live server: a room read returns `sig: null` on
+         every message and rewrites `nonce` to its own millisecond clock. The
+         signature we sent is verified upstream and then simply not echoed
+         back, so matching on it found nothing, every time, and the page fell
+         through to the timer — which is exactly what was reported.
+
+         What the read DOES carry is `from` and `text`, and we know both
+         exactly: our own DID, and the text after Technocore's own flattening,
+         which is the string we signed. Matching on those two is a stronger
+         claim anyway — it is the message visible in the room to everyone,
+         not a token we handed over. */
+      const hit=msgs.find((m)=>m && m.from===did && String(m.text??"")===text)
+             || msgs.find((m)=>m && (sig && m.sig===sig) || (m && String(m.nonce??"")===String(nonce)))
+             || msgs.find((m)=>m && m.from===did);
+      if(hit) return hit;
     }catch{}
   }
   return null;
