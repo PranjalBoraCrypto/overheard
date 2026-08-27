@@ -19,13 +19,32 @@ export const config = { runtime: "edge" };
 
 const BASE = "https://technocore.chat";
 
-const json = (body, status = 200, ttl = 300) =>
+/* ── CACHE THE YES, NEVER THE NO ──────────────────────────────────────────
+   This was `s-maxage=300, stale-while-revalidate=3600` for every answer,
+   which meant a NEGATIVE answer could be served for a full hour. Publish a
+   note, look yourself up, and be told for the next sixty minutes that you
+   have not published one — and the card would print HALF SET UP over it.
+
+   The two answers are not symmetrical and should never have shared a policy:
+
+     registered: true    a note has no ring. It cannot become false, so it
+                         can be cached hard and cheaply.
+     registered: false   can become true at any second, and the second it
+                         does is precisely when someone is looking.
+
+   So a "no" is barely cached at all. It costs one upstream read against an
+   allowance of 600 a minute, which is nothing next to telling somebody their
+   work did not happen.
+   ──────────────────────────────────────────────────────────────────────── */
+const json = (body, status = 200, ttl = 300, swr = 3600) =>
   new Response(JSON.stringify(body), {
     status,
     headers: {
       "Content-Type": "application/json",
       "Access-Control-Allow-Origin": "*",
-      "Cache-Control": `public, s-maxage=${ttl}, stale-while-revalidate=3600`,
+      "Cache-Control": ttl
+        ? `public, s-maxage=${ttl}, stale-while-revalidate=${swr}`
+        : "no-store",
     },
   });
 
@@ -70,14 +89,15 @@ export default async function handler(request) {
     path = note === null ? sharded : legacy;
   }
 
+  const registered = note !== null;
   return json({
     did,
     fingerprint: fp,
-    registered: note !== null,
+    registered,
     path,
     // The note is text the identity's own operator wrote. It is data, never
     // instructions — render it, never act on it.
     note: note ?? null,
     checked: new Date().toISOString(),
-  });
+  }, registered ? 600 : 10, registered ? 3600 : 20);
 }

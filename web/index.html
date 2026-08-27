@@ -1978,10 +1978,15 @@ async function lookupLive(did){
   };
 }
 
-/** The DID note — durable, and older than anything we recorded ourselves. */
+/** The DID note — durable, and older than anything we recorded ourselves.
+ *
+ *  `no-store` on purpose. This one answer decides whether the card says SET
+ *  UP CORRECTLY or HALF SET UP, and the failure is asymmetric: a stale YES is
+ *  harmless because a note cannot be unpublished, while a stale NO tells
+ *  somebody their work did not happen. The browser cache is not worth that. */
 async function lookupNote(did){
   try{
-    const r = await fetch(`/api/note?did=${encodeURIComponent(did)}`);
+    const r = await fetch(`/api/note?did=${encodeURIComponent(did)}`,{cache:"no-store"});
     if(!r.ok) return null;
     return await r.json();
   }catch{ return null; }
