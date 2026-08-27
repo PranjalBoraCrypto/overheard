@@ -109,6 +109,34 @@ export default async function handler(request) {
     return json({ ok: out.status === 200, ...out });
   }
 
+  if (kind === "allow") {
+    /* The allow-list is the other half of owning a room, and without it a
+       shared room is read-only to everyone but its owner — which makes
+       "share your room" a fairly hollow offer.
+
+       Technocore shares one replay counter between the two operations at
+       /kv/room-nonce/d-<room>, and the allow nonce must EXCEED the nonce
+       used to claim. Nonces here are Date.now()*1e6, so any later one wins;
+       the rule still matters, because a page that reused a nonce would
+       silently fail and look like a network error.
+         signature covers: room-allow|d-<room>|<nonce>|<value>          */
+    const { room, sig, nonce, value } = payload;
+    if (!/^d-[a-z0-9][a-z0-9_-]{0,45}$/.test(room ?? "")) {
+      return json({ error: "an ownable room name must start with d-" }, 400);
+    }
+    if (!SIG_RE.test(sig ?? "")) return json({ error: "bad signature" }, 400);
+    if (!NONCE_RE.test(String(nonce ?? ""))) return json({ error: "bad nonce" }, 400);
+    if (typeof value !== "string" || value.length > MAX_NOTE) return json({ error: "bad allow list" }, 400);
+    // Every entry must be a canonical did:key. An allow-list is a permission
+    // grant; junk in it is a permission granted to nothing, stored forever.
+    const list = value.trim() ? value.trim().split(/\s+/) : [];
+    if (list.length > 64) return json({ error: "at most 64 identities" }, 400);
+    if (!list.every((d) => DID_RE.test(d))) return json({ error: "every entry must be a canonical did:key" }, 400);
+    const path = `/kv/room-allow/${room}/set-signed/${did}/${sig}/${nonce}/${encodeURIComponent(list.join(" "))}`;
+    const out = await forward(path);
+    return json({ ok: out.status === 200, ...out });
+  }
+
   if (kind === "note") {
     const { value, fingerprint } = payload;
     if (!/^[0-9a-f]{16}$/.test(fingerprint ?? "")) return json({ error: "bad fingerprint" }, 400);
@@ -120,5 +148,5 @@ export default async function handler(request) {
     return json({ ok: out.status === 200, ...out });
   }
 
-  return json({ error: 'kind must be "message", "note" or "claim"' }, 400);
+  return json({ error: 'kind must be "message", "note", "claim" or "allow"' }, 400);
 }
