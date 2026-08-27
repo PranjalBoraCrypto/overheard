@@ -11,6 +11,7 @@ const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'web'
 const DID = "did:key:z6MkngD8RZKCgJQCkJvHfGyYoCcNCG5rz9Tc7yRmWrMZExaz";
 let NEWER = null;             // a message newer than the archive's
 let ROOM_READS = [];
+let NOCOUNT = false;          // registered, but nothing signed on the record yet
 let INDEX_READS = 0;
 
 const srv = http.createServer((req, res) => {
@@ -25,11 +26,14 @@ const srv = http.createServer((req, res) => {
   if (p === '/api/note') return J({ did: DID, registered: true, known: true, fingerprint: 'ab'.repeat(8), path: '/kv/did-7f/8984c465299fd4', note: 'a note' });
   if (p === '/api/profile') return J({
     owned: { rooms: [], owners: 312, identities: 97264 },
-    profile: { count: 10, unique: 10, templates: 0, rooms: ['ca-floppyroom', 'lobby'], first: '2026-08-25T10:00:00Z', last: '2026-08-27T09:00:00Z', last_text: 'the archived one' },
+    profile: { count: NOCOUNT ? 0 : 10, unique: NOCOUNT ? 0 : 10, templates: 0, rooms: ['ca-floppyroom', 'lobby'], first: '2026-08-25T10:00:00Z', last: '2026-08-27T09:00:00Z', last_text: 'the archived one' },
     standing: null });
   if (p === '/api/room') {
     ROOM_READS.push(u.search);
     const room = u.searchParams.get('room');
+    // Nothing signed anywhere the page can see: the archive has not published
+    // it and the room's 200-message window has long since rolled past it.
+    if (NOCOUNT) return J({ room, first_seq: null, last_seq: '0', count: 0, messages: [] });
     const msgs = (NEWER && room === NEWER.room)
       ? [{ seq: '9', ts: NEWER.ts, from: DID, nick: null, text: NEWER.text, sig: null, nonce: '9' }]
       : [{ seq: '8', ts: '2026-08-27T09:00:00Z', from: DID, nick: null, text: 'the archived one', sig: null, nonce: '8' }];
@@ -138,6 +142,31 @@ console.log('\n=== E. an identity with no record gets no freshness row to misrea
 await pg.goto('http://localhost:8992/');
 await pg.evaluate(() => { window.__none = true; });
 console.log('  (row hidden until a lookup runs):', await pg.locator('#fresh').isHidden());
+
+console.log('\n=== G. the card is behind, and this browser knows why');
+/* REPORTED: somebody finished the create page — note published, message
+   signed — opened their card, and read "REGISTERED · nothing signed has been
+   seen yet" as a step having failed. It had not: the archive publishes on a
+   cycle and had not got there yet. Both pages leave the same record when this
+   browser posts, so the row can say which message, how long ago, and that
+   waiting is all that is left. */
+NOCOUNT = true;
+await pg.addInitScript((did) => {
+  localStorage.setItem('overheard.posted.' + did.slice(-12), JSON.stringify({
+    room: 'technocore', ts: new Date(Date.now() - 4 * 60000).toISOString(),
+    text: 'hello from the create page', sig: 'zSig', seq: '7',
+  }));
+}, DID);
+await look();
+const mine = (await pg.locator('#freshsay').textContent()) || '';
+console.log('  line:', JSON.stringify(mine));
+console.log('  names the message this browser signed:', /You signed a message/.test(mine));
+console.log('  and how long ago:', /4 minutes ago/.test(mine));
+console.log('  and which room:', /technocore/.test(mine));
+console.log('  says the card stands on what this browser saw:', /this browser watched arrive/.test(mine));
+console.log('  and warns that other people still see the older card:', /anyone else/.test(mine));
+console.log('  and it does not appear for a card that already has messages:',
+  await (async () => { NOCOUNT = false; await look(); return /^Just posted\?/.test((await pg.locator('#freshsay').textContent()) || ''); })());
 
 console.log('\n=== F. phone');
 const pg2 = await b.newPage(); await killWebGL(pg2); await pg2.setViewportSize({ width: 390, height: 844 });

@@ -136,6 +136,7 @@ svg.line *{stroke-dasharray:1;stroke-dashoffset:1;transition:stroke-dashoffset .
 .tier small{font-family:var(--mono);font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--faint)}
 .tier b{font-family:var(--mono);font-weight:600;font-size:15px;letter-spacing:.1em;color:var(--gold);transition:color .4s}
 .tier.good b{color:var(--blue);text-shadow:0 0 16px rgba(88,233,255,.6)}
+.tier .lag{font-style:normal;font-size:11.5px;color:var(--faint);line-height:1.35}
 
 /* ── a rung ────────────────────────────────────────────────────────────── */
 .rail{margin-top:20px;position:relative}
@@ -294,6 +295,13 @@ code{font-family:var(--mono);font-size:12.5px;background:var(--navy-0);border:1p
 .avail.wait{color:var(--faint)}
 .avail.free::before,.avail.bad::before,.avail.warn::before{content:"";display:inline-block;width:6px;height:6px;border-radius:50%;
   background:currentColor;margin-right:8px;vertical-align:middle;box-shadow:0 0 8px currentColor}
+/* "test says available — surely that is taken?" The name people picture is
+   `test`; the name being claimed is `d-test`, and they are two different
+   rooms. Whenever the un-prefixed twin exists and has people in it, that gets
+   said outright, under the green line rather than inside it. */
+.twin{font-size:12.5px;line-height:1.5;color:var(--faint);margin-top:6px;padding-left:14px;border-left:2px solid rgba(147,182,192,.24)}
+.twin code{font-family:var(--mono);font-size:12px;color:var(--dim)}
+.step.blocked .twin{display:none}
 
 /* A result you can take away. */
 .linkout{display:flex;gap:9px;align-items:center;flex-wrap:wrap;margin-top:12px;padding:11px 13px;border-radius:12px;
@@ -488,6 +496,13 @@ footer a:hover{color:var(--blue)}
     <div class="tier" id="tier">
       <small>Your card would say</small>
       <b id="tierWord">KEY ONLY</b>
+      <!-- The card does not read the network live; it reads an archive that
+           collects every few minutes and is published a few minutes after
+           that. So this verdict is what the card will say, not what it says
+           this second — and somebody who opens their card straight away sees
+           the older word and thinks a step failed. It is spelled out here,
+           beside the word, rather than left to be discovered. -->
+      <em class="lag" id="tierLag" hidden>after the archive&rsquo;s next pass</em>
     </div>
 
     <div class="rail" id="rail"></div>
@@ -507,7 +522,7 @@ footer a:hover{color:var(--blue)}
   <div class="finish" id="finish" hidden>
     <div class="seal"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 12.5 10 18 20 6.5"/></svg></div>
     <h3 id="finishTitle">You&rsquo;re on the network</h3>
-    <p id="finishBody">Your card fills in within a few minutes, once the archive catches your messages.</p>
+    <p id="finishBody">Your card fills in once the archive catches your messages, usually five to ten minutes from now.</p>
     <div class="row"><a class="go" id="seeCard" href="/">See your card &rarr;</a></div>
   </div>
 
@@ -710,6 +725,7 @@ const SIDE=[
       <label for="roomName">Room name <span class="lhint">lowercase letters, numbers and hyphens &middot; 3 or more</span></label>
       <div class="prefixed" id="roomWrap"><span class="pfx">d-</span><input id="roomName" placeholder="yourname" autocomplete="off" spellcheck="false" maxlength="45"></div>
       <div class="avail" id="roomAvail"></div>
+      <div class="twin" id="roomTwin" hidden></div>
       <div class="picks" id="roomPicks" data-for="roomName"></div>
       <div class="capbox" id="roomCap" hidden>
         <b>Technocore has run out of space for new rooms.</b>
@@ -857,6 +873,7 @@ function score(){
   spotlight();
   $("tierWord").textContent=word;
   $("tier").classList.toggle("good", word==="VERIFIED");
+  $("tierLag").hidden = word==="KEY ONLY";
 
   /* EVERY rung, not just the main four. "Set up correctly" arriving at four
      of eight is the page congratulating somebody halfway up the ladder and
@@ -868,7 +885,13 @@ function score(){
     $("finish").hidden=false;
     if(word==="VERIFIED"){
       $("finishTitle").textContent="Set up correctly";
-      $("finishBody").textContent="A permanent note, and a signed message. Your card fills in within a few minutes, once the archive catches up.";
+      /* Measured, not guessed: the archiver keeps pace with even the busiest
+         rooms, and the delay is the publishing behind it — it commits its
+         collection about every five minutes and the card reads that a minute
+         or two later. Until then a card opened right now still says
+         REGISTERED, and somebody who is not told that reads it as a step
+         having failed. */
+      $("finishBody").textContent="A permanent note, and a signed message — both done. Your card still says REGISTERED for now: it reads the archive, which picks your message up on its next pass, usually five to ten minutes. It turns to VERIFIED on its own, and “Look again” on the card checks.";
     }
     $("finish").classList.add("arrive");
     $("finish").scrollIntoView({behavior:calmMotion?"auto":"smooth",block:"center"});
@@ -1107,7 +1130,29 @@ document.addEventListener("click", async (e)=>{
 const roomFull=()=>"d-"+$("roomName").value.trim().toLowerCase().replace(/^d-/,"");
 let availTimer=0, availSeq=0, taken=null;
 
-function showAvail(cls,text){ const el=$("roomAvail"); el.className="avail "+cls; el.textContent=text; }
+function showAvail(cls,text){ const el=$("roomAvail"); el.className="avail "+cls; el.textContent=text;
+  if(cls!=="free") $("roomTwin").hidden=true; }
+
+/* The un-prefixed room of the same name. `d-test` is empty and ownerless, and
+   that is the truth — but the name a person pictures when they type "test" is
+   the busy room called `test`, which has a hundred messages in it and is not
+   what they would be claiming. Saying only "available" leaves them arguing
+   with the page. So when the twin exists, it is named, counted, and put
+   plainly beside the answer. Only asked once a name is otherwise free. */
+const esc=(s)=>String(s).replace(/[&<>"']/g,(c)=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+async function showTwin(bareName,seq){
+  const el=$("roomTwin"); el.hidden=true;
+  try{
+    const d=await fetch(`/api/room?room=${encodeURIComponent(bareName)}`).then(r=>r.json());
+    if(seq!==availSeq) return;
+    const n=Number(d?.count ?? 0);
+    if(!n) return;
+    el.innerHTML=`There is a separate room called <code>${esc(bareName)}</code> with `
+      + `${n.toLocaleString()} message${n===1?"":"s"} in it — a different room, without the `
+      + `<code>d-</code>. Claiming <code>d-${esc(bareName)}</code> does not touch it, and does not bring those messages with it.`;
+    el.hidden=false;
+  }catch{ /* the twin is a courtesy; its absence changes no answer */ }
+}
 
 /* Three characters, and it is our rule rather than Technocore's. The network
    has a hard cap on how many keys can exist at once, and every claim spends
@@ -1144,7 +1189,7 @@ async function checkRoom(){
     taken=null;
     const n=Number(msgs?.count ?? 0);
     if(n>0) showAvail("warn",`${room} is unclaimed — but it already exists, with ${n.toLocaleString()} message${n===1?"":"s"} in it from other people.`);
-    else showAvail("free",`${room} is available`);
+    else { showAvail("free",`${room} is available — no owner, and no messages in it`); showTwin(body,seq); }
   }catch{
     if(seq===availSeq){ taken=null; showAvail("","Could not check that name just now."); }
   }
@@ -1234,6 +1279,53 @@ async function postSigned(id, room, rawText, quiet){
   if(!d.ok && isFull(d)) return say(id,"Technocore is at capacity for new rooms just now. It releases them after 7 days without a write — try again shortly.","err");
   if(!d.ok) return say(id,`Technocore said: ${d.error||d.body||"failed"}`,"err");
   if(!quiet){ say(id,"Posted.","ok"); done(id); openStep(id,false); advance(); }
+  witnessPost(room,text,sig);
+}
+
+/* ── leaving a note for the card page ──────────────────────────────────────
+   REPORTED: "I did everything except the room, so why does my card say
+   REGISTERED?" It says so because it is honest — the card reads the archive,
+   and the archive had not published the message yet. But the person had no
+   way to know that, and a card that looks like a failed step reads as one.
+
+   The card page already knows how to say the right thing. It keeps a record
+   under this key when somebody posts FROM it, and shows "posted, the archive
+   has not caught up" instead of a bare verdict. This page posts too and left
+   nothing behind, so a card opened straight afterwards had nothing to go on.
+   Same key, same shape — both pages are the same origin, so the record simply
+   carries across.
+
+   `pending` is the honest distinction and it is kept: a message the room
+   handed back on a read is a message the network HAS; one the send merely
+   accepted is not the same claim. The read window is seconds wide in the busy
+   rooms, so this looks immediately, which is the only moment it is certain to
+   be there. */
+async function witnessPost(room, text, sig){
+  if(!ID) return;
+  /* Two rooms are excluded, for the same reason. A private `p-` room is
+     listed nowhere, so the archive never reads it and a card that named one
+     would be pointing at a wait that is never going to end — and it would put
+     a private address into a line about a public card. And a record already
+     confirmed is never replaced by a later unconfirmed one: the strongest
+     thing this browser has seen stands. */
+  if(/^p-/.test(room)) return;
+  const key=`overheard.posted.${ID.did.slice(-12)}`;
+  const read=()=>{ try{ const r=localStorage.getItem(key); return r&&r[0]==="{"?JSON.parse(r):null; }catch{ return null; } };
+  const write=(rec)=>{ try{ localStorage.setItem(key,JSON.stringify(rec)); }catch{} };
+  const held=read();
+  if(held && held.sig && held.ts && !held.pending) return;
+  write({room,ts:new Date().toISOString(),text,sig,pending:true});
+  for(const w of [900,1600,2600,3600]){
+    await new Promise(r=>setTimeout(r,w));
+    try{
+      const j=await fetch(`/api/room?room=${encodeURIComponent(room)}&since=0&limit=200`,{cache:"no-store"}).then(r=>r.json());
+      /* Rooms return `sig: null` on every message and rewrite the nonce, so
+         neither is matchable. `from` and `text` are, and both are exactly
+         known here — that is the message the room is showing everyone. */
+      const hit=(j.messages||[]).find(m=>m && m.from===ID.did && String(m.text??"")===text);
+      if(hit){ write({room,ts:hit.ts||new Date().toISOString(),text,sig,seq:String(hit.seq??"")}); return; }
+    }catch{ /* keep trying; the pending record already stands */ }
+  }
 }
 
 /* ── the proof link ────────────────────────────────────────────────────────

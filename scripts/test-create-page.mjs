@@ -34,7 +34,7 @@ const srv = http.createServer((req, res) => {
   if (p === '/api/room') {
     const room = u.searchParams.get('room') || '';
     res.writeHead(200, { 'content-type': 'application/json' });
-    return res.end(JSON.stringify({ room, count: room === 'd-busy' ? 200 : 0, messages: [] }));
+    return res.end(JSON.stringify({ room, count: room === 'd-busy' ? 200 : room === 'twinny' ? 104 : 0, messages: [] }));
   }
   if (p === '/api/owner') {
     const room = u.searchParams.get('room') || '';
@@ -350,6 +350,23 @@ check('an unclaimed room with other people in it is not just "available"',
   /unclaimed/.test(busy) && /200 messages/.test(busy));
 check('and it is amber, not green', (await pg.locator('#roomAvail').getAttribute('class')).includes('warn'));
 
+console.log('\n=== F4a3. the room people picture, and the room they would get');
+/* "test says available — surely that is taken?" It is: the room called `test`
+   is busy. `d-test` is a different room and it is empty, and saying only
+   "available" leaves somebody arguing with the page. */
+await pg.fill('#roomName', 'twinny');
+await pg.waitForFunction(() => !document.getElementById('roomTwin').hidden, null, { timeout: 8000 });
+const twin = (await pg.locator('#roomTwin').textContent()).replace(/\s+/g, ' ');
+console.log('   ', twin);
+check('the green line says WHY it is free', /no owner, and no messages/.test(await pg.locator('#roomAvail').textContent()),
+  await pg.locator('#roomAvail').textContent());
+check('and the un-prefixed room of the same name is named and counted',
+  /separate room called/.test(twin) && /104 messages/.test(twin));
+check('with the claim scoped to the prefixed one', /does not touch it/.test(twin));
+await pg.fill('#roomName', 'my-lab');
+await pg.waitForFunction(() => document.getElementById('roomTwin').hidden, null, { timeout: 8000 });
+check('and no note at all when there is no twin', await pg.locator('#roomTwin').isHidden());
+
 console.log('\n=== F4b. a name too short to be worth a permanent slot');
 POSTS = [];
 await pg.fill('#roomName', '11');
@@ -428,6 +445,23 @@ check('every rung is settled', await pg.evaluate(() =>
     s.classList.contains('done') || s.classList.contains('skipped'))));
 check('NOW the finish appears', await pg.locator('#finish').isVisible());
 check('it says the setup is correct', /Set up correctly/.test((await pg.locator('#finishTitle').textContent()) || ''));
+/* The reported confusion: this page says VERIFIED, the card says REGISTERED,
+   and nothing tells you the second one is simply a few minutes behind. */
+const fin = await pg.locator('#finishBody').textContent();
+check('and it says the card lags rather than letting it look like a failure',
+  /REGISTERED/.test(fin) && /archive/.test(fin), fin.slice(0, 80) + '…');
+check('the verdict is marked as a forecast, not the card as it stands',
+  await pg.locator('#tierLag').isVisible());
+
+/* Both pages leave the same record, so the card can say which message and
+   how long ago rather than a generic "just posted?". */
+const wit = await pg.evaluate(() => {
+  const k = Object.keys(localStorage).find(x => x.startsWith('overheard.posted.'));
+  return k ? JSON.parse(localStorage.getItem(k)) : null;
+});
+check('and this browser left the card page a record of the signed message',
+  !!wit && wit.room === 'lobby' && !!wit.sig && !!wit.ts, JSON.stringify(wit && wit.room));
+
 check('it arrives rather than appearing', (await pg.locator('#finish').getAttribute('class')).includes('arrive'));
 await pg.waitForTimeout(700);
 check('and there is confetti', (await pg.locator('canvas.confetti').count()) === 1);

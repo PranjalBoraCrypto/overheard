@@ -2644,7 +2644,10 @@ function finishJob(key, label){
   // ticked is arguing with the screen underneath it.
   if(!document.querySelector(".job:not(.done)")){
     $("diagTitle").textContent="Both done — this identity is on the record";
-    $("diagSub").textContent="The note is permanent from this moment. The message reaches the card on the archive's next pass, usually within five minutes.";
+    // Five was optimistic. The archiver keeps pace with the rooms; what takes
+    // the time is publishing — it commits about every five minutes and the
+    // card reads that a minute or two after. Ten is the number to plan for.
+    $("diagSub").textContent="The note is permanent from this moment. The message reaches the card on the archive's next pass, usually five to ten minutes.";
   }
 }
 
@@ -3760,7 +3763,30 @@ function showFreshness(did, stats){
      newer just now, wait a few seconds and look again" at the moment the
      button became clickable again, which is the one moment that advice has
      already been taken. */
-  const HINT = `<b>Just posted?</b> If the card has not picked it up yet, wait a few seconds and look again.`;
+  let HINT = `<b>Just posted?</b> If the card has not picked it up yet, wait a few seconds and look again.`;
+
+  /* THE CASE THAT WAS REPORTED. Somebody finishes the create page — note
+     published, message signed — opens their card, and reads "REGISTERED,
+     nothing signed has been seen yet" as a step having failed. It had not:
+     the archive collects continuously but PUBLISHES on a cycle, and the room
+     itself forgets within a minute, so for a few minutes neither source can
+     see a message that certainly exists.
+
+     The witness floor above already rescues the card in that gap: a message
+     this browser posted and read back out of the room is evidence, and the
+     card stands on it. But then the card is standing on something only this
+     browser knows, and anybody else looking the same identity up still sees
+     the older one. That is worth saying out loud rather than leaving somebody
+     to discover it by sending the link to a friend. */
+  const w = stats.witnessed ? (()=>{ try{ const r=localStorage.getItem(postedKey(did));
+    return r && r[0]==="{" ? JSON.parse(r) : null; }catch{ return null; } })() : null;
+  if(w && w.room && w.ts){
+    const mins=Math.max(0,Math.round((Date.now()-Date.parse(w.ts))/60000));
+    const ago = mins<1 ? "a moment ago" : mins===1 ? "a minute ago" : `${mins} minutes ago`;
+    HINT = `<b>You signed a message ${ago}</b>, into <code>${String(w.room).replace(/[^a-z0-9_-]/gi,"")}</code>,`
+         + ` and this card is standing on what this browser watched arrive.`
+         + ` The published archive is a few minutes behind — until it catches up, anyone else looking up this identity still sees the older card.`;
+  }
   say.innerHTML = HINT;
 
   btn.disabled=false; btn.textContent="Look again";
