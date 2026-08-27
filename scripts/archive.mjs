@@ -109,7 +109,7 @@ const ROSTER_MS = Number(process.env.ROSTER_SECONDS ?? 120) * 1000;
 // each read once per MAX_INTERVAL, which is what bounds how late a message in
 // a quiet room can be.
 const READS_PER_MIN = Number(process.env.READS_PER_MIN ?? 360);
-const CONCURRENCY = Number(process.env.CONCURRENCY ?? 6);
+const CONCURRENCY = Number(process.env.CONCURRENCY ?? 10);
 
 const PAGE = 200;
 // Aim to arrive when a page is a little over half full. The margin absorbs a
@@ -172,9 +172,19 @@ function takeToken() {
   return true;
 }
 
-async function get(url) {
+/* Every read carries a deadline. Without one, a single hung request holds a
+   lane for as long as the socket stays open, and with CONCURRENCY lanes a
+   handful of them starve the scheduler — the lobby's deadline passes, 200
+   more messages land, and the loss is indistinguishable from a bad interval.
+   MEASURED: steady-state coverage sat at ~88% with the schedule provably
+   correct (the lobby's interval was a third of its safe value), which is the
+   signature of the loop not running rather than running late. */
+async function get(url, deadlineMs = 8000) {
   reads++;
-  const res = await fetch(url, { headers: { Accept: "application/json", "User-Agent": UA } });
+  const res = await fetch(url, {
+    headers: { Accept: "application/json", "User-Agent": UA },
+    signal: AbortSignal.timeout(deadlineMs),
+  });
   if (res.status === 429) {
     rateLimited++;
     const body = await res.text();
@@ -260,7 +270,9 @@ async function recordProfile(state, did, room, ts, isTemplate, text) {
    costs nothing extra — no message bodies are read to decide where to look.
    ─────────────────────────────────────────────────────────────────────── */
 async function roster() {
-  const data = await get(`${BASE}/rooms?format=json&limit=${ROSTER_LIMIT}`);
+  // One response describing hundreds of rooms: reliably the slowest request
+  // here, and it is not on the critical path, so it gets longer.
+  const data = await get(`${BASE}/rooms?format=json&limit=${ROSTER_LIMIT}`, 20000);
   const rows = Array.isArray(data.rooms) ? data.rooms : [];
   const kept = [], rejected = [];
   for (const r of rows) {
@@ -727,11 +739,15 @@ async function writeReport(state, rows, total) {
    everything else; below it, the tie-breaks are being overdue, being a core
    room, and never having been read at all.
    ─────────────────────────────────────────────────────────────────────── */
-function pick(sched, now) {
+function pick(sched, now, minRisk = 0) {
   let best = null, bestKey = -Infinity;
   for (const e of sched.values()) {
     if (e.busy || e.nextAt > now) continue;
     const risk = e.rate && e.lastAt ? ((now - e.lastAt) / 1000) * e.rate / PAGE : 0;
+    // When lanes are scarce they are held for the rooms that actually lose
+    // data by waiting. A quiet room read a minute late loses nothing; the
+    // lobby read twelve seconds late loses two hundred messages.
+    if (minRisk && risk < minRisk) continue;
     const overdue = (now - e.nextAt) / Math.max(1000, e.interval);
     const key = risk * 10 + overdue + (e.core ? 0.5 : 0) + (e.fresh ? 0.25 : 0);
     if (key > bestKey) { bestKey = key; best = e; }
@@ -813,8 +829,12 @@ async function main() {
 
     if (inflight.size >= CONCURRENCY) { await Promise.race(inflight); continue; }
 
-    const e = pick(sched, now);
-    if (!e) { await sleep(120); continue; }
+    // The last two lanes are reserved for rooms genuinely close to losing
+    // messages, so a burst of slow cold-room reads cannot lock the busy ones
+    // out of the scheduler.
+    const scarce = inflight.size >= CONCURRENCY - 2;
+    const e = pick(sched, now, scarce ? 0.15 : 0);
+    if (!e) { await sleep(scarce ? 60 : 120); continue; }
     if (!takeToken()) { await sleep(150); continue; }
 
     e.busy = true;
