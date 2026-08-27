@@ -503,7 +503,8 @@ export function mountAgent3D(canvas, opts = {}){
   }
 
   // ── the loop ──
-  let raf = 0, last = performance.now(), acc = 0, visible = true, dead = false;
+  let raf = 0, last = performance.now(), acc = 0, dead = false;
+  let onScreen = true, awake = !document.hidden;
   const STEP = 1 / 120;
 
   /* ── PAYING FOR IT ───────────────────────────────────────────────────────
@@ -601,7 +602,7 @@ export function mountAgent3D(canvas, opts = {}){
   function frame(now){
     if(dead) return;
     raf = requestAnimationFrame(frame);
-    if(!visible) { last = now; return; }
+    if(!onScreen || !awake) { last = now; return; }
     let dt = (now - last) / 1000; last = now;
     if(dt > 0.25) dt = 0.25;                 // a backgrounded tab is not a fling
     frameAvg += (dt * 1000 - frameAvg) * 0.08;
@@ -636,9 +637,15 @@ export function mountAgent3D(canvas, opts = {}){
     gl.drawArrays(gl.TRIANGLES, 0, 3);
   }
 
-  const io = new IntersectionObserver((es) => { visible = es[0].isIntersecting; }, { threshold: 0.02 });
+  /* TWO REASONS TO STOP, TRACKED SEPARATELY. These were one boolean, and
+     `visible = !document.hidden && visible` is a one-way door: the first time
+     the tab was backgrounded it went false and nothing could ever set it back
+     except a fresh intersection. Measured on the deployed page — a hero that
+     was on screen the whole time, with 24.8 rad/s of angular velocity sitting
+     in the state and not one frame being stepped to spend it. */
+  const io = new IntersectionObserver((es) => { onScreen = es[0].isIntersecting; }, { threshold: 0.02 });
   io.observe(canvas);
-  const onVis = () => { visible = !document.hidden && visible; last = performance.now(); };
+  const onVis = () => { awake = !document.hidden; last = performance.now(); };
   document.addEventListener("visibilitychange", onVis);
 
   canvas.addEventListener("webglcontextlost", (e) => { e.preventDefault(); dead = true; }, { once: true });

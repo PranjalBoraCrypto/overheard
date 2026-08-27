@@ -81,6 +81,23 @@ console.log('  once it has slowed:', JSON.stringify(settled));
 check('friction brings it back out of the spin', settled && !settled.spinning);
 check('and it settles, rather than drifting for ever', settled && Math.abs(settled.vYaw) < 1.2, settled?String(settled.vYaw.toFixed(3)):'n/a');
 
+console.log('\n=== it survives the tab going away and coming back');
+/* This is the bug the deployed page had: two reasons to stop rendering were
+   one boolean, and backgrounding the tab shut the loop down for good. */
+await pg.evaluate(() => {
+  Object.defineProperty(document, 'hidden', { configurable: true, get: () => true });
+  document.dispatchEvent(new Event('visibilitychange'));
+});
+await pg.waitForTimeout(600);
+await pg.evaluate(() => {
+  Object.defineProperty(document, 'hidden', { configurable: true, get: () => false });
+  document.dispatchEvent(new Event('visibilitychange'));
+});
+const yawA = await pg.evaluate(()=>window.__hero.state.yaw);
+await pg.mouse.move(cx-200, cy+ch+150, {steps:6}); await pg.waitForTimeout(1800);
+const yawB = await pg.evaluate(()=>window.__hero.state.yaw);
+check('still stepping after the tab comes back', Math.abs(yawB - yawA) > 0.05, `${yawA.toFixed(3)} -> ${yawB.toFixed(3)}`);
+
 console.log('\n=== a poke');
 const before = await pg.evaluate(()=>window.__hero?.state.squash);
 await pg.mouse.click(cx+cw/2, cy+ch/2);
