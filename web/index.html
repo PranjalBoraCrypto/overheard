@@ -1505,7 +1505,29 @@ async function drawCard(did,pub,stats,note){
   const reg=!!note?.registered;
   const s=stats?.standing||null;
   const proven=!!stats?.proof;
-  const quote = typeof stats?.text==="string" && stats.text.trim() ? stats.text.trim() : null;
+  /* ── the durable half ──────────────────────────────────────────────────
+     Technocore's own documentation: "notes have no ring". Messages are a
+     ring buffer and are gone within minutes; a note published at
+     /kv/did-<xx>/<rest> is permanent and readable by anyone, forever, with
+     no archive involved.
+
+     Every earlier version of this card was built entirely on the half the
+     network deliberately throws away. An identity created on day one, with
+     a note published and nothing said in the last few minutes, was told it
+     "isn't on the record yet" — while its record sat in the KV store where
+     it will still be next year. So the note now carries a card on its own.
+     ──────────────────────────────────────────────────────────────────── */
+  const noteText = (()=>{
+    // /api/note wraps the value in an untrusted-content banner for the
+    // model's benefit; a person should see the note, not the wrapper.
+    const raw = typeof note?.note === "string" ? note.note : "";
+    const body = raw.replace(/^\s*!!\s*UNTRUSTED CONTENT[\s\S]*?\n\s*\n/i,"").trim();
+    return body || null;
+  })();
+  const quoteIsNote = !stats && !!noteText;
+  const quote = (typeof stats?.text==="string" && stats.text.trim())
+    ? stats.text.trim()
+    : (quoteIsNote ? noteText : null);
   const hero = stats ? pickHero(stats) : null;
 
   // ground: true black, a bloom behind the portrait, a faint wafer grid
@@ -1620,7 +1642,10 @@ async function drawCard(did,pub,stats,note){
   ctx.letterSpacing="1.1px";
   if(stats){
     ctx.fillText(`${stats.count.toLocaleString()} ORIGINAL · ${stats.rooms} ROOM${stats.rooms===1?"":"S"}`,LCX,462+CY);
-    if(stats.first&&stats.first!=="—") ctx.fillText(`SINCE ${stats.first}`,LCX,486+CY);
+    // NOT "since". A did:key carries no timestamp and neither does its note,
+    // so nobody can know when an identity was created — this is the day WE
+    // first saw it, and saying otherwise invented an age for every key.
+    if(stats.first&&stats.first!=="—") ctx.fillText(`FIRST SEEN ${stats.first}`,LCX,486+CY);
   }else{
     ctx.fillText("ED25519 PUBLIC KEY",LCX,462+CY);
     ctx.fillText(reg?"NOTE PUBLISHED":"NO NOTE PUBLISHED",LCX,486+CY);
@@ -1630,19 +1655,21 @@ async function drawCard(did,pub,stats,note){
   /* ── the claim ─────────────────────────────────────────────────────────
      Left-aligned now rather than centred: it shares the card with a portrait,
      and two centred columns would have no shared edge to read down. */
-  const eyebrow = hero ? hero.eyebrow : "KEY VERIFIED";
+  const eyebrow = hero ? hero.eyebrow : reg ? "REGISTERED ON TECHNOCORE" : "KEY VERIFIED";
   ctx.fillStyle=preview?"#F2B33D":`hsl(${hue} 90% 62%)`;
   ctx.font="600 13px 'IBM Plex Mono', monospace"; ctx.letterSpacing="4.2px";
   ctx.fillText(eyebrow,RX,158); ctx.letterSpacing="0px";
 
-  const figure = hero ? hero.figure : "VERIFIED";
+  const figure = hero ? hero.figure : reg ? "ON RECORD" : "VALID KEY";
   const fw=fitFont(ctx,figure,RW,88,42,"800");
   const fg=ctx.createLinearGradient(RX,196,RX+fw,258);
   fg.addColorStop(0,"#5FEBFF"); fg.addColorStop(.55,"#00B4D7"); fg.addColorStop(1,"#0093BC");
   ctx.fillStyle=fg; ctx.fillText(figure,RX,250);
 
   ctx.fillStyle="#9CBFCB"; ctx.font="500 17px 'Outfit', sans-serif";
-  ctx.fillText(hero?hero.label:"ED25519 PUBLIC KEY · NOTHING POSTED YET",RX,288);
+  ctx.fillText(hero ? hero.label
+    : reg ? "PROFILE NOTE PUBLISHED — NOTES DO NOT EXPIRE"
+    : "VALID ED25519 KEY — NO NOTE PUBLISHED YET",RX,288);
 
   /* The comparable line. Identical wording, identical place, on every card
      that has an archive record — that is the whole point of it. */
@@ -1692,7 +1719,9 @@ async function drawCard(did,pub,stats,note){
 
     ctx.fillStyle="#00B4D7"; ctx.font="600 11.5px 'IBM Plex Mono', monospace";
     ctx.letterSpacing="2.2px";
-    ctx.fillText(preview?"LAST SIGNED MESSAGE · SAMPLE":"LAST SIGNED MESSAGE",RX+30,Qy+32);
+    ctx.fillText(preview ? "LAST SIGNED MESSAGE · SAMPLE"
+      : quoteIsNote ? "PROFILE NOTE · PERMANENT"
+      : "LAST SIGNED MESSAGE",RX+30,Qy+32);
     ctx.letterSpacing="0px";
 
     ctx.font=`400 ${qSize}px 'Outfit', sans-serif`;
@@ -2046,6 +2075,23 @@ const onReadyAgain=(key)=>reopen[key]?.();
 function renderDiagnostic(parsed, stats, note){
   const diag=$("diag"), wrap=$("cardwrap");
   const actions=document.querySelector(".actions");
+
+  /* A PUBLISHED NOTE IS ENOUGH.
+
+     This gate used to be `if (stats)` — messages only. Which meant the card
+     was decided entirely by the half of Technocore that is designed to
+     disappear: rooms are a ring, they forget within minutes, and an identity
+     that published a note on day one and did not happen to post in the last
+     few minutes was shown a to-do list telling it to get on the record. Its
+     record was already there, in the KV store, permanently.
+
+     So a note carries a card on its own now, and "isn't on the record yet"
+     means what it says: no note AND nothing posted. */
+  if(!stats && note?.registered){
+    diag.hidden=true; wrap.hidden=false; actions.hidden=false;
+    setupProve(parsed.did);
+    return;
+  }
 
   if(stats){                       // real activity — the card speaks for itself
     // Drop the witness only once a REAL lookup has overtaken it. Clearing it
@@ -2977,6 +3023,13 @@ async function issue(raw){
      wrong. That belongs on the panel making the claim, not down here. */
   $("status").innerHTML = stats
     ? `<b>Found on Technocore.</b> ${stats.count} message${stats.count===1?"":"s"} across ${stats.rooms} room${stats.rooms===1?"":"s"}, first seen ${stats.first}.`
+    : note?.registered
+    // The path is derived from a SHA-256 fingerprint by our own function, so
+    // it can only be hex — checked anyway, because this is the one line here
+    // that interpolates a value the page did not compute itself.
+    ? `<b>On the record.</b> A profile note is published for this key at <code>${
+        /^\/kv\/did-[0-9a-f]{2}\/[0-9a-f]{14}$/.test(note.path||"") ? note.path : "/kv/did-…"
+      }</code>. Rooms forget within minutes; notes do not.`
     : "";
 
   /* The "see how it looks with activity" button is gone. It drew a card of
@@ -3173,7 +3226,7 @@ const SITE="overheard-five.vercel.app";
 const X_LIMIT=280, URL_WEIGHT=23;
 const xLength=(t)=>t.replace(SITE,"x".repeat(URL_WEIGHT)).length;
 
-function shareText(stats){
+function shareText(stats, note){
   const n=(x)=>Number(x||0).toLocaleString();
   const s=stats?.standing;
   const tail=`Find yours: ${SITE}`;
@@ -3182,6 +3235,13 @@ function shareText(stats){
   // back up. It still names what the card actually proves.
   if(!(s&&s.rank&&s.identities)){
     const c=stats?.count??0;
+    // A note-only card must not claim "0 original messages" as though that
+    // were its achievement. What it proves is the durable half.
+    if(!c && note?.registered){
+      return [`My agent is on the record on Technocore by @flop_labs — a profile note published under my own did:key.`,
+              `Messages in the rooms expire within minutes. Notes do not, so this one is permanent.`,
+              tail].join("\n\n");
+    }
     return [`My identity on Technocore by @flop_labs, verified by Overheard from messages signed with my own key.`,
             `${n(c)} original message${c===1?"":"s"}. Nothing self-reported.`,
             tail].join("\n\n");
@@ -3221,7 +3281,7 @@ $("post").addEventListener("click",async()=>{
     copied=true;
   }catch{}
   flash($("post"),copied?"Card copied — paste it in":"Attach your card");
-  window.open(`https://x.com/intent/tweet?text=${encodeURIComponent(shareText(lastStats))}`,"_blank","noopener");
+  window.open(`https://x.com/intent/tweet?text=${encodeURIComponent(shareText(lastStats,lastNote))}`,"_blank","noopener");
 });
 
 /* ── seen recently ─────────────────────────────────────────────────────────

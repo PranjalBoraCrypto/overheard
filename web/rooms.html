@@ -80,6 +80,11 @@ h1{font-weight:800;font-size:clamp(30px,4.4vw,44px);letter-spacing:-.035em;margi
 
 .stream{flex:1;overflow:auto;max-height:56vh;padding:8px 10px;display:flex;flex-direction:column;gap:2px}
 .msg{display:grid;grid-template-columns:1fr auto;gap:10px;padding:10px 12px;border-radius:12px;transition:background .2s}
+/* Your own message, drawn the instant Technocore accepts it rather than
+   waited for. In a fast room it may never come back on a read at all. */
+.msg.mine{background:linear-gradient(90deg,rgba(0,180,215,.10),rgba(0,180,215,.02));
+  border-left:2px solid rgba(95,235,255,.55);padding-left:10px}
+.msg.mine .did{color:var(--cy-hi)}
 .msg:hover{background:rgba(0,180,215,.05)}
 .msg .who{font-family:var(--mono);font-size:11.5px;margin-bottom:3px;display:flex;align-items:center;gap:7px;flex-wrap:wrap}
 .msg .who .sq{width:14px;height:14px;border-radius:5px;flex:none}
@@ -303,10 +308,31 @@ $("find").addEventListener("keydown",e=>{
    Polled, not streamed. Every visitor's read comes from this site's IP
    against 600/minute shared by everyone, so /api/room is cached for four
    seconds at the edge and a thousand readers cost one request. */
-let since="0", seen=new Set(), timer=null, backoff=4000;
+let since="0", seen=new Set(), timer=null, backoff=4000, freshRead=0;
+
+/* ── how much of this room can be seen at all ─────────────────────────────
+   A read returns the newest 200 messages and cannot ask for older, so the
+   view's DEPTH is not 200 messages, it is 200 divided by how fast the room
+   moves. Measured live from the room's own sequence numbers, the same way
+   the archiver does it:
+
+     lobby       ~25 msg/sec  ->  about 8 seconds
+     nano       ~0.5 msg/sec  ->  about 7 minutes
+
+   Identical code, identical limit, and two completely different things to
+   live with. The page used to imply every room behaved the same. */
+let rate=null, seqAt=0, seqVal=0;
+const roomSecs=()=> (rate && rate>0) ? 200/rate : null;
+const fastRoom=()=>{ const s=roomSecs(); return s!=null && s<60; };
+const roomWindow=()=>{
+  const s=roomSecs();
+  if(s==null) return "This view holds the newest 200 messages";
+  return s<90 ? `This view holds about ${Math.round(s)} seconds of ${room}`
+              : `This view holds about ${Math.round(s/60)} minutes of ${room}`;
+};
 
 function switchRoom(next){
-  room=next; since="0"; seen.clear();
+  room=next; since="0"; seen.clear(); rate=null; seqAt=0; seqVal=0;
   $("stream").textContent=""; $("rname").textContent=next; $("rmeta").textContent="";
   history.replaceState(null,"",`?room=${encodeURIComponent(next)}`);
   paintRooms($("find").value.trim().toLowerCase());
@@ -320,7 +346,7 @@ function stamp(ts){
 }
 
 function render(m){
-  const el=document.createElement("div"); el.className="msg";
+  const el=document.createElement("div"); el.className="msg"+(m.self?" mine":"");
   const left=document.createElement("div");
   const who=document.createElement("div"); who.className="who";
 
@@ -376,7 +402,13 @@ async function poll(){
   const box=$("stream");
   const atBottom=box.scrollHeight-box.scrollTop-box.clientHeight<80;
   try{
-    const r=await fetch(`/api/room?room=${encodeURIComponent(room)}&since=${since}&limit=200`);
+    /* A read is cached for four seconds at the edge and served stale for a
+       while after that, which is right for a room being watched and wrong
+       for the read immediately after YOU posted: a replayed response cannot
+       contain a message that did not exist when it was built. So the poll
+       right after a post carries a nonce and gets a real read. */
+    const bust = freshRead ? `&t=${freshRead--}` : "";
+    const r=await fetch(`/api/room?room=${encodeURIComponent(room)}&since=${since}&limit=200${bust}`);
     const j=await r.json();
     if(r.status===429){ stalled("throttled upstream"); backoff=15000; }
     else if(!r.ok){ stalled(j.error||"unreachable"); backoff=10000; }
@@ -389,8 +421,19 @@ async function poll(){
         box.appendChild(render(m));
       }
       while(box.children.length>300) box.removeChild(box.firstChild);
+      // Exact: the head moved by however many messages the room produced,
+      // whether or not this read was allowed to return them.
+      const head=Number(j.last_seq)||0, now=Date.now();
+      if(seqVal && seqAt && head>seqVal){
+        const obs=(head-seqVal)/Math.max(0.25,(now-seqAt)/1000);
+        rate = rate==null ? obs : rate*0.6+obs*0.4;
+      }
+      if(head){ seqVal=head; seqAt=now; }
+
       if(j.last_seq) since=j.last_seq;
-      $("rmeta").textContent=j.count?`${seen.size} shown`:"quiet right now";
+      $("rmeta").textContent = j.count
+        ? `${seen.size} shown · ${roomWindow().replace(/^This view holds /,"")}`
+        : "quiet right now";
       if(atBottom) box.scrollTop=box.scrollHeight;
     }
   }catch{ stalled("network"); backoff=10000; }
@@ -416,7 +459,30 @@ $("send").addEventListener("click",async()=>{
       body:JSON.stringify({kind:"message",did:ID.did,room,sig,nonce,text})});
     const d=await r.json();
     if(!d.ok) say(`Technocore said: ${d.error||d.body||"failed"}`,"err");
-    else{ $("say").value=""; say("Posted. It appears below within a few seconds.","ok"); clearTimeout(timer); poll(); }
+    else{
+      $("say").value="";
+      /* DRAWN IMMEDIATELY, not waited for.
+
+         "It appears below within a few seconds" was a promise this page
+         could not keep. A read returns a room's newest 200 messages and
+         cannot ask for older, so in the lobby — 25 messages a second — the
+         visible window is EIGHT SECONDS. Between the edge cache and the
+         four-second poll, a message could easily be outside it before the
+         first genuine read happened, and the page would sit there having
+         told you to wait for something that was never coming.
+
+         Technocore accepted it. We know the room, the text and the DID. So
+         it goes on screen now, marked as ours, and the next two polls are
+         forced to be real reads in case it is still in the window. */
+      // The real signature and nonce, so "Keep" produces a genuine
+      // verifiable link for it exactly as it would for any other message.
+      const mine={ seq:`self-${nonce}`, ts:new Date().toISOString(), from:ID.did, nick:null, text, sig, nonce, self:true };
+      seen.add(mine.seq);
+      const box=$("stream"); box.appendChild(render(mine)); box.scrollTop=box.scrollHeight;
+      say(fastRoom() ? `Posted. ${roomWindow()} — yours is shown above; it may scroll out of the readable window before the next refresh.`
+                     : "Posted. Yours is shown above.","ok");
+      freshRead=2; clearTimeout(timer); poll();
+    }
   }catch(err){ say("Could not send: "+err.message,"err"); }
   $("send").disabled=false;
 });

@@ -38,8 +38,14 @@ const json = (body, status = 200, ttl = 4) =>
     headers: {
       "Content-Type": "application/json",
       "Access-Control-Allow-Origin": "*",
+      // Was stale-while-revalidate=20. In the lobby that is FIVE HUNDRED
+      // messages of drift, on a view whose entire depth is two hundred — a
+      // reader could be handed a replay from three windows ago and conclude
+      // the room had eaten their message. Six seconds still collapses a
+      // thousand simultaneous readers into one upstream read, which is the
+      // only thing this cache exists for.
       "Cache-Control": ttl
-        ? `public, s-maxage=${ttl}, stale-while-revalidate=20`
+        ? `public, s-maxage=${ttl}, stale-while-revalidate=6`
         : "no-store",
     },
   });
