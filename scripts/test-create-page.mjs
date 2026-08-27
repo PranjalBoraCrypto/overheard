@@ -27,6 +27,11 @@ const srv = http.createServer((req, res) => {
       res.end(JSON.stringify(FAIL ? { ok: false, error: 'nope' } : { ok: true }));
     });
   }
+  if (p === '/api/owner') {
+    const room = u.searchParams.get('room') || '';
+    res.writeHead(200, { 'content-type': 'application/json' });
+    return res.end(JSON.stringify({ room, status: room === 'd-taken' ? 'claimed' : 'free' }));
+  }
   if (p.startsWith('/api/') || p.startsWith('/data/')) { res.writeHead(200, { 'content-type': 'application/json' }); return res.end('{}'); }
   const f = path.join(ROOT, p);
   if (fs.existsSync(f) && fs.statSync(f).isFile()) { res.writeHead(200, { 'content-type': p.endsWith('.js') ? 'text/javascript' : 'text/html' }); res.end(fs.readFileSync(f)); }
@@ -44,6 +49,15 @@ const cls = (id) => pg.evaluate((i) => document.getElementById(i).className, id)
 const stateOf = async (id) => {
   const c = await cls('t-' + id);
   return c.includes('done') ? 'done' : c.includes('live') ? 'live' : c.includes('locked') ? 'locked' : '?';
+};
+/* Clicking a rung's head TOGGLES it, so a test that wants one open has to ask
+   whether it already is — otherwise it closes the very thing it is about to
+   click inside, and Playwright reports the head "intercepting pointer events"
+   for a button in a zero-height body. */
+const ensureOpen = async (id) => {
+  if ((await cls('t-' + id)).includes('open')) return;
+  await pg.click(`#t-${id} .shead`);
+  await pg.waitForTimeout(400);
 };
 const rung = async () => {
   const out = {};
@@ -89,6 +103,18 @@ await pg.locator('#gateGo').click({ force: true }).catch(() => {});
 await pg.waitForTimeout(300);
 check('and pressing it anyway does nothing', (await stateOf('note')) === 'locked');
 
+console.log('\n=== C2. the page points at the one button that matters');
+const lead = await pg.evaluate(() => {
+  const d = document.getElementById('saveTxt');
+  return { cls: d.className, first: d.parentElement.firstElementChild.id,
+           gate: document.getElementById('gateGo').className };
+});
+console.log('  ', JSON.stringify(lead));
+check('Download leads the row', lead.first === 'saveTxt');
+check('and is the solid button, not a ghost', !lead.cls.includes('ghost'));
+check('and it pulses', lead.cls.includes('beckon'));
+check('while the gate does not, because it cannot be pressed yet', !lead.gate.includes('beckon'));
+
 console.log('\n=== D. saving the seed arms it');
 const dl = pg.waitForEvent('download');
 await pg.click('#saveTxt');
@@ -98,6 +124,18 @@ const body = fs.readFileSync(await file.path(), 'utf8');
 check('with the DID and the seed in it', /did:key:z6Mk/.test(body) && /SEED \(private/.test(body));
 check('the confirm button is now live', !(await pg.locator('#gateGo').isDisabled()));
 check('and it says what it saw', /Downloaded/.test((await pg.locator('#gateText').textContent()) || ''));
+// a download is silent; the page has to go to the button it just woke up
+await pg.waitForTimeout(900);
+const gateSeen = await pg.evaluate(() => {
+  const r = document.getElementById('gateBox').getBoundingClientRect();
+  return r.top > -20 && r.bottom < innerHeight + 20;
+});
+check('and the page went to the button it just woke up', gateSeen);
+const after = await pg.evaluate(() => ({
+  dl: document.getElementById('saveTxt').className,
+  gate: document.getElementById('gateGo').className }));
+check('Download stops pulsing once it has been obeyed', !after.dl.includes('beckon'), after.dl);
+check('and the pulse moves to the gate', after.gate.includes('beckon'), after.gate);
 
 await pg.click('#gateGo');
 await pg.waitForTimeout(800);
@@ -121,7 +159,8 @@ await pg.waitForTimeout(200);
 check('tapping one swaps the text', (await pg.locator('#profile').inputValue()).startsWith('Building on Technocore'));
 check('and the room names are derived from the key, not left as a placeholder',
   (await pg.locator('#roomPicks .pick').count()) === 3
-  && /^d-[0-9a-f]/.test(await pg.locator('#roomPicks .pick').first().textContent()));
+  && /^[0-9a-f]{8}$/.test((await pg.locator('#roomPicks .pick').first().textContent()).trim()),
+  await pg.locator('#roomPicks .pick').first().textContent());
 
 console.log('\n=== F. publish the note, post the message');
 POSTS = [];
@@ -130,7 +169,7 @@ await pg.waitForFunction(() => document.getElementById('t-note').className.inclu
 check('the note rung is done', (await stateOf('note')) === 'done');
 check('and a note went to the network', POSTS.some(p => p.kind === 'note'), JSON.stringify(POSTS.map(p => p.kind)));
 check('the verdict moved to REGISTERED', (await pg.locator('#tierWord').textContent()) === 'REGISTERED');
-check('the finish panel appeared', await pg.locator('#finish').isVisible());
+check('the finish panel does NOT appear yet', await pg.locator('#finish').isHidden());
 
 await pg.click('#t-hello button[data-act]');
 await pg.waitForFunction(() => document.getElementById('t-hello').className.includes('done'), null, { timeout: 15000 });
@@ -148,6 +187,23 @@ check('and points at this identity\'s card',
   ((await pg.locator('#seeCard').getAttribute('href')) || '').startsWith('/?did=did%3Akey%3Az6Mk'));
 await pg.screenshot({ path: '/tmp/create-3-done.png', clip: { x: 0, y: 0, width: 1240, height: 950 } });
 
+check('the finish panel appears once the main line is done', await pg.locator('#finish').isVisible());
+check('and it sits BELOW the side quests, not between them and the person',
+  await pg.evaluate(() => document.getElementById('finish').getBoundingClientRect().top
+                        > document.getElementById('side').getBoundingClientRect().top));
+check('the ladder carried on into a side quest', (await cls('t-intro')).includes('open'));
+
+console.log('\n=== F3. a message box with a way to send it');
+/* Every rung's action button used to live only in its header, and the moment
+   a rung opened, its textarea pushed that button off the top of the screen. */
+for (const id of ['note', 'hello', 'intro', 'room', 'proof', 'priv']) {
+  const n = await pg.locator(`#t-${id} .actionrow button[data-act]`).count();
+  if (n !== 1) { check(`${id} has an action where its form ends`, false, `${n} found`); }
+}
+check('every rung has an action button where its form ends',
+  (await pg.locator('.actionrow button[data-act]').count()) === 6,
+  `${await pg.locator('.actionrow button[data-act]').count()} of 6`);
+
 console.log('\n=== F2. no button on the page runs nothing');
 /* The seed rung had a "Save" header button and no action behind it: pressing
    it threw, and the throw was caught and shown as "Something went wrong",
@@ -163,25 +219,82 @@ check('every action button has an action behind it',
 check('and the seed rung has none, because its action is the gate',
   !orphan.ids.includes('save'));
 
+console.log('\n=== F4. the room field: the rule is furniture, not something to type');
+await ensureOpen('room');
+check('the d- is shown, outside the box', (await pg.locator('#roomWrap .pfx').textContent()).trim() === 'd-');
+check('and it is not in the input', (await pg.locator('#roomName').inputValue()) === '');
+check('the placeholder no longer teaches a prefix',
+  (await pg.locator('#roomName').getAttribute('placeholder')) === 'yourname');
+
+await pg.fill('#roomName', 'taken');
+await pg.waitForFunction(() => /already claimed/.test(document.getElementById('roomAvail').textContent), null, { timeout: 6000 });
+check('a claimed name says so before anything is signed',
+  /d-taken is already claimed/.test(await pg.locator('#roomAvail').textContent()));
+POSTS = [];
+await pg.click('#t-room .actionrow button[data-act]');
+await pg.waitForTimeout(600);
+check('and claiming it never reaches the network', POSTS.length === 0, `${POSTS.length} posts`);
+
+await pg.fill('#roomName', 'my-lab');
+await pg.waitForFunction(() => /is free/.test(document.getElementById('roomAvail').textContent), null, { timeout: 6000 });
+check('a free one says that too', /d-my-lab is free/.test(await pg.locator('#roomAvail').textContent()));
+await pg.click('#t-room .actionrow button[data-act]');
+await pg.waitForFunction(() => document.getElementById('t-room').className.includes('done'), null, { timeout: 10000 });
+const claim = POSTS.find(p => p.kind === 'claim');
+check('the claim carries the WHOLE name, prefix and all', claim?.room === 'd-my-lab', claim?.room);
+check('and a shareable link comes back', await pg.locator('#roomOut').isVisible());
+check('pointing at the room just claimed',
+  (await pg.locator('#roomLink').textContent()) === 'technocore.chat/r/d-my-lab',
+  await pg.locator('#roomLink').textContent());
+
+console.log('\n=== F5. the private room hands back something copyable');
+// open it first: a closed rung's body is a 0fr grid row, so its button has no
+// height to be clicked at
+await ensureOpen('priv');
+await pg.click('#t-priv .actionrow button[data-act]');
+await pg.waitForFunction(() => document.getElementById('t-priv').className.includes('done'), null, { timeout: 10000 });
+check('the address is shown', /technocore\.chat\/r\/p-[0-9a-f]{24}/.test(await pg.locator('#privName').textContent()),
+  await pg.locator('#privName').textContent());
+check('with a copy button beside it', (await pg.locator('#privOut [data-copyval="privName"]').count()) === 1);
+await pg.locator('#privOut [data-copyval="privName"]').click();
+await pg.waitForTimeout(300);
+check('that says it copied', /Copied/.test(await pg.locator('#privOut [data-copyval="privName"]').textContent()));
+
+console.log('\n=== F6. the page is about making one, not unlocking one');
+check('no "Already have an identity?" on a first visit', await pg.locator('#unlock').isHidden());
+const back = await ctx.newPage();
+await back.addInitScript(() => localStorage.setItem('overheard.identity',
+  JSON.stringify({ v: 1, did: 'did:key:z6MkTEST', salt: 'x', iv: 'y', data: 'z' })));
+await back.goto('http://localhost:8888/create.html'); await back.waitForTimeout(500);
+check('but it is there for a browser that holds one', await back.locator('#unlock').isVisible());
+await back.close();
+
+console.log('\n=== F7. the footer matches the card page');
+const foot = await pg.evaluate(() => document.querySelector('footer').innerText);
+check('two rows', (await pg.locator('footer .frow').count()) === 2);
+check('names the builder and links X', /Built by\s+Pranjal Bora/.test(foot)
+  && (await pg.locator('footer a[href="https://x.com/Crypto_Pranjal"]').count()) === 1);
+check('carries the whole DID', foot.includes('did:key:z6MkngD8RZKCgJQCkJvHfGyYoCcNCG5rz9Tc7yRmWrMZExaz'));
+check('and the DID opens its own card',
+  (await pg.locator('footer .bydid').getAttribute('href')) === '/?did=did:key:z6MkngD8RZKCgJQCkJvHfGyYoCcNCG5rz9Tc7yRmWrMZExaz');
+
 console.log('\n=== G. a failure reads as a failure, not as success');
 FAIL = true;
-await pg.click('#t-room .shead');
-await pg.waitForTimeout(300);
-await pg.fill('#roomName', 'd-test-room');
-await pg.click('#t-room button[data-act]');
+await ensureOpen('intro');
+await pg.click('#t-intro .actionrow button[data-act]');
 await pg.waitForTimeout(1200);
-check('the rung is NOT marked done', (await stateOf('room')) !== 'done');
-check('and it says what the network said', /Technocore said/.test((await pg.locator('#m-room').textContent()) || ''),
-  (await pg.locator('#m-room').textContent()));
-check('the button is pressable again', !(await pg.locator('#t-room button[data-act]').isDisabled()));
+check('the rung is NOT marked done', (await stateOf('intro')) !== 'done');
+check('and it says what the network said', /Technocore said/.test((await pg.locator('#m-intro').textContent()) || ''),
+  (await pg.locator('#m-intro').textContent()));
+check('the button is pressable again', !(await pg.locator('#t-intro .actionrow button[data-act]').isDisabled()));
 FAIL = false;
 
-console.log('\n=== H. a bad room name never reaches the network');
+console.log('\n=== H. an empty message never reaches the network');
 POSTS = [];
-await pg.fill('#roomName', 'MyRoom');
-await pg.click('#t-room button[data-act]');
+await pg.fill('#introText', '   ');
+await pg.click('#t-intro .actionrow button[data-act]');
 await pg.waitForTimeout(600);
-check('rejected locally', /Must start with d-/.test((await pg.locator('#m-room').textContent()) || ''));
+check('rejected locally', /Write a message first/.test((await pg.locator('#m-intro').textContent()) || ''));
 check('nothing was sent', POSTS.length === 0, `${POSTS.length} posts`);
 
 console.log('\n=== I. phone');

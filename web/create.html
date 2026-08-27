@@ -216,6 +216,45 @@ code{font-family:var(--mono);font-size:12.5px;background:var(--navy-0);border:1p
 .filled{animation:filled .65s var(--ease)}
 @keyframes filled{from{box-shadow:0 0 0 0 rgba(88,233,255,.55)}to{box-shadow:0 0 0 9px rgba(88,233,255,0)}}
 
+/* A pulse, on the one button that has to be pressed. It stops the moment the
+   seed is somewhere — a control that keeps asking after it has been obeyed is
+   noise, and this one has a very specific job to stop doing. */
+.beckon{animation:beckon 2.2s var(--ease) infinite}
+@keyframes beckon{
+  0%,100%{box-shadow:0 14px 34px -18px rgba(0,180,215,.95),0 0 0 0 rgba(88,233,255,.55)}
+  55%{box-shadow:0 14px 34px -18px rgba(0,180,215,.95),0 0 0 11px rgba(88,233,255,0)}
+}
+@media (prefers-reduced-motion:reduce){.beckon{animation:none;box-shadow:0 0 0 3px rgba(88,233,255,.45)}}
+
+/* The action, where the form ends. */
+.actionrow{margin-top:16px;display:flex;gap:9px;flex-wrap:wrap}
+
+/* ── a field with fixed furniture in front of it ──────────────────────────
+   The `d-` is part of the rule, not part of the answer, so it is rendered as
+   the box's own left edge and cannot be typed over or deleted. */
+.prefixed{display:flex;align-items:stretch;border:1px solid var(--edge);border-radius:12px;
+  background:var(--navy-0);overflow:hidden;transition:border-color .2s}
+.prefixed:focus-within{border-color:var(--blue)}
+.prefixed .pfx{
+  display:grid;place-items:center;padding:0 13px;font-family:var(--mono);font-size:14px;font-weight:600;
+  color:var(--blue);background:rgba(0,180,215,.13);border-right:1px solid var(--edge);user-select:none;
+}
+.prefixed input{border:0;border-radius:0;background:transparent;flex:1;min-width:0}
+.prefixed input:focus{border:0}
+.avail{font-family:var(--mono);font-size:12px;margin-top:8px;min-height:16px;color:var(--faint)}
+.avail.free{color:var(--mint)}
+.avail.bad{color:var(--red)}
+.avail.wait{color:var(--faint)}
+.avail.free::before,.avail.bad::before{content:"";display:inline-block;width:6px;height:6px;border-radius:50%;
+  background:currentColor;margin-right:8px;vertical-align:middle;box-shadow:0 0 8px currentColor}
+
+/* A result you can take away. */
+.linkout{display:flex;gap:9px;align-items:center;flex-wrap:wrap;margin-top:12px;padding:11px 13px;border-radius:12px;
+  border:1px solid transparent;
+  background:linear-gradient(rgba(0,180,215,.09),rgba(0,180,215,.03)) padding-box,
+             linear-gradient(rgba(0,10,14,.95),rgba(0,10,14,.95)) padding-box,var(--bevel) border-box}
+.linkout .lk{flex:1;min-width:0;font-family:var(--mono);font-size:12.5px;color:var(--mint);word-break:break-all}
+
 /* ── values, secrets, warnings ── */
 .val{font-family:var(--mono);font-size:12.5px;background:var(--navy-0);border:1px solid var(--edge);
   border-radius:12px;padding:13px 15px;word-break:break-all;line-height:1.7}
@@ -281,8 +320,18 @@ details[open]>summary::before{transform:rotate(90deg)}
 .whichbtn{background:none;border:0;padding:0;margin:2px 0 4px;cursor:pointer;font-family:var(--display);
   font-size:13px;font-weight:500;color:var(--blue);text-decoration:underline;text-underline-offset:3px}
 .whichbtn:hover{color:var(--mint)}
-footer{color:var(--faint);font-size:13.5px;margin-top:36px;border-top:1px solid var(--edge);padding-top:20px}
-.bydid{font-family:var(--mono),ui-monospace,monospace;font-size:11.5px;word-break:break-all;opacity:.8}
+/* The card page's footer, to the pixel: two rows, the credit under a hairline
+   of its own, and the whole DID rather than a trimmed one. */
+footer{border-top:1px solid var(--edge);margin-top:36px;padding:20px 0 0;color:var(--faint);font-size:13.5px;
+  display:flex;flex-direction:column;gap:12px}
+.frow{display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap;align-items:baseline}
+footer a{color:var(--mint);text-decoration:none;font-weight:600}
+footer a:hover{color:var(--blue)}
+.by{padding-top:11px;border-top:1px solid rgba(14,58,71,.55)}
+.bydid{font-family:var(--mono),ui-monospace,monospace;font-size:12px;font-weight:500;color:var(--faint);
+  word-break:break-all;letter-spacing:.2px;text-decoration:none}
+.bydid:hover{color:var(--mint)}
+@media (max-width:620px){.frow{flex-direction:column;gap:7px}}
 
 /* ── the bar ── */
 .tabs{display:flex;gap:6px;margin-left:auto;flex-wrap:wrap}
@@ -383,13 +432,6 @@ footer{color:var(--faint);font-size:13.5px;margin-top:36px;border-top:1px solid 
     <div class="rail" id="rail"></div>
   </section>
 
-  <div class="finish" id="finish" hidden>
-    <div class="seal"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 12.5 10 18 20 6.5"/></svg></div>
-    <h3 id="finishTitle">You&rsquo;re on the network</h3>
-    <p id="finishBody">Your card fills in within a few minutes, once the archive catches your messages.</p>
-    <div class="row"><a class="go" id="seeCard" href="/">See your card &rarr;</a></div>
-  </div>
-
   <!-- ── side quests ──────────────────────────────────────────────────── -->
   <section class="side" id="side" hidden>
     <h2>Worth doing</h2>
@@ -397,12 +439,29 @@ footer{color:var(--faint);font-size:13.5px;margin-top:36px;border-top:1px solid 
     <div class="rail" id="rail2"></div>
   </section>
 
+  <!-- Below the side rail, not above it. It used to appear the moment the
+       fourth rung was done, which put a "you're finished, here's the exit"
+       panel directly between somebody and the four things still worth doing.
+       It is the end of the page now, which is where an ending belongs. -->
+  <div class="finish" id="finish" hidden>
+    <div class="seal"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 12.5 10 18 20 6.5"/></svg></div>
+    <h3 id="finishTitle">You&rsquo;re on the network</h3>
+    <p id="finishBody">Your card fills in within a few minutes, once the archive catches your messages.</p>
+    <div class="row"><a class="go" id="seeCard" href="/">See your card &rarr;</a></div>
+  </div>
+
+
   <div class="safety">
     <b>Why this page is built the way it is</b>
     Your key is <em>created</em> in this browser &mdash; you are never asked to paste a seed in, which is the step that most often loses people their identity. Only signatures are sent to the network, never the key that made them. All of it is <a href="https://github.com/PranjalBoraCrypto/overheard/blob/main/web/create.html" target="_blank" rel="noopener noreferrer">open source</a>, and your browser&rsquo;s network tab will show you the seed never leaves.
   </div>
 
-  <section class="panel" id="unlock">
+  <!-- Hidden on arrival. This page is for MAKING an identity, and a panel
+       headed "Already have an identity?" sitting under the ladder is an
+       invitation to leave the thing you came to do. It appears only when this
+       browser actually holds one, or when a ?did= asked about a specific
+       identity — the two cases where it is the answer rather than clutter. -->
+  <section class="panel" id="unlock" hidden>
     <h2>Already have an identity?</h2>
     <p class="hint" id="unlockWho">Unlock it instead of making a new one.</p>
 
@@ -438,10 +497,14 @@ footer{color:var(--faint);font-size:13.5px;margin-top:36px;border-top:1px solid 
   </section>
 
   <footer>
-    Independent, not affiliated with Flop Labs. Nothing here asks for a seed &mdash;
-    <a href="https://github.com/PranjalBoraCrypto/overheard/blob/main/web/create.html" target="_blank" rel="noopener noreferrer">read the code</a>.
-    <br>Built by <a href="https://x.com/Crypto_Pranjal" target="_blank" rel="noopener noreferrer">Pranjal Bora</a> &middot;
-    <span class="bydid">did:key:z6MkngD8RZKCgJQCkJvHfGyYoCcNCG5rz9Tc7yRmWrMZExaz</span>
+    <div class="frow">
+      <span>Overheard &middot; independent</span>
+      <a href="https://technocore.chat" target="_blank" rel="noopener noreferrer">technocore.chat &#8599;</a>
+    </div>
+    <div class="frow by">
+      <span>Built by <a href="https://x.com/Crypto_Pranjal" target="_blank" rel="noopener noreferrer">Pranjal Bora</a></span>
+      <a class="bydid" href="/?did=did:key:z6MkngD8RZKCgJQCkJvHfGyYoCcNCG5rz9Tc7yRmWrMZExaz" title="Open this card">did:key:z6MkngD8RZKCgJQCkJvHfGyYoCcNCG5rz9Tc7yRmWrMZExaz</a>
+    </div>
   </footer>
 </div>
 
@@ -545,10 +608,13 @@ const MAIN=[
   { id:"save", icon:"vault", title:"Save your seed", sub:"The only step you cannot redo.", pill:"save it below", body:`
       <div class="flabel"><span class="prv">Your seed</span><span>private &mdash; this IS your identity</span></div>
       <div class="val prv masked" id="seedOut">&bull;&bull;&bull;&bull; &bull;&bull;&bull;&bull; &bull;&bull;&bull;&bull; &bull;&bull;&bull;&bull; &bull;&bull;&bull;&bull; &bull;&bull;&bull;&bull; &bull;&bull;&bull;&bull; &bull;&bull;&bull;&bull;</div>
+      <!-- Download leads, and the other two follow. Three identical ghost
+           buttons made the most important action on the site look like an
+           option, and the one people should take look like the third one. -->
       <div class="row">
-        <button class="go ghost" id="revealSeed">Reveal</button>
+        <button class="go beckon" id="saveTxt">Download .txt</button>
         <button class="go ghost" data-copy="seed">Copy</button>
-        <button class="go ghost" id="saveTxt">Download .txt</button>
+        <button class="go ghost" id="revealSeed">Reveal</button>
       </div>
       <div class="warnbox">
         <b>Anyone holding this seed is you, forever</b>
@@ -587,11 +653,22 @@ const SIDE=[
       <label for="introText">Message</label><textarea id="introText">${SUGGEST.introText[0]}</textarea>${picksFor("introText")}
       <div class="msg" id="m-intro"></div>` },
 
+  /* The `d-` is a RULE, not a thing to type. It was a placeholder, so the
+     commonest first attempt was a name without it and the commonest first
+     response was a validation error about a prefix nobody had been told was
+     mandatory. It is fixed furniture in the field now, and the box takes the
+     part that is actually a choice. */
   { id:"room", icon:"room", title:"Claim a room", sub:"Signed ownership. First claim wins.", cta:"Claim", body:`
       <p class="hint">Only <code>d-</code> rooms can be owned, and only by the key that claims one first. This is one of just two signed writes Technocore accepts &mdash; a real ownership record, not a nickname.</p>
-      <label for="roomName">Room name</label><input id="roomName" placeholder="d-yourname">
+      <label for="roomName">Room name</label>
+      <div class="prefixed" id="roomWrap"><span class="pfx">d-</span><input id="roomName" placeholder="yourname" autocomplete="off" spellcheck="false" maxlength="45"></div>
+      <div class="avail" id="roomAvail"></div>
       <div class="picks" id="roomPicks" data-for="roomName"></div>
-      <p class="hint">Lowercase letters, numbers and hyphens, starting with <code>d-</code>.</p>
+      <p class="hint">Lowercase letters, numbers and hyphens.</p>
+      <div class="linkout" id="roomOut" hidden>
+        <span class="lk" id="roomLink"></span>
+        <button class="go ghost" type="button" data-copyval="roomLink">Copy</button>
+      </div>
       <div class="msg" id="m-room"></div>` },
 
   { id:"proof", icon:"seal", title:"Make a proof link", sub:"Anyone can screenshot a card. This one can be checked.", cta:"Sign", body:`
@@ -608,10 +685,20 @@ const SIDE=[
 
   { id:"priv", icon:"ghost", title:"Open a private room", sub:"Never listed. The name is the key.", cta:"Create", body:`
       <p class="hint">A <code>p-</code> room is never enumerated, so its name is the only secret. Anyone you give the link to can read it, and there is no revoking that except moving.</p>
-      <div class="didbox" id="privName">not created yet</div>
+      <div class="linkout" id="privOut" hidden>
+        <span class="lk" id="privName"></span>
+        <button class="go ghost" type="button" data-copyval="privName">Copy</button>
+      </div>
       <div class="msg" id="m-priv"></div>` },
 ];
 
+/* TWO BUTTONS, ON PURPOSE. The header one is how a closed rung opens; the
+   body one is how an open rung acts. They were the same button, in the
+   header — and the moment a rung opened, its textarea pushed that button off
+   the top of the screen, so the page looked like it had a message box and no
+   way to send. Both carry data-act, both are updated together when the rung
+   is done, and the handler's rule takes care of the rest: a press on a closed
+   rung opens it, a press on an open one runs it. */
 const stepHTML=(s)=>`
   <div class="step locked" id="t-${s.id}" data-id="${s.id}">
     <div class="node"><svg viewBox="0 0 24 24" aria-hidden="true">${ICON[s.icon]}</svg></div>
@@ -619,9 +706,11 @@ const stepHTML=(s)=>`
       <div><h3>${s.title}</h3><p>${s.sub}</p></div>
       ${s.auto || s.pill
         ? `<span class="lockpill" id="pill-${s.id}">${s.auto ? "start here" : s.pill}</span>`
-        : `<button class="go" data-act="${s.id}" disabled>${s.cta}</button>`}
+        : `<button class="go ghost" data-act="${s.id}" disabled>${s.cta}</button>`}
     </div>
-    <div class="sbody"><div><div class="pad">${s.body}</div></div></div>
+    <div class="sbody"><div><div class="pad">${s.body}${
+      s.auto || s.pill ? "" : `<div class="actionrow"><button class="go" data-act="${s.id}" disabled>${s.cta}</button></div>`
+    }</div></div></div>
   </div>`;
 
 $("rail").innerHTML  = MAIN.map(stepHTML).join("");
@@ -633,25 +722,24 @@ const openStep=(id,on=true)=>$("t-"+id)?.classList.toggle("open",on);
 function live(id){
   const el=$("t-"+id); if(!el || el.classList.contains("done")) return;
   el.classList.remove("locked"); el.classList.add("live");
-  const b=el.querySelector("button[data-act]"); if(b) b.disabled=false;
+  el.querySelectorAll("button[data-act]").forEach(b=>{ b.disabled=false; });
 }
 function done(id){
   state[id]=true;
   const el=$("t-"+id); if(!el) return;
   el.classList.remove("live","locked"); el.classList.add("done");
-  const b=el.querySelector("button[data-act]");
-  if(b){ b.textContent="Done"; b.classList.add("ghost"); b.disabled=true; }
+  el.querySelectorAll("button[data-act]").forEach(b=>{
+    b.textContent="Done"; b.classList.add("ghost"); b.disabled=true;
+  });
   score();
 }
 
-/* Finishing a rung on the MAIN line opens the next unfinished one. A ladder
-   where you have to go and find the next rung is a list with a progress bar
-   drawn on it — and it costs a press, because the first press on a closed
-   step only opens it. Side quests never auto-advance: they are a menu, not a
-   sequence, and opening one uninvited is what made the old page a chore. */
-function advance(from){
-  if(!MAIN.some(s=>s.id===from)) return;
-  const next=MAIN.find(s=>!state[s.id]);
+/* Finishing a rung opens the next unfinished one, and the main line runs
+   straight on into the side rail rather than stopping dead at four of four.
+   A ladder where you have to go and find the next rung is a list with a
+   progress bar drawn on it. */
+function advance(){
+  const next=[...MAIN,...SIDE].find(s=>!state[s.id]);
   if(!next) return;
   live(next.id); openStep(next.id);
   $("t-"+next.id).scrollIntoView({behavior:"smooth",block:"center"});
@@ -675,7 +763,10 @@ function score(){
   $("tierWord").textContent=word;
   $("tier").classList.toggle("good", word==="VERIFIED");
 
-  if(state.note || state.hello){
+  /* Shown only when the main line is finished, and only at the foot of the
+     page. Appearing after the fourth rung — which is what it used to do —
+     put an exit sign between somebody and the four things still worth doing. */
+  if(main===MAIN.length){
     $("finish").hidden=false;
     if(word==="VERIFIED"){
       $("finishTitle").textContent="Set up correctly";
@@ -701,7 +792,7 @@ document.addEventListener("click", async (e)=>{
   btn.disabled=true;
   try{ await ACTIONS[id](); }
   catch(err){ say(id,"Something went wrong: "+err.message,"err"); }
-  if(!state[id]) btn.disabled=false;
+  if(!state[id]) $("t-"+id).querySelectorAll("button[data-act]").forEach(x=>{ x.disabled=false; });
 });
 
 /* One delegated handler for every ready-made line: tapping one drops it into
@@ -715,6 +806,7 @@ document.addEventListener("click",(e)=>{
   field.classList.remove("filled"); void field.offsetWidth; field.classList.add("filled");
   field.focus();
   row.querySelectorAll(".pick").forEach((x)=>x.classList.toggle("on",x===pick));
+  field.dispatchEvent(new Event("input",{bubbles:true}));
 });
 document.addEventListener("input",(e)=>{
   const field=e.target;
@@ -771,7 +863,7 @@ async function install({did,jwk,seed}){
     picks.replaceChildren();
     const lab=document.createElement("span"); lab.className="lab"; lab.textContent="Or try";
     picks.appendChild(lab);
-    [`d-${fingerprint.slice(0,8)}`,`d-agent-${fingerprint.slice(0,6)}`,`d-notes-${fingerprint.slice(2,8)}`]
+    [fingerprint.slice(0,8),`agent-${fingerprint.slice(0,6)}`,`notes-${fingerprint.slice(2,8)}`]
       .forEach((name)=>{
         const b=document.createElement("button");
         b.type="button"; b.className="pick"; b.textContent=name;
@@ -791,12 +883,16 @@ let saved=false;
 function armGate(how){
   if(saved) return;
   saved=true;
+  $("saveTxt").classList.remove("beckon");
+  $("saveTxt").classList.add("ghost");
+  $("gateGo").classList.add("beckon");
   $("gateGo").disabled=false;
   $("gateBox").classList.add("armed");
   $("gateText").textContent=`${how} Press the button once it is somewhere you will still have next month.`;
 }
 $("gateGo").addEventListener("click",()=>{
   if($("gateGo").disabled) return;
+  $("gateGo").classList.remove("beckon");
   done("save");
   $("pill-save")?.remove();
   live("note"); live("hello");
@@ -804,7 +900,7 @@ $("gateGo").addEventListener("click",()=>{
   for(const s of SIDE) live(s.id);
   openStep("save",false);
   say("save","Saved. The rest of the setup is open.","ok");
-  advance("save");
+  advance();
 });
 
 $("revealSeed").addEventListener("click", ()=>{
@@ -818,6 +914,10 @@ $("saveTxt").addEventListener("click", ()=>{
   const body=`Technocore identity\ncreated ${new Date().toISOString()}\n\nDID  (public)\n${ID.did}\n\nSEED (private — anyone with this is you)\n${ID.seed}\n\nKeep this file offline. Never paste the seed into a website.\n`;
   download(new Blob([body],{type:"text/plain"}), `technocore-identity-${ID.did.slice(-8)}.txt`);
   armGate("Downloaded.");
+  /* A download is silent — the file lands in a folder somewhere and the page
+     does not move. Without this, the button that just came alive is below the
+     fold and the page looks like nothing happened. */
+  $("gateBox").scrollIntoView({behavior:"smooth",block:"center"});
 });
 
 $("doBackup").addEventListener("click", async ()=>{
@@ -841,6 +941,18 @@ $("doBackup").addEventListener("click", async ()=>{
   download(new Blob([JSON.stringify(vault,null,2)],{type:"application/json"}), `overheard-identity-${ID.did.slice(-8)}.json`);
   say("backup","Encrypted, saved in this browser, and downloaded. Keep that file.","ok");
   armGate("Backup file downloaded.");
+  $("gateBox").scrollIntoView({behavior:"smooth",block:"center"});
+});
+
+/* A link nobody can copy is a link nobody can share, which for a private
+   room — whose name IS the only way back in — is the whole feature missing. */
+document.addEventListener("click", async (e)=>{
+  const btn=e.target.closest("[data-copyval]"); if(!btn) return;
+  const text=$(btn.dataset.copyval)?.textContent?.trim(); if(!text) return;
+  try{ await navigator.clipboard.writeText(text); }
+  catch{ const ta=document.createElement("textarea"); ta.value=text; document.body.appendChild(ta);
+         ta.select(); document.execCommand("copy"); ta.remove(); }
+  const was=btn.textContent; btn.textContent="Copied"; setTimeout(()=>btn.textContent=was,1400);
 });
 
 document.addEventListener("click", async (e)=>{
@@ -856,6 +968,42 @@ document.addEventListener("click", async (e)=>{
   if(btn.dataset.copy==="seed") armGate("Copied to your clipboard.");
 });
 
+/* ── IS THAT NAME FREE? ────────────────────────────────────────────────────
+   First claim wins and there is no undo, so finding out a name is taken by
+   pressing Claim and reading a 409 is finding out too late. /api/owner reads
+   the same signed record the claim would write to, and it answers three ways
+   — free, claimed, or "could not tell" — so a lookup that fails says so
+   instead of quietly reading as free. Debounced, because a keystroke is not
+   a question.                                                              */
+const roomFull=()=>"d-"+$("roomName").value.trim().toLowerCase().replace(/^d-/,"");
+let availTimer=0, availSeq=0, taken=null;
+
+function showAvail(cls,text){ const el=$("roomAvail"); el.className="avail "+cls; el.textContent=text; }
+
+async function checkRoom(){
+  const room=roomFull(), seq=++availSeq;
+  if(room==="d-"){ showAvail("",""); taken=null; return; }
+  if(!/^d-[a-z0-9][a-z0-9_-]{0,45}$/.test(room)){
+    taken=null; return showAvail("bad","Lowercase letters, numbers and hyphens only.");
+  }
+  showAvail("wait",`Checking ${room}…`);
+  try{
+    const r=await fetch(`/api/owner?room=${encodeURIComponent(room)}`);
+    const d=await r.json();
+    if(seq!==availSeq) return;                       // a later keystroke won
+    if(d.status==="free"){ taken=null; showAvail("free",`${room} is free.`); }
+    else if(d.status==="claimed"){ taken=room; showAvail("bad",`${room} is already claimed.`); }
+    else { taken=null; showAvail("","Could not check that name just now."); }
+  }catch{
+    if(seq===availSeq){ taken=null; showAvail("","Could not check that name just now."); }
+  }
+}
+$("roomName").addEventListener("input",()=>{
+  $("roomOut").hidden=true;
+  clearTimeout(availTimer); availTimer=setTimeout(checkRoom,420);
+});
+$("roomWrap").addEventListener("click",()=>$("roomName").focus());
+
 /* ── the actions ───────────────────────────────────────────────────────── */
 const ACTIONS={
   async note(){
@@ -865,15 +1013,16 @@ const ACTIONS={
     const d=await post({kind:"note",did:ID.did,fingerprint:ID.fingerprint,value});
     if(!d.ok) return say("note",`Technocore said: ${d.error||d.body||"failed"}`,"err");
     say("note","Published. This one is permanent.","ok");
-    done("note"); openStep("note",false); advance("note");
+    done("note"); openStep("note",false); advance();
   },
 
   async hello(){ await postSigned("hello","lobby",$("helloText").value); },
   async intro(){ await postSigned("intro","technocore",$("introText").value); },
 
   async room(){
-    const room=$("roomName").value.trim().toLowerCase();
-    if(!/^d-[a-z0-9][a-z0-9_-]{0,45}$/.test(room)) return say("room","Must start with d- and use only lowercase letters, numbers and hyphens.","err");
+    const room=roomFull();
+    if(!/^d-[a-z0-9][a-z0-9_-]{0,45}$/.test(room)) return say("room","Lowercase letters, numbers and hyphens, and it cannot be empty.","err");
+    if(taken===room) return say("room","That one is already claimed. Try another name.","err");
     say("room","Signing the claim…");
     const nonce=nextNonce();
     // The claim signs `room-owners|d-<room>|<nonce>|<did>` and stores the DID,
@@ -885,8 +1034,10 @@ const ACTIONS={
     if(!d.ok) return say("room", d.status===409
       ? "That room is already claimed by someone else. Try another name."
       : `Technocore said: ${d.error||d.body||"failed"}`,"err");
-    say("room",`You own ${room}. Only your key can write to it.`,"ok");
-    done("room");
+    $("roomLink").textContent=`technocore.chat/r/${room}`;
+    $("roomOut").hidden=false;
+    say("room",`You own ${room}. Only your key can write to it — share the link.`,"ok");
+    done("room"); advance();
   },
 
   async proof(){ $("makeProof").click(); },
@@ -894,10 +1045,11 @@ const ACTIONS={
   async priv(){
     const name="p-"+[...crypto.getRandomValues(new Uint8Array(12))].map(b=>b.toString(16).padStart(2,"0")).join("");
     $("privName").textContent=`technocore.chat/r/${name}`;
+    $("privOut").hidden=false;
     say("priv","Creating…");
     await postSigned("priv",name,"Private room opened.",true);
     say("priv","Created. Copy that address somewhere — it is the only way back in, and it is listed nowhere.","ok");
-    done("priv");
+    done("priv"); advance();
   },
 };
 
@@ -910,7 +1062,7 @@ async function postSigned(id, room, rawText, quiet){
   if(!quiet) say(id,"Sending the signature — never the key…");
   const d=await post({kind:"message",did:ID.did,room,sig,nonce,text});
   if(!d.ok) return say(id,`Technocore said: ${d.error||d.body||"failed"}`,"err");
-  if(!quiet){ say(id,"Posted.","ok"); done(id); openStep(id,false); advance(id); }
+  if(!quiet){ say(id,"Posted.","ok"); done(id); openStep(id,false); advance(); }
 }
 
 /* ── the proof link ────────────────────────────────────────────────────────
@@ -983,6 +1135,8 @@ async function adopt(vault, jwk){
 
 const stored=(()=>{ try{ return JSON.parse(localStorage.getItem("overheard.identity")||"null"); }catch{ return null; } })();
 const wanted=new URLSearchParams(location.search).get("did");
+
+if(stored || wanted) $("unlock").hidden=false;
 
 if(stored){
   $("storedBox").hidden=false;
