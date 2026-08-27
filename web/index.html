@@ -1101,6 +1101,54 @@ function mark(ctx,x,y,s){
   ctx.restore();
 }
 
+/* ── THE FLOP MARK ────────────────────────────────────────────────────────
+   Traced off the 400x400 artwork with a pixel reader rather than eyeballed,
+   so it is the real shape at any size and there is still no image to load:
+
+     body        x 49..348, y 49..348           a 300px square, the unit here
+     grid gaps   x 121..125, 196..201, 271..277 exact quarters, ~1.7% wide
+     hole        x 150..250                     centred, one third across
+     corner cut  ink at y 88 begins at x 85     a 45 degree cut of one cell
+
+   The cut-outs are punched with destination-out on a scratch canvas instead
+   of being folded into a single even-odd path. Even-odd would have filled
+   the grid gaps back in WHERE THEY CROSS THE HOLE — two boundaries instead
+   of one — and drawn little bars through the middle of the logo. Doing it
+   off-card also keeps the punching away from everything already painted.
+   The result is cached per size and colour; the card redraws often. */
+const FLOP_CACHE = new Map();
+function flopMark(ctx,x,y,s,color){
+  const key = s+"|"+color;
+  let c = FLOP_CACHE.get(key);
+  if(!c){
+    const D = 2;                       // drawn at 2x, placed at 1x
+    c = document.createElement("canvas");
+    c.width = c.height = Math.round(s*D);
+    const q = c.getContext("2d");
+    const u = (n)=>n*s*D;              // the unit square in device pixels
+    const C = 0.25, G = 0.017, HA = 0.337, HB = 0.670;
+
+    q.fillStyle = color;
+    q.beginPath();
+    q.moveTo(u(C),0);   q.lineTo(u(1-C),0); q.lineTo(u(1),u(C));
+    q.lineTo(u(1),u(1-C)); q.lineTo(u(1-C),u(1)); q.lineTo(u(C),u(1));
+    q.lineTo(0,u(1-C)); q.lineTo(0,u(C)); q.closePath(); q.fill();
+
+    q.globalCompositeOperation = "destination-out";
+    for(const t of [0.25,0.5,0.75]){
+      q.fillRect(u(t-G/2),0,u(G),u(1));    // the vertical rules
+      q.fillRect(0,u(t-G/2),u(1),u(G));    // and the horizontal ones
+    }
+    q.beginPath(); q.roundRect(u(HA),u(HA),u(HB-HA),u(HB-HA),u(0.075)); q.fill();
+    q.beginPath();                          // the doubled corner, bottom left
+    q.moveTo(u(0.35),u(0.65)); q.lineTo(u(0.42),u(0.72));
+    q.lineTo(u(0.11),u(1.03)); q.lineTo(u(0.04),u(0.96)); q.closePath(); q.fill();
+
+    FLOP_CACHE.set(key,c);
+  }
+  ctx.drawImage(c,x,y,s,s);
+}
+
 /** THE AGENT — a face for the key, drawn from the key.
  *
  *  What was here before was a mirrored grid of squares: honest, deterministic,
@@ -1753,6 +1801,53 @@ async function drawCard(did,pub,stats,note){
   if(proven||preview){ ctx.fillStyle=preview?"#F2B33D":"#5FEBFF"; ctx.fill(); }
   else{ ctx.strokeStyle="#00B4D7"; ctx.lineWidth=1.5; ctx.stroke(); }
 
+  /* ── the Flop lock-up ──────────────────────────────────────────────────
+     The card carries the network's own mark, on every state of the card.
+
+     It goes in the MIDDLE because both ends of this row are already spoken
+     for and neither end is a fixed width: the Overheard mark and name run
+     to about x 186, and the status badge is right-aligned, so it starts at
+     RIGHT minus whatever it happens to say — x 918 at its longest wording,
+     "PUBLIC LOOKUP · UNPROVEN". The plaque is sized from its own text and
+     centred on the card, so the gap either side is measured, not guessed,
+     and it cannot drift into either neighbour on any card state. There is a
+     test that samples this row pixel by pixel and asserts the three groups
+     never touch. */
+  (()=>{
+    const MS=44, PADL=16, GAP=14, PADR=18, BH=68, BY=16;
+    const L1="FLOP · TECHNOCORE", L2="NETWORK ACTIVITY";
+    ctx.save();
+    ctx.textAlign="left";
+    ctx.font="700 17px 'Outfit', sans-serif"; ctx.letterSpacing="1.2px";
+    const w1=ctx.measureText(L1).width;
+    ctx.font="500 11px 'IBM Plex Mono', monospace"; ctx.letterSpacing="2.6px";
+    const w2=ctx.measureText(L2).width;
+    const tw=Math.max(w1,w2), bw=Math.round(PADL+MS+GAP+tw+PADR);
+    const bx=Math.round(W/2-bw/2);
+
+    oct(ctx,bx,BY,bw,BH,14);
+    const pg=ctx.createLinearGradient(bx,BY,bx+bw,BY+BH);
+    pg.addColorStop(0,"rgba(0,180,215,.12)"); pg.addColorStop(1,"rgba(0,180,215,.04)");
+    ctx.fillStyle=pg; ctx.fill();
+    ctx.strokeStyle=proven?"rgba(95,235,255,.46)":"rgba(0,180,215,.30)";
+    ctx.lineWidth=1.25; ctx.stroke();
+
+    flopMark(ctx,bx+PADL,BY+(BH-MS)/2,MS,"#5FEBFF");
+
+    const tx=bx+PADL+MS+GAP;
+    ctx.fillStyle="#EDFAFE"; ctx.font="700 17px 'Outfit', sans-serif";
+    ctx.letterSpacing="1.2px"; ctx.fillText(L1,tx,BY+29);
+    ctx.fillStyle="#5E8C9B"; ctx.font="500 11px 'IBM Plex Mono', monospace";
+    ctx.letterSpacing="2.6px"; ctx.fillText(L2,tx,BY+50);
+    ctx.letterSpacing="0px";
+    ctx.restore();
+    ctx.textAlign="left"; ctx.letterSpacing="0px";
+    // Published so the layout test can assert the plaque's real box rather
+    // than infer it from pixels — its border is deliberately faint enough to
+    // sit under any sane ink threshold.
+    try{ window.__flopBox=[bx,BY,bw,BH]; }catch{}
+  })();
+
   // A preview must stay unmistakable even cropped, so the figures carry it.
   if(preview){
     ctx.save();
@@ -1776,9 +1871,31 @@ async function drawCard(did,pub,stats,note){
   ctx.textAlign="center";
   ctx.fillStyle=proven?"#5FEBFF":`hsl(${hue} 70% 52%)`;
   ctx.font="600 11px 'IBM Plex Mono', monospace";
-  ctx.letterSpacing="3.4px"; ctx.fillText(proven?"VERIFIED AGENT":"AGENT",LCX,140); ctx.letterSpacing="0px";
+  /* ── THE PLATE IS SIZED, NOT NUDGED ────────────────────────────────────
+     A proven card carries a full-width band at the foot, so the caption used
+     to ride up 22px to clear it — and rode straight into the socket ring.
+     The ring's outer edge sits at PCY ± (PR+13), so with PCY 272 / PR 116 it
+     spans y 143…401, and the DID's cap height at baseline 410 starts at 392.
+     The ring was drawn THROUGH the key. The label had the same problem at the
+     other end: baseline 140 against a ring starting at 143.
 
-  const PCY=272, PR=116;
+     Both are arithmetic, so both get solved with arithmetic rather than a few
+     pixels of guesswork. A proven card gets a slightly smaller plate, raised,
+     and every caption below it recomputed from the ring's real extent.
+
+       label baseline   128   ring top 141   -> 13px of air
+       ring bottom      375   DID cap top 400 -> 25px
+       facts bottom     ~476  band top    496 -> 20px
+     ──────────────────────────────────────────────────────────────────── */
+  const PCY = proven ? 258 : 272;
+  const PR  = proven ? 104 : 116;
+  const AS  = proven ? 176 : 196;
+  const CY  = proven ? -14 : 0;      // how far the captions ride up
+
+  ctx.letterSpacing="3.4px";
+  ctx.fillText(proven?"VERIFIED AGENT":"AGENT",LCX,proven?128:132);
+  ctx.letterSpacing="0px";
+
   const sock=ctx.createRadialGradient(LCX,PCY-14,8,LCX,PCY,PR+42);
   sock.addColorStop(0,`hsla(${hue} 92% 56% / .26)`); sock.addColorStop(1,"transparent");
   ctx.fillStyle=sock; ctx.beginPath(); ctx.arc(LCX,PCY,PR+42,0,Math.PI*2); ctx.fill();
@@ -1796,7 +1913,6 @@ async function drawCard(did,pub,stats,note){
     ctx.strokeStyle=`hsl(${hue} 96% 66%)`; ctx.lineWidth=3; ctx.lineCap="round"; ctx.stroke();
   }
 
-  const AS=196;
   agent(ctx,LCX-AS/2,PCY-Math.round(AS*0.52),AS,pub);
 
   /* The seal. Struck on the ring at 45°, where a verification mark sits on an
@@ -1821,9 +1937,6 @@ async function drawCard(did,pub,stats,note){
   // Fitted, because keys vary and a plate that overflows looks broken.
   const idText=did.slice(8,18)+"…"+did.slice(-4);
   fitFont(ctx,idText,COL-M-24,25,15,"700");
-  // A proven card gives its last band to the proof, so the plate's caption
-  // rides up to keep clear of it rather than sitting on its edge.
-  const CY=proven?-22:0;
   ctx.fillStyle="#EDFAFE"; ctx.fillText(idText,LCX,432+CY);
 
   ctx.fillStyle="#5F8593"; ctx.font="500 12px 'IBM Plex Mono', monospace";
