@@ -160,15 +160,41 @@ svg.line *{stroke-dasharray:1;stroke-dashoffset:1;transition:stroke-dashoffset .
 .step.done .node{background:linear-gradient(140deg,var(--blue),var(--mint)) padding-box,linear-gradient(var(--blue),var(--blue)) border-box}
 .step.done .node svg{stroke:#001016}
 .step.locked{opacity:.4}
+/* A notice, not an error. Grey rather than red, because nothing here went
+   wrong and nothing the person types will change it — red says "you did
+   something", and this is the network saying "not right now". */
+.capbox{margin-top:14px;padding:15px 17px;border-radius:13px;
+  border:1px solid rgba(147,182,192,.30);background:rgba(147,182,192,.05)}
+.capbox b{display:block;color:var(--white);font-weight:600;font-size:15px;margin-bottom:7px}
+.capbox p{color:var(--dim);font-size:14px;line-height:1.6;margin-bottom:9px}
+.capbox p:last-child{margin-bottom:0}
+.capbox .fine{color:var(--faint);font-size:12.5px;padding-top:9px;border-top:1px solid rgba(147,182,192,.16)}
+
+/* While the network is refusing, the suggested names are noise: every one of
+   them is equally unclaimable, so offering three is offering three ways to
+   get the same refusal. */
+.step.blocked .picks{display:none}
+.step.blocked .avail{display:none}
+.step.blocked .msg{display:none}
+
 /* A rung the network itself has refused. Not an error state — nothing here
    is wrong — but the way past it is the Skip, so the Skip stops being quiet. */
 .step.blocked .actionrow button[data-act]{opacity:.4;pointer-events:none}
 .step.blocked .skip{color:var(--blue);font-weight:600}
-.step.skipped{opacity:.55}
+.step.skipped{opacity:.6}
 .step.skipped .node svg{stroke:var(--faint)}
+.step.skipped .shead{cursor:pointer}
+/* The way back stays lit while everything around it is dimmed. */
+.step.skipped .shead button[data-act]{opacity:1;color:var(--blue);font-weight:600}
 .step.locked .shead{cursor:not-allowed}
 
 .shead{display:grid;grid-template-columns:1fr auto;gap:12px;align-items:center;cursor:pointer;user-select:none;padding:8px 0 0}
+/* One visible action per rung. The head button is how a CLOSED rung opens;
+   once it is open the body button is the real one, and two buttons saying
+   "Generate" a few lines apart is the thing that made this page feel like a
+   form in the first place. A skipped rung is the exception — its head button
+   is the way back in, and its body button is the one that is spent. */
+.step.open:not(.skipped) .shead button[data-act]{display:none}
 .shead h3{font-size:17px;font-weight:700;letter-spacing:-.015em}
 .shead p{color:var(--faint);font-size:13.5px;margin-top:1px}
 .lockpill{font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--blue);white-space:nowrap}
@@ -264,8 +290,9 @@ code{font-family:var(--mono);font-size:12.5px;background:var(--navy-0);border:1p
 .avail{font-family:var(--mono);font-size:12px;margin-top:8px;min-height:16px;color:var(--faint)}
 .avail.free{color:var(--mint)}
 .avail.bad{color:var(--red)}
+.avail.warn{color:var(--gold)}
 .avail.wait{color:var(--faint)}
-.avail.free::before,.avail.bad::before{content:"";display:inline-block;width:6px;height:6px;border-radius:50%;
+.avail.free::before,.avail.bad::before,.avail.warn::before{content:"";display:inline-block;width:6px;height:6px;border-radius:50%;
   background:currentColor;margin-right:8px;vertical-align:middle;box-shadow:0 0 8px currentColor}
 
 /* A result you can take away. */
@@ -628,7 +655,7 @@ const MAIN=[
            buttons made the most important action on the site look like an
            option, and the one people should take look like the third one. -->
       <div class="row">
-        <button class="go beckon" id="saveTxt">Download .txt</button>
+        <button class="go" id="saveTxt">Download .txt</button>
         <button class="go ghost" data-copy="seed">Copy</button>
         <button class="go ghost" id="revealSeed">Reveal</button>
       </div>
@@ -684,21 +711,26 @@ const SIDE=[
       <div class="prefixed" id="roomWrap"><span class="pfx">d-</span><input id="roomName" placeholder="yourname" autocomplete="off" spellcheck="false" maxlength="45"></div>
       <div class="avail" id="roomAvail"></div>
       <div class="picks" id="roomPicks" data-for="roomName"></div>
+      <div class="capbox" id="roomCap" hidden>
+        <b>Technocore has run out of space for new rooms.</b>
+        <p>It can only hold so many room owners at once, and it is at that number &mdash; so right now <em>nobody</em> can claim a new room, on any site, whatever name they pick. This is not about your name and not about your key.</p>
+        <p>Space comes back on its own as unused rooms expire, which takes about a week. Skip this step for now and come back whenever you like &mdash; your identity does not change, and the room will still be there to claim.</p>
+        <p class="fine">Technocore&rsquo;s limit is 50,960 ownership records. Rooms already claimed are unaffected, and entries are released after 7 days without a write.</p>
+      </div>
       <div class="linkout" id="roomOut" hidden>
         <span class="lk" id="roomLink"></span>
         <button class="go ghost" type="button" data-copyval="roomLink">Copy</button>
       </div>
       <div class="msg" id="m-room"></div>` },
 
-  { id:"proof", icon:"seal", title:"Make a proof link", sub:"Anyone can screenshot a card. This one can be checked.", cta:"Sign", skippable:true, body:`
+  /* Four buttons for one idea, once: a header Sign, a Create proof link, a
+     Copy link and an Open it. The rung's own action generates it and the
+     result gets one Copy, which is the only thing anybody does next. */
+  { id:"proof", icon:"seal", title:"Make a proof link", sub:"Anyone can screenshot a card. This one can be checked.", cta:"Generate", skippable:true, body:`
       <p class="hint">Signs one short line with your key and packs it into a link. Whoever opens it can confirm the card belongs to whoever holds this identity &mdash; without trusting us.</p>
-      <div class="row"><button class="go ghost" id="makeProof">Create proof link</button></div>
-      <div id="proofOut" hidden>
-        <div class="val pub" id="proofLink" style="margin-top:12px"></div>
-        <div class="row">
-          <button class="go ghost" data-copy="proof">Copy link</button>
-          <a class="go ghost" id="openProof" target="_blank" rel="noopener noreferrer">Open it</a>
-        </div>
+      <div class="linkout" id="proofOut" hidden>
+        <span class="lk" id="proofLink"></span>
+        <button class="go ghost" type="button" data-copyval="proofLink">Copy</button>
       </div>
       <div class="msg" id="m-proof"></div>` },
 
@@ -763,7 +795,7 @@ function done(id){
 function advance(){
   const next=[...MAIN,...SIDE].find(s=>!state[s.id]&&!skipped[s.id]);
   if(!next) return;
-  live(next.id); openStep(next.id);
+  live(next.id); openStep(next.id); spotlight();
   /* The scroll waits out the collapse of the rung being left behind. Both
      happen at once — one body closing above, another opening below — and a
      smooth scroll started before that settles is aimed at a position the page
@@ -773,6 +805,38 @@ function advance(){
   setTimeout(()=>{
     $("t-"+next.id)?.scrollIntoView({behavior:calmMotion?"auto":"smooth",block:"center"});
   }, calmMotion?0:460);
+}
+
+/* ── WHERE TO CLICK NEXT ───────────────────────────────────────────────────
+   Exactly one control on the page glows, and it is always the next thing to
+   do. Not a rule applied by hand in nine places — one function that clears
+   every beacon and lights one, called after anything that changes what the
+   next thing IS.
+
+   The order matters. A link that has just been produced and not yet copied
+   outranks the next rung, because for a private room the address IS the only
+   way back in, and moving somebody on before they have it loses the room.
+   After that it is simply the first unsettled rung: its body button when it
+   is open, its head button when it is not, because beckoning at a control
+   nobody can see is worse than beckoning at nothing. */
+let pendingCopy=null;
+
+function spotlight(){
+  document.querySelectorAll(".beckon").forEach(el=>el.classList.remove("beckon"));
+  const light=(el)=>{ if(el && !el.disabled) el.classList.add("beckon"); };
+
+  if(pendingCopy && $(pendingCopy)?.closest(".linkout")?.offsetParent !== null)
+    return light($(pendingCopy).closest(".linkout").querySelector("[data-copyval]"));
+
+  if(!state.key)  return light($("gen"));
+  if(!state.save) return light(saved ? $("gateGo") : $("saveTxt"));
+
+  const next=[...MAIN,...SIDE].find(x=>!state[x.id]&&!skipped[x.id]);
+  if(!next) return;
+  const el=$("t-"+next.id);
+  light(el.classList.contains("open")
+    ? el.querySelector(".actionrow button[data-act]")
+    : el.querySelector(".shead button[data-act]"));
 }
 
 /* ── the score ─────────────────────────────────────────────────────────────
@@ -790,6 +854,7 @@ function score(){
              : state.note                ? "REGISTERED"
              : state.hello               ? "UNREGISTERED"
              :                             "KEY ONLY";
+  spotlight();
   $("tierWord").textContent=word;
   $("tier").classList.toggle("good", word==="VERIFIED");
 
@@ -818,11 +883,13 @@ document.addEventListener("click", async (e)=>{
   const head=e.target.closest(".shead");
   const btn=e.target.closest("button[data-act]");
   if(head && !btn){
-    const el=$("t-"+head.dataset.t);
-    if(el && !el.classList.contains("locked")) openStep(head.dataset.t, !el.classList.contains("open"));
+    const id=head.dataset.t, el=$("t-"+id);
+    if(el && skipped[id]) return setSkipped(id,false);
+    if(el && !el.classList.contains("locked")){ openStep(id, !el.classList.contains("open")); spotlight(); }
   }
   if(!btn) return;
   const id=btn.dataset.act;
+  if(skipped[id]){ setSkipped(id,false); return; }     // "Try again"
   if(!$("t-"+id).classList.contains("open") && id!=="priv"){ openStep(id); return; }
   openStep(id);
   btn.disabled=true;
@@ -831,15 +898,31 @@ document.addEventListener("click", async (e)=>{
   if(!state[id]) $("t-"+id).querySelectorAll("button[data-act]").forEach(x=>{ x.disabled=false; });
 });
 
+/* ── SKIPPING IS A DECISION, NOT A DOOR CLOSING ────────────────────────────
+   A skipped rung greys out and settles, which is right — but it used to have
+   no way back, and the commonest reason to skip one of these is that the
+   network refused it for a week. So the head keeps a live button, and it
+   changes to the way back in. */
+function setSkipped(id,on){
+  const el=$("t-"+id); if(!el) return;
+  const cta=[...MAIN,...SIDE].find(s=>s.id===id)?.cta || "Open";
+  skipped[id]=on;
+  el.classList.toggle("skipped",on);
+  el.classList.toggle("live",!on);
+  const head=el.querySelector(".shead button[data-act]");
+  const body=el.querySelector(".actionrow button[data-act]");
+  if(head){ head.disabled=false; head.textContent=on?"Try again":cta; head.classList.toggle("ghost",true); }
+  if(body){ body.disabled=on; body.textContent=on?"Skipped":cta; body.classList.toggle("ghost",on); }
+  openStep(id,!on);
+  spotlight();
+  if(!on) el.scrollIntoView({behavior:calmMotion?"auto":"smooth",block:"center"});
+  score();
+}
+
 document.addEventListener("click",(e)=>{
   const b=e.target.closest("[data-skip]"); if(!b) return;
-  const id=b.dataset.skip;
-  skipped[id]=true;
-  const el=$("t-"+id);
-  el.classList.remove("live"); el.classList.add("skipped");
-  el.querySelectorAll("button[data-act]").forEach(x=>{ x.textContent="Skipped"; x.classList.add("ghost"); x.disabled=true; });
-  openStep(id,false);
-  score(); advance();
+  setSkipped(b.dataset.skip,true);
+  advance();
 });
 
 /* One delegated handler for every ready-made line: tapping one drops it into
@@ -930,16 +1013,14 @@ let saved=false;
 function armGate(how){
   if(saved) return;
   saved=true;
-  $("saveTxt").classList.remove("beckon");
   $("saveTxt").classList.add("ghost");
-  $("gateGo").classList.add("beckon");
   $("gateGo").disabled=false;
+  spotlight();
   $("gateBox").classList.add("armed");
   $("gateText").textContent=`${how} Press the button once it is somewhere you will still have next month.`;
 }
 $("gateGo").addEventListener("click",()=>{
   if($("gateGo").disabled) return;
-  $("gateGo").classList.remove("beckon");
   done("save");
   $("pill-save")?.remove();
   live("note"); live("hello");
@@ -1000,6 +1081,7 @@ document.addEventListener("click", async (e)=>{
   catch{ const ta=document.createElement("textarea"); ta.value=text; document.body.appendChild(ta);
          ta.select(); document.execCommand("copy"); ta.remove(); }
   const was=btn.textContent; btn.textContent="Copied"; setTimeout(()=>btn.textContent=was,1400);
+  if(pendingCopy===btn.dataset.copyval){ pendingCopy=null; spotlight(); }
 });
 
 document.addEventListener("click", async (e)=>{
@@ -1035,20 +1117,34 @@ function showAvail(cls,text){ const el=$("roomAvail"); el.className="avail "+cls
 const ROOM_MIN=3;
 const roomOk=(r)=>new RegExp(`^d-[a-z0-9][a-z0-9_-]{${ROOM_MIN-1},45}$`).test(r);
 
+/* UNOWNED IS NOT THE SAME AS UNUSED, and the first version only checked one
+   of them. `d-test` has no owner — it is genuinely claimable — but so does
+   `d-crypto`, which has two hundred messages in it from other people. Calling
+   both of those "available" is true and useless: claiming the second one
+   makes you the owner of somebody else's conversation.
+
+   So it asks twice, in parallel: who owns the name, and whether a room by
+   that name already has anything in it. Three answers instead of two. */
 async function checkRoom(){
   const room=roomFull(), seq=++availSeq;
   const body=room.slice(2);
+  $("roomCap").hidden=true;
   if(!body){ showAvail("",""); taken=null; return; }
   if(body.length<ROOM_MIN){ taken=null; return showAvail("bad",`Too short — ${ROOM_MIN} characters or more.`); }
   if(!roomOk(room)){ taken=null; return showAvail("bad","Lowercase letters, numbers and hyphens only."); }
   showAvail("wait",`Checking ${room}…`);
   try{
-    const r=await fetch(`/api/owner?room=${encodeURIComponent(room)}`);
-    const d=await r.json();
+    const [own,msgs]=await Promise.all([
+      fetch(`/api/owner?room=${encodeURIComponent(room)}`).then(r=>r.json()).catch(()=>null),
+      fetch(`/api/room?room=${encodeURIComponent(room)}`).then(r=>r.json()).catch(()=>null),
+    ]);
     if(seq!==availSeq) return;                       // a later keystroke won
-    if(d.status==="free"){ taken=null; showAvail("free",`${room} is available`); }
-    else if(d.status==="claimed"){ taken=room; showAvail("bad",`${room} is taken`); }
-    else { taken=null; showAvail("","Could not check that name just now."); }
+    if(!own || own.status==="unknown") { taken=null; return showAvail("","Could not check that name just now."); }
+    if(own.status==="claimed"){ taken=room; return showAvail("bad",`${room} is taken`); }
+    taken=null;
+    const n=Number(msgs?.count ?? 0);
+    if(n>0) showAvail("warn",`${room} is unclaimed — but it already exists, with ${n.toLocaleString()} message${n===1?"":"s"} in it from other people.`);
+    else showAvail("free",`${room} is available`);
   }catch{
     if(seq===availSeq){ taken=null; showAvail("","Could not check that name just now."); }
   }
@@ -1060,6 +1156,7 @@ $("roomName").addEventListener("input",()=>{
   // at any moment as entries age out, and refusing to let somebody try again
   // for the rest of the session would outlive the reason for it.
   $("t-room").classList.remove("blocked");
+  $("roomCap").hidden=true;
   clearTimeout(availTimer); availTimer=setTimeout(checkRoom,420);
 });
 $("roomWrap").addEventListener("click",()=>$("roomName").focus());
@@ -1096,26 +1193,29 @@ const ACTIONS={
     if(!d.ok && isFull(d)){
       /* Not the name, not this key, and not this site: the register of room
          owners is at its 50,960 cap, so no client anywhere can claim a NEW
-         room until entries are released. Rooms already claimed keep working. */
+         room until entries are released. It gets the notice box rather than a
+         red line, and the suggestions and the availability line go with it. */
       $("t-room").classList.add("blocked");
-      showAvail("bad","Nobody can claim a new room right now.");
-      return say("room","Technocore's room-ownership register is full — it caps at 50,960 claims and it has hit that. No new room can be claimed on any site until entries are released, which happens after 7 days without a write. Nothing is wrong with your name, and rooms already claimed are unaffected. Skip this one and come back.","err");
+      $("roomCap").hidden=false;
+      say("room","");
+      $("roomCap").scrollIntoView({behavior:calmMotion?"auto":"smooth",block:"center"});
+      return;
     }
     if(!d.ok) return say("room", d.status===409
       ? "That room is taken. Try another name."
       : `Technocore said: ${d.error||d.body||"failed"}`,"err");
     $("roomLink").textContent=`technocore.chat/r/${room}`;
-    $("roomOut").hidden=false;
+    $("roomOut").hidden=false; pendingCopy="roomLink";
     say("room",`You own ${room}. Only your key can write to it — share the link.`,"ok");
     done("room"); advance();
   },
 
-  async proof(){ $("makeProof").click(); },
+  async proof(){ await makeProof(); },
 
   async priv(){
     const name="p-"+[...crypto.getRandomValues(new Uint8Array(12))].map(b=>b.toString(16).padStart(2,"0")).join("");
     $("privName").textContent=`technocore.chat/r/${name}`;
-    $("privOut").hidden=false;
+    $("privOut").hidden=false; pendingCopy="privName";
     say("priv","Creating…");
     await postSigned("priv",name,"Private room opened.",true);
     say("priv","Created. Copy that address somewhere — it is the only way back in, and it is listed nowhere.","ok");
@@ -1147,9 +1247,8 @@ async function postSigned(id, room, rawText, quiet){
    claim publicly. If that post fails the link is still valid: verification is
    arithmetic on the signature, not a lookup.
    ─────────────────────────────────────────────────────────────────────── */
-$("makeProof").addEventListener("click", async ()=>{
+async function makeProof(){
   if(!ID) return;
-  const btn=$("makeProof"); btn.disabled=true;
   say("proof","Signing on this device…");
   try{
     const room="overheard-proofs";
@@ -1160,9 +1259,8 @@ $("makeProof").addEventListener("click", async ()=>{
     PROOF=`${location.origin}/v#b=${b64u(enc.encode(JSON.stringify(bundle)))}`;
 
     $("proofLink").textContent=PROOF;
-    $("openProof").href=PROOF;
     $("proofOut").hidden=false;
-    btn.textContent="Regenerate";
+    pendingCopy="proofLink";
 
     // Publishing is a bonus, not the proof. Say which happened rather than
     // implying the link depends on it.
@@ -1175,8 +1273,7 @@ $("makeProof").addEventListener("click", async ()=>{
   }catch(err){
     say("proof","Could not sign: "+err.message,"err");
   }
-  btn.disabled=false;
-});
+}
 
 /* Unlock, restore and the vault reader used to live here. They moved out with
    the panel that used them: this page mints keys, and the one place that

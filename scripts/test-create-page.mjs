@@ -31,6 +31,11 @@ const srv = http.createServer((req, res) => {
         : { ok: true }));
     });
   }
+  if (p === '/api/room') {
+    const room = u.searchParams.get('room') || '';
+    res.writeHead(200, { 'content-type': 'application/json' });
+    return res.end(JSON.stringify({ room, count: room === 'd-busy' ? 200 : 0, messages: [] }));
+  }
   if (p === '/api/owner') {
     const room = u.searchParams.get('room') || '';
     res.writeHead(200, { 'content-type': 'application/json' });
@@ -107,17 +112,19 @@ await pg.locator('#gateGo').click({ force: true }).catch(() => {});
 await pg.waitForTimeout(300);
 check('and pressing it anyway does nothing', (await stateOf('note')) === 'locked');
 
-console.log('\n=== C2. the page points at the one button that matters');
-const lead = await pg.evaluate(() => {
-  const d = document.getElementById('saveTxt');
-  return { cls: d.className, first: d.parentElement.firstElementChild.id,
-           gate: document.getElementById('gateGo').className };
+console.log('\n=== C2. exactly one thing on the page is glowing, and it is the next thing');
+const beacon = async () => pg.evaluate(() => {
+  const l = [...document.querySelectorAll('.beckon')];
+  return { n: l.length, at: l[0] ? (l[0].id || l[0].dataset.act || l[0].dataset.copyval || l[0].textContent.trim()) : null };
 });
-console.log('  ', JSON.stringify(lead));
-check('Download leads the row', lead.first === 'saveTxt');
-check('and is the solid button, not a ghost', !lead.cls.includes('ghost'));
-check('and it pulses', lead.cls.includes('beckon'));
-check('while the gate does not, because it cannot be pressed yet', !lead.gate.includes('beckon'));
+let bc = await beacon();
+console.log('  ', JSON.stringify(bc));
+check('one beacon, not several', bc.n === 1, String(bc.n));
+check('and it is Download', bc.at === 'saveTxt', String(bc.at));
+check('Download leads the row',
+  await pg.evaluate(() => document.getElementById('saveTxt').parentElement.firstElementChild.id === 'saveTxt'));
+check('and is the solid button, not a ghost',
+  !(await pg.evaluate(() => document.getElementById('saveTxt').className)).includes('ghost'));
 
 console.log('\n=== D. saving the seed arms it');
 const dl = pg.waitForEvent('download');
@@ -135,11 +142,8 @@ const gateSeen = await pg.evaluate(() => {
   return r.top > -20 && r.bottom < innerHeight + 20;
 });
 check('and the page went to the button it just woke up', gateSeen);
-const after = await pg.evaluate(() => ({
-  dl: document.getElementById('saveTxt').className,
-  gate: document.getElementById('gateGo').className }));
-check('Download stops pulsing once it has been obeyed', !after.dl.includes('beckon'), after.dl);
-check('and the pulse moves to the gate', after.gate.includes('beckon'), after.gate);
+bc = await beacon();
+check('the beacon moved to the gate', bc.n === 1 && bc.at === 'gateGo', JSON.stringify(bc));
 
 await pg.click('#gateGo');
 await pg.waitForTimeout(800);
@@ -174,6 +178,11 @@ check('and the room names are derived from the key, not left as a placeholder',
   && /^[0-9a-f]{8}$/.test((await pg.locator('#roomPicks .pick').first().textContent()).trim()),
   await pg.locator('#roomPicks .pick').first().textContent());
 
+console.log('\n=== D2. and it keeps moving, one at a time');
+bc = await beacon();
+check('one beacon after the gate', bc.n === 1, String(bc.n));
+check('on the rung that is now live', bc.at === 'note', String(bc.at));
+
 console.log('\n=== E2. the button sits with the field it acts on');
 const gap = await pg.evaluate(() => {
   const out = {};
@@ -191,14 +200,14 @@ check('nothing is pushed more than a line away from its own button',
 
 console.log('\n=== F. publish the note, post the message');
 POSTS = [];
-await pg.click('#t-note button[data-act]');
+await pg.click('#t-note .actionrow button[data-act]');
 await pg.waitForFunction(() => document.getElementById('t-note').className.includes('done'), null, { timeout: 15000 });
 check('the note rung is done', (await stateOf('note')) === 'done');
 check('and a note went to the network', POSTS.some(p => p.kind === 'note'), JSON.stringify(POSTS.map(p => p.kind)));
 check('the verdict moved to REGISTERED', (await pg.locator('#tierWord').textContent()) === 'REGISTERED');
 check('the finish panel does NOT appear yet', await pg.locator('#finish').isHidden());
 
-await pg.click('#t-hello button[data-act]');
+await pg.click('#t-hello .actionrow button[data-act]');
 await pg.waitForFunction(() => document.getElementById('t-hello').className.includes('done'), null, { timeout: 15000 });
 await pg.waitForTimeout(400);
 const msg = POSTS.find(p => p.kind === 'message');
@@ -295,20 +304,32 @@ await pg.fill('#roomName', 'another-name');
 await pg.waitForFunction(() => /is available/.test(document.getElementById('roomAvail').textContent), null, { timeout: 6000 });
 await pg.click('#t-room .actionrow button[data-act]');
 await pg.waitForTimeout(1000);
-const capMsg = (await pg.locator('#m-room').textContent()) || '';
+const capMsg = (await pg.locator('#roomCap').innerText()) || '';
 console.log('   ', capMsg.slice(0, 120) + '…');
-check('it does not pass the raw error through', !/Technocore said/.test(capMsg));
-check('it names the register that is full', /room-ownership register is full/.test(capMsg));
-check('and says it is not this name', /Nothing is wrong with your name/.test(capMsg));
+check('it does not pass the raw error through',
+  !/Technocore said/.test(await pg.evaluate(() => document.body.innerText)));
+check('it names the limit', /50,960 ownership records/.test(capMsg));
+check('and says it is not this name', /not about your name/.test(capMsg));
 check('and says it is not just this site', /on any site/.test(capMsg));
-check('and says when it clears', /7 days/.test(capMsg));
+check('and says when it clears', /about a week/.test(capMsg) && /7 days/.test(capMsg));
+check('and it does not repeat Technocore\'s own wording at anyone',
+  !/note limit reached/.test(await pg.evaluate(() => document.body.innerText)));
 check('the rung is marked blocked, not failed', (await cls('t-room')).includes('blocked'));
 check('and it is not marked done', (await stateOf('room')) !== 'done');
+check('the notice is a box, not a red line', await pg.locator('#roomCap').isVisible());
+check('and it leads with plain words',
+  /run out of space for new rooms/.test((await pg.locator('#roomCap b').textContent()) || ''));
+check('it says nobody can, not just you', /nobody<\/em>? can|nobody/i.test(await pg.locator('#roomCap').innerText()));
+check('it says you can come back', /come back/.test(await pg.locator('#roomCap').innerText()));
+check('the suggested names are hidden — every one of them is equally refused',
+  await pg.locator('#t-room .picks').isHidden());
+check('and so is the availability line', await pg.locator('#roomAvail').isHidden());
 FULL = false;
 
 await pg.fill('#roomName', 'my-lab');
-await pg.waitForFunction(() => /is available/.test(document.getElementById('roomAvail').textContent), null, { timeout: 6000 });
-check('a free one says available', /d-my-lab is available/.test(await pg.locator('#roomAvail').textContent()));
+await pg.waitForFunction(() => /d-my-lab is available/.test(document.getElementById('roomAvail').textContent), null, { timeout: 8000 });
+check('a free one says available', /d-my-lab is available/.test(await pg.locator('#roomAvail').textContent()),
+  JSON.stringify(await pg.locator('#roomAvail').textContent()));
 check('in green', (await pg.locator('#roomAvail').getAttribute('class')).includes('free'));
 POSTS = [];   // the refused claim above is still in there
 await pg.click('#t-room .actionrow button[data-act]');
@@ -320,12 +341,41 @@ check('pointing at the room just claimed',
   (await pg.locator('#roomLink').textContent()) === 'technocore.chat/r/d-my-lab',
   await pg.locator('#roomLink').textContent());
 
+console.log('\n=== F4a2. unowned is not the same as unused');
+await pg.fill('#roomName', 'busy');
+await pg.waitForFunction(() => /already exists/.test(document.getElementById('roomAvail').textContent), null, { timeout: 6000 });
+const busy = await pg.locator('#roomAvail').textContent();
+console.log('   ', busy);
+check('an unclaimed room with other people in it is not just "available"',
+  /unclaimed/.test(busy) && /200 messages/.test(busy));
+check('and it is amber, not green', (await pg.locator('#roomAvail').getAttribute('class')).includes('warn'));
+
 console.log('\n=== F4b. a name too short to be worth a permanent slot');
 POSTS = [];
 await pg.fill('#roomName', '11');
 await pg.waitForTimeout(700);
 check('says so while typing, not after signing', /Too short/.test(await pg.locator('#roomAvail').textContent()),
   await pg.locator('#roomAvail').textContent());
+
+console.log('\n=== F4c. the proof rung: generate, then copy, and nothing else');
+await ensureOpen('proof');
+const pbtns = await pg.evaluate(() => [...document.querySelectorAll('#t-proof button, #t-proof a.go')]
+  .filter(b => b.offsetParent !== null).map(b => b.textContent.trim()));
+console.log('   visible controls:', JSON.stringify(pbtns));
+check('two, before it runs: the action and the skip', pbtns.length === 2, JSON.stringify(pbtns));
+check('and the action says Generate', pbtns[0] === 'Generate');
+check('no duplicate action in the head of an open rung',
+  await pg.locator('#t-proof .shead button[data-act]').isHidden());
+await pg.click('#t-proof .actionrow button[data-act]');
+await pg.waitForFunction(() => document.getElementById('t-proof').className.includes('done'), null, { timeout: 15000 });
+await pg.waitForTimeout(400);
+check('a link came out', /\/v#b=/.test((await pg.locator('#proofLink').textContent()) || ''));
+check('with one Copy beside it', (await pg.locator('#proofOut [data-copyval]').count()) === 1);
+check('and the beacon is on that Copy, because it is what you do next',
+  (await beacon()).at === 'proofLink', JSON.stringify(await beacon()));
+await pg.click('#proofOut [data-copyval]');
+await pg.waitForTimeout(400);
+check('copying moves the beacon on', (await beacon()).at !== 'proofLink', JSON.stringify(await beacon()));
 
 console.log('\n=== F5. the private room hands back something copyable');
 // open it first: a closed rung's body is a 0fr grid row, so its button has no
@@ -360,6 +410,19 @@ for (const id of ['intro', 'proof', 'priv']) {
   await pg.click(`#t-${id} [data-skip]`);
   await pg.waitForTimeout(600);
 }
+console.log('   (and a skipped rung can be re-entered)');
+check('a skipped rung offers a way back',
+  (await pg.locator('#t-intro .shead button[data-act]').textContent()) === 'Try again',
+  await pg.locator('#t-intro .shead button[data-act]').textContent());
+await pg.click('#t-intro .shead button[data-act]');
+await pg.waitForTimeout(800);
+check('which un-skips it', !(await cls('t-intro')).includes('skipped'));
+check('and makes it live and open again',
+  (await cls('t-intro')).includes('live') && (await cls('t-intro')).includes('open'));
+check('with its real action back', (await pg.locator('#t-intro .actionrow button[data-act]').textContent()) === 'Post');
+await pg.click('#t-intro [data-skip]');
+await pg.waitForTimeout(600);
+
 check('every rung is settled', await pg.evaluate(() =>
   [...document.querySelectorAll('.step')].every(s =>
     s.classList.contains('done') || s.classList.contains('skipped'))));
