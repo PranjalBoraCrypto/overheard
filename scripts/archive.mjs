@@ -116,7 +116,18 @@ const PAGE = 200;
 // burst without losing anything; chasing 100% would double the reads to buy
 // the one condition we must never be in.
 const SAFE_FILL = 0.55;
-const MIN_INTERVAL_MS = 2_500;
+/* A busy room gets a tighter target than the arithmetic asks for.
+
+   Overflow does not depend on the interval, it depends on the GAP between
+   two successive reads exceeding the window — 8 seconds in the lobby. The
+   interval only decides how much headroom a stall has to eat before that
+   happens. At 0.55 the lobby aims for 4.4s and a 4-second hiccup overflows;
+   at 0.35 it aims for 2.8s and the same hiccup is absorbed. Twenty-one reads
+   a minute against an allowance of six hundred is not a cost worth
+   protecting. */
+const FAST_ROOM_RATE = 8;      // messages/sec
+const FAST_SAFE_FILL = 0.35;
+const MIN_INTERVAL_MS = 1_500;
 const MAX_INTERVAL_MS = 150_000;
 const NEW_ROOM_INTERVAL_MS = 20_000;
 
@@ -425,7 +436,8 @@ async function readRoom(state, e) {
   e.lastAt = startedAt;
 
   if (e.rate != null && e.rate > 0) {
-    e.interval = clamp((PAGE * SAFE_FILL) / e.rate * 1000, MIN_INTERVAL_MS, MAX_INTERVAL_MS);
+    const fill = e.rate >= FAST_ROOM_RATE ? FAST_SAFE_FILL : SAFE_FILL;
+    e.interval = clamp((PAGE * fill) / e.rate * 1000, MIN_INTERVAL_MS, MAX_INTERVAL_MS);
   } else if (!msgs.length) {
     // Nothing at all: back off, but never past the window, so every tracked
     // room is still read at least once per run.

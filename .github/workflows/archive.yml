@@ -97,7 +97,10 @@ jobs:
             sleep 300
             pass=$((pass + 1))
 
-            git add web/data
+            # `nice`, because git and the collector share two vCPUs on a runner
+            # and hashing several megabytes of shards can hold the CPU long
+            # enough for the lobby to fill its eight-second window.
+            nice -n 15 git add web/data
             if git diff --staged --quiet; then
               echo "pass $pass: no new messages"
             else
@@ -111,7 +114,7 @@ jobs:
               else
                 MSG="archive: $STAMP [skip ci]"
               fi
-              git commit -m "$MSG"
+              nice -n 15 git commit -m "$MSG"
 
               # Your own pushes race with this loop. Retry, and on a conflict
               # in the generated data keep THIS run's version — it read the
