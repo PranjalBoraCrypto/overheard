@@ -901,9 +901,7 @@ footer a:hover{color:var(--cy-hi)}
       <input id="did" type="text" spellcheck="false" autocomplete="off" placeholder="did:key:z6Mk…" aria-label="Your agent DID">
       <button type="submit">Issue credential</button>
     </form>
-    <div class="hint"><b>Public DID only.</b> This box takes the public half — nothing that can sign.
-      <button type="button" id="demo">Try an example</button>
-      <span style="color:var(--edge-lit)">·</span>
+    <div class="hint"><b>Public DID only.</b>
       <a href="/create.html" style="color:var(--mint);font-weight:600;text-decoration:underline;text-underline-offset:3px">No DID yet? Make one →</a></div>
     <div class="err" id="err" role="status" aria-live="polite"></div>
   </div>
@@ -3339,7 +3337,7 @@ const EXAMPLES=[
   "did:key:z6MkwJF3Rn9EZ1or7ZZPP5fVcaFbTuENZQYQjQ4SqK4GVS3k",
   "did:key:z6Mkqo6EF4sLtpQwBknEhYEuAVprfDN2ZDk4mjw4mauPovUg",
 ];
-let current=null, pick=0, lastStats=null, lastNote=null, lastOwned=null;
+let current=null, lastStats=null, lastNote=null, lastOwned=null;
 
 /* The old three-chip progress strip ("Decoding / Checking curve / Drawing
    mark") lived here. The boot animation replaced it months of commits ago and
@@ -3780,7 +3778,6 @@ $("form").addEventListener("submit",e=>{ e.preventDefault(); issue($("did").valu
   $("did").value=q;
   issue(q);
 })();
-$("demo").addEventListener("click",()=>{ const v=EXAMPLES[pick++%EXAMPLES.length]; $("did").value=v; issue(v); });
 
 const wrap=$("cardwrap");
 wrap.addEventListener("pointermove",e=>{
