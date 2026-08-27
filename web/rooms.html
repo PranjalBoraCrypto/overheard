@@ -85,6 +85,11 @@ h1{font-weight:800;font-size:clamp(30px,4.4vw,44px);letter-spacing:-.035em;margi
 .msg.mine{background:linear-gradient(90deg,rgba(0,180,215,.10),rgba(0,180,215,.02));
   border-left:2px solid rgba(95,235,255,.55);padding-left:10px}
 .msg.mine .did{color:var(--cy-hi)}
+/* Sent, and then seen coming back out of the room. Two different facts, and
+   the second is the one that matters. */
+.msg.mine .body::after{content:"sent";margin-left:8px;font-size:10px;letter-spacing:.09em;
+  text-transform:uppercase;color:var(--faint);vertical-align:2px}
+.msg.mine.echoed .body::after{content:"in the room";color:var(--cy)}
 .msg:hover{background:rgba(0,180,215,.05)}
 .msg .who{font-family:var(--mono);font-size:11.5px;margin-bottom:3px;display:flex;align-items:center;gap:7px;flex-wrap:wrap}
 .msg .who .sq{width:14px;height:14px;border-radius:5px;flex:none}
@@ -310,6 +315,15 @@ $("find").addEventListener("keydown",e=>{
    seconds at the edge and a thousand readers cost one request. */
 let since="0", seen=new Set(), timer=null, backoff=4000, freshRead=0;
 
+/* Messages this browser drew the moment Technocore accepted them, waiting
+   for the room to echo them back. Without this the echo arrives carrying a
+   real sequence number, `seen` has never met it, and the page appends a
+   SECOND copy of your own line directly under the first — which is exactly
+   what it did. Matched on DID and text rather than on the signature,
+   because a room read returns `sig: null` on every message. */
+let mineWaiting=[];
+const MINE_TTL=180000;
+
 /* ── how much of this room can be seen at all ─────────────────────────────
    A read returns the newest 200 messages and cannot ask for older, so the
    view's DEPTH is not 200 messages, it is 200 divided by how fast the room
@@ -332,7 +346,7 @@ const roomWindow=()=>{
 };
 
 function switchRoom(next){
-  room=next; since="0"; seen.clear(); rate=null; seqAt=0; seqVal=0;
+  room=next; since="0"; seen.clear(); rate=null; seqAt=0; seqVal=0; mineWaiting=[];
   $("stream").textContent=""; $("rname").textContent=next; $("rmeta").textContent="";
   history.replaceState(null,"",`?room=${encodeURIComponent(next)}`);
   paintRooms($("find").value.trim().toLowerCase());
@@ -417,6 +431,25 @@ async function poll(){
       backoff=4000;
       for(const m of j.messages){
         if(seen.has(m.seq)) continue;
+
+        // Our own line coming back. Keep the copy already on screen — it
+        // holds the real signature and nonce, which the echo does not, so
+        // "Keep" goes on working — and mark it as confirmed in the room.
+        const mineKey = ID && m.from===ID.did ? `${m.from}|${String(m.text??"")}` : null;
+        if(mineKey){
+          const now=Date.now();
+          mineWaiting=mineWaiting.filter((x)=>now-x.at<MINE_TTL);
+          const i=mineWaiting.findIndex((x)=>x.key===mineKey);
+          if(i>=0){
+            const mine=mineWaiting.splice(i,1)[0];
+            seen.add(m.seq);
+            mine.el.classList.add("echoed");
+            const t=mine.el.querySelector("time");
+            if(t){ t.textContent=stamp(m.ts)||t.textContent; t.title="Confirmed — read back out of the room"; }
+            continue;
+          }
+        }
+
         seen.add(m.seq);
         box.appendChild(render(m));
       }
@@ -478,7 +511,9 @@ $("send").addEventListener("click",async()=>{
       // verifiable link for it exactly as it would for any other message.
       const mine={ seq:`self-${nonce}`, ts:new Date().toISOString(), from:ID.did, nick:null, text, sig, nonce, self:true };
       seen.add(mine.seq);
-      const box=$("stream"); box.appendChild(render(mine)); box.scrollTop=box.scrollHeight;
+      const box=$("stream"); const el=render(mine);
+      box.appendChild(el); box.scrollTop=box.scrollHeight;
+      mineWaiting.push({ key:`${ID.did}|${text}`, el, at:Date.now() });
       say(fastRoom() ? `Posted. ${roomWindow()} — yours is shown above; it may scroll out of the readable window before the next refresh.`
                      : "Posted. Yours is shown above.","ok");
       freshRead=2; clearTimeout(timer); poll();
