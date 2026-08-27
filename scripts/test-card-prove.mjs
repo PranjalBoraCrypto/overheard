@@ -129,40 +129,66 @@ await pg.waitForTimeout(500);
 check('clicking it does not reopen the dialog', !(await pg.locator('#pmodal').isVisible()));
 await pg.locator('#provebar').screenshot({ path: '/tmp/prove-bar-done.png' });
 
-console.log('\n=== D3. the card follows the cursor instead of trailing it');
-/* `transition: transform .5s` plus a transform set on every pointer move
-   restarted the ease every move, so the card sat most of a second behind the
-   cursor — measured at 0.74 degrees on screen while the handler had asked for
-   4.94. It reads as lag, not as smoothing, and it only showed up after a
-   lookup because before one the card is a 34%-opacity mock. */
+console.log('\n=== D3. the tilt: no snap on arrival, no lag while following');
+/* Two failures, one after the other, so this checks for both at once.
+
+   `transition: transform .5s` plus a transform set on every move restarted
+   the ease on every move: the card sat most of a second behind the cursor —
+   4.94 degrees asked for, 0.74 on screen. Turning the transition off while
+   the pointer was on the card fixed that and produced the opposite fault:
+   arriving applied the whole tilt on a single frame, which at the edges of
+   the card is a visible bump.
+
+   So: on the frame after the pointer arrives at a corner the card must have
+   moved only slightly, and a fifth of a second later it must be exactly
+   where the cursor put it. */
 const feel = await pg.evaluate(() => {
   const w = document.getElementById('cardwrap'), r = w.getBoundingClientRect();
-  const ev = (x, y) => w.dispatchEvent(new PointerEvent('pointermove', { clientX: x, clientY: y, bubbles: true }));
-  w.dispatchEvent(new PointerEvent('pointerenter', { clientX: r.left + 10, clientY: r.top + 10, bubbles: true }));
-  ev(r.left + 12, r.top + 12);
-  return new Promise((done) => setTimeout(() => {
-    ev(r.right - 12, r.bottom - 12);
-    const asked = w.style.transform;
-    requestAnimationFrame(() => requestAnimationFrame(() => {
-      const m = new DOMMatrix(getComputedStyle(w).transform);
-      // the yaw the screen is actually showing, in degrees
-      done({ asked, shownDeg: +(Math.asin(Math.max(-1, Math.min(1, -m.m13))) * 180 / Math.PI).toFixed(2),
-             transition: getComputedStyle(w).transitionDuration });
-    }));
-  }, 600));
+  const yaw = () => {
+    const m = new DOMMatrix(getComputedStyle(w).transform);
+    return Math.asin(Math.max(-1, Math.min(1, -m.m13))) * 180 / Math.PI;
+  };
+  const send = (type, x, y) => w.dispatchEvent(new PointerEvent(type, { clientX: x, clientY: y, bubbles: true }));
+  const raf = () => new Promise((r2) => requestAnimationFrame(() => r2()));
+  return (async () => {
+    // start flat and at rest
+    send('pointerleave', 0, 0);
+    await new Promise((r2) => setTimeout(r2, 700));
+    const atRest = yaw();
+    // arrive hard, in the far corner
+    send('pointerenter', r.right - 14, r.bottom - 14);
+    send('pointermove',  r.right - 14, r.bottom - 14);
+    const t0 = performance.now();
+    await raf(); await raf();
+    const firstFrames = yaw(), elapsed = performance.now() - t0;
+    await new Promise((r2) => setTimeout(r2, 320));
+    const settled = yaw();
+    const asked = +(/rotateY\(([-\d.]+)deg/.exec(w.style.transform)?.[1] ?? 0);
+    send('pointerleave', 0, 0);
+    await new Promise((r2) => setTimeout(r2, 700));
+    const back = yaw();
+    return { atRest, firstFrames, elapsed, settled, asked, back,
+             transition: getComputedStyle(w).transitionDuration };
+  })();
 });
-const wanted = +(/rotateY\(([-\d.]+)deg/.exec(feel.asked)?.[1] ?? NaN);
-console.log('  asked for', wanted, 'deg · showing', feel.shownDeg, 'deg · transition', feel.transition);
-check('what is on screen is what the cursor asked for', Math.abs(feel.shownDeg - wanted) < 0.6,
-  `${wanted} vs ${feel.shownDeg}`);
-check('and the ease is off while tracking', parseFloat(feel.transition) === 0, feel.transition);
-const back = await pg.evaluate(() => {
-  const w = document.getElementById('cardwrap');
-  w.dispatchEvent(new PointerEvent('pointerleave', { bubbles: true }));
-  return { tracking: w.classList.contains('tracking'), transition: getComputedStyle(w).transitionDuration };
-});
-check('the ease comes back for the return to flat', parseFloat(back.transition) > 0.2 && !back.tracking,
-  JSON.stringify(back));
+console.log('  at rest', feel.atRest.toFixed(2), '· two frames after arriving', feel.firstFrames.toFixed(2),
+            '· settled', feel.settled.toFixed(2), '· after leaving', feel.back.toFixed(2), 'deg');
+check('it starts flat', Math.abs(feel.atRest) < 0.2, feel.atRest.toFixed(2));
+/* Bounded in TIME, not in frames. Headless runs at about 15fps and a real
+   browser at 60, so "two frames in" is a different amount of ease each time;
+   what must hold either way is that the card never moves FASTER than an
+   exponential would. The bound uses a 55ms time constant against the code's
+   80ms, which leaves room for timing noise and still fails a snap — a snap
+   arrives complete at whatever the elapsed time happens to be. */
+const bound = Math.abs(feel.settled) * (1 - Math.exp(-feel.elapsed / 55));
+check('arriving RAMPS rather than snapping',
+  Math.abs(feel.firstFrames) <= bound + 0.15,
+  `${feel.firstFrames.toFixed(2)} deg after ${feel.elapsed.toFixed(0)}ms, ceiling ${bound.toFixed(2)}`);
+check('but it does get there', Math.abs(feel.settled) > 4.4, feel.settled.toFixed(2));
+check('and lands exactly where the cursor put it', Math.abs(feel.settled - feel.asked) < 0.25,
+  `asked ${feel.asked} · showing ${feel.settled.toFixed(2)}`);
+check('leaving decays back to flat', Math.abs(feel.back) < 0.2, feel.back.toFixed(2));
+check('none of it is a CSS transition', parseFloat(feel.transition) === 0, feel.transition);
 
 console.log('\n=== E. a DIFFERENT browser, no identity — the seed route, and a file back');
 const pg2 = await ctx.newPage(); await killWebGL(pg2); pg2.on('pageerror', e => errs.push(e.message));

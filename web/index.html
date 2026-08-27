@@ -233,18 +233,25 @@ h1 em{
    translateX(100%), and without clipping it that off-screen copy widened the
    document by a full card and gave the whole page a horizontal scrollbar
    mid-animation. */
+/* NO CSS TRANSITION ON THIS TRANSFORM AT ALL. It has been wrong twice.
+
+   With `transition: transform .5s`, a handler that sets a new transform on
+   every pointer move restarted the ease on every move, and the card sat most
+   of a second behind the cursor — measured at 0.74 degrees on screen while
+   the handler had asked for 4.94.
+
+   Turning the transition off while the pointer was on the card fixed the lag
+   and bought a worse problem: entering the card applied the full tilt on one
+   frame. At the edges, where a cursor crosses in and out, that is a visible
+   bump — 40ms from flat to five degrees, over and over.
+
+   A transition cannot do both jobs, because it does not know the difference
+   between arriving and following. The tilt is integrated in JS instead: one
+   exponential ease toward a target, running while the pointer is over the
+   card and until it has settled back to flat afterwards. Arriving ramps,
+   following tracks, leaving decays, and all three are the same three lines. */
 .cardwrap{position:relative;max-width:960px;margin:0 auto;border-radius:22px;overflow:hidden;
-  transition:transform .5s var(--ease);will-change:transform}
-/* THE TRANSITION IS FOR LETTING GO, NOT FOR FOLLOWING.
-   The pointer handler sets a new transform on every move, and with a
-   half-second ease on the property every one of those restarted the ease —
-   so the card was permanently most of a second behind the cursor. Measured:
-   the handler had asked for 4.94 degrees and the screen was showing 0.74.
-   It reads as lag rather than as smoothing, and it only became obvious once
-   the card stopped being the 34%-opacity mock, which is why it looked fine
-   before a lookup and wrong after one. While the pointer is on the card the
-   transform is applied raw; the ease comes back for the return to flat. */
-.cardwrap.tracking{transition:none}
+  will-change:transform}
 /* BACKWARDS, NOT BOTH. `both` keeps the deal's last keyframe applied for
    good, and an animation's applied value beats an inline style — so from the
    moment the finished card was dealt in, `transform:none` won every frame and
@@ -4048,32 +4055,69 @@ $("form").addEventListener("submit",e=>{ e.preventDefault(); issue($("did").valu
   issue(q);
 })();
 
+/* ── THE CARD'S TILT ────────────────────────────────────────────────────────
+   Integrated, not transitioned. See the note on .cardwrap for why a CSS
+   transition cannot do this: arriving needs a ramp, following needs none, and
+   one duration cannot be both.
+
+   TAU is the time constant, and 80ms is chosen rather than tuned: below about
+   50ms the ramp is short enough to read as the snap it replaced, and above
+   about 120ms it starts to feel like the lag it replaced. The rate is derived
+   from the real frame delta, so a slow frame moves further rather than
+   stalling the ease. */
 const wrap=$("cardwrap");
-/* The rect is read once on entry rather than on every move: reading it inside
-   the handler forces a layout on each pointer event, which is a strange price
-   to pay for a number that only changes when the page scrolls or resizes. */
+const TAU=0.08;
+let tYaw=0,tPit=0,cYaw=0,cPit=0,tSx=0,tSy=0,cSx=0,cSy=0;
+let tiltRaf=0,tiltLast=0,tiltOver=false;
+/* The rect is read on entry, not per move: reading it inside the handler
+   forces a layout on every pointer event, for a number that only changes when
+   the page scrolls or resizes. */
 let wrapRect=null;
 const dropRect=()=>{ wrapRect=null; };
 addEventListener("scroll",dropRect,{passive:true});
 addEventListener("resize",dropRect,{passive:true});
 
-wrap.addEventListener("pointerenter",()=>{ if(!calm) wrap.classList.add("tracking"); });
+/* The deal-in animation owns the transform while it runs, and an animation's
+   value beats an inline style — so a tilt built up underneath it would appear
+   all at once the instant the animation stopped. Hold at flat until it ends. */
+const dealing=()=>{
+  try{ return wrap.getAnimations().some(a=>a.animationName==="deal"&&a.playState==="running"); }
+  catch{ return false; }
+};
+
+function tiltStep(now){
+  const dt=Math.min(0.05,(now-tiltLast)/1000||0.0166); tiltLast=now;
+  if(dealing()){ tiltRaf=requestAnimationFrame(tiltStep); return; }
+  const k=1-Math.exp(-dt/TAU);
+  cYaw+=(tYaw-cYaw)*k; cPit+=(tPit-cPit)*k;
+  cSx+=(tSx-cSx)*k;    cSy+=(tSy-cSy)*k;
+  wrap.style.transform=`rotateY(${cYaw.toFixed(3)}deg) rotateX(${cPit.toFixed(3)}deg)`;
+  wrap.style.setProperty("--sx",`${cSx.toFixed(1)}px`);
+  wrap.style.setProperty("--sy",`${cSy.toFixed(1)}px`);
+  // 0.05 of a degree is not a tilt anyone can see, and holding a rAF open to
+  // chase the last thousandth is a frame a minute for nothing.
+  const settled=Math.abs(tYaw-cYaw)+Math.abs(tPit-cPit)<0.05
+             && Math.abs(tSx-cSx)+Math.abs(tSy-cSy)<0.5;
+  if(tiltOver||!settled) tiltRaf=requestAnimationFrame(tiltStep);
+  else { wrap.style.transform=""; tiltRaf=0; }
+}
+const tiltRun=()=>{ if(!tiltRaf){ tiltLast=performance.now(); tiltRaf=requestAnimationFrame(tiltStep); } };
+
+wrap.addEventListener("pointerenter",()=>{ if(!calm){ tiltOver=true; tiltRun(); } });
 wrap.addEventListener("pointermove",e=>{
   if(calm) return;
   const r=wrapRect||(wrapRect=wrap.getBoundingClientRect());
   if(!r.width) return;
   const px=(e.clientX-r.left)/r.width, py=(e.clientY-r.top)/r.height;
-  wrap.classList.add("tracking");
-  wrap.style.transform=`rotateY(${(px-.5)*11}deg) rotateX(${(.5-py)*9}deg)`;
+  tiltOver=true;
+  tYaw=(px-.5)*11; tPit=(.5-py)*9;
   // the sheen is translated, not repainted: pixels from the card's centre
-  wrap.style.setProperty("--sx",`${Math.round((px-.5)*r.width)}px`);
-  wrap.style.setProperty("--sy",`${Math.round((py-.5)*r.height)}px`);
+  tSx=(px-.5)*r.width; tSy=(py-.5)*r.height;
+  tiltRun();
 });
 wrap.addEventListener("pointerleave",()=>{
-  // class off first, so the ease is in force when the transform is cleared
-  wrap.classList.remove("tracking");
-  wrap.style.transform="";
-  wrapRect=null;
+  tiltOver=false; tYaw=0; tPit=0; tSx=0; tSy=0;
+  wrapRect=null; tiltRun();
 });
 
 const flash=(btn,msg)=>{ const o=btn.innerHTML; btn.textContent=msg; setTimeout(()=>btn.innerHTML=o,1700); };

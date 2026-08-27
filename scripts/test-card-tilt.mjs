@@ -35,13 +35,28 @@ let bad = 0;
 const check = (n, ok, d = '') => { console.log(`  ${ok ? 'ok  ' : 'FAIL'}  ${n}${d ? '   ' + d : ''}`); if (!ok) bad++; };
 
 const tf = () => pg.evaluate(() => getComputedStyle(document.getElementById('cardwrap')).transform);
-const tilted = (t) => !!t && t !== 'none' && t !== 'matrix(1, 0, 0, 1, 0, 0)';
+/* A residual of a thousandth of a radian is not a tilt; the ease decays
+   toward zero and stops when the remainder stops being visible. */
+const degOf = (t) => {
+  const m = /matrix3d\(([^)]+)\)/.exec(t || '');
+  if(!m) return 0;
+  const v = m[1].split(',').map(Number);
+  return Math.abs(Math.asin(Math.max(-1, Math.min(1, -v[2]))) * 180 / Math.PI);
+};
+const tilted = (t) => degOf(t) > 0.25;
 
+/* The rect is read with evaluate rather than locator.boundingBox(), which
+   waits for the element to hold still — and this element is now deliberately
+   never still while a pointer is on it. The wait after the sweep is long
+   enough for an 80ms ease to have arrived. */
 const sweep = async () => {
-  const box = await pg.locator('#cardwrap').boundingBox();
+  const box = await pg.evaluate(() => {
+    const r = document.getElementById('cardwrap').getBoundingClientRect();
+    return { x: r.x, y: r.y, width: r.width, height: r.height };
+  });
   await pg.mouse.move(box.x + box.width * 0.5, box.y + box.height * 0.5);
   await pg.mouse.move(box.x + box.width * 0.82, box.y + box.height * 0.24, { steps: 8 });
-  await pg.waitForTimeout(250);
+  await pg.waitForTimeout(500);
   return tf();
 };
 
@@ -69,6 +84,34 @@ await pg.evaluate(() => { const w = document.getElementById('cardwrap'); w.class
 await pg.waitForTimeout(2600);
 const again = await sweep();
 check('still tilts after a re-deal', tilted(again), again);
+
+console.log('\n=== D2. hovering DURING the deal-in must not bank up a jump');
+/* The deal animation owns the transform while it runs and an animation beats
+   an inline style, so a tilt integrated underneath it would appear all at
+   once the moment the animation stopped. The loop holds at flat instead. */
+const during = await pg.evaluate(() => {
+  const w = document.getElementById('cardwrap');
+  w.classList.remove('reveal'); void w.offsetWidth; w.classList.add('reveal');
+  w.style.transform = '';                 // start from nothing banked
+  const r = w.getBoundingClientRect();
+  const send = (t, x, y) => w.dispatchEvent(new PointerEvent(t, { clientX: x, clientY: y, bubbles: true }));
+  send('pointerenter', r.right - 14, r.bottom - 14);
+  const seen = [];
+  return new Promise((done) => {
+    const id = setInterval(() => {
+      send('pointermove', r.right - 14, r.bottom - 14);
+      const running = w.getAnimations().some(a => a.animationName === 'deal' && a.playState === 'running');
+      if (running) seen.push(w.style.transform || '');
+      else { clearInterval(id); done(seen); }
+    }, 40);
+  });
+});
+const banked = during.filter(t => { const m = /rotateY\(([-\d.]+)deg/.exec(t); return m && Math.abs(+m[1]) > 0.05; });
+check('nothing accumulates while the card is dealing in', banked.length === 0,
+  `${during.length} samples during the deal, ${banked.length} of them tilted`);
+await pg.waitForTimeout(900);
+const afterDeal = await sweep();
+check('and it starts tilting normally once the deal ends', tilted(afterDeal), afterDeal);
 
 console.log('\n=== E. reduced motion is respected');
 const pg2 = await b.newPage({ viewport: { width: 1240, height: 1000 }, reducedMotion: 'reduce' });
