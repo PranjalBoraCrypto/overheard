@@ -823,13 +823,111 @@ input.beckon,textarea.beckon{animation:beckonin 2.3s var(--ease) infinite}
 @keyframes toastin{from{opacity:0;transform:translateY(9px) scale(.96)}}
 @keyframes toastout{to{opacity:0;transform:translateY(-7px)}}
 @media (prefers-reduced-motion:reduce){.toast,.toast.leaving{animation:none}}
-.plain{max-width:64ch}
-.plain p{color:var(--dim);margin-bottom:15px;font-size:15.5px}
-.plain strong{color:var(--txt);font-weight:600}
+/* ── THE LEDGER ────────────────────────────────────────────────────────────
+   Two columns, and the split IS the information: what a card can stand
+   behind on the left in cyan, what it cannot on the right in amber. The old
+   version was four paragraphs of prose in which the two kinds of statement
+   were typographically identical, so the honest half — the half that makes
+   the rest believable — read as small print and got skipped.
+
+   The icons draw themselves in rather than fading: every path carries
+   pathLength="1", so one dash length works for a circle, a squiggle and a
+   rectangle alike without measuring any of them. */
+.ledger{display:grid;grid-template-columns:1fr 1fr;grid-template-rows:auto repeat(4,auto);
+  column-gap:20px;row-gap:12px;align-items:start}
+/* subgrid, so row 1 on the left lines up with row 1 on the right. Where it is
+   not supported the declaration is dropped and each column falls back to its
+   own auto rows — the same layout, just unaligned. */
+.col{display:grid;grid-row:1 / -1;grid-template-rows:subgrid;align-content:start}
+.colhead{
+  display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+  font-size:13.5px;color:var(--faint);padding-bottom:4px;
+}
+.colhead .chip{
+  font-family:var(--mono);font-size:11px;font-weight:600;letter-spacing:1.6px;text-transform:uppercase;
+  padding:5px 10px;border-radius:8px;border:1px solid transparent;
+}
+.colhead .chip.yes{color:var(--cy-hi);background:rgba(0,180,215,.13);border-color:rgba(0,180,215,.4)}
+.colhead .chip.no{color:var(--warn);background:rgba(242,179,61,.11);border-color:rgba(242,179,61,.36)}
+
+.claim{
+  position:relative;overflow:hidden;display:flex;gap:15px;align-items:flex-start;
+  padding:19px 20px;border-radius:16px;transition:.4s var(--ease);
+  background:linear-gradient(rgba(4,20,28,.72),rgba(4,20,28,.72)) padding-box,var(--bevel) border-box;
+  border:1px solid transparent;
+}
+.claim::after{content:"";position:absolute;inset:0;opacity:0;transition:opacity .4s;pointer-events:none;
+  background:radial-gradient(280px circle at var(--bx,50%) var(--by,50%),rgba(0,180,215,.13),transparent 65%)}
+.claim:hover{transform:translateY(-3px);box-shadow:0 26px 52px -34px rgba(0,180,215,.85)}
+.claim:hover::after{opacity:1}
+.claim h3{font-weight:700;font-size:16.5px;letter-spacing:-.015em;margin-bottom:6px;text-wrap:balance}
+.claim p{color:var(--dim);font-size:14.5px;line-height:1.62;margin:0}
+.claim p strong{color:var(--cy-hi);font-weight:600}
+.claim .cic{
+  flex:0 0 auto;width:40px;height:40px;border-radius:12px;display:grid;place-items:center;
+  transition:transform .45s var(--spring),box-shadow .4s;
+}
+.claim .cic svg{width:21px;height:21px;fill:none;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
+.claim:hover .cic{transform:translateY(-2px) rotate(-6deg) scale(1.07)}
+
+[data-side="yes"] .cic{background:rgba(0,180,215,.13);box-shadow:inset 0 0 0 1px rgba(0,180,215,.34)}
+[data-side="yes"] .cic svg{stroke:var(--cy-hi)}
+[data-side="yes"] .claim:hover .cic{box-shadow:inset 0 0 0 1px rgba(95,235,255,.7),0 10px 24px -12px rgba(0,180,215,.9)}
+[data-side="no"] .cic{background:rgba(242,179,61,.1);box-shadow:inset 0 0 0 1px rgba(242,179,61,.32)}
+[data-side="no"] .cic svg{stroke:var(--warn)}
+[data-side="no"] .claim:hover .cic{box-shadow:inset 0 0 0 1px rgba(242,179,61,.65),0 10px 24px -12px rgba(242,179,61,.7)}
+[data-side="no"] .claim::after{background:radial-gradient(280px circle at var(--bx,50%) var(--by,50%),rgba(242,179,61,.1),transparent 65%)}
+[data-side="no"] .claim:hover{box-shadow:0 26px 52px -34px rgba(242,179,61,.6)}
+[data-side="no"] .claim p strong{color:var(--warn)}
+
+/* the draw-on: held at full offset until the column scrolls in */
+.col .cic svg > *{stroke-dasharray:1;stroke-dashoffset:1;transition:stroke-dashoffset 1s var(--ease)}
+.col.in .cic svg > *{stroke-dashoffset:0}
+.col.in .claim:nth-child(2) .cic svg > *{transition-delay:.10s}
+.col.in .claim:nth-child(3) .cic svg > *{transition-delay:.22s}
+.col.in .claim:nth-child(4) .cic svg > *{transition-delay:.34s}
+.col.in .claim:nth-child(5) .cic svg > *{transition-delay:.46s}
+
+.seedrule{
+  display:flex;gap:18px;align-items:flex-start;margin-top:22px;padding:24px 26px;border-radius:18px;
+  position:relative;overflow:hidden;
+  background:linear-gradient(140deg,rgba(242,179,61,.07),rgba(4,20,28,.8) 52%) padding-box,
+             linear-gradient(150deg,rgba(242,179,61,.55),rgba(242,179,61,.08) 45%,rgba(255,255,255,.05)) border-box;
+  border:1px solid transparent;
+}
+.seedrule::after{content:"";position:absolute;inset:0;opacity:0;transition:opacity .4s;pointer-events:none;
+  background:radial-gradient(420px circle at var(--bx,50%) var(--by,50%),rgba(242,179,61,.09),transparent 65%)}
+.seedrule:hover::after{opacity:1}
+.seedrule h3{font-weight:700;font-size:17.5px;letter-spacing:-.02em;margin-bottom:9px;color:var(--txt)}
+.seedrule p{color:var(--dim);font-size:14.5px;line-height:1.65;margin:0 0 11px}
+.seedrule p:last-child{margin-bottom:0}
+.seedrule .sic{
+  flex:0 0 auto;width:44px;height:44px;border-radius:13px;display:grid;place-items:center;
+  background:rgba(242,179,61,.12);box-shadow:inset 0 0 0 1px rgba(242,179,61,.4);
+}
+.seedrule .sic svg{width:23px;height:23px;fill:none;stroke:var(--warn);stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
+/* One column, and the subgrid has to be undone as well as the tracks: a
+   .col still spanning `grid-row: 1 / -1` inside a single-column grid puts
+   both columns in the same track, on top of each other. */
+@media (max-width:900px){
+  .ledger{grid-template-columns:1fr;grid-template-rows:none;column-gap:0;row-gap:26px}
+  .col{display:flex;flex-direction:column;gap:12px;grid-row:auto;grid-template-rows:none}
+  .seedrule{flex-direction:column;gap:14px;padding:22px}
+}
 .mono{font-family:var(--mono);font-size:13.5px}
-footer{border-top:1px solid rgba(16,57,74,.9);padding:30px 0 56px;color:var(--faint);font-size:13.5px;display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap}
+footer{border-top:1px solid rgba(16,57,74,.9);padding:30px 0 56px;color:var(--faint);font-size:13.5px;
+  display:flex;flex-direction:column;gap:12px}
+.frow{display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap;align-items:baseline}
 footer a{color:var(--cy);text-decoration:none;font-weight:600}
 footer a:hover{color:var(--cy-hi)}
+/* The DID is the credit, so it is shown whole rather than trimmed to an
+   ellipsis — and it links to its own card, which is the one thing on this
+   page that can check it. It wraps rather than pushing the page sideways. */
+.by{padding-top:11px;border-top:1px solid rgba(16,57,74,.55)}
+.bydid{font-family:var(--mono);font-size:12px;font-weight:500;color:var(--faint);
+  word-break:break-all;letter-spacing:.2px}
+.bydid:hover{color:var(--cy)}
+@media (max-width:620px){.frow{flex-direction:column;gap:7px}}
 
 .rise{opacity:0;transform:translateY(28px);transition:.85s var(--ease)}
 .rise.in{opacity:1;transform:none}
@@ -838,6 +936,7 @@ footer a:hover{color:var(--cy-hi)}
 .stagger.in>*:nth-child(2){transition-delay:.1s}
 .stagger.in>*:nth-child(3){transition-delay:.2s}
 .stagger.in>*:nth-child(4){transition-delay:.3s}
+.stagger.in>*:nth-child(5){transition-delay:.4s}
 :focus-visible{outline:2px solid var(--cy-hi);outline-offset:3px;border-radius:6px}
 @media (prefers-reduced-motion:reduce){
   *,*::before,*::after{animation-duration:.001ms!important;animation-iteration-count:1!important;transition-duration:.001ms!important}
@@ -1025,39 +1124,126 @@ footer a:hover{color:var(--cy-hi)}
     <div class="chips" id="chips"></div>
   </section>
 
-  <section class="band rise" id="how">
-    <h2>Three seconds, no install</h2>
-    <p class="sub">Everything runs in this browser tab. Nothing leaves your device.</p>
-    <div class="grid stagger">
-      <div class="tile">
-        <div class="ic"><svg viewBox="0 0 24 24"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1"/></svg></div>
-        <h3>Paste your DID</h3>
-        <p>The long <span class="mono">did:key:z6Mk…</span> string your agent prints. It's the public half — the part people already put in their posts.</p>
-      </div>
-      <div class="tile">
-        <div class="ic"><svg viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><polyline points="9 12 11 14 15 10"/></svg></div>
-        <h3>The key gets checked</h3>
-        <p>We decode it and confirm it's a real Ed25519 key, not a typo. Bad strings get a clear reason, not a broken card.</p>
-      </div>
-      <div class="tile">
-        <div class="ic"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v4M12 18v4M4.9 4.9l2.9 2.9M16.2 16.2l2.9 2.9M2 12h4M18 12h4M4.9 19.1l2.9-2.9M16.2 7.8l2.9-2.9"/></svg></div>
-        <h3>Your mark is drawn</h3>
-        <p>The emblem and colours come from your key's own bytes. Change one character and the whole design changes.</p>
-      </div>
-    </div>
-  </section>
-
   <section class="band rise" id="truth">
     <h2>What it proves, and what it doesn't</h2>
-    <div class="plain">
-      <p><strong>It proves the key is real and well-formed.</strong> Plenty of DIDs in screenshots are mistyped. Those fail here, loudly.</p>
-      <p><strong>It does not prove you own it.</strong> Anyone can paste a public DID, including someone else's — that's what public means. A card is a nameplate, not a password.</p>
-      <p><strong>It is not affiliated with Flop Labs.</strong> Independently built, reading a public network anyone can read.</p>
-      <p style="margin-bottom:0"><strong>It asks for a seed in one place, once.</strong> Bringing an identity made somewhere else into this browser needs its key, so that one screen takes a seed, encrypts it on your device, and never asks again — everywhere else it is a passphrase. No request this site makes carries key material, and the endpoint that forwards writes rejects anything that looks like it. A site that asks for your seed <em>routinely</em> is indistinguishable from one that steals it, which is why this one asks once and then stops.</p>
+    <p class="sub">A card is a public lookup of a public key. Here is exactly how far that goes, in plain words —
+      because a badge nobody can check is just a picture.</p>
+
+    <div class="ledger">
+      <div class="col stagger" data-side="yes">
+        <div class="colhead"><span class="chip yes">Proves</span> what the card can stand behind</div>
+
+        <article class="claim">
+          <div class="cic"><svg viewBox="0 0 24 24" aria-hidden="true">
+            <circle cx="8" cy="15" r="4" pathLength="1"/><path d="M10.9 12.1 20 3" pathLength="1"/>
+            <path d="M16.5 6.5 19 9" pathLength="1"/><path d="M14 9l2.5 2.5" pathLength="1"/></svg></div>
+          <div><h3>The key is real, not a typo</h3>
+            <p>The address is decoded before anything is drawn. One wrong character and there is no card, just the
+              reason — which matters, because most DIDs copied out of a screenshot are broken and no other site
+              tells you.</p></div>
+        </article>
+
+        <article class="claim">
+          <div class="cic"><svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M4 16.5c2 0 3-8.5 5-8.5s2 8.5 4 8.5 2.6-5.5 4.6-5.5" pathLength="1"/>
+            <path d="M3 21h18" pathLength="1"/></svg></div>
+          <div><h3>Everything counted was signed by that key</h3>
+            <p>Each message on this card carries a signature only the holder of the private key can produce. Nobody
+              can post in your name, and nobody can pad your card by talking <em>about</em> you.</p></div>
+        </article>
+
+        <article class="claim">
+          <div class="cic"><svg viewBox="0 0 24 24" aria-hidden="true">
+            <circle cx="12" cy="12" r="9" pathLength="1"/><path d="M7.8 12.4 10.7 15.3 16.3 9.2" pathLength="1"/></svg></div>
+          <div><h3>The tick means the setup was finished</h3>
+            <p>Two things, both permanent and both public: a profile note published to the network, and at least one
+              signed message seen in a room. Anyone can go to technocore.chat and check either one without taking
+              our word for it.</p></div>
+        </article>
+
+        <article class="claim">
+          <div class="cic"><svg viewBox="0 0 24 24" aria-hidden="true">
+            <rect x="4" y="10.5" width="16" height="10" rx="2.4" pathLength="1"/>
+            <path d="M8 10.5V7a4 4 0 0 1 8 0v3.5" pathLength="1"/><path d="M12 14.5v2.5" pathLength="1"/></svg></div>
+          <div><h3>&ldquo;Ownership proven&rdquo; means somebody signed, here</h3>
+            <p>The strongest thing a card can say. It appears only after the private key signs one fixed line in
+              this tab, and the proof link that comes with it can be re-checked by anyone, anywhere — including
+              people who do not trust this site.</p></div>
+        </article>
+      </div>
+
+      <div class="col stagger" data-side="no">
+        <div class="colhead"><span class="chip no">Doesn't prove</span> what you should not read into it</div>
+
+        <article class="claim">
+          <div class="cic"><svg viewBox="0 0 24 24" aria-hidden="true">
+            <circle cx="9" cy="8" r="3.4" pathLength="1"/><path d="M3 20.5a6 6 0 0 1 12 0" pathLength="1"/>
+            <path d="M17 7.5 21.5 12" pathLength="1"/><path d="M21.5 7.5 17 12" pathLength="1"/></svg></div>
+          <div><h3>That the person holding it is you</h3>
+            <p>Anyone can paste anyone's address — that is what public means. A card is the nameplate on a door,
+              not the key to it. If you want the difference to show, press <strong>Prove this card is yours</strong>
+              above the buttons and sign one line.</p></div>
+        </article>
+
+        <article class="claim">
+          <div class="cic"><svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M12 21.5s7.5-3.8 7.5-9.5V5.2L12 2.5 4.5 5.2V12c0 5.7 7.5 9.5 7.5 9.5z" pathLength="1"/>
+            <path d="M4 3.5 20.5 20.5" pathLength="1"/></svg></div>
+          <div><h3>That Flop Labs issued it</h3>
+            <p>Nobody official signed off on this. It is built independently and it reads a network that is public
+              to everyone — the same rooms and the same profile notes you can open yourself. Useful, not official.</p></div>
+        </article>
+
+        <article class="claim">
+          <div class="cic"><svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M4 6.5h16" pathLength="1"/><path d="M4 12h11" pathLength="1"/>
+            <path d="M4 17.5h6" pathLength="1"/><path d="M17.5 17.5h.01" pathLength="1"/>
+            <path d="M20.5 17.5h.01" pathLength="1"/></svg></div>
+          <div><h3>That the numbers are everything you ever said</h3>
+            <p>Rooms forget. A busy one holds only its last few seconds, and the network drops everything after
+              seven days. The counts here are what was actually seen and kept — a floor, never a ceiling. Nothing
+              on the card claims otherwise.</p></div>
+        </article>
+
+        <article class="claim">
+          <div class="cic"><svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M12 3v18" pathLength="1"/><path d="M5 8.5c3.5 2 10.5 2 14 0" pathLength="1"/>
+            <path d="M5 15.5c3.5 2 10.5 2 14 0" pathLength="1"/></svg></div>
+          <div><h3>That a card made today still describes you next month</h3>
+            <p>The parts built to last do: the note, the tick, the key itself. The quote and the counts are a
+              snapshot of a network that keeps moving, which is why the card says when it was last seen rather than
+              pretending to be live.</p></div>
+        </article>
+      </div>
     </div>
+
+    <aside class="seedrule rise">
+      <div class="sic"><svg viewBox="0 0 24 24" aria-hidden="true">
+        <rect x="3.5" y="10" width="17" height="11" rx="2.6"/><path d="M7.5 10V6.8a4.5 4.5 0 0 1 9 0V10"/>
+        <circle cx="12" cy="15.4" r="1.5"/></svg></div>
+      <div>
+        <h3>One rule about your seed, and it is the whole rule</h3>
+        <p>A seed is the master password behind an identity — whoever has it <em>is</em> you, everywhere, forever.
+          This site asks for one in exactly one place: the screen that brings an identity made elsewhere into this
+          browser. It is encrypted on your device the moment you hand it over, and from then on it is a passphrase,
+          never the seed again.</p>
+        <p>No request this site makes carries key material, and the endpoint that forwards writes to the network
+          refuses anything that looks like a key. A site that asks for your seed <em>routinely</em> is
+          indistinguishable from one that steals it — so this one asks once, and then stops asking.</p>
+      </div>
+    </aside>
   </section>
 
-  <footer><span>Overheard · independent</span><a href="https://technocore.chat" target="_blank" rel="noopener noreferrer">technocore.chat ↗</a></footer>
+  <footer>
+    <div class="frow">
+      <span>Overheard · independent</span>
+      <a href="https://technocore.chat" target="_blank" rel="noopener noreferrer">technocore.chat ↗</a>
+    </div>
+    <div class="frow by">
+      <span>Built by <a href="https://x.com/Crypto_Pranjal" target="_blank" rel="noopener noreferrer">Pranjal Bora</a></span>
+      <a class="bydid" href="/?did=did:key:z6MkngD8RZKCgJQCkJvHfGyYoCcNCG5rz9Tc7yRmWrMZExaz" title="Open this card">did:key:z6MkngD8RZKCgJQCkJvHfGyYoCcNCG5rz9Tc7yRmWrMZExaz</a>
+    </div>
+  </footer>
 </div>
 
 <script type="module">
@@ -4370,7 +4556,7 @@ const finePointer=matchMedia("(hover: hover) and (pointer: fine)").matches;
    control hard to hit — the magnet is capped at 4px. */
 (()=>{
   if(!finePointer||calmMotion) return;
-  const lit=".act,.tile,.chip,.meter,.field button,.fix .go";
+  const lit=".act,.tile,.chip,.meter,.field button,.fix .go,.claim,.seedrule";
   addEventListener("pointermove",(e)=>{
     const el=e.target.closest?.(lit); if(!el) return;
     const r=el.getBoundingClientRect();
