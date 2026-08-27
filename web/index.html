@@ -1418,7 +1418,7 @@ function bootCard(pub, did, progress){
  *  that makes a whole card look made up. */
 const HERO_MAX_RARITY = 0.25;
 
-function pickHero(stats){
+function pickHero(stats, owned){
   const n=(x)=>Number(x||0).toLocaleString();
   const pc=(x)=>x<1?x.toFixed(1):Math.round(x);
   const s=stats?.standing;
@@ -1453,12 +1453,111 @@ function pickHero(stats){
             "OF ITS MESSAGES ARE NOT COPY-PASTE");
   }
 
+  /* Ownership deliberately does NOT compete for the hero.
+
+     It is permanent and unforgeable, which is why it earns a line on the
+     card — but a COUNT of rooms is farmable. Anyone wanting a bigger number
+     claims five empty rooms in a minute, and the card would be paying people
+     to litter the network with dead rooms. A hero has to be something that
+     gets harder to fake as it gets bigger, and this is the opposite. */
+
   // The floor. Always true, never a distinction, and still a real number.
   out.push({ rarity:1, eyebrow:"SIGNED AND VERIFIED", figure:n(stats?.count??0),
              label:`ORIGINAL MESSAGE${stats?.count===1?"":"S"} SIGNED BY THIS KEY` });
 
   out.sort((a,b)=>a.rarity-b.rarity);
   return out[0];
+}
+
+/* ── the seal ──────────────────────────────────────────────────────────────
+   A medal, drawn rather than lettered. The first read of a card in a
+   timeline is a SHAPE — at the size these are seen, a face and a seal land
+   before a single word does, and the words are there for whoever stops.
+
+   Two states and no ambiguity between them: finished is cyan with a tick,
+   unfinished is amber with a half-ring that is visibly not closed. Someone
+   glancing at a shared card should be able to tell which they are looking at
+   without reading anything, and should never mistake one for the other.
+   ──────────────────────────────────────────────────────────────────────── */
+function drawSeal(ctx,cx,cy,r,complete,proven,hue){
+  const warm = !complete;
+  const hi = warm ? "#F2C97A" : "#9BF6FF";
+  const mid= warm ? "#D9A03F" : "#5FEBFF";
+  const lo = warm ? "#8A5F14" : "#0093BC";
+
+  ctx.save();
+
+  // bloom
+  const gl=ctx.createRadialGradient(cx,cy,r*0.2,cx,cy,r*1.9);
+  gl.addColorStop(0, warm?"rgba(217,160,63,.20)":"rgba(0,180,215,.24)");
+  gl.addColorStop(1,"transparent");
+  ctx.fillStyle=gl; ctx.beginPath(); ctx.arc(cx,cy,r*1.9,0,Math.PI*2); ctx.fill();
+
+  // milled edge — 36 teeth, the detail that makes it read as struck metal
+  ctx.strokeStyle = warm ? "rgba(242,201,122,.55)" : "rgba(95,235,255,.55)";
+  ctx.lineWidth=2; ctx.lineCap="round";
+  for(let i=0;i<36;i++){
+    const a=(i/36)*Math.PI*2;
+    const r1=r*1.02, r2=r*1.12;
+    ctx.beginPath();
+    ctx.moveTo(cx+Math.cos(a)*r1,cy+Math.sin(a)*r1);
+    ctx.lineTo(cx+Math.cos(a)*r2,cy+Math.sin(a)*r2);
+    ctx.stroke();
+  }
+
+  // the disc
+  const g=ctx.createRadialGradient(cx-r*0.35,cy-r*0.4,r*0.1,cx,cy,r);
+  g.addColorStop(0, warm?"rgba(242,201,122,.30)":"rgba(155,246,255,.34)");
+  g.addColorStop(.55,warm?"rgba(140,95,20,.22)":"rgba(0,140,175,.22)");
+  g.addColorStop(1, "rgba(0,10,14,.55)");
+  ctx.beginPath(); ctx.arc(cx,cy,r,0,Math.PI*2); ctx.fillStyle=g; ctx.fill();
+  ctx.lineWidth=2.5; ctx.strokeStyle=mid; ctx.stroke();
+
+  // inner hairline
+  ctx.beginPath(); ctx.arc(cx,cy,r*0.80,0,Math.PI*2);
+  ctx.lineWidth=1.25; ctx.strokeStyle= warm?"rgba(242,201,122,.45)":"rgba(155,246,255,.45)";
+  ctx.stroke();
+
+  // the mark: a closed tick when it is finished, a gap and a stroke when it
+  // is not. Never the same glyph in two colours — colour alone is not a
+  // distinction on a card someone screenshots.
+  ctx.lineCap="round"; ctx.lineJoin="round";
+  if(complete){
+    ctx.beginPath();
+    ctx.moveTo(cx-r*0.32,cy+r*0.02);
+    ctx.lineTo(cx-r*0.08,cy+r*0.28);
+    ctx.lineTo(cx+r*0.34,cy-r*0.28);
+    ctx.lineWidth=r*0.16; ctx.strokeStyle=hi; ctx.stroke();
+  }else{
+    // an arc that stops short of closing, with the remaining step as a dot
+    ctx.beginPath();
+    ctx.arc(cx,cy,r*0.42,-Math.PI*0.75,Math.PI*0.45);
+    ctx.lineWidth=r*0.15; ctx.strokeStyle=hi; ctx.stroke();
+    ctx.beginPath(); ctx.arc(cx+r*0.42,cy+r*0.30,r*0.085,0,Math.PI*2);
+    ctx.fillStyle=lo; ctx.fill();
+  }
+
+  // a second ring for a card whose owner signed a live challenge
+  if(proven){
+    ctx.beginPath(); ctx.arc(cx,cy,r*1.24,0,Math.PI*2);
+    ctx.lineWidth=1.5; ctx.strokeStyle="rgba(95,235,255,.5)"; ctx.setLineDash([3,7]); ctx.stroke();
+    ctx.setLineDash([]);
+  }
+  ctx.restore();
+}
+
+/** Wrap to at most `max` lines, eliding the tail rather than overflowing. */
+function wrapTo(ctx,text,width,max){
+  const words=String(text).split(/\s+/); const lines=[]; let line="";
+  for(const w of words){
+    const t=line?line+" "+w:w;
+    if(ctx.measureText(t).width<=width){ line=t; continue; }
+    lines.push(line); line=w;
+    if(lines.length===max){ line=""; break; }
+  }
+  if(line) lines.push(line);
+  if(lines.length>max) lines.length=max;
+  return lines;
 }
 
 /** Largest size at which the text still fits. Cards carry names and numbers
@@ -1524,11 +1623,12 @@ async function drawCard(did,pub,stats,note){
     const body = raw.replace(/^\s*!!\s*UNTRUSTED CONTENT[\s\S]*?\n\s*\n/i,"").trim();
     return body || null;
   })();
+  const owned = (lastOwned&&Array.isArray(lastOwned.rooms)&&lastOwned.rooms.length) ? lastOwned : null;
   const quoteIsNote = !stats && !!noteText;
   const quote = (typeof stats?.text==="string" && stats.text.trim())
     ? stats.text.trim()
     : (quoteIsNote ? noteText : null);
-  const hero = stats ? pickHero(stats) : null;
+  const hero = stats ? pickHero(stats,owned) : null;
 
   // ground: true black, a bloom behind the portrait, a faint wafer grid
   ctx.fillStyle="#000000"; ctx.fillRect(0,0,W,H);
@@ -1641,51 +1741,98 @@ async function drawCard(did,pub,stats,note){
   ctx.fillStyle="#5F8593"; ctx.font="500 12px 'IBM Plex Mono', monospace";
   ctx.letterSpacing="1.1px";
   if(stats){
-    ctx.fillText(`${stats.count.toLocaleString()} ORIGINAL · ${stats.rooms} ROOM${stats.rooms===1?"":"S"}`,LCX,462+CY);
+    ctx.fillText(`${stats.count.toLocaleString()} ORIGINAL · ${stats.rooms} ROOM${stats.rooms===1?"":"S"}`
+      + (owned ? ` · ${owned.rooms.length} OWNED` : ""),LCX,462+CY);
     // NOT "since". A did:key carries no timestamp and neither does its note,
     // so nobody can know when an identity was created — this is the day WE
     // first saw it, and saying otherwise invented an age for every key.
     if(stats.first&&stats.first!=="—") ctx.fillText(`FIRST SEEN ${stats.first}`,LCX,486+CY);
   }else{
     ctx.fillText("ED25519 PUBLIC KEY",LCX,462+CY);
-    ctx.fillText(reg?"NOTE PUBLISHED":"NO NOTE PUBLISHED",LCX,486+CY);
+    ctx.fillText(owned ? `${owned.rooms.length} ROOM${owned.rooms.length===1?"":"S"} OWNED`
+                       : reg ? "NOTE PUBLISHED" : "NO NOTE PUBLISHED",LCX,486+CY);
   }
   ctx.letterSpacing="0px"; ctx.textAlign="left";
 
   /* ── the claim ─────────────────────────────────────────────────────────
      Left-aligned now rather than centred: it shares the card with a portrait,
      and two centred columns would have no shared edge to read down. */
-  const eyebrow = hero ? hero.eyebrow : reg ? "REGISTERED ON TECHNOCORE" : "KEY VERIFIED";
-  ctx.fillStyle=preview?"#F2B33D":`hsl(${hue} 90% 62%)`;
+  /* ── THE SEAL ───────────────────────────────────────────────────────────
+     WHAT THIS CARD IS ACTUALLY FOR
+
+     Three heroes were tried here and all three were wrong for the same
+     reason. Join order ("91,592 arrived after this one") was an artefact of
+     the day our archive started. A rank was measured against a denominator
+     that moved from 52,053 to 94,598 in one night. A count of rooms owned
+     was worse than either: farmable in a minute, and it would have paid
+     people to litter the network with empty rooms.
+
+     What is left is the thing the card was always for — did this identity
+     finish setting itself up properly. Two steps, both checkable by anyone:
+
+       a profile note published   permanent; "notes have no ring"
+       a signed message seen      proof the key is live and posting
+
+     Neither can be faked by a stranger, neither drifts, and neither rewards
+     doing it more times. It is a state, not a score, which is exactly why it
+     still reads true on a card made a month ago.
+     ──────────────────────────────────────────────────────────────────── */
+  const posted = !!(stats && stats.count > 0);
+  const tier = proven && reg && posted ? "PROVEN"
+             : reg && posted            ? "VERIFIED"
+             : reg                      ? "REGISTERED"
+             : posted                   ? "UNREGISTERED"
+             :                            "KEY ONLY";
+  const complete = reg && posted;
+  const seal = {
+    PROVEN:       ["SET UP AND PROVEN",   "Note published, messages signed, key control proved."],
+    VERIFIED:     ["SET UP CORRECTLY",    "A permanent profile note, and signed messages in the rooms."],
+    REGISTERED:   ["HALF SET UP",         "The note is published and permanent. Nothing signed has been seen yet."],
+    UNREGISTERED: ["HALF SET UP",         "Signing and posting, but no profile note — nothing here outlives the rooms."],
+    "KEY ONLY":   ["NOT SET UP YET",      "A valid Ed25519 key and nothing else on the record."],
+  }[tier];
+
+  // The medallion, and everything about it, sits in its own column so the
+  // eyebrow is never lettered across the metal.
+  drawSeal(ctx,RX+84,250,76,complete,tier==="PROVEN",hue);
+
+  const TX = RX+192, TW = RIGHT-TX;
+
+  ctx.fillStyle = preview ? "#F2B33D" : complete ? `hsl(${hue} 90% 62%)` : "#C08A2E";
   ctx.font="600 13px 'IBM Plex Mono', monospace"; ctx.letterSpacing="4.2px";
-  ctx.fillText(eyebrow,RX,158); ctx.letterSpacing="0px";
+  ctx.fillText(seal[0],TX,196); ctx.letterSpacing="0px";
 
-  const figure = hero ? hero.figure : reg ? "ON RECORD" : "VALID KEY";
-  const fw=fitFont(ctx,figure,RW,88,42,"800");
-  const fg=ctx.createLinearGradient(RX,196,RX+fw,258);
-  fg.addColorStop(0,"#5FEBFF"); fg.addColorStop(.55,"#00B4D7"); fg.addColorStop(1,"#0093BC");
-  ctx.fillStyle=fg; ctx.fillText(figure,RX,250);
+  const fw=fitFont(ctx,tier,TW,58,30,"800");
+  const fg=ctx.createLinearGradient(TX,214,TX+fw,262);
+  if(complete){ fg.addColorStop(0,"#9BF6FF"); fg.addColorStop(.5,"#5FEBFF"); fg.addColorStop(1,"#00A6C9"); }
+  else { fg.addColorStop(0,"#F2C97A"); fg.addColorStop(1,"#C08A2E"); }
+  ctx.fillStyle=fg; ctx.fillText(tier,TX,262);
 
-  ctx.fillStyle="#9CBFCB"; ctx.font="500 17px 'Outfit', sans-serif";
-  ctx.fillText(hero ? hero.label
-    : reg ? "PROFILE NOTE PUBLISHED — NOTES DO NOT EXPIRE"
-    : "VALID ED25519 KEY — NO NOTE PUBLISHED YET",RX,288);
+  ctx.fillStyle="#9CBFCB"; ctx.font="500 15.5px 'Outfit', sans-serif";
+  for(const [i,line] of wrapTo(ctx,seal[1],TW,2).entries()) ctx.fillText(line,TX,294+i*23);
 
-  /* The comparable line. Identical wording, identical place, on every card
-     that has an archive record — that is the whole point of it. */
-  let qTop=352;
-  if(s&&s.identities&&s.rank){
-    const pct=s.percentile<1?s.percentile.toFixed(1):Math.round(s.percentile);
-    const txt=`TOP ${pct}%   ·   #${s.rank.toLocaleString()} OF ${s.identities.toLocaleString()} BY ORIGINAL MESSAGES`;
-    ctx.font="600 13px 'IBM Plex Mono', monospace"; ctx.letterSpacing="1.8px";
-    const tw=ctx.measureText(txt).width, pw=Math.min(RW,tw+50);
-    rr(ctx,RX,312,pw,38,19);
-    ctx.fillStyle="rgba(0,180,215,.10)"; ctx.fill();
-    ctx.strokeStyle="rgba(0,180,215,.34)"; ctx.lineWidth=1.5; ctx.stroke();
-    ctx.fillStyle="#EDFAFE"; ctx.fillText(txt,RX+25,337);
-    ctx.letterSpacing="0px";
-    qTop=376;
-  }
+  /* Rooms owned are named nowhere on this card and counted only in the
+     facts column, deliberately. A COUNT of rooms is farmable — anyone
+     wanting a bigger number claims five empty rooms in a minute — so it can
+     be a fact about an identity but never a thing the card celebrates. */
+
+  /* ── WHY THERE IS NO RANK HERE ANY MORE ─────────────────────────────────
+     There used to be a pill on this line reading "#900 OF 52,053 BY ORIGINAL
+     MESSAGES", and above it "48,053 IDENTITIES ARRIVED AFTER THIS ONE".
+
+     Both were false in the way that matters. The denominator is the number
+     of identities OUR ARCHIVE has seen, and it went from 52,053 to 94,598 in
+     a single night — not because 42,000 agents arrived, but because the
+     archiver stopped sampling 3% of the lobby and started reading all of it.
+     Join order was worse still: it described the day we started watching,
+     not the day anything was created, and a did:key carries no timestamp at
+     all.
+
+     A card is screenshotted and shared. Whatever it says has to still be
+     true next week, and a rank measured against a moving population is not.
+     The seal is: it is a state, checkable by anyone, and it does not move.
+     ──────────────────────────────────────────────────────────────────── */
+  let qTop=372;
 
   /* ── what they last said ────────────────────────────────────────────────
      The card's only box, and it earns it. This is the one piece of text here
@@ -1850,7 +1997,14 @@ async function lookupStats(did){
     let p=null, standing=null;
     try{
       const live=await fetch(`/api/profile?did=${encodeURIComponent(did)}`);
-      if(live.ok){ const j=await live.json(); p=j.profile; standing=j.standing??null; }
+      if(live.ok){
+        const j=await live.json();
+        p=j.profile; standing=j.standing??null;
+        // Ownership is not activity. An identity that has never been seen
+        // posting can still own three rooms, so this is stashed OUTSIDE the
+        // stats object and survives `p` being null.
+        lastOwned = (j.owned && Array.isArray(j.owned.rooms)) ? j.owned : null;
+      }
     }catch{}
 
     if(!p){
@@ -2087,7 +2241,7 @@ function renderDiagnostic(parsed, stats, note){
 
      So a note carries a card on its own now, and "isn't on the record yet"
      means what it says: no note AND nothing posted. */
-  if(!stats && note?.registered){
+  if(!stats && (note?.registered || (lastOwned&&lastOwned.rooms&&lastOwned.rooms.length))){
     diag.hidden=true; wrap.hidden=false; actions.hidden=false;
     setupProve(parsed.did);
     return;
@@ -2920,7 +3074,7 @@ const EXAMPLES=[
   "did:key:z6MkwJF3Rn9EZ1or7ZZPP5fVcaFbTuENZQYQjQ4SqK4GVS3k",
   "did:key:z6Mkqo6EF4sLtpQwBknEhYEuAVprfDN2ZDk4mjw4mauPovUg",
 ];
-let current=null, pick=0, lastStats=null, lastNote=null;
+let current=null, pick=0, lastStats=null, lastNote=null, lastOwned=null;
 
 /* The old three-chip progress strip ("Decoding / Checking curve / Drawing
    mark") lived here. The boot animation replaced it months of commits ago and
@@ -2946,6 +3100,7 @@ async function issue(raw){
   $("status").textContent="";
   $("stage").scrollIntoView({behavior:calm?"auto":"smooth",block:"center"});
 
+  lastOwned=null;                  // never let one identity wear another's
   const progress={rooms:false,archive:false,note:false};
   const boot=bootCard(p.pub,p.did,progress);
   // Known identities get their real activity; unseen keys show the fingerprint.
@@ -3023,6 +3178,8 @@ async function issue(raw){
      wrong. That belongs on the panel making the claim, not down here. */
   $("status").innerHTML = stats
     ? `<b>Found on Technocore.</b> ${stats.count} message${stats.count===1?"":"s"} across ${stats.rooms} room${stats.rooms===1?"":"s"}, first seen ${stats.first}.`
+    : (lastOwned&&lastOwned.rooms&&lastOwned.rooms.length)
+    ? `<b>Holds ground.</b> This key owns ${lastOwned.rooms.length} ownable room${lastOwned.rooms.length===1?"":"s"} on Technocore \u2014 signed claims that do not expire.`
     : note?.registered
     // The path is derived from a SHA-256 fingerprint by our own function, so
     // it can only be hex — checked anyway, because this is the one line here

@@ -124,9 +124,14 @@ export default async function handler(request) {
 
   // Both come from the same commit, so the rank and the figures it ranks
   // always describe the same moment.
-  const [bucket, standings] = await Promise.all([
+  /* owners.json comes along for the ride. It is small, it is the only
+     PERMANENT per-identity fact this network offers — a signed, first-come,
+     never-expiring claim in /kv/room-owners — and unlike everything else
+     here it reads the same today and in a year. */
+  const [bucket, standings, owners] = await Promise.all([
     grab(`profiles/${shard}.json`),
     grab("standings.json"),
+    grab("owners.json"),
   ]);
 
   if (!bucket) {
@@ -135,11 +140,23 @@ export default async function handler(request) {
   }
 
   const p = bucket[did] ?? null;
+  const owns = Array.isArray(owners?.owners?.[did]) ? owners.owners[did] : [];
   return json({
     did,
     shard,
     source: "repository",
     standing: p && standing(p, standings),
+    // Deliberately OUTSIDE `profile`: owning a room has nothing to do with
+    // having been seen posting, and an identity with no archive record at all
+    // can still own three rooms.
+    owned: {
+      rooms: owns,
+      // The denominator for "how rare is this", counted over identities that
+      // own anything at all rather than over the whole population.
+      owners: owners?.owner_count ?? null,
+      claimed: owners?.claimed ?? null,
+      identities: standings?.identities ?? null,
+    },
     // Named exactly as the archiver writes them, so there is one vocabulary:
     // `unique` excludes collapsed template spam, `count` does not.
     profile: p && {

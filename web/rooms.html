@@ -97,6 +97,14 @@ h1{font-weight:800;font-size:clamp(30px,4.4vw,44px);letter-spacing:-.035em;margi
 .ownlede{color:var(--dim);font-size:14px;line-height:1.7;max-width:74ch}
 .ownlede b{color:var(--txt)}
 .ownlede em{font-style:normal;color:var(--cy)}
+.kinds{display:flex;gap:10px;margin-top:16px;flex-wrap:wrap}
+.kind{flex:1 1 260px;text-align:left;cursor:pointer;padding:14px 16px;border-radius:14px;
+  background:rgba(0,20,26,.5);border:1px solid rgba(0,180,215,.18);color:var(--dim);
+  transition:border-color .2s,background .2s,box-shadow .2s}
+.kind b{display:block;color:var(--txt);font-size:14.5px;font-weight:700;margin-bottom:4px}
+.kind span{display:block;font-size:12.5px;line-height:1.55}
+.kind:hover{border-color:rgba(0,180,215,.4)}
+.kind.on{border-color:rgba(95,235,255,.6);background:rgba(0,60,74,.4);box-shadow:0 0 0 4px rgba(0,180,215,.09)}
 .ownform{display:flex;gap:10px;align-items:stretch;margin-top:16px;flex-wrap:wrap}
 .nameline{display:flex;align-items:center;flex:1 1 280px;min-width:0;
   border-radius:12px;background:rgba(0,20,26,.6);border:1px solid rgba(0,180,215,.22);
@@ -230,11 +238,20 @@ footer a{color:var(--cy);text-decoration:none}
 
   <section class="panel own" id="own">
     <h2>A room of your own</h2>
-    <p class="ownlede">Rooms forget. <b>Ownership does not.</b> Claiming an ownable room writes a <em>signed</em> entry into Technocore's key–value store: it has no expiry, only your key could have written it, and the first claim takes the name permanently. It is the one thing on this network you can earn that will still read true in a year — and it is what puts <b>OWNS A ROOM</b> on your card.</p>
+    <p class="ownlede">Make somewhere to talk and hand people the link. Two kinds, and the difference is only <em>who may post</em> — everyone can read either one. An open room belongs to nobody and can never be locked; a claimed one is yours permanently, because the claim is a <em>signed</em> entry in Technocore's key–value store and the first claim takes the name for good.</p>
+
+    <div class="kinds" role="radiogroup" aria-label="Who can post">
+      <button type="button" class="kind on" id="kOpen" role="radio" aria-checked="true">
+        <b>Open to everyone</b><span>Anyone can read it and anyone can post. Nobody owns it, so nobody can lock it.</span>
+      </button>
+      <button type="button" class="kind" id="kOwned" role="radio" aria-checked="false">
+        <b>Only people I allow</b><span>You claim the name permanently. Everyone can read; only you and the identities you list can post.</span>
+      </button>
+    </div>
 
     <div class="ownform">
-      <label class="nameline" for="rn"><span class="pre">d-</span><input id="rn" type="text" spellcheck="false" autocomplete="off" placeholder="your-room-name" maxlength="45" aria-label="Room name"></label>
-      <button class="go" id="claim" disabled>Claim it</button>
+      <label class="nameline" for="rn"><span class="pre" id="rpre" hidden>d-</span><input id="rn" type="text" spellcheck="false" autocomplete="off" placeholder="your-room-name" maxlength="45" aria-label="Room name"></label>
+      <button class="go" id="claim" disabled>Open it</button>
     </div>
     <p class="ownsay" id="ownsay">Lowercase letters, numbers, hyphens and underscores.</p>
 
@@ -591,7 +608,33 @@ $("say").addEventListener("keydown",e=>{ if(e.key==="Enter"&&(e.metaKey||e.ctrlK
    someone a page they can read and cannot answer in.
    ──────────────────────────────────────────────────────────────────────── */
 const NAME_RE = /^[a-z0-9][a-z0-9_-]{0,45}$/;
-let ownState = null;          // {name, claimNonce} once claimed in this tab
+let ownState = null;          // {name} once created or claimed in this tab
+
+/* TWO KINDS OF ROOM, and the difference is only who may POST — everyone can
+   read either.
+
+   OPEN is a plain room name. Technocore has no concept of owning one, which
+   is the point: nobody can claim it, nobody can lock it, and anyone can
+   answer you in it. It costs no signature and it exists the moment something
+   is said there.
+
+   CLAIMED is d-<name>, taken with a signed if_absent write. Once claimed,
+   /r/d-<name> refuses every write except the owner's and the allow-list's.
+   Permanent and unforgeable — and, for exactly that reason, not the sort of
+   room to make casually. */
+let kind = "open";
+function setKind(k){
+  kind = k;
+  $("kOpen").classList.toggle("on",k==="open");
+  $("kOwned").classList.toggle("on",k==="owned");
+  $("kOpen").setAttribute("aria-checked",String(k==="open"));
+  $("kOwned").setAttribute("aria-checked",String(k==="owned"));
+  $("rpre").hidden = k!=="owned";
+  $("claim").textContent = k==="owned" ? "Claim it" : "Open it";
+  scheduleCheck();
+}
+$("kOpen").addEventListener("click",()=>setKind("open"));
+$("kOwned").addEventListener("click",()=>setKind("owned"));
 
 const ownSay = (t, cls="") => { $("ownsay").textContent = t; $("ownsay").className = "ownsay " + cls; };
 
@@ -605,7 +648,28 @@ function scheduleCheck(){
   $("claim").disabled = true;
   if(!raw){ ownSay("Lowercase letters, numbers, hyphens and underscores."); return; }
   if(!NAME_RE.test(raw)){ ownSay("Lowercase letters, numbers, hyphens and underscores — starting with a letter or number.","err"); return; }
-  if(!ID){ ownSay("Unlock your identity above first — claiming a room is a signature, so it needs your key.","err"); return; }
+  if(!ID){ ownSay("Unlock your identity above first — posting and claiming both need your key.","err"); return; }
+
+  if(kind==="open"){
+    // No registry to consult: an open room simply exists once something is
+    // said in it. What IS worth saying is whether anyone is already there,
+    // because "your" new room may turn out to be someone else's busy one.
+    ownSay("Checking whether anyone is already in "+raw+"…","busy");
+    checkTimer = setTimeout(async()=>{
+      lastChecked = raw;
+      try{
+        const r = await fetch(`/api/room?room=${encodeURIComponent(raw)}&limit=200`);
+        const j = await r.json();
+        if($("rn").value.trim().toLowerCase() !== lastChecked) return;
+        const n = Array.isArray(j.messages) ? j.messages.length : 0;
+        ownSay(n ? `${raw} already exists and has people in it — you can post there, it is open to everyone.`
+                 : `${raw} is empty. It comes into existence the moment you post.`,"ok");
+      }catch{ ownSay(`${raw} looks fine. Open rooms need no claim.`,"ok"); }
+      $("claim").disabled=false;
+    }, 420);
+    return;
+  }
+
   ownSay("Checking whether d-"+raw+" is free…","busy");
   checkTimer = setTimeout(async()=>{
     lastChecked = raw;
@@ -626,6 +690,16 @@ $("rn").addEventListener("keydown",(e)=>{ if(e.key==="Enter" && !$("claim").disa
 $("claim").addEventListener("click",async()=>{
   const raw = $("rn").value.trim().toLowerCase();
   if(!NAME_RE.test(raw) || !ID) return;
+
+  if(kind==="open"){
+    // Nothing to sign and nothing to reserve. Open the room, put the cursor
+    // in the box, and let the first message bring it into existence.
+    ownState = { name: raw, open: true };
+    ownSay("");
+    showOwned(raw, true);
+    return;
+  }
+
   const full = "d-"+raw;
   $("claim").disabled = true;
   ownSay("Signing the claim on this device — only the signature is sent…","busy");
@@ -646,13 +720,16 @@ $("claim").addEventListener("click",async()=>{
   }catch(err){ ownSay("Could not sign the claim: "+err.message,"err"); $("claim").disabled=false; }
 });
 
-function showOwned(full){
+function showOwned(full, open=false){
   const box = $("owndone"); box.replaceChildren(); box.hidden=false;
   const link = `${location.origin}/rooms.html?room=${encodeURIComponent(full)}`;
 
-  const h=document.createElement("h3"); h.textContent=`${full} is yours`;
+  const h=document.createElement("h3");
+  h.textContent = open ? `${full} is open` : `${full} is yours`;
   const p=document.createElement("p");
-  p.textContent="The claim is signed and permanent — it does not expire and cannot be overwritten. Anyone with this link can read the room; only you and the identities you allow below can post in it.";
+  p.textContent = open
+    ? "Nobody owns this room, which is exactly what makes it open: anyone with the link can read it AND post in it, and no one can ever lock it. Say something to bring it into existence."
+    : "The claim is signed and permanent — it does not expire and cannot be overwritten. Anyone with this link can read the room; only you and the identities you allow below can post in it.";
   box.append(h,p);
 
   const row=document.createElement("div"); row.className="sharerow";
@@ -662,14 +739,19 @@ function showOwned(full){
     navigator.clipboard?.writeText(link).catch(()=>{});
     copy.textContent="Copied"; setTimeout(()=>copy.textContent="Copy link",1600);
   });
-  const open=document.createElement("button"); open.className="go ghost"; open.type="button"; open.textContent="Open it";
-  open.addEventListener("click",()=>{
+  const go=document.createElement("button"); go.className="go ghost"; go.type="button"; go.textContent="Open it";
+  go.addEventListener("click",()=>{
     switchRoom(full);
-    $("say").value="First message in my own room.";
+    $("say").value = open ? "Opening this room. Anyone can post here." : "First message in my own room.";
     $("say").focus();
     document.querySelector(".layout").scrollIntoView({behavior:calmish()?"auto":"smooth",block:"start"});
   });
-  row.append(code,copy,open); box.appendChild(row);
+  row.append(code,copy,go); box.appendChild(row);
+
+  if(open){
+    box.scrollIntoView({behavior:calmish()?"auto":"smooth",block:"center"});
+    return;                       // an open room has nobody to allow
+  }
 
   /* ── who can post ────────────────────────────────────────────────────── */
   const al=document.createElement("div"); al.className="allowbox";

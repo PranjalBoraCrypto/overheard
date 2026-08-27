@@ -211,6 +211,19 @@ async function get(url, deadlineMs = 8000) {
   return res.json();
 }
 
+/** The KV store answers text/plain, so it needs its own reader. Same budget,
+ *  same deadline, same 429 handling — just no JSON.parse at the end. */
+async function getText(url, deadlineMs = 8000) {
+  reads++;
+  const res = await fetch(url, {
+    headers: { Accept: "text/plain", "User-Agent": UA },
+    signal: AbortSignal.timeout(deadlineMs),
+  });
+  if (res.status === 404) return null;                 // absent, definitively
+  if (!res.ok) throw new Error(`HTTP ${res.status} for ${url}`);
+  return (await res.text()).trim();
+}
+
 const readJson = async (file, fallback) =>
   existsSync(file) ? JSON.parse(await readFile(file, "utf8")) : fallback;
 
@@ -566,6 +579,11 @@ async function flush(state, rows, total, standings = false) {
 
     try { await writeStandings(); }
     catch (err) { console.error(`  standings failed (${err.message}) — cards fall back to the previous file`); }
+
+    if (state.sched) {
+      try { await syncOwners(state, state.sched); }
+      catch (err) { console.error(`  owners sweep failed (${err.message}) — the previous book stands`); }
+    }
   }
 
   if (state.sched) await writeReport(state, rows, total);
@@ -742,6 +760,76 @@ async function writeReport(state, rows, total) {
   };
   await writeAtomic(path.join(OUT, "index.json"), JSON.stringify(body, null, 1) + "\n");
   return body;
+}
+
+/* ── who owns what ────────────────────────────────────────────────────────
+   THE ONLY PERMANENT, EARNED, UNFORGEABLE FACT ON THIS NETWORK
+
+   A d- room is claimed by a SIGNED write to /kv/room-owners/d-<room> with
+   if_absent=1. Three properties follow, and no other per-identity fact here
+   has all three:
+
+     permanent    the KV namespace has no ring; messages are gone in minutes
+     unforgeable  the stored value is the key that signed it
+     first-come   if_absent means no later signature can overwrite it
+
+   So this is what a card can rank on without the number drifting. A claim
+   made today reads the same in a year, which is exactly what an
+   archive-derived rank cannot promise.
+
+   CHEAP BY CONSTRUCTION: a claim cannot change, so a room whose owner is
+   already known is never read again. Only rooms never checked cost anything,
+   which after the first sweep is just newly-created ones.
+   ──────────────────────────────────────────────────────────────────────── */
+const OWNER_RE = /^did:key:z6Mk[1-9A-HJ-NP-Za-km-z]{44}$/;
+const OWNERS_PER_PASS = Number(process.env.OWNERS_PER_PASS ?? 60);
+
+async function syncOwners(state, sched) {
+  const file = path.join(OUT, "owners.json");
+  const book = await readJson(file, { updated: null, rooms: {}, unclaimed: [] });
+  book.rooms ??= {}; book.unclaimed ??= [];
+
+  const known = new Set([...Object.keys(book.rooms), ...book.unclaimed]);
+  const candidates = new Set();
+  for (const room of Object.keys(state.cursors)) if (room.startsWith("d-")) candidates.add(room);
+  for (const e of sched.values()) if (e.room.startsWith("d-")) candidates.add(e.room);
+
+  // Unclaimed rooms are re-checked occasionally — a name that was free last
+  // week can have been taken since — but a CLAIMED one never is.
+  const todo = [...candidates].filter((r) => !book.rooms[r] && safeRoom(r));
+  const fresh = todo.filter((r) => !known.has(r));
+  const stale = todo.filter((r) => known.has(r));
+  const queue = [...fresh, ...stale].slice(0, OWNERS_PER_PASS);
+
+  let checked = 0, found = 0;
+  for (const room of queue) {
+    if (!takeToken()) break;
+    try {
+      const val = await getText(`${BASE}/kv/room-owners/${room}`);
+      checked++;
+      if (val && OWNER_RE.test(val)) {
+        book.rooms[room] = val; found++;
+        const i = book.unclaimed.indexOf(room); if (i >= 0) book.unclaimed.splice(i, 1);
+      } else if (!known.has(room)) {
+        book.unclaimed.push(room);
+      }
+    } catch { /* one unreadable room must not lose the sweep */ }
+  }
+
+  // did -> rooms, so a card is one lookup rather than a scan.
+  const owners = {};
+  for (const [room, did] of Object.entries(book.rooms)) (owners[did] ??= []).push(room);
+  for (const list of Object.values(owners)) list.sort();
+
+  book.updated = new Date().toISOString();
+  book.owner_count = Object.keys(owners).length;
+  book.claimed = Object.keys(book.rooms).length;
+  book.seen = candidates.size;
+  book.owners = owners;
+  book.note = "Claims are signed writes to /kv/room-owners with if_absent=1: permanent, unforgeable, first-come. A room already claimed is never re-read.";
+  await writeAtomic(file, JSON.stringify(book) + "\n");
+  if (checked) console.log(`  owners: checked ${checked} d- room(s), ${found} claimed; ${book.claimed} of ${candidates.size} known, ${book.owner_count} distinct owners`);
+  return book;
 }
 
 /* ── the scheduler ────────────────────────────────────────────────────────
