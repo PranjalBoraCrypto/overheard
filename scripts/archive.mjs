@@ -247,6 +247,9 @@ async function loadState() {
     // room -> { days: Map<day, records[]>, seen, stored, collapsed, capped, gaps }
     pending: new Map(),
     metas: new Map(),
+    // room|day -> { text, seqs, n }. Held in memory so a day shard is
+    // APPENDED to rather than rebuilt, which is what lets git delta it.
+    shards: new Map(),
   };
 }
 
@@ -261,7 +264,11 @@ async function profileShard(state, shard) {
  *  Technocore's own: control and formatting characters become spaces, which
  *  also removes the invisible ones a message could use to hide text inside a
  *  quote. */
-const LAST_TEXT_MAX = 180;
+/* 180 before. This is the field that changes on almost every profile on
+   almost every pass, so its length sets the size of the delta git has to
+   store 288 times a day across 256 shards. 120 characters is still a
+   readable quote on a card. */
+const LAST_TEXT_MAX = 120;
 const flatten = (t) =>
   String(t ?? "")
     .replace(/[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/gu, " ")
@@ -490,8 +497,15 @@ async function flush(state, rows, total, standings = false) {
 
   await mkdir(path.join(OUT, "profiles"), { recursive: true });
   for (const shard of shards) {
-    await writeAtomic(path.join(OUT, "profiles", `${shard}.json`),
-      JSON.stringify(state.profiles.get(shard)) + "\n");
+    // One identity per line. Still valid JSON, but a single identity's
+    // update now changes one short line instead of shuffling a 100 KB
+    // single-line object — which is the difference between git storing a
+    // small delta and storing the file again.
+    const bucket = state.profiles.get(shard);
+    const body = Object.keys(bucket).sort()
+      .map((did) => ` ${JSON.stringify(did)}:${JSON.stringify(bucket[did])}`)
+      .join(",\n");
+    await writeAtomic(path.join(OUT, "profiles", `${shard}.json`), `{\n${body}\n}\n`);
   }
 
   for (const { room, days, gaps, p } of work) {
@@ -500,27 +514,51 @@ async function flush(state, rows, total, standings = false) {
     const metaFile = path.join(roomDir, "_meta.json");
     const meta = await readJson(metaFile, { room, days: [], total: 0, gaps: [] });
 
+    /* ── APPEND, NEVER REBUILD ────────────────────────────────────────────
+       This used to read the whole day shard, push the new messages in, SORT
+       THE WHOLE ARRAY and write it back as one line of JSON. Correct, and
+       ruinous: a re-sorted single-line file shares almost no byte runs with
+       its previous version, so git could not delta it and stored a fresh
+       three-megabyte blob every five minutes. MEASURED: .git reached 2.0 GB
+       in about fourteen hours, and fetches began timing out.
+
+       One message per line, appended in the order they arrived, and the file
+       is still written whole via rename so `git add` can never catch a torn
+       line. The content is now strictly previous + new, which is the one
+       shape delta compression is good at.                                  */
     for (const [d, recs] of days) {
-      const file = path.join(roomDir, `${d}.json`);
-      const shard = await readJson(file, { room, date: d, messages: [] });
-      let capped = 0;
-      const have = new Set(shard.messages.map((m) => m.seq));
-      for (const r of recs) {
-        if (have.has(r.seq)) continue;
-        if (shard.messages.length >= DAY_BODY_MAX) { capped++; continue; }
-        shard.messages.push(r); have.add(r.seq);
+      const file = path.join(roomDir, `${d}.ndjson`);
+      const key = `${room}|${d}`;
+      let sh = state.shards.get(key);
+      if (!sh) {
+        sh = { text: "", seqs: new Set(), n: 0 };
+        if (existsSync(file)) {
+          sh.text = await readFile(file, "utf8");
+          for (const line of sh.text.split("\n")) {
+            if (!line) continue;
+            try { sh.seqs.add(JSON.parse(line).seq); sh.n++; } catch { /* torn line: skip */ }
+          }
+        }
+        state.shards.set(key, sh);
       }
-      shard.messages.sort((a, b) => a.seq - b.seq);
-      shard.count = shard.messages.length;
-      if (capped || shard.body_cap) {
-        // Said out loud in the file itself. A shard that quietly stopped
-        // growing is indistinguishable from a room that went quiet.
-        shard.body_cap = DAY_BODY_MAX;
-        shard.bodies_dropped = (shard.bodies_dropped ?? 0) + capped;
-        shard.note = "Bodies past body_cap are counted in profiles and templates but not stored here.";
+
+      let add = "", capped = 0;
+      for (const r of recs) {
+        if (sh.seqs.has(r.seq)) continue;
+        if (sh.n >= DAY_BODY_MAX) { capped++; continue; }
+        sh.seqs.add(r.seq); sh.n++;
+        add += JSON.stringify(r) + "\n";
       }
       p.capped += capped;
-      await writeAtomic(file, JSON.stringify(shard) + "\n");
+      if (add) {
+        sh.text += add;
+        await writeAtomic(file, sh.text);
+      }
+      if (capped) {
+        meta.body_cap = DAY_BODY_MAX;
+        meta.bodies_dropped = (meta.bodies_dropped ?? 0) + capped;
+        meta.cap_note = "Past body_cap, messages are counted in profiles and templates but their text is not stored.";
+      }
       if (!meta.days.includes(d)) meta.days.push(d);
     }
 

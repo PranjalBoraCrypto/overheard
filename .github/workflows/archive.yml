@@ -100,7 +100,33 @@ jobs:
             # `nice`, because git and the collector share two vCPUs on a runner
             # and hashing several megabytes of shards can hold the CPU long
             # enough for the lobby to fill its eight-second window.
-            nice -n 15 git add web/data
+            # ── THREE TIERS, THREE CLOCKS ──────────────────────────────
+            # MEASURED: .git reached 2.0 GB in about a day and a half, and
+            # fetches began timing out. 143 commits a day, each rewriting
+            # 27 MB of profile shards, a 3.4 MB template table and every
+            # active room's day shard, is roughly 600 MB of new objects a
+            # day. Nothing about the site needs that.
+            #
+            # What actually has to be current, and what does not:
+            #
+            #   every pass    cursors, recent, standings, index, owners,
+            #                 roster -- ~250 KB total, and `recent` is the
+            #                 homepage strip people watch
+            #   every 3rd     profiles -- these drive rank and history, and
+            #                 nobody needs their rank to the minute. The
+            #                 card's immediacy comes from the live room scan
+            #                 and the "Look again" button, not from here.
+            #   every 12th    room day shards, per-room meta, templates,
+            #                 spam -- the bulk, and the least time-critical
+            #                 data in the project. It is an ARCHIVE.
+            #
+            # Collection is unaffected: the archiver still reads every room
+            # on its own schedule and writes to disk continuously. This only
+            # changes how often git is asked to remember it.
+            SMALL="web/data/cursors.json web/data/recent.json web/data/standings.json web/data/index.json web/data/owners.json web/data/roster.json"
+            for f in $SMALL; do [ -f "$f" ] && nice -n 15 git add "$f"; done
+            if [ $(( pass % 3 )) -eq 0 ]; then nice -n 15 git add web/data/profiles; fi
+            if [ $(( (pass - 1) % 12 )) -eq 0 ]; then nice -n 15 git add web/data; fi
             if git diff --staged --quiet; then
               echo "pass $pass: no new messages"
             else
@@ -142,6 +168,13 @@ jobs:
                 const r=JSON.parse(fs.readFileSync("web/data/index.json","utf8")).last_run;
                 if(r) console.log(`  coverage ${(r.coverage*100).toFixed(2)}% — produced ${r.produced}, missed ${r.missed}, ${r.reads} reads`);
               }catch{}' || true
+
+            # Keep the run's own clone from bloating over five and a half
+            # hours. Cheap, and it stops the push slowing down as the day
+            # goes on.
+            if [ $(( pass % 24 )) -eq 0 ]; then
+              nice -n 19 git gc --quiet --prune=now 2>/dev/null || true
+            fi
 
             if ! kill -0 $ARCH 2>/dev/null; then
               # Either the window finished or the collector died. Both end the

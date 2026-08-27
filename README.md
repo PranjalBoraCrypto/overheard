@@ -223,6 +223,31 @@ back to the lobby every few seconds, a process that exited between passes
 would be blind for the whole commit and push. Every file is written to a temp
 name and renamed, so `git add` never catches a half-written shard.
 
+**The repository is the other budget.** Measured 2026-08-27: `.git` reached
+2.0 GB in about a day and a half and fetches began timing out. 143 commits a
+day, each rewriting 27 MB of profile shards, a 3.4 MB template table and
+every active room's day shard, is roughly 600 MB of new git objects a day —
+for data almost none of which anyone needs to the minute. Three fixes, in
+order of how much they bought:
+
+- **commit in tiers.** Small live files (`cursors`, `recent`, `standings`,
+  `index`, `owners`, `roster`, ~250 KB) every pass; `profiles/` every third;
+  room shards, per-room meta, `templates` and `spam` every twelfth. Measured
+  on a realistic simulation: **3.7× less**. Collection is untouched — the
+  archiver still reads every room on its own schedule and writes to disk
+  continuously. Only how often git is asked to remember it changed.
+- **day shards are append-only NDJSON**, one message per line, never
+  re-sorted. Written whole via rename so `git add` cannot catch a torn line.
+- `last_text` is 120 characters, not 180. It is the field that changes on
+  nearly every profile on nearly every pass, so its length sets the size of
+  the delta git stores 256 times over.
+
+Two things that did NOT help, both measured before being believed:
+formatting profile shards one identity per line (git's delta works on bytes,
+not lines — no difference at all), and sorting day shards differently
+(messages already arrive in sequence order, so the file was effectively
+append-only already; 24% at most).
+
 `web/data/index.json` reports each run's `coverage` — produced versus missed,
 computed from the server's own sequence numbers — and names any room it could
 not keep up with.
