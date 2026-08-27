@@ -51,6 +51,9 @@ uniform float uSquash;   // >1 stretched, <1 squashed
 uniform float uWide;     // eyes widen with speed
 uniform float uGlow;     // emissive gain
 uniform vec3  uAccent;
+uniform float uSpin;     // |angular velocity|, normalised
+uniform float uCamZ;     // how close the camera stands
+uniform float uBack;     // 1 draws the field behind the head, 0 leaves it bare
 
 const float PI = 3.14159265;
 
@@ -218,10 +221,58 @@ float spec(vec3 n, vec3 v, vec3 l, float rough){
   return (a * a) / (PI * k * k + 1e-5);
 }
 
+float hash21(vec2 p){
+  p = fract(p * vec2(123.34, 456.21));
+  p += dot(p, p + 45.32);
+  return fract(p.x * p.y);
+}
+
+/* ── WHAT IS BEHIND IT ─────────────────────────────────────────────────────
+   The bubble and the circuit traces are gone, and a hero with nothing behind
+   it is a robot floating in a void. This is the replacement, and it is drawn
+   in the same shader rather than in CSS for one reason: it can react.
+
+   Three layers of motes drift behind the head, parallaxed by the head's own
+   rotation — turn the head and the field slides the other way, which is the
+   cheapest honest depth cue there is. Spin it and they STREAK: uSpin is the
+   angular velocity, and it stretches each mote along x, so the backdrop is
+   part of the same physical event rather than an animation running beside it.
+
+   Everything here is additive with zero alpha, so it composites as light on
+   whatever the page's own background happens to be. */
+vec3 backdrop(vec2 uv, float t){
+  float r = length(uv);
+  vec3 c = uAccent * (exp(-r * 2.7) * 0.165 + exp(-r * 1.05) * 0.042);
+  // a wide soft bar behind the head, like a strip light out of frame
+  c += uAccent * exp(-abs(uv.y + 0.12) * 5.5) * exp(-abs(uv.x) * 0.75) * 0.050;
+
+  float streak = 1.0 + uSpin * 7.0;
+  for(int i = 0; i < 3; i++){
+    float fi = float(i);
+    float f = 2.6 + fi * 2.9;
+    float par = 0.10 + fi * 0.055;                    // nearer layers move more
+    vec2 g = uv * f + vec2(uRot.x * par * f, -uRot.y * par * f) + vec2(fi * 21.7, fi * 9.3);
+    vec2 id = floor(g), fr = fract(g) - 0.5;
+    float h = hash21(id);
+    if(h > 0.845){
+      vec2 off = vec2(sin(t * 0.35 + h * 41.0), cos(t * 0.29 + h * 33.0)) * 0.20;
+      vec2 d = (fr - off) * vec2(1.0 / streak, 1.0);
+      float m = smoothstep(0.13, 0.0, length(d));
+      float tw = 0.55 + 0.45 * sin(t * 1.6 + h * 60.0);
+      c += uAccent * m * tw * (0.55 - fi * 0.12);
+    }
+  }
+  /* The canvas is a rectangle and the glow is not. Without this the backdrop
+     stopped dead at the edge of the element and the hero read as a faintly
+     lit BOX sitting on the page — the exact thing removing the bubble was
+     meant to fix. */
+  return c * smoothstep(1.16, 0.30, length(uv));
+}
+
 void main(){
   vec2 uv = (gl_FragCoord.xy * 2.0 - uRes) / uRes.y;
 
-  vec3 ro = vec3(0.0, 0.02, 2.62);
+  vec3 ro = vec3(0.0, 0.02, uCamZ);
   vec3 rd = normalize(vec3(uv * 0.70, -1.0));
 
   float t = 0.0, mid = 0.0;
@@ -240,7 +291,9 @@ void main(){
   float bloom = exp(-emisNear * 11.0) * 0.55;
 
   if(!hit){
-    fragColor = vec4(uAccent * bloom * uGlow, clamp(bloom * 1.6, 0.0, 1.0));
+    vec3 bg = backdrop(uv, uTime) * uBack + uAccent * bloom * uGlow;
+    // zero alpha, so it adds light to the page rather than painting over it
+    fragColor = vec4(bg, 0.0);
     return;
   }
 
@@ -356,11 +409,18 @@ export function mountAgent3D(canvas, opts = {}){
   gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
 
   const U = {};
-  for(const k of ["uRes","uTime","uRot","uEye","uAnt","uBlink","uSquash","uWide","uGlow","uAccent"])
+  for(const k of ["uRes","uTime","uRot","uEye","uAnt","uBlink","uSquash","uWide","uGlow","uAccent","uSpin","uCamZ","uBack"])
     U[k] = gl.getUniformLocation(prog, k);
 
   const accent = opts.accent || [0.34, 0.86, 1.0];
   const calm = !!opts.calm;
+  /* The camera distance and the backdrop are options, not constants, because
+     /?hero=classic has to be the OLD hero rather than a smaller version of
+     this one — the bubble behind it already was the backdrop, and the head
+     stood further back inside it. A saved design that is not what was saved
+     is not much of a saved design. */
+  const camZ = opts.camZ ?? 2.05;
+  const back = opts.backdrop === false ? 0 : 1;
 
   /* ── THE BODY ────────────────────────────────────────────────────────────
      Angular position and velocity, in radians. The spring is a spring, not
@@ -631,6 +691,9 @@ export function mountAgent3D(canvas, opts = {}){
     gl.uniform1f(U.uWide, S.wide);
     gl.uniform1f(U.uGlow, 1 + S.energy * 0.55);
     gl.uniform3f(U.uAccent, accent[0], accent[1], accent[2]);
+    gl.uniform1f(U.uSpin, Math.min(1, Math.abs(S.vYaw) / 14));
+    gl.uniform1f(U.uCamZ, camZ);
+    gl.uniform1f(U.uBack, back);
 
     gl.clearColor(0, 0, 0, 0);
     gl.clear(gl.COLOR_BUFFER_BIT);

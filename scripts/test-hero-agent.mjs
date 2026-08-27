@@ -64,16 +64,36 @@ check('and again, the other way', await differs('/tmp/hero-look-dl.png','/tmp/he
 
 console.log('\n=== a shake spins it');
 const st = () => pg.evaluate(()=>{ const s=window.__hero?.state; return s?{yaw:s.yaw,vYaw:s.vYaw,spinning:s.spinning}:null; });
-// A waggle: back and forth across the socket, the way a person does it.
-for(let i=0;i<5;i++){
-  await pg.mouse.move(cx+cw*0.05, cy+ch/2);
-  await pg.mouse.move(cx+cw*0.95, cy+ch/2);
-}
-await pg.waitForTimeout(120);
-const spun = await st();
-console.log('  state after the shake:', JSON.stringify(spun));
-check('it picked up angular velocity', spun && Math.abs(spun.vYaw) > 4, spun?String(spun.vYaw.toFixed(2)):'n/a');
-check('and went into free spin', !!spun?.spinning);
+await pg.evaluate(() => {
+  window.__sawSpin = false;
+  window.__spinWatch = setInterval(() => { if(window.__hero.state.spinning) window.__sawSpin = true; }, 25);
+});
+/* The waggle is dispatched from inside the page rather than driven over CDP.
+   A shake is three reversals inside 420ms, and under software rendering one
+   frame of this canvas can take seconds — the round trip per synthetic mouse
+   move was landing further apart than that, so the counter reset every time
+   and the test failed for a reason that has nothing to do with the code. In
+   the page, the events arrive milliseconds apart, the way a hand moves. */
+/* The velocity is read INSIDE the same evaluate, immediately after the last
+   event. Reading it 120ms later over CDP was measuring whatever survived a
+   software frame — which can be a quarter-second of simulation and most of
+   the energy — and reporting a spin that happened as a spin that did not. */
+const spun = await pg.evaluate(([x0, x1, y]) => {
+  const ev = (x) => window.dispatchEvent(new PointerEvent('pointermove', { clientX:x, clientY:y, bubbles:true }));
+  for(let i=0;i<5;i++){ ev(x0); ev(x1); }
+  const s = window.__hero.state;
+  return { vYaw: s.vYaw, yaw: s.yaw };
+}, [cx+cw*0.05, cx+cw*0.95, cy+ch/2]);
+console.log('  velocity the instant the shake ended:', JSON.stringify(spun));
+check('it picked up angular velocity', Math.abs(spun.vYaw) > 4, spun.vYaw.toFixed(2));
+/* Watched, not sampled. At 25 rad/s the head does a whole revolution in a
+   quarter second, so a snapshot of its ANGLE proves nothing — it can be back
+   where it started — and waitForFunction polls on rAF, which under software
+   rendering fires more slowly than the whole spin takes. A setInterval
+   installed before the shake sees the flag whenever it is up. */
+await pg.waitForTimeout(3200);
+const sawSpin = await pg.evaluate(() => { clearInterval(window.__spinWatch); return window.__sawSpin; });
+check('and the spring let go, so it spun free', sawSpin === true);
 await pg.waitForTimeout(900); await shot('/tmp/hero-spin.png');
 await pg.waitForTimeout(4200);
 const settled = await st();
@@ -121,6 +141,27 @@ console.log('  state:', JSON.stringify(calmState));
 check('never spins', calmState && !calmState.spinning);
 check('no angular velocity at all', calmState && Math.abs(calmState.vYaw) < 0.001, calmState?String(calmState.vYaw):'n/a');
 await shot('/tmp/hero-calm.png', pg2, box2);
+
+console.log('\n=== /?hero=classic is the hero as it shipped before this one');
+const pgc = await b.newPage({ viewport:{width:1330,height:900} });
+pgc.on('pageerror',e=>errs.push(e.message));
+await pgc.goto('http://localhost:8898/?hero=classic'); await pgc.waitForTimeout(3000);
+const cl = await pgc.evaluate(() => {
+  const f = document.getElementById('hface');
+  const cs = (el) => el ? getComputedStyle(el).display : 'gone';
+  return { flagged: f.classList.contains('classic'),
+           traces: cs(document.querySelector('.traces')),
+           bubble: getComputedStyle(document.querySelector('.socket'), '::before').display,
+           canvas: getComputedStyle(document.getElementById('heroFace')).width };
+});
+console.log('  ', JSON.stringify(cl));
+check('the traces come back', cl.traces === 'block');
+check('the bubble comes back', cl.bubble !== 'none');
+check('and the face returns to its old size', cl.canvas === '274px', cl.canvas);
+const dflt = await pg.evaluate(() => ({
+  traces: getComputedStyle(document.querySelector('.traces')).display,
+  canvas: getComputedStyle(document.getElementById('heroFace')).width }));
+check('none of which is on by default', dflt.traces === 'none' && dflt.canvas === '420px', JSON.stringify(dflt));
 
 console.log('\n=== phone');
 const pg3 = await b.newPage({ viewport:{width:390,height:844}, hasTouch:true, isMobile:true });

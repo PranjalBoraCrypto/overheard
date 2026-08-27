@@ -100,7 +100,15 @@ header nav a:hover{color:var(--cy-hi)} header nav a:hover::after{width:100%}
 }
 .hcopy{max-width:760px;min-width:0}
 .hface{position:relative;display:flex;flex-direction:column;align-items:center;gap:15px}
-.socket{position:relative;width:286px;height:286px;display:grid;place-items:center}
+/* The agent is the hero now, so it gets the room the bubble used to take —
+   the canvas IS the composition, and the glow and the drifting field behind
+   the head are painted inside it by the same shader that lights the robot. */
+.socket{position:relative;width:420px;height:420px;display:grid;place-items:center}
+.hface.classic .socket{width:286px;height:286px}
+.socket::before,.socket::after,.socket .orbit{display:none}
+.hface.classic .socket::before,
+.hface.classic .socket::after,
+.hface.classic .socket .orbit{display:block}
 /* A socket, not a frame: the key plugs into it and a face comes out. */
 .socket::before{
   content:"";position:absolute;inset:-6px;border-radius:50%;
@@ -122,7 +130,8 @@ header nav a:hover{color:var(--cy-hi)} header nav a:hover::after{width:100%}
   animation:orbit 9s linear infinite;
 }
 @keyframes orbit{to{transform:rotate(360deg)}}
-#heroFace{position:relative;z-index:1;width:274px;height:274px;display:block;touch-action:none}
+#heroFace{position:relative;z-index:1;width:420px;height:420px;display:block;touch-action:none}
+.hface.classic #heroFace{width:274px;height:274px}
 .facecap{text-align:center;min-height:1.6em;max-width:30ch;font-family:var(--mono)}
 /* The hint is a nudge, not a label: it says the thing is alive, and then it
    gets out of the way the moment somebody discovers that for themselves. */
@@ -151,7 +160,14 @@ h1 em{
 .lede{margin-top:20px;color:var(--dim);font-size:17.5px;max-width:47ch;font-weight:400;opacity:0;animation:word .9s var(--ease) .55s forwards}
 /* Anchored to the socket and running back toward the copy, so the routing
    reads as the key arriving rather than as wallpaper in a corner. */
-.traces{position:absolute;right:64%;top:50%;transform:translateY(-52%);width:340px;height:250px;opacity:.5;pointer-events:none}
+/* ── THE OLD DRESSING, KEPT BEHIND A SWITCH ────────────────────────────────
+   The circuit traces and the socket bubble are off by default now. They are
+   not deleted: /?hero=classic puts .classic on the hero and every rule below
+   comes back, so the two can be compared on the deployed site in two tabs
+   rather than in two deployments. That is the whole reason this is a class
+   and not a commit. */
+.traces{display:none;position:absolute;right:64%;top:50%;transform:translateY(-52%);width:340px;height:250px;opacity:.5;pointer-events:none}
+.hface.classic .traces{display:block}
 .traces path{fill:none;stroke:var(--cy-lo);stroke-width:1.5}
 .traces .live{stroke:var(--cy-hi);stroke-dasharray:26 320;filter:drop-shadow(0 0 6px var(--cy-hi));animation:flow 3.6s var(--ease) .4s infinite}
 @keyframes flow{from{stroke-dashoffset:346}to{stroke-dashoffset:0}}
@@ -952,8 +968,10 @@ footer a:hover{color:var(--cy-hi)}
      it costs less height than the paragraph it sits above. */
   .hero{grid-template-columns:1fr;gap:22px;padding-top:30px}
   .hface{order:-1;align-items:flex-start}
-  .socket{width:164px;height:164px;margin-left:-6px}
-  #heroFace{width:158px;height:158px}
+  .socket{width:250px;height:250px;margin-left:-16px}
+  #heroFace{width:250px;height:250px}
+  .hface.classic .socket{width:164px;height:164px}
+  .hface.classic #heroFace{width:158px;height:158px}
   .facecap{text-align:left;min-height:0;max-width:none}
   .hface{gap:9px}
 }
@@ -986,7 +1004,7 @@ footer a:hover{color:var(--cy-hi)}
       <h1>Your agent has an ID. Give it a <em>face</em>.</h1>
       <p class="lede">Paste your DID. Get a credential worth posting — no install, no account, nothing uploaded.</p>
     </div>
-    <div class="hface">
+    <div class="hface" id="hface">
       <!-- Routing, not decoration: every elbow is 45°, the way a trace is
            actually laid out, and it now runs INTO the socket. -->
       <svg class="traces" viewBox="0 0 340 250" aria-hidden="true">
@@ -4424,6 +4442,9 @@ let hero3d = null;
 
 (function mountHero(){
   const c = $("heroFace"); if(!c) return;
+  // Two tabs, one deployment. /?hero=classic is the version before this one.
+  const classic = new URLSearchParams(location.search).get("hero") === "classic";
+  if(classic) $("hface")?.classList.add("classic");
   const hint = $("faceHint");
   const touch = matchMedia("(hover: none)").matches;
 
@@ -4444,6 +4465,10 @@ let hero3d = null;
       accent: [0.30, 0.86, 1.0],
       calm,
       maxDpr: 1.75,
+      // classic stands the camera back where it was and leaves the space
+      // behind the head to the bubble, exactly as it shipped
+      camZ: classic ? 2.62 : 2.05,
+      backdrop: !classic,
       hint,
       onFirstInteraction(){ if(hint) hint.classList.add("used"); },
     });
