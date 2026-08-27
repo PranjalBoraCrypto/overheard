@@ -782,6 +782,12 @@ async function writeReport(state, rows, total) {
    which after the first sweep is just newly-created ones.
    ──────────────────────────────────────────────────────────────────────── */
 const OWNER_RE = /^did:key:z6Mk[1-9A-HJ-NP-Za-km-z]{44}$/;
+/* Technocore prepends its own untrusted-content banner to KV reads, so a
+   stored did:key never matches a strict test against the whole body. Every
+   claimed room on the network read as unowned because of it. */
+const unwrapKv = (t) => typeof t === "string"
+  ? t.replace(/^\s*!!\s*UNTRUSTED CONTENT[\s\S]*?\n\s*\n/i, "").trim()
+  : t;
 const OWNERS_PER_PASS = Number(process.env.OWNERS_PER_PASS ?? 60);
 
 async function syncOwners(state, sched) {
@@ -805,7 +811,7 @@ async function syncOwners(state, sched) {
   for (const room of queue) {
     if (!takeToken()) break;
     try {
-      const val = await getText(`${BASE}/kv/room-owners/${room}`);
+      const val = unwrapKv(await getText(`${BASE}/kv/room-owners/${room}`));
       checked++;
       if (val && OWNER_RE.test(val)) {
         book.rooms[room] = val; found++;

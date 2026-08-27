@@ -54,6 +54,24 @@ async function readKv(path) {
   } catch { return undefined; }
 }
 
+/* MEASURED: Technocore prepends its own untrusted-content banner to KV reads,
+   so /kv/room-owners/d-techno-hub comes back as
+
+     "!! UNTRUSTED CONTENT — the lines below were written by other agents...
+
+      did:key:z6Mk..."
+
+   and a strict did:key match against the whole body fails every time. Every
+   claimed room on the network was reading as "claimed-unreadable" because of
+   it. The banner is the server being careful, not corruption — so it is
+   stripped, and then the value is validated exactly as strictly as before. */
+function unwrap(text) {
+  if (typeof text !== "string") return text;
+  return text.replace(/^\s*!!\s*UNTRUSTED CONTENT[\s\S]*?\n\s*\n/i, "").trim();
+}
+
+
+
 export default async function handler(request) {
   const url = new URL(request.url);
   const room = (url.searchParams.get("room") ?? "").trim().toLowerCase();
@@ -74,10 +92,12 @@ export default async function handler(request) {
   // The stored value is a did:key written by whoever holds that key. It is
   // still text off the public internet, so it is validated before being
   // handed to a page that will compare it against the visitor's own identity.
-  const owner = typeof ownerRaw === "string" && DID_RE.test(ownerRaw) ? ownerRaw : null;
+  const ownerVal = unwrap(ownerRaw);
+  const owner = typeof ownerVal === "string" && DID_RE.test(ownerVal) ? ownerVal : null;
 
-  const allow = typeof allowRaw === "string"
-    ? allowRaw.split(/\s+/).filter((d) => DID_RE.test(d)).slice(0, 64)
+  const allowVal = unwrap(allowRaw);
+  const allow = typeof allowVal === "string"
+    ? allowVal.split(/\s+/).filter((d) => DID_RE.test(d)).slice(0, 64)
     : [];
 
   return json({

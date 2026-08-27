@@ -36,6 +36,14 @@ const BASE = "https://technocore.chat";
    allowance of 600 a minute, which is nothing next to telling somebody their
    work did not happen.
    ──────────────────────────────────────────────────────────────────────── */
+/* `status` FIRST, then the cache policy. Two commits ago this was called as
+   json(body, 600, 3600) meaning "cache for 600s" — and 600 went in as the
+   HTTP STATUS, which Response rejects, so every single note lookup threw and
+   answered 500. The page reads a failed lookup as "no note", so the bug it
+   was meant to fix came back wearing the same face.
+
+   Named arguments would have made it impossible. Until then, the parameter
+   order is stated here and the smoke test below calls the real handler. */
 const json = (body, status = 200, ttl = 300, swr = 3600) =>
   new Response(JSON.stringify(body), {
     status,
@@ -129,5 +137,7 @@ export default async function handler(request) {
     note: typeof note === "string" ? note : null,
     checked: new Date().toISOString(),
     // Never cache an answer we are not sure of.
-  }, !known ? 0 : registered ? 600 : 10, !known ? 0 : registered ? 3600 : 20);
+  }, 200,
+     !known ? 0 : registered ? 600 : 10,      // ttl
+     !known ? 0 : registered ? 3600 : 20);    // stale-while-revalidate
 }
