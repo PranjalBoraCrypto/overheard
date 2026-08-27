@@ -1601,7 +1601,11 @@ async function drawCard(did,pub,stats,note){
   const RX=468, RW=RIGHT-RX;        // the claim column
 
   const preview=!!stats?.preview;
-  const reg=!!note?.registered;
+  // `registered` is now three-valued: true, false, or null for "we could not
+  // tell". Only an explicit true is registration, and only an explicit false
+  // is grounds for saying somebody has not done it.
+  const reg = note?.registered === true;
+  const noteUnknown = note?.registered === null || note?.known === false;
   const s=stats?.standing||null;
   const proven=!!stats?.proof;
   /* ── the durable half ──────────────────────────────────────────────────
@@ -1781,6 +1785,8 @@ async function drawCard(did,pub,stats,note){
   const tier = proven && reg && posted ? "PROVEN"
              : reg && posted            ? "VERIFIED"
              : reg                      ? "REGISTERED"
+             : noteUnknown && posted    ? "SIGNING"
+             : noteUnknown              ? "UNCONFIRMED"
              : posted                   ? "UNREGISTERED"
              :                            "KEY ONLY";
   const complete = reg && posted;
@@ -1790,6 +1796,9 @@ async function drawCard(did,pub,stats,note){
     REGISTERED:   ["HALF SET UP",         "The note is published and permanent. Nothing signed has been seen yet."],
     UNREGISTERED: ["HALF SET UP",         "Signing and posting, but no profile note — nothing here outlives the rooms."],
     "KEY ONLY":   ["NOT SET UP YET",      "A valid Ed25519 key and nothing else on the record."],
+    // Never accuse somebody of not doing something we could not check.
+    SIGNING:      ["NOTE NOT CHECKED",    "Signed messages are on record. The note lookup did not answer, so that half is unconfirmed."],
+    UNCONFIRMED:  ["NOTE NOT CHECKED",    "The note lookup did not answer just now. Nothing is claimed either way."],
   }[tier];
 
   // The medallion, and everything about it, sits in its own column so the
@@ -2269,8 +2278,31 @@ function renderDiagnostic(parsed, stats, note){
   actions.hidden=true;
   $("prove").hidden=true;
 
-  const reg=!!note?.registered;
+  const reg = note?.registered === true;
+  const noteUnknown = note?.registered === null || note?.known === false || !note;
   const fp=note?.fingerprint;
+
+  /* WE COULD NOT CHECK — so we do not accuse.
+
+     The note lookup answering "no" and the note lookup not answering at all
+     used to be the same thing to this panel, and it would tell somebody to
+     go and publish a note that was already published. That is the worst
+     thing this page can do: send a person to redo finished work, and print
+     HALF SET UP on the card while they do it. */
+  if(!stats && noteUnknown){
+    $("diagTitle").textContent="Could not check this identity's note";
+    $("diagSub").textContent="The lookup did not answer just now, so nothing is being claimed either way — this identity may well be fully set up. Nothing is wrong with the key itself: it decodes to a real Ed25519 key.";
+    $("jobs").replaceChildren();
+    const doit=$("doit"); doit.replaceChildren();
+    const again=document.createElement("button");
+    again.className="act primary"; again.type="button"; again.textContent="Check again";
+    again.addEventListener("click",()=>{ $("did").value=parsed.did; issue(parsed.did); });
+    const p2=document.createElement("p"); p2.className="small"; p2.style.marginTop="12px";
+    p2.textContent="A note lives at a fixed address and does not expire, so a second look usually settles it.";
+    doit.append(again,p2);
+    diag.hidden=false; wrap.hidden=true;
+    return;
+  }
   const mine=savedIdentity?.did===parsed.did;
   const donePost=(()=>{ try{ return !!localStorage.getItem(postedKey(parsed.did)); }catch{ return false; } })();
   if(openKey && !mine) openKey=null;   // a key only ever belongs to its own DID
