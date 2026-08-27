@@ -16,6 +16,7 @@ import { fileURLToPath } from 'url';
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'web');
 let POSTS = [];
 let FAIL = false;
+let FULL = false;      // Technocore answering "note limit reached"
 
 const srv = http.createServer((req, res) => {
   const u = new URL(req.url, 'http://x'); let p = u.pathname; if (p === '/') p = '/index.html';
@@ -24,7 +25,10 @@ const srv = http.createServer((req, res) => {
     return req.on('end', () => {
       try { POSTS.push(JSON.parse(raw)); } catch { POSTS.push({ bad: raw }); }
       res.writeHead(200, { 'content-type': 'application/json' });
-      res.end(JSON.stringify(FAIL ? { ok: false, error: 'nope' } : { ok: true }));
+      res.end(JSON.stringify(
+        FULL ? { ok: false, status: 400, error: '400 note limit reached (50960 is the cap, and this would be a new one). Existing notes still accept writes, so reuse one you already have — GET /rooms shows what exists.' }
+        : FAIL ? { ok: false, error: 'nope' }
+        : { ok: true }));
     });
   }
   if (p === '/api/owner') {
@@ -281,10 +285,32 @@ await pg.click('#t-room .actionrow button[data-act]');
 await pg.waitForTimeout(600);
 check('and claiming it never reaches the network', POSTS.length === 0, `${POSTS.length} posts`);
 
+console.log('\n=== F4a. when the network itself refuses, it must not read as your mistake');
+/* Technocore caps notes at 50,960 PER NAMESPACE, and a room claim is one key
+   in `room-owners`. When that namespace is full no client anywhere can claim
+   a new room — so "try a different name", which is what the raw error invites,
+   cannot work. */
+FULL = true;
+await pg.fill('#roomName', 'another-name');
+await pg.waitForFunction(() => /is available/.test(document.getElementById('roomAvail').textContent), null, { timeout: 6000 });
+await pg.click('#t-room .actionrow button[data-act]');
+await pg.waitForTimeout(1000);
+const capMsg = (await pg.locator('#m-room').textContent()) || '';
+console.log('   ', capMsg.slice(0, 120) + '…');
+check('it does not pass the raw error through', !/Technocore said/.test(capMsg));
+check('it names the register that is full', /room-ownership register is full/.test(capMsg));
+check('and says it is not this name', /Nothing is wrong with your name/.test(capMsg));
+check('and says it is not just this site', /on any site/.test(capMsg));
+check('and says when it clears', /7 days/.test(capMsg));
+check('the rung is marked blocked, not failed', (await cls('t-room')).includes('blocked'));
+check('and it is not marked done', (await stateOf('room')) !== 'done');
+FULL = false;
+
 await pg.fill('#roomName', 'my-lab');
 await pg.waitForFunction(() => /is available/.test(document.getElementById('roomAvail').textContent), null, { timeout: 6000 });
 check('a free one says available', /d-my-lab is available/.test(await pg.locator('#roomAvail').textContent()));
 check('in green', (await pg.locator('#roomAvail').getAttribute('class')).includes('free'));
+POSTS = [];   // the refused claim above is still in there
 await pg.click('#t-room .actionrow button[data-act]');
 await pg.waitForFunction(() => document.getElementById('t-room').className.includes('done'), null, { timeout: 10000 });
 const claim = POSTS.find(p => p.kind === 'claim');

@@ -160,6 +160,10 @@ svg.line *{stroke-dasharray:1;stroke-dashoffset:1;transition:stroke-dashoffset .
 .step.done .node{background:linear-gradient(140deg,var(--blue),var(--mint)) padding-box,linear-gradient(var(--blue),var(--blue)) border-box}
 .step.done .node svg{stroke:#001016}
 .step.locked{opacity:.4}
+/* A rung the network itself has refused. Not an error state — nothing here
+   is wrong — but the way past it is the Skip, so the Skip stops being quiet. */
+.step.blocked .actionrow button[data-act]{opacity:.4;pointer-events:none}
+.step.blocked .skip{color:var(--blue);font-weight:600}
 .step.skipped{opacity:.55}
 .step.skipped .node svg{stroke:var(--faint)}
 .step.locked .shead{cursor:not-allowed}
@@ -540,6 +544,22 @@ async function signFor(room,nonce,text){
   return b64u(await crypto.subtle.sign({name:"Ed25519"},key,enc.encode(`${room}|${nonce}|${text}`)));
 }
 const say=(id,t,cls="")=>{ const n=$("m-"+id); if(!n) return; n.textContent=t; n.className="msg "+cls; };
+
+/* ── WHEN THE NETWORK IS FULL, SAY WHICH PART OF IT ───────────────────────
+   Technocore's own limits: 20,480 rooms, 655,360 notes in total, and 50,960
+   notes PER NAMESPACE. A room claim is a signed write to one key in the
+   `room-owners` namespace, and that namespace is the one at its ceiling —
+   which is why claiming fails for every name, including the ones this page
+   suggests, and why trying a different one cannot help.
+
+   Raw, it arrives as `Technocore said: 400 note limit reached (50960 is the
+   cap, and this would be a new one)`, which reads as something the person
+   did. It is not: it is a shared register that is full, it is full for every
+   client on the network and not just this one, and entries with no write for
+   seven days are released. Each caller says which of its own things is
+   affected, because "the network is full" is both alarming and, for a note
+   or a message, untrue. */
+const isFull=(d)=>/limit reached|too many|capacity/i.test(String(d?.error||d?.body||""));
 function download(blob,name){
   const a=document.createElement("a");
   a.href=URL.createObjectURL(blob); a.download=name; a.click();
@@ -1035,6 +1055,11 @@ async function checkRoom(){
 }
 $("roomName").addEventListener("input",()=>{
   $("roomOut").hidden=true;
+  // Editing the name clears a capacity block. The register being full is not
+  // about the name, so this does not fix anything — but the ceiling can drop
+  // at any moment as entries age out, and refusing to let somebody try again
+  // for the rest of the session would outlive the reason for it.
+  $("t-room").classList.remove("blocked");
   clearTimeout(availTimer); availTimer=setTimeout(checkRoom,420);
 });
 $("roomWrap").addEventListener("click",()=>$("roomName").focus());
@@ -1046,6 +1071,7 @@ const ACTIONS={
     if(!value) return say("note","Write a line about your agent first.","err");
     say("note","Publishing…");
     const d=await post({kind:"note",did:ID.did,fingerprint:ID.fingerprint,value});
+    if(!d.ok && isFull(d)) return say("note","Technocore's note store is full at the moment, so it cannot take a new one. It frees entries that have gone 7 days without a write — try again shortly. Nothing is wrong with what you wrote.","err");
     if(!d.ok) return say("note",`Technocore said: ${d.error||d.body||"failed"}`,"err");
     say("note","Published. This one is permanent.","ok");
     done("note"); openStep("note",false); advance();
@@ -1067,14 +1093,13 @@ const ACTIONS={
     const sig=b64u(await crypto.subtle.sign({name:"Ed25519"},key,
       enc.encode(`room-owners|${room}|${nonce}|${ID.did}`)));
     const d=await post({kind:"claim",did:ID.did,room,sig,nonce});
-    /* "note limit reached" is not about the name and not about this key:
-       Technocore's key-value store has a hard ceiling on how many keys can
-       exist at once, and while it is full NO new room can be claimed by
-       anyone. Passing that through as `Technocore said: 400 note limit
-       reached (50960 is the cap…)` reads as a mistake somebody made, and the
-       obvious response — try a different name — cannot work. */
-    if(!d.ok && /note limit reached|limit reached/i.test(String(d.error||d.body||""))){
-      return say("room","Technocore is out of room slots right now — its key store is at its cap, so nobody can claim a new room until some are reclaimed (idle ones free up after about 7 days). Nothing wrong with your name. Skip this one and come back.","err");
+    if(!d.ok && isFull(d)){
+      /* Not the name, not this key, and not this site: the register of room
+         owners is at its 50,960 cap, so no client anywhere can claim a NEW
+         room until entries are released. Rooms already claimed keep working. */
+      $("t-room").classList.add("blocked");
+      showAvail("bad","Nobody can claim a new room right now.");
+      return say("room","Technocore's room-ownership register is full — it caps at 50,960 claims and it has hit that. No new room can be claimed on any site until entries are released, which happens after 7 days without a write. Nothing is wrong with your name, and rooms already claimed are unaffected. Skip this one and come back.","err");
     }
     if(!d.ok) return say("room", d.status===409
       ? "That room is taken. Try another name."
@@ -1106,6 +1131,7 @@ async function postSigned(id, room, rawText, quiet){
   const sig=await signFor(room,nonce,text);
   if(!quiet) say(id,"Sending the signature — never the key…");
   const d=await post({kind:"message",did:ID.did,room,sig,nonce,text});
+  if(!d.ok && isFull(d)) return say(id,"Technocore is at capacity for new rooms just now. It releases them after 7 days without a write — try again shortly.","err");
   if(!d.ok) return say(id,`Technocore said: ${d.error||d.body||"failed"}`,"err");
   if(!quiet){ say(id,"Posted.","ok"); done(id); openStep(id,false); advance(); }
 }
