@@ -107,6 +107,63 @@ check('dialog closed itself', !(await pg.locator('#pmodal').isVisible()));
 const link = await pg.evaluate(() => window.__p ?? null);
 await pg.locator('#card').screenshot({ path: '/tmp/prove-card.png' });
 
+console.log('\n=== D2. and then it stops being a button');
+/* A control that still lifts, still shows a hand cursor and still opens a
+   passphrase box after the key has signed is telling somebody their signature
+   did not take. */
+const bar = await pg.evaluate(() => {
+  const b = document.getElementById('provebar');
+  return { disabled: b.disabled, cursor: getComputedStyle(b).cursor,
+           arrow: getComputedStyle(b.querySelector('.pb-go')).display,
+           tick: getComputedStyle(b.querySelector('.pb-ok')).display,
+           sub: document.getElementById('pbSub').textContent };
+});
+console.log('  ', JSON.stringify(bar));
+check('the button is disabled', bar.disabled === true);
+check('no hand cursor', bar.cursor === 'default', bar.cursor);
+check('the arrow is gone', bar.arrow === 'none');
+check('a tick is in its place', bar.tick !== 'none');
+check('and the line underneath says what happened', /Signed with your key/.test(bar.sub), bar.sub.slice(0, 46));
+await pg.locator('#provebar').click({ force: true, timeout: 3000 }).catch(() => {});
+await pg.waitForTimeout(500);
+check('clicking it does not reopen the dialog', !(await pg.locator('#pmodal').isVisible()));
+await pg.locator('#provebar').screenshot({ path: '/tmp/prove-bar-done.png' });
+
+console.log('\n=== D3. the card follows the cursor instead of trailing it');
+/* `transition: transform .5s` plus a transform set on every pointer move
+   restarted the ease every move, so the card sat most of a second behind the
+   cursor — measured at 0.74 degrees on screen while the handler had asked for
+   4.94. It reads as lag, not as smoothing, and it only showed up after a
+   lookup because before one the card is a 34%-opacity mock. */
+const feel = await pg.evaluate(() => {
+  const w = document.getElementById('cardwrap'), r = w.getBoundingClientRect();
+  const ev = (x, y) => w.dispatchEvent(new PointerEvent('pointermove', { clientX: x, clientY: y, bubbles: true }));
+  w.dispatchEvent(new PointerEvent('pointerenter', { clientX: r.left + 10, clientY: r.top + 10, bubbles: true }));
+  ev(r.left + 12, r.top + 12);
+  return new Promise((done) => setTimeout(() => {
+    ev(r.right - 12, r.bottom - 12);
+    const asked = w.style.transform;
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      const m = new DOMMatrix(getComputedStyle(w).transform);
+      // the yaw the screen is actually showing, in degrees
+      done({ asked, shownDeg: +(Math.asin(Math.max(-1, Math.min(1, -m.m13))) * 180 / Math.PI).toFixed(2),
+             transition: getComputedStyle(w).transitionDuration });
+    }));
+  }, 600));
+});
+const wanted = +(/rotateY\(([-\d.]+)deg/.exec(feel.asked)?.[1] ?? NaN);
+console.log('  asked for', wanted, 'deg · showing', feel.shownDeg, 'deg · transition', feel.transition);
+check('what is on screen is what the cursor asked for', Math.abs(feel.shownDeg - wanted) < 0.6,
+  `${wanted} vs ${feel.shownDeg}`);
+check('and the ease is off while tracking', parseFloat(feel.transition) === 0, feel.transition);
+const back = await pg.evaluate(() => {
+  const w = document.getElementById('cardwrap');
+  w.dispatchEvent(new PointerEvent('pointerleave', { bubbles: true }));
+  return { tracking: w.classList.contains('tracking'), transition: getComputedStyle(w).transitionDuration };
+});
+check('the ease comes back for the return to flat', parseFloat(back.transition) > 0.2 && !back.tracking,
+  JSON.stringify(back));
+
 console.log('\n=== E. a DIFFERENT browser, no identity — the seed route, and a file back');
 const pg2 = await ctx.newPage(); await killWebGL(pg2); pg2.on('pageerror', e => errs.push(e.message));
 await pg2.goto('http://localhost:8990/');

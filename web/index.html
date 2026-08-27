@@ -235,6 +235,16 @@ h1 em{
    mid-animation. */
 .cardwrap{position:relative;max-width:960px;margin:0 auto;border-radius:22px;overflow:hidden;
   transition:transform .5s var(--ease);will-change:transform}
+/* THE TRANSITION IS FOR LETTING GO, NOT FOR FOLLOWING.
+   The pointer handler sets a new transform on every move, and with a
+   half-second ease on the property every one of those restarted the ease —
+   so the card was permanently most of a second behind the cursor. Measured:
+   the handler had asked for 4.94 degrees and the screen was showing 0.74.
+   It reads as lag rather than as smoothing, and it only became obvious once
+   the card stopped being the 34%-opacity mock, which is why it looked fine
+   before a lookup and wrong after one. While the pointer is on the card the
+   transform is applied raw; the ease comes back for the return to flat. */
+.cardwrap.tracking{transition:none}
 /* BACKWARDS, NOT BOTH. `both` keeps the deal's last keyframe applied for
    good, and an animation's applied value beats an inline style — so from the
    moment the finished card was dealt in, `transform:none` won every frame and
@@ -249,9 +259,16 @@ h1 em{
   display:block;width:100%;height:auto;border-radius:22px;
   box-shadow:0 50px 110px -40px rgba(0,0,0,.95),0 0 0 1px rgba(0,180,215,.22),0 0 90px -30px rgba(0,180,215,.55);
 }
+/* The highlight used to be a gradient whose CENTRE moved, which means the
+   browser re-rasterised a 960px radial gradient on every pointer move and
+   then blended it. It is now a gradient of fixed shape on an oversized box
+   that is TRANSLATED — same picture, one raster, and the per-frame work is a
+   composited transform. The card's overflow:hidden clips the overhang. */
 .sheen{
-  position:absolute;inset:0;border-radius:22px;pointer-events:none;mix-blend-mode:overlay;opacity:0;transition:opacity .4s;
-  background:radial-gradient(600px circle at var(--mx,30%) var(--my,25%),rgba(95,235,255,.55),rgba(0,180,215,.2) 40%,transparent 70%);
+  position:absolute;left:-50%;top:-50%;width:200%;height:200%;
+  pointer-events:none;mix-blend-mode:overlay;opacity:0;transition:opacity .4s;
+  background:radial-gradient(600px circle at 50% 50%,rgba(95,235,255,.55),rgba(0,180,215,.2) 40%,transparent 70%);
+  transform:translate3d(var(--sx,0px),var(--sy,0px),0);will-change:transform;
 }
 .cardwrap:hover .sheen{opacity:1}
 .glare{position:absolute;inset:0;border-radius:22px;pointer-events:none;
@@ -377,8 +394,24 @@ h1 em{
 .pb-txt span{display:block;color:var(--faint);font-size:12.5px;line-height:1.5;margin-top:2px}
 .pb-go{flex:0 0 auto;color:var(--cy)}
 .pb-go svg{width:20px;height:20px;display:block}
-.provebar.done .pb-ic{background:radial-gradient(circle at 34% 28%,rgba(95,235,255,.4),rgba(0,140,175,.2))}
+/* ── DONE IS DONE ──────────────────────────────────────────────────────────
+   Once the key has signed there is nothing left for this control to do, and a
+   button that still lifts, still shows a hand cursor and still opens a
+   passphrase box is telling somebody their signature did not take. It goes
+   inert and swaps the arrow for a tick: the arrow means "there is a next
+   step", and there isn't one. */
+.provebar.done{cursor:default}
+.provebar.done:hover{transform:none;box-shadow:none}
+.provebar.done .pb-ic{background:radial-gradient(circle at 34% 28%,rgba(95,235,255,.4),rgba(0,140,175,.2));
+  box-shadow:inset 0 0 0 1px rgba(95,235,255,.6)}
 .provebar.done .pb-txt b::after{content:"  ·  proven";color:var(--cy-hi);font-weight:600}
+.provebar[disabled]{opacity:1}
+.pb-ok{flex:0 0 auto;color:var(--cy-hi);display:none}
+.pb-ok svg{width:24px;height:24px;display:block;filter:drop-shadow(0 0 8px rgba(95,235,255,.55))}
+.provebar.done .pb-go{display:none}
+.provebar.done .pb-ok{display:block;animation:pbtick .5s var(--spring) both}
+@keyframes pbtick{0%{transform:scale(.4);opacity:0}100%{transform:scale(1);opacity:1}}
+@media (prefers-reduced-motion:reduce){.provebar.done .pb-ok{animation:none}}
 
 .pmodal{
   /* Centred against the TRUE viewport. `inset:0; margin:auto` centres inside
@@ -1065,10 +1098,13 @@ footer a:hover{color:var(--cy-hi)}
       </span>
       <span class="pb-txt">
         <b>Prove this card is yours</b>
-        <span>Optional. Sign one line with your key — nothing leaves this device.</span>
+        <span id="pbSub">Optional. Sign one line with your key — nothing leaves this device.</span>
       </span>
       <span class="pb-go" aria-hidden="true">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h13"/><polyline points="12 6 18 12 12 18"/></svg>
+      </span>
+      <span class="pb-ok" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9.5"/><polyline points="7.8 12.4 10.8 15.4 16.4 9.2"/></svg>
       </span>
     </button>
 
@@ -3815,11 +3851,22 @@ const pmsg = (t, cls="") => { $("pmsg").textContent = t; $("pmsg").className = "
    holding an encrypted backup and a browser that can sign, which is the
    whole upgrade.
    ──────────────────────────────────────────────────────────────────────── */
-function setupProve(did){
+/* The finished state is set in ONE place, because it is four things —
+   the class, the disabled attribute, the sub-line and the proof-link button —
+   and the two callers had been keeping three of them in step by hand. */
+function markProven(done){
   const bar=$("provebar");
-  bar.hidden=false;
-  bar.classList.toggle("done", !!lastStats?.proof);
-  $("proofBtn").hidden = !lastStats?.proof;
+  bar.classList.toggle("done", done);
+  bar.disabled = done;
+  $("pbSub").textContent = done
+    ? "Signed with your key, on this device. Use “Copy proof link” to let anyone re-check it."
+    : "Optional. Sign one line with your key — nothing leaves this device.";
+  $("proofBtn").hidden = !done;
+}
+
+function setupProve(did){
+  $("provebar").hidden=false;
+  markProven(!!lastStats?.proof);
 }
 
 const smsg=(t,cls="")=>{ const el=$("smsg"); el.textContent=t; el.className="pmsg "+cls; };
@@ -3865,6 +3912,7 @@ $("pclose").addEventListener("click",()=>$("pmodal").close());
 
 $("provebar").addEventListener("click",()=>{
   const did=current?.did; if(!did) return;
+  if(lastStats?.proof) return;          // already signed; nothing to ask for
   const mine = savedIdentity?.did === did;
 
   $("ppw").value=""; $("pseed").value=""; $("pnp1").value=""; $("pnp2").value="";
@@ -3916,8 +3964,7 @@ async function proveWith(jwk){
   lastStats=lastStats||{};
   lastStats.proof={ ...bundle, link:`${location.origin}/v#b=${b64u(encU.encode(JSON.stringify(bundle)))}`,
                     when:new Date().toISOString().slice(0,10) };
-  $("provebar").classList.add("done");
-  $("proofBtn").hidden=false;
+  markProven(true);
   await drawCard(current.did,current.pub,lastStats,lastNote);
   return true;
 }
@@ -4002,13 +4049,32 @@ $("form").addEventListener("submit",e=>{ e.preventDefault(); issue($("did").valu
 })();
 
 const wrap=$("cardwrap");
+/* The rect is read once on entry rather than on every move: reading it inside
+   the handler forces a layout on each pointer event, which is a strange price
+   to pay for a number that only changes when the page scrolls or resizes. */
+let wrapRect=null;
+const dropRect=()=>{ wrapRect=null; };
+addEventListener("scroll",dropRect,{passive:true});
+addEventListener("resize",dropRect,{passive:true});
+
+wrap.addEventListener("pointerenter",()=>{ if(!calm) wrap.classList.add("tracking"); });
 wrap.addEventListener("pointermove",e=>{
   if(calm) return;
-  const r=wrap.getBoundingClientRect(), px=(e.clientX-r.left)/r.width, py=(e.clientY-r.top)/r.height;
+  const r=wrapRect||(wrapRect=wrap.getBoundingClientRect());
+  if(!r.width) return;
+  const px=(e.clientX-r.left)/r.width, py=(e.clientY-r.top)/r.height;
+  wrap.classList.add("tracking");
   wrap.style.transform=`rotateY(${(px-.5)*11}deg) rotateX(${(.5-py)*9}deg)`;
-  wrap.style.setProperty("--mx",`${px*100}%`); wrap.style.setProperty("--my",`${py*100}%`);
+  // the sheen is translated, not repainted: pixels from the card's centre
+  wrap.style.setProperty("--sx",`${Math.round((px-.5)*r.width)}px`);
+  wrap.style.setProperty("--sy",`${Math.round((py-.5)*r.height)}px`);
 });
-wrap.addEventListener("pointerleave",()=>{ wrap.style.transform=""; });
+wrap.addEventListener("pointerleave",()=>{
+  // class off first, so the ease is in force when the transform is cleared
+  wrap.classList.remove("tracking");
+  wrap.style.transform="";
+  wrapRect=null;
+});
 
 const flash=(btn,msg)=>{ const o=btn.innerHTML; btn.textContent=msg; setTimeout(()=>btn.innerHTML=o,1700); };
 $("save").addEventListener("click",async()=>{
