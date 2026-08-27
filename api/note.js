@@ -80,21 +80,35 @@ async function fingerprint(did) {
    body), and `undefined` is "we could not tell" — which is never cached and
    never reported as absence. One retry first, because the commonest failure
    here is transient.                                                       */
+/* THREE attempts, not two, with a real pause between them.
+
+   MEASURED against production: two calls nineteen seconds apart returned
+   known:false and then registered:true. The read is not failing, it is being
+   RATE LIMITED — 600 reads a minute per IP, shared by every visitor's live
+   scan and every room poll, and a note lookup was losing the race against
+   our own traffic. A 429 is the one failure worth waiting out, because the
+   answer is definitely there. */
+const PAUSE = [220, 650, 1400];
+
 async function fetchNote(path) {
-  for (let attempt = 0; attempt < 2; attempt++) {
+  for (let attempt = 0; attempt < 3; attempt++) {
     try {
       const res = await fetch(`${BASE}${path}`, {
         headers: { Accept: "text/plain", "User-Agent": "overheard/1.0" },
-        signal: AbortSignal.timeout(6000),
+        signal: AbortSignal.timeout(5000),
       });
       if (res.status === 404) return null;               // definitively absent
-      if (!res.ok) { if (attempt) return undefined; await new Promise(r => setTimeout(r, 250)); continue; }
+      if (!res.ok) {
+        if (attempt === 2) return undefined;
+        await new Promise((r) => setTimeout(r, PAUSE[attempt]));
+        continue;
+      }
       const text = (await res.text()).trim();
       // An absent note can come back as an empty body rather than a 404.
       return text.length ? text : null;
     } catch {
-      if (attempt) return undefined;                     // could not tell
-      await new Promise(r => setTimeout(r, 250));
+      if (attempt === 2) return undefined;               // could not tell
+      await new Promise((r) => setTimeout(r, PAUSE[attempt]));
     }
   }
   return undefined;

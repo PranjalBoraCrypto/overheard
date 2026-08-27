@@ -194,12 +194,16 @@ export default async function handler() {
     headers: {
       "Content-Type": "application/json",
       "Access-Control-Allow-Origin": "*",
-      // Was 60s fresh with a TEN MINUTE stale window, which meant a visitor
-      // who had just posted could be handed an index built before they did —
-      // and then be told their identity was not on the record. The window a
-      // scan covers is 200 messages; serving it for longer than that window
-      // lasts is serving an answer that was already wrong when it was cached.
-      "Cache-Control": "public, s-maxage=20, stale-while-revalidate=40",
+      /* 20 seconds was too greedy and the cost landed somewhere unexpected.
+         A cache miss here is ~45 upstream reads, so three misses a minute is
+         135 of a 600-per-minute allowance SHARED with every room poll and
+         every note lookup this site makes — and a note lookup losing that
+         race is a card that says UNREGISTERED at somebody who is registered.
+
+         The freshness this was bought for is no longer needed anyway: a
+         just-posted message is confirmed by reading the room back directly,
+         not by waiting for this index to catch up. */
+      "Cache-Control": "public, s-maxage=60, stale-while-revalidate=120",
     },
   });
 }
