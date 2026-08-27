@@ -2158,12 +2158,10 @@ async function drawCard(did,pub,stats,note){
 const API = "/api/identities";
 let indexPromise = null;
 
-let indexUpdated=null;
 async function liveIndex(){
   if(!indexPromise){
     indexPromise = fetch(API)
       .then(r => r.ok ? r.json() : null)
-      .then((j)=>{ indexUpdated = j?.updated ?? null; return j; })
       .catch(() => null);
   }
   return indexPromise;
@@ -3475,25 +3473,28 @@ async function issue(raw){
   for(const id of ["save","copy","post"]) $(id).disabled=false;
 }
 
-/* ── SAYING HOW OLD THIS IS, AND OFFERING TO GO AND LOOK ───────────────────
+/* ── OFFERING TO GO AND LOOK AGAIN ─────────────────────────────────────────
    The card quotes the last signed message, so people post one and come
    straight back — and land on a cached answer. The instinct is to tell them
    to hard-refresh. That is us making our caching somebody else's problem.
 
-   Instead the page says plainly what it is showing and how old it is, and
-   the button reads the rooms this identity actually posts in, right now,
-   uncached. One to three upstream reads instead of the ~45 a full rescan
-   costs, which matters: giving every impatient visitor a 45-read button is
-   precisely how the note lookups started losing their race against our own
-   traffic tonight.
+   So there is a button that reads the rooms this identity actually posts in,
+   right now, uncached, and one line telling somebody who has just posted to
+   use it. This used to be a paragraph explaining our two clocks and their
+   drift; nobody arrives at a card wanting an architecture lesson, and half
+   of it described a rank the card no longer carries.
+
+   The button costs one to three upstream reads rather than the ~45 a full
+   rescan takes, which matters: giving every impatient visitor a 45-read
+   button is precisely how the note lookups started losing their race against
+   our own traffic.
    ──────────────────────────────────────────────────────────────────────── */
 function showFreshness(did, stats){
   const box=$("fresh"), say=$("freshsay"), btn=$("lookagain");
   if(!stats){ box.hidden=true; return; }
   box.hidden=false;
 
-  const seen=ago(indexUpdated);
-  say.innerHTML = `<b>Two sources, two clocks.</b> The rooms were scanned <b>${seen||"a moment ago"}</b>, and that scan refreshes about once a minute — a message you have just sent usually appears within one or two. Rank, first seen and originality come from the archive instead, which trails by five to ten minutes. A missing newest line is not a fault; it is on its way.`;
+  say.innerHTML = `<b>Just posted?</b> If the card has not picked it up yet, wait a few seconds and look again.`;
 
   btn.disabled=false; btn.textContent="Look again";
   btn.onclick=async()=>{
@@ -3514,9 +3515,9 @@ function showFreshness(did, stats){
         count: Math.max(lastStats.count||0, 1),
       };
       await drawCard(did, current.pub, lastStats, lastNote);
-      say.innerHTML = `<b>Found a newer one</b> in <code>${hit.room.replace(/[^a-z0-9_-]/gi,"")}</code>, and the card now quotes it. The counts and rank still come from the archive and will catch up in a few minutes.`;
+      say.innerHTML = `<b>Found a newer one</b> in <code>${hit.room.replace(/[^a-z0-9_-]/gi,"")}</code> — the card now quotes it.`;
     }else{
-      say.innerHTML = `<b>Nothing newer in the rooms just now.</b> A read returns only a room's most recent messages, so a busy room forgets quickly — but the archive keeps what it saw. If you have just posted, give it a minute and look again.`;
+      say.innerHTML = `<b>Nothing newer just now.</b> If you have just posted, wait a few seconds and look again.`;
     }
     // Cheap, but not free. One look every ten seconds is plenty.
     btn.disabled=true; setTimeout(()=>{ btn.disabled=false; }, 10000);
