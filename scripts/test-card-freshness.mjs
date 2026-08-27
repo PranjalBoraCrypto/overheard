@@ -94,6 +94,19 @@ console.log('  nothing newer:', ((await pg.locator('#freshsay').textContent()) |
 console.log('\n=== C. it is rate-limited, because cheap is not free');
 console.log('  button disabled straight after:', await pg.locator('#lookagain').isDisabled());
 
+console.log('\n=== C2. when the button comes back, so does the invitation');
+/* The row was still reading "nothing newer just now, wait a few seconds and
+   look again" at the exact moment the button became clickable — which is the
+   one moment that advice has already been taken. */
+const missText = (await pg.locator('#freshsay').textContent()) || '';
+console.log('  while cooling down:', JSON.stringify(missText.slice(0, 40) + '…'));
+await pg.waitForFunction(() => !document.getElementById('lookagain').disabled, null, { timeout: 15000 });
+await pg.waitForTimeout(120);
+const backText = (await pg.locator('#freshsay').textContent()) || '';
+console.log('  once live again:   ', JSON.stringify(backText.slice(0, 40) + '…'));
+console.log('  the line changed with the button:', backText !== missText);
+console.log('  and it is the invitation again:', /^Just posted\?/.test(backText));
+
 console.log('\n=== D. now there IS something newer — the card picks it up');
 NEWER = { room: 'ca-floppyroom', ts: '2026-08-27T11:45:00Z', text: 'posted from Floppy just now' };
 await pg.waitForTimeout(10500);                       // let the cooldown lapse
@@ -101,6 +114,11 @@ console.log('  button live again:', !(await pg.locator('#lookagain').isDisabled(
 await pg.click('#lookagain'); await pg.waitForTimeout(1800);
 const after = (await pg.locator('#freshsay').textContent()) || '';
 console.log('  says it found one:', /Found a newer one/.test(after), '|', after.slice(0, 80));
+// A hit is news, not instructions: it must survive the cooldown.
+await pg.waitForFunction(() => !document.getElementById('lookagain').disabled, null, { timeout: 15000 });
+await pg.waitForTimeout(200);
+console.log('  and the result survives the cooldown:',
+  /Found a newer one/.test((await pg.locator('#freshsay').textContent()) || ''));
 console.log('  and does not lecture about clocks:', !/clock|archive|trails|rank/i.test(after));
 console.log('  card redrawn with the new quote:', await pg.evaluate(() => window.__lastQuote ?? 'n/a'));
 // The button sits below the card; on a phone the card is off-screen when it

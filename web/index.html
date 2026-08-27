@@ -1146,13 +1146,17 @@ footer a:hover{color:var(--cy-hi)}
 
   <!-- Shown once a lookup has run. The card is the end of the errand people
        came to do, and until now the page had nothing to offer after it — so
-       the natural next move was to close the tab. These are the three things
-       an identity can actually DO here, and the section appears even when the
-       lookup found nothing, because "go and say something" is exactly the
-       right advice for an identity with no messages. -->
+       the natural next move was to close the tab.
+
+       The heading used to read "What this identity can do next", which was
+       wrong about two of the three: checking somebody else's proof and making
+       a new identity need no DID at all, and the second one is the obvious
+       next step for a visitor who does not have one yet. Only the first tile
+       is about the identity on the card. It is addressed to the PERSON now,
+       which is true of all three. -->
   <section class="band rise" id="next" hidden>
-    <h2>What this identity can do next</h2>
-    <p class="sub">Three things, all in this browser tab. Nothing asks for your seed, here or anywhere else on this site.</p>
+    <h2>What you can do from here</h2>
+    <p class="sub">Three things, all in this browser tab. Two of them need no identity at all, and none of them asks for your seed — here or anywhere else on this site.</p>
     <div class="grid stagger">
       <a class="tile route" href="/rooms">
         <div class="ic"><svg viewBox="0 0 24 24"><path d="M21 11.5a8.4 8.4 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.4 8.4 0 0 1-3.8-.9L3 21l1.9-5.7a8.4 8.4 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.4 8.4 0 0 1 3.8-.9h.5a8.5 8.5 0 0 1 8 8v.5z"/></svg></div>
@@ -3751,10 +3755,17 @@ function showFreshness(did, stats){
   if(!stats){ box.hidden=true; return; }
   box.hidden=false;
 
-  say.innerHTML = `<b>Just posted?</b> If the card has not picked it up yet, wait a few seconds and look again.`;
+  /* One line, used twice: on arrival, and again when the cooldown lapses.
+     The two used to drift apart — the row would still be reading "nothing
+     newer just now, wait a few seconds and look again" at the moment the
+     button became clickable again, which is the one moment that advice has
+     already been taken. */
+  const HINT = `<b>Just posted?</b> If the card has not picked it up yet, wait a few seconds and look again.`;
+  say.innerHTML = HINT;
 
   btn.disabled=false; btn.textContent="Look again";
   btn.onclick=async()=>{
+    let missed=false;
     box.classList.add("busy"); btn.textContent="Reading the rooms…";
     const rooms = lastStats?.roomNames?.length ? lastStats.roomNames : null;
     const hit = await freshLook(did, rooms);
@@ -3780,10 +3791,19 @@ function showFreshness(did, stats){
       // than saying nothing.
       $("cardwrap").scrollIntoView({behavior:calm?"auto":"smooth",block:"center"});
     }else{
+      missed=true;
       say.innerHTML = `<b>Nothing newer just now.</b> If you have just posted, wait a few seconds and look again.`;
     }
-    // Cheap, but not free. One look every ten seconds is plenty.
-    btn.disabled=true; setTimeout(()=>{ btn.disabled=false; }, 10000);
+    /* Cheap, but not free. One look every ten seconds is plenty — and when
+       those ten seconds are up the line goes back to the invitation, because
+       "wait a few seconds and look again" is stale advice next to a button
+       you can press right now. A hit keeps its result: that one is news, not
+       instructions. */
+    btn.disabled=true;
+    setTimeout(()=>{
+      btn.disabled=false;
+      if(missed) say.innerHTML = HINT;
+    }, 10000);
   };
 }
 
