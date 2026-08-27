@@ -129,6 +129,18 @@ await pg.waitForTimeout(500);
 check('clicking it does not reopen the dialog', !(await pg.locator('#pmodal').isVisible()));
 await pg.locator('#provebar').screenshot({ path: '/tmp/prove-bar-done.png' });
 
+console.log('\n=== D2b. the post says the card was signed, since it was');
+/* The only state the share-text test cannot reach on its own: proving needs a
+   real private key, and this file already has one. */
+await pg.evaluate(() => { window.__u = null; window.open = (u) => { window.__u = u; }; });
+await pg.click('#post'); await pg.waitForTimeout(3000);
+const tweet = decodeURIComponent(new URL(await pg.evaluate(() => window.__u)).searchParams.get('text'));
+console.log(tweet.split('\n').filter(Boolean).map(l => '     ' + l).join('\n'));
+check('claims the signature', /I signed this card|key is mine to prove/.test(tweet));
+check('and still fits X', tweet.replace('overheard-five.vercel.app', 'x'.repeat(23)).length <= 280,
+  `${tweet.replace('overheard-five.vercel.app', 'x'.repeat(23)).length} chars`);
+check('no rank, no join order', !/#\d|arrived after/.test(tweet));
+
 console.log('\n=== D3. the tilt: no snap on arrival, no lag while following');
 /* Two failures, one after the other, so this checks for both at once.
 

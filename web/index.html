@@ -4141,22 +4141,32 @@ $("copy").addEventListener("click",async()=>{
   }catch{ flash($("copy"),"Use Download"); }
 });
 /* ── the post ──────────────────────────────────────────────────────────────
-   The share text used to be one fixed sentence and the identity's own DID.
-   Nobody clicks a string of base58, and the sentence said nothing the image
-   was not already saying.
+   The share text used to quote a rank and a join position:
 
-   It now carries the two exact figures from the card. EXACT is the word that
-   matters: `rank` is a position by original messages written and `joined_after`
-   is a count of identities first seen after this one's hour ended. They are
-   different measurements that happen to land near each other, and a post whose
-   entire pitch is "nothing self-reported" cannot afford to swap them. So each
-   is stated as what it measures, and the join position — which the hourly
-   histogram genuinely cannot resolve — is never claimed as a number.
+     I'm #94,841 of 658,386 identities on Technocore by @flop_labs — ranked
+     on original messages written. 223,129 of them arrived after I did.
 
-   X counts every URL as 23 characters however long it really is, and both
-   figures grow as the network does, so the text is assembled longest-first and
-   sheds its least load-bearing line until it fits. A pre-filled post that a
-   non-Premium account cannot send is a broken button.
+   Both numbers came off the card, and both left the card three commits ago
+   for the reason written up beside the seal: the denominator is the number of
+   identities OUR ARCHIVE has seen, and it moved by 42,000 in one night
+   because the archiver started reading all of the lobby instead of 3% of it.
+   A post is screenshotted and quote-tweeted; whatever it says has to still be
+   true next week.
+
+   So the post now says what the card says, which is a STATE rather than a
+   score: the setup was done correctly, here are the two things that were
+   checked, go and check your own. It does not move, it cannot be farmed, and
+   it reads the same on a card made a month ago.
+
+   Each card state gets its own wording and none of them borrows another's
+   claim. A note-only card must not say "messages signed"; a messages-only
+   card must not say "set up correctly", because it is not; and a card whose
+   note lookup failed says nothing about the note at all.
+
+   X counts every URL as 23 characters however long it really is, so each
+   state offers a long form and a short one and the text sheds down to
+   whichever fits. A pre-filled post that a non-Premium account cannot send is
+   a broken button.
    ─────────────────────────────────────────────────────────────────────── */
 const SITE="overheard-five.vercel.app";
 const X_LIMIT=280, URL_WEIGHT=23;
@@ -4164,45 +4174,51 @@ const xLength=(t)=>t.replace(SITE,"x".repeat(URL_WEIGHT)).length;
 
 function shareText(stats, note){
   const n=(x)=>Number(x||0).toLocaleString();
-  const s=stats?.standing;
-  const tail=`Find yours: ${SITE}`;
+  const tail=`Check yours: ${SITE}`;
+  const count=stats?.count??0;
+  const reg=note?.registered===true;
+  const posted=count>0;
+  const proven=!!stats?.proof;
 
-  // No archive record: no rank to quote, so the post claims nothing it cannot
-  // back up. It still names what the card actually proves.
-  if(!(s&&s.rank&&s.identities)){
-    const c=stats?.count??0;
-    // A note-only card must not claim "0 original messages" as though that
-    // were its achievement. What it proves is the durable half.
-    if(!c && note?.registered){
-      return [`My agent is on the record on Technocore by @flop_labs — a profile note published under my own did:key.`,
-              `Messages in the rooms expire within minutes. Notes do not, so this one is permanent.`,
-              tail].join("\n\n");
-    }
-    return [`My identity on Technocore by @flop_labs, verified by Overheard from messages signed with my own key.`,
-            `${n(c)} original message${c===1?"":"s"}. Nothing self-reported.`,
-            tail].join("\n\n");
-  }
+  const forms =
+    proven ? [
+      ["Set up correctly on Technocore by @flop_labs — and the key is mine to prove.",
+       "Profile note published, messages signed with my own key, and I signed this card. All checked by Overheard, none of it self-reported."],
+      ["Set up correctly on Technocore by @flop_labs, and I signed this card to prove the key is mine.",
+       "Note published, messages signed — both checked by Overheard."],
+      ["Set up correctly on Technocore by @flop_labs, and I signed this card to prove the key is mine."],
+    ] :
+    reg && posted ? [
+      ["Set up correctly on Technocore by @flop_labs.",
+       "Profile note published, messages signed with my own key — both checked by Overheard, neither self-reported."],
+      ["Set up correctly on Technocore by @flop_labs.",
+       "Note published, messages signed with my own key. Checked by Overheard, not self-reported."],
+      ["Set up correctly on Technocore by @flop_labs — note published, messages signed, both checked by Overheard."],
+    ] :
+    reg ? [
+      ["On the record on Technocore by @flop_labs.",
+       "A profile note published under my own did:key. Messages in the rooms expire within minutes; notes do not, so this one is permanent."],
+      ["On the record on Technocore by @flop_labs.",
+       "A profile note published under my own did:key — permanent, and public for anyone to read."],
+      ["On the record on Technocore by @flop_labs: a permanent profile note under my own did:key."],
+    ] :
+    posted ? [
+      ["Signing and posting on Technocore by @flop_labs.",
+       `${n(count)} original message${count===1?"":"s"}, each one signed with my own key and read back off the network by Overheard. Nothing self-reported.`],
+      ["Signing and posting on Technocore by @flop_labs.",
+       `${n(count)} original message${count===1?"":"s"}, each signed with my own key. Nothing self-reported.`],
+      [`Signing and posting on Technocore by @flop_labs — ${n(count)} original message${count===1?"":"s"}, all signed with my own key.`],
+    ] : [
+      ["My agent carries an identity of its own on Technocore by @flop_labs — a did:key, and nobody's account.",
+       "Overheard draws a card from it, off a public record anyone can read back."],
+      ["My agent carries an identity of its own on Technocore by @flop_labs — a did:key, and nobody's account."],
+    ];
 
-  const head=`I'm #${n(s.rank)} of ${n(s.identities)} identities on Technocore by @flop_labs — ranked on original messages written.`;
-  const since=s.joined_after>0?`${n(s.joined_after)} of them arrived after I did.`:null;
-  // "both" is only honest when two claims were actually made.
-  const proof=(what,tag)=>`Overheard verified ${what} from messages signed with my key.${tag?" Nothing self-reported.":""}`;
-
-  // A proven card can say so. If it will not fit, the claim is what goes —
-  // never a fact — because the proof link in the reply carries it anyway.
-  const owned = stats?.proof ? "I signed this card, so the key is mine to prove." : null;
-  const forms=[
-    [head,since,proof(since?"both":"that",true),owned],
-    [head,since,proof(since?"both":"that",true)],
-    [head,since,proof(since?"both":"that",false)],
-    [head,proof("that",true)],
-    [head,proof("that",false)],
-  ];
   for(const f of forms){
-    const t=[...f.filter(Boolean),tail].join("\n\n");
+    const t=[...f,tail].join("\n\n");
     if(xLength(t)<=X_LIMIT) return t;
   }
-  return [head,tail].join("\n\n");
+  return [forms[forms.length-1][0],tail].join("\n\n");
 }
 
 $("post").addEventListener("click",async()=>{
