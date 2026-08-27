@@ -23,8 +23,21 @@ const srv = http.createServer((req, res) => {
   else { res.writeHead(404); res.end('{}'); }
 }).listen(8991);
 
+
+/* The hero agent is a raymarcher. Headless Chromium renders it in software,
+   where one frame costs about a second and the page has no main thread left
+   for anything this file is actually testing. WebGL is switched off for these
+   pages so the hero falls back to its flat drawing and the page behaves like
+   one on a machine with a GPU. The hero itself has its own test — this is a
+   deliberate split, not a gap. NO_WEBGL */
+const killWebGL = (page) => page.addInitScript(() => {
+  const g = HTMLCanvasElement.prototype.getContext;
+  HTMLCanvasElement.prototype.getContext = function(t, ...r){
+    return String(t).startsWith('webgl') ? null : g.call(this, t, ...r);
+  };
+});
 const b = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium' });
-const pg = await b.newPage({ viewport: { width: 1280, height: 1000 }, deviceScaleFactor: 2 });
+const pg = await b.newPage({ viewport: { width: 1280, height: 1000 }, deviceScaleFactor: 2 }); await killWebGL(pg);
 const errs = []; pg.on('pageerror', e => errs.push(e.message));
 
 let bad = 0;
@@ -70,7 +83,7 @@ await pg.locator('#truth').screenshot({ path: '/tmp/truth.png' });
 await pg.locator('footer').screenshot({ path: '/tmp/foot.png' });
 
 console.log('\n=== phone');
-const pg2 = await b.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
+const pg2 = await b.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 }); await killWebGL(pg2);
 pg2.on('pageerror', e => errs.push(e.message));
 await pg2.goto('http://localhost:8991/'); await pg2.waitForTimeout(500);
 await pg2.locator('#truth').scrollIntoViewIfNeeded(); await pg2.waitForTimeout(1500);

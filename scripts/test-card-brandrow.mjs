@@ -33,9 +33,22 @@ const srv = http.createServer((req, res) => {
   else { res.writeHead(404); res.end('{}'); }
 }).listen(8994);
 
+
+/* The hero agent is a raymarcher. Headless Chromium renders it in software,
+   where one frame costs about a second and the page has no main thread left
+   for anything this file is actually testing. WebGL is switched off for these
+   pages so the hero falls back to its flat drawing and the page behaves like
+   one on a machine with a GPU. The hero itself has its own test — this is a
+   deliberate split, not a gap. NO_WEBGL */
+const killWebGL = (page) => page.addInitScript(() => {
+  const g = HTMLCanvasElement.prototype.getContext;
+  HTMLCanvasElement.prototype.getContext = function(t, ...r){
+    return String(t).startsWith('webgl') ? null : g.call(this, t, ...r);
+  };
+});
 const b = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium' });
 const bctx = await b.newContext({ viewport: { width: 1240, height: 1000 }, deviceScaleFactor: 2 });
-const pg = await bctx.newPage(); const errs = []; pg.on('pageerror', e => errs.push(e.message));
+const pg = await bctx.newPage(); await killWebGL(pg); const errs = []; pg.on('pageerror', e => errs.push(e.message));
 await pg.goto('http://localhost:8994/');
 
 const ID = await pg.evaluate(async () => {
@@ -165,7 +178,7 @@ const plate = await bandsIn(120, 500, 150);
 console.log('  (left column ink rows checked separately by t-note/hero)');
 
 console.log('\n=== phone: the page must still not scroll sideways');
-const pg2 = await bctx.newPage(); await pg2.setViewportSize({ width: 390, height: 844 });
+const pg2 = await bctx.newPage(); await killWebGL(pg2); await pg2.setViewportSize({ width: 390, height: 844 });
 pg2.on('pageerror', e => errs.push(e.message));
 await pg2.goto('http://localhost:8994/'); await pg2.waitForTimeout(300);
 await pg2.fill('#did', ID.did); await pg2.click('.field button');

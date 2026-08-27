@@ -104,11 +104,13 @@ header nav a:hover{color:var(--cy-hi)} header nav a:hover::after{width:100%}
 /* A socket, not a frame: the key plugs into it and a face comes out. */
 .socket::before{
   content:"";position:absolute;inset:-6px;border-radius:50%;
-  background:radial-gradient(circle at 50% 40%,rgba(0,180,215,.30),transparent 63%);filter:blur(7px);
+  /* The agent brings its own light now, so the socket stops competing with
+     it. At .30 the disc read as the subject and the robot as a decal on it. */
+  background:radial-gradient(circle at 50% 42%,rgba(0,180,215,.19),transparent 66%);filter:blur(8px);
 }
 .socket::after{
   content:"";position:absolute;inset:16px;border-radius:50%;
-  border:1px solid rgba(0,180,215,.34);box-shadow:inset 0 0 46px -14px rgba(0,180,215,.9);
+  border:1px solid rgba(0,180,215,.34);box-shadow:inset 0 0 46px -16px rgba(0,180,215,.75);
   animation:breathe 5.6s var(--ease) infinite;
 }
 @keyframes breathe{0%,100%{transform:scale(1);opacity:.7}50%{transform:scale(1.035);opacity:1}}
@@ -120,11 +122,13 @@ header nav a:hover{color:var(--cy-hi)} header nav a:hover::after{width:100%}
   animation:orbit 9s linear infinite;
 }
 @keyframes orbit{to{transform:rotate(360deg)}}
-#heroFace{position:relative;z-index:1;width:236px;height:236px;display:block}
-.facecap{text-align:center;min-height:2.9em;max-width:26ch;font-family:var(--mono)}
-.fid{display:block;font-size:12px;color:var(--dim);letter-spacing:.02em;transition:color .3s var(--ease)}
-.flab{display:block;margin-top:5px;font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--faint);transition:color .3s var(--ease)}
-.facecap.pinned .flab{color:var(--cy-hi)}
+#heroFace{position:relative;z-index:1;width:274px;height:274px;display:block;touch-action:none}
+.facecap{text-align:center;min-height:1.6em;max-width:30ch;font-family:var(--mono)}
+/* The hint is a nudge, not a label: it says the thing is alive, and then it
+   gets out of the way the moment somebody discovers that for themselves. */
+.flab{display:block;font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--faint);
+  transition:opacity .8s var(--ease),color .3s var(--ease)}
+.flab.used{opacity:0}
 @media (prefers-reduced-motion:reduce){.socket::after,.socket .orbit{animation:none}}
 .tagline{
   display:inline-flex;align-items:center;gap:10px;font-family:var(--mono);font-size:11.5px;
@@ -948,8 +952,8 @@ footer a:hover{color:var(--cy-hi)}
      it costs less height than the paragraph it sits above. */
   .hero{grid-template-columns:1fr;gap:22px;padding-top:30px}
   .hface{order:-1;align-items:flex-start}
-  .socket{width:150px;height:150px;margin-left:-6px}
-  #heroFace{width:124px;height:124px}
+  .socket{width:164px;height:164px;margin-left:-6px}
+  #heroFace{width:158px;height:158px}
   .facecap{text-align:left;min-height:0;max-width:none}
   .hface{gap:9px}
 }
@@ -999,7 +1003,7 @@ footer a:hover{color:var(--cy-hi)}
       <!-- Two spans, because base58 is case-sensitive: uppercasing a DID for
            looks turns it into a different string, and this one is meant to be
            checkable. Only the label is styled as a label. -->
-      <p class="facecap"><span class="fid" id="faceId"></span><span class="flab" id="faceLab">every key draws a different one</span></p>
+      <p class="facecap"><span class="flab" id="faceHint"></span></p>
     </div>
   </section>
 
@@ -4344,7 +4348,6 @@ async function loadSeen(animate){
   if(rows.length){
     // The socket at the top of the page shows these same identities, so every
     // face a visitor sees is one they can click through and check.
-    seedFaces(rows.map((d) => d.did));
     box.replaceChildren();
     rows.forEach((d, i) => {
       const c = chipFor(d, i);
@@ -4395,104 +4398,74 @@ $("refresh")?.addEventListener("click", () => loadSeen(true));
    showing whatever shipped with the deployment. */
 loadSeen(false);
 
-/* ── the hero face ─────────────────────────────────────────────────────────
-   The headline says "give it a face", so the page draws one before it asks
-   for anything — and it is not an illustration. It is the same procedural
-   agent the card uses, from real keys the archive has actually seen, cycling
-   every few seconds.
+/* ── THE HERO AGENT ────────────────────────────────────────────────────────
+   The headline says "give it a face", so the page shows one before it asks
+   for anything. It used to cycle through real identities from the archive
+   every four seconds, drawing each from that key's own bytes.
 
-   The part that earns its place: the moment a valid DID is typed into the
-   field below, the rotation stops and the face becomes THAT key's. The demo
-   and the product are the same code, so the promise is kept before the first
-   click rather than after it.
+   That went, and it went on purpose. The rotation was proving a point about
+   determinism to somebody who had been on the page for six seconds and had
+   not yet been given a reason to care — and a face that changes under your
+   cursor cannot be played with, which is the thing people will actually stay
+   for. One agent now, modelled rather than drawn, and it looks back.
+
+   /agent3d.js has the physics and the shader. This end owns three things:
+   choosing it over the flat fallback, telling somebody the thing is alive,
+   and asking a phone for its motion sensor at the only moment iOS allows.
    ──────────────────────────────────────────────────────────────────────── */
-const FACE_HOLD = 3800, FACE_FADE = 560;
-let facePool = [], faceAt = 0, faceCur = null, facePinned = false, facePinnedDid = null, faceTimer = 0, faceAnim = 0;
 
-/** Cross-fade two agents in one canvas: the old one grows away as the new one
- *  settles in, which reads as a change of identity rather than a flicker. */
-function paintFace(prev, next, t){
+/* The one agent, as bytes. It is no longer a key's face, so it no longer
+   comes from a key — these six numbers pick the visor, antenna, mouth,
+   plating and hue of the FALLBACK drawing, and they are frozen so that the
+   flat face and the modelled one are recognisably the same character. */
+const HERO_BYTES = new Uint8Array([176, 1, 2, 0, 1, 1]);
+
+let hero3d = null;
+
+(function mountHero(){
   const c = $("heroFace"); if(!c) return;
-  const x = c.getContext("2d"), S = c.width;
-  x.clearRect(0, 0, S, S);
-  const put = (pub, alpha, scale) => {
-    if(!pub || alpha <= 0) return;
-    x.save(); x.globalAlpha = Math.min(1, alpha);
-    x.translate(S/2, S/2); x.scale(scale, scale); x.translate(-S/2, -S/2);
-    agent(x, S*0.07, S*0.05, S*0.86, pub);
-    x.restore();
+  const hint = $("faceHint");
+  const touch = matchMedia("(hover: none)").matches;
+
+  const flat = () => {
+    // No WebGL2: the flat agent, drawn once. Not a downgrade anyone is told
+    // about, because there is nothing they can do about it.
+    try{
+      const x = c.getContext("2d"); if(!x) return;
+      const S = c.width = c.height = 480;
+      x.clearRect(0, 0, S, S);
+      agent(x, S * 0.07, S * 0.05, S * 0.86, HERO_BYTES);
+    }catch{}
+    if(hint) hint.textContent = "";
   };
-  const e = 1 - Math.pow(1 - t, 3);
-  put(prev, 1 - e*1.25, 1 + 0.12*e);
-  put(next, e*1.2, 0.90 + 0.10*e);
-}
 
-function showFace(pub, id, label, pinned){
-  const cap = document.querySelector(".facecap");
-  if(cap){
-    $("faceId").textContent = id;
-    $("faceLab").textContent = label;
-    cap.classList.toggle("pinned", !!pinned);
-  }
-  const prev = faceCur; faceCur = pub;
-  cancelAnimationFrame(faceAnim);
-  if(calm || !prev){ paintFace(null, pub, 1); return; }
-  const t0 = performance.now();
-  (function step(now){
-    const t = Math.min(1, (now - t0) / FACE_FADE);
-    paintFace(prev, pub, t);
-    if(t < 1) faceAnim = requestAnimationFrame(step);
-  })(t0);
-}
+  import("/agent3d.js").then(({ mountAgent3D }) => {
+    hero3d = mountAgent3D(c, {
+      accent: [0.30, 0.86, 1.0],
+      calm,
+      maxDpr: 1.75,
+      hint,
+      onFirstInteraction(){ if(hint) hint.classList.add("used"); },
+    });
+    if(!hero3d){ flat(); return; }
+    // Published so the interaction test can read the angular state directly
+    // rather than trying to infer a spin from screenshots of a spinning thing.
+    try{ window.__hero = hero3d; }catch{}
 
-const faceShort = (did) => `${did.slice(8,16)}…${did.slice(-4)}`;
+    if(hint) hint.textContent = touch ? "tap it · tilt your phone" : "move your cursor · shake it";
 
-function rotateFace(){
-  if(facePinned || !facePool.length) return;
-  const e = facePool[faceAt++ % facePool.length];
-  showFace(e.pub, faceShort(e.did), "seen on the network", false);
-}
-
-function startFaceRotation(){
-  clearInterval(faceTimer);
-  rotateFace();
-  if(!calm) faceTimer = setInterval(rotateFace, FACE_HOLD);
-}
-
-/** Pool: the identities the strip is already showing, so the faces on screen
- *  are ones a visitor can go and check. EXAMPLES is the seed so the socket is
- *  never empty while the archive loads. */
-function seedFaces(dids){
-  const seen = new Set(facePool.map((e) => e.did));
-  for(const did of dids){
-    if(seen.has(did)) continue;
-    try{ facePool.push({ did, pub: parseDid(did).pub }); seen.add(did); }catch{}
-  }
-}
-
-seedFaces(EXAMPLES);
-startFaceRotation();
-
-/* Typing a DID pins the face to it. Debounced, because a face changing on
-   every keystroke of a 56-character string is noise, not feedback. */
-let faceDebounce = 0;
-$("did").addEventListener("input", () => {
-  clearTimeout(faceDebounce);
-  faceDebounce = setTimeout(() => {
-    const raw = $("did").value.trim();
-    let p = null;
-    try{ p = raw ? parseDid(raw) : null; }catch{}
-    if(p){
-      if(facePinnedDid === p.did) return;        // already showing this one
-      facePinnedDid = p.did; facePinned = true; clearInterval(faceTimer);
-      showFace(p.pub, faceShort(p.did), "this is your key", true);
-    }else if(facePinned){
-      facePinnedDid = null;
-      facePinned = false;
-      startFaceRotation();
+    /* iOS hands over the motion sensor only from inside a gesture, and only
+       once. So it is asked for on the first tap of the socket and never on
+       load; a refusal is silent, and dragging still works either way. */
+    if(touch){
+      c.addEventListener("pointerdown", async function once(){
+        c.removeEventListener("pointerdown", once);
+        const ok = await hero3d.enableTilt();
+        if(hint) hint.textContent = ok ? "tilt your phone" : "drag it · poke it";
+      }, { passive: true });
     }
-  }, 260);
-});
+  }).catch(flat);
+})();
 
 const io=new IntersectionObserver(es=>es.forEach(e=>e.isIntersecting&&e.target.classList.add("in")),{threshold:.15});
 document.querySelectorAll(".rise").forEach(el=>io.observe(el));

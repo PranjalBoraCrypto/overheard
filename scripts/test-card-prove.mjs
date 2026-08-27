@@ -22,9 +22,22 @@ const srv = http.createServer((req, res) => {
   else { res.writeHead(404); res.end('{}'); }
 }).listen(8990);
 
+
+/* The hero agent is a raymarcher. Headless Chromium renders it in software,
+   where one frame costs about a second and the page has no main thread left
+   for anything this file is actually testing. WebGL is switched off for these
+   pages so the hero falls back to its flat drawing and the page behaves like
+   one on a machine with a GPU. The hero itself has its own test — this is a
+   deliberate split, not a gap. NO_WEBGL */
+const killWebGL = (page) => page.addInitScript(() => {
+  const g = HTMLCanvasElement.prototype.getContext;
+  HTMLCanvasElement.prototype.getContext = function(t, ...r){
+    return String(t).startsWith('webgl') ? null : g.call(this, t, ...r);
+  };
+});
 const b = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium' });
 const ctx = await b.newContext({ viewport: { width: 1240, height: 1000 }, deviceScaleFactor: 2, acceptDownloads: true });
-const pg = await ctx.newPage(); const errs = []; pg.on('pageerror', e => errs.push(e.message));
+const pg = await ctx.newPage(); await killWebGL(pg); const errs = []; pg.on('pageerror', e => errs.push(e.message));
 await pg.goto('http://localhost:8990/');
 
 // A real Ed25519 identity, plus its raw seed — the two ways in.
@@ -95,7 +108,7 @@ const link = await pg.evaluate(() => window.__p ?? null);
 await pg.locator('#card').screenshot({ path: '/tmp/prove-card.png' });
 
 console.log('\n=== E. a DIFFERENT browser, no identity — the seed route, and a file back');
-const pg2 = await ctx.newPage(); pg2.on('pageerror', e => errs.push(e.message));
+const pg2 = await ctx.newPage(); await killWebGL(pg2); pg2.on('pageerror', e => errs.push(e.message));
 await pg2.goto('http://localhost:8990/');
 await pg2.evaluate(() => localStorage.removeItem('overheard.identity'));
 await look(pg2, ID.did);
@@ -148,7 +161,7 @@ check('horizontally centred', Math.abs(geo.left - geo.right) <= 2, JSON.stringif
 check('vertically centred', Math.abs(geo.top - geo.bottom) <= 2);
 
 console.log('\n=== E3. the backup-file route: the case that was locked out');
-const pg4 = await ctx.newPage(); pg4.on('pageerror', e => errs.push(e.message));
+const pg4 = await ctx.newPage(); await killWebGL(pg4); pg4.on('pageerror', e => errs.push(e.message));
 await pg4.goto('http://localhost:8990/');
 await pg4.evaluate(() => localStorage.removeItem('overheard.identity'));
 await look(pg4, ID.did);
@@ -212,7 +225,7 @@ check('the DID is clear of the ring', merged.length >= 3 && (merged[2][0] - merg
 await pg4.locator('#card').screenshot({ path: '/tmp/proven-card.png' });
 
 console.log('\n=== F. phone');
-const pg3 = await ctx.newPage(); await pg3.setViewportSize({ width: 390, height: 844 });
+const pg3 = await ctx.newPage(); await killWebGL(pg3); await pg3.setViewportSize({ width: 390, height: 844 });
 pg3.on('pageerror', e => errs.push(e.message));
 await pg3.goto('http://localhost:8990/');
 await vaultInto(pg3, ID.did, ID.jwk, 'hunter2');
