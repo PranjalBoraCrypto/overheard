@@ -147,6 +147,14 @@ check('the side quests appeared', await pg.locator('#side').isVisible());
 check('all four of them live', ['intro', 'room', 'proof', 'priv'].every(Boolean)
   && (await stateOf('room')) === 'live' && (await stateOf('proof')) === 'live');
 check('count at two', (await pg.locator('#count').textContent()) === '2 of 4');
+/* The scroll has to wait out the collapse of the rung being left behind:
+   started before that settles, it aims at a position the page no longer has
+   by the time it gets there. */
+await pg.waitForTimeout(1100);
+check('and the page went to "Publish your note"', await pg.evaluate(() => {
+  const r = document.getElementById('t-note').getBoundingClientRect();
+  return r.top > -30 && r.top < innerHeight * 0.85;
+}), await pg.evaluate(() => Math.round(document.getElementById('t-note').getBoundingClientRect().top) + 'px from the top'));
 await pg.screenshot({ path: '/tmp/create-2-open.png', clip: { x: 0, y: 0, width: 1240, height: 950 } });
 
 console.log('\n=== E. the fields arrive filled in');
@@ -161,6 +169,21 @@ check('and the room names are derived from the key, not left as a placeholder',
   (await pg.locator('#roomPicks .pick').count()) === 3
   && /^[0-9a-f]{8}$/.test((await pg.locator('#roomPicks .pick').first().textContent()).trim()),
   await pg.locator('#roomPicks .pick').first().textContent());
+
+console.log('\n=== E2. the button sits with the field it acts on');
+const gap = await pg.evaluate(() => {
+  const out = {};
+  for (const id of ['note', 'hello', 'intro']) {
+    const step = document.getElementById('t-' + id);
+    const last = step.querySelector('.picks') || step.querySelector('textarea');
+    const btn = step.querySelector('.actionrow button[data-act]');
+    out[id] = Math.round(btn.getBoundingClientRect().top - last.getBoundingClientRect().bottom);
+  }
+  return out;
+});
+console.log('   px between the field and its button:', JSON.stringify(gap));
+check('nothing is pushed more than a line away from its own button',
+  Object.values(gap).every(v => v < 60), JSON.stringify(gap));
 
 console.log('\n=== F. publish the note, post the message');
 POSTS = [];
@@ -182,16 +205,18 @@ check('four of four', (await pg.locator('#count').textContent()) === '4 of 4');
 check('the verdict is the card\'s top word', (await pg.locator('#tierWord').textContent()) === 'VERIFIED');
 check('every badge lit', (await pg.evaluate(() =>
   [...document.querySelectorAll('.badge')].every(b => b.classList.contains('won')))));
-check('the finish says so', /Set up correctly/.test((await pg.locator('#finishTitle').textContent()) || ''));
 check('and points at this identity\'s card',
   ((await pg.locator('#seeCard').getAttribute('href')) || '').startsWith('/?did=did%3Akey%3Az6Mk'));
 await pg.screenshot({ path: '/tmp/create-3-done.png', clip: { x: 0, y: 0, width: 1240, height: 950 } });
 
-check('the finish panel appears once the main line is done', await pg.locator('#finish').isVisible());
-check('and it sits BELOW the side quests, not between them and the person',
-  await pg.evaluate(() => document.getElementById('finish').getBoundingClientRect().top
-                        > document.getElementById('side').getBoundingClientRect().top));
+check('the finish STILL does not appear at four of eight', await pg.locator('#finish').isHidden());
+check('it sits BELOW the side quests in the document',
+  await pg.evaluate(() => document.getElementById('finish').compareDocumentPosition(
+    document.getElementById('side')) & Node.DOCUMENT_POSITION_PRECEDING));
 check('the ladder carried on into a side quest', (await cls('t-intro')).includes('open'));
+check('and the page scrolled to it', await pg.evaluate(() => {
+  const r = document.getElementById('t-intro').getBoundingClientRect();
+  return r.top > -40 && r.top < innerHeight; }));
 
 console.log('\n=== F3. a message box with a way to send it');
 /* Every rung's action button used to live only in its header, and the moment
@@ -219,65 +244,6 @@ check('every action button has an action behind it',
 check('and the seed rung has none, because its action is the gate',
   !orphan.ids.includes('save'));
 
-console.log('\n=== F4. the room field: the rule is furniture, not something to type');
-await ensureOpen('room');
-check('the d- is shown, outside the box', (await pg.locator('#roomWrap .pfx').textContent()).trim() === 'd-');
-check('and it is not in the input', (await pg.locator('#roomName').inputValue()) === '');
-check('the placeholder no longer teaches a prefix',
-  (await pg.locator('#roomName').getAttribute('placeholder')) === 'yourname');
-
-await pg.fill('#roomName', 'taken');
-await pg.waitForFunction(() => /already claimed/.test(document.getElementById('roomAvail').textContent), null, { timeout: 6000 });
-check('a claimed name says so before anything is signed',
-  /d-taken is already claimed/.test(await pg.locator('#roomAvail').textContent()));
-POSTS = [];
-await pg.click('#t-room .actionrow button[data-act]');
-await pg.waitForTimeout(600);
-check('and claiming it never reaches the network', POSTS.length === 0, `${POSTS.length} posts`);
-
-await pg.fill('#roomName', 'my-lab');
-await pg.waitForFunction(() => /is free/.test(document.getElementById('roomAvail').textContent), null, { timeout: 6000 });
-check('a free one says that too', /d-my-lab is free/.test(await pg.locator('#roomAvail').textContent()));
-await pg.click('#t-room .actionrow button[data-act]');
-await pg.waitForFunction(() => document.getElementById('t-room').className.includes('done'), null, { timeout: 10000 });
-const claim = POSTS.find(p => p.kind === 'claim');
-check('the claim carries the WHOLE name, prefix and all', claim?.room === 'd-my-lab', claim?.room);
-check('and a shareable link comes back', await pg.locator('#roomOut').isVisible());
-check('pointing at the room just claimed',
-  (await pg.locator('#roomLink').textContent()) === 'technocore.chat/r/d-my-lab',
-  await pg.locator('#roomLink').textContent());
-
-console.log('\n=== F5. the private room hands back something copyable');
-// open it first: a closed rung's body is a 0fr grid row, so its button has no
-// height to be clicked at
-await ensureOpen('priv');
-await pg.click('#t-priv .actionrow button[data-act]');
-await pg.waitForFunction(() => document.getElementById('t-priv').className.includes('done'), null, { timeout: 10000 });
-check('the address is shown', /technocore\.chat\/r\/p-[0-9a-f]{24}/.test(await pg.locator('#privName').textContent()),
-  await pg.locator('#privName').textContent());
-check('with a copy button beside it', (await pg.locator('#privOut [data-copyval="privName"]').count()) === 1);
-await pg.locator('#privOut [data-copyval="privName"]').click();
-await pg.waitForTimeout(300);
-check('that says it copied', /Copied/.test(await pg.locator('#privOut [data-copyval="privName"]').textContent()));
-
-console.log('\n=== F6. the page is about making one, not unlocking one');
-check('no "Already have an identity?" on a first visit', await pg.locator('#unlock').isHidden());
-const back = await ctx.newPage();
-await back.addInitScript(() => localStorage.setItem('overheard.identity',
-  JSON.stringify({ v: 1, did: 'did:key:z6MkTEST', salt: 'x', iv: 'y', data: 'z' })));
-await back.goto('http://localhost:8888/create.html'); await back.waitForTimeout(500);
-check('but it is there for a browser that holds one', await back.locator('#unlock').isVisible());
-await back.close();
-
-console.log('\n=== F7. the footer matches the card page');
-const foot = await pg.evaluate(() => document.querySelector('footer').innerText);
-check('two rows', (await pg.locator('footer .frow').count()) === 2);
-check('names the builder and links X', /Built by\s+Pranjal Bora/.test(foot)
-  && (await pg.locator('footer a[href="https://x.com/Crypto_Pranjal"]').count()) === 1);
-check('carries the whole DID', foot.includes('did:key:z6MkngD8RZKCgJQCkJvHfGyYoCcNCG5rz9Tc7yRmWrMZExaz'));
-check('and the DID opens its own card',
-  (await pg.locator('footer .bydid').getAttribute('href')) === '/?did=did:key:z6MkngD8RZKCgJQCkJvHfGyYoCcNCG5rz9Tc7yRmWrMZExaz');
-
 console.log('\n=== G. a failure reads as a failure, not as success');
 FAIL = true;
 await ensureOpen('intro');
@@ -296,6 +262,131 @@ await pg.click('#t-intro .actionrow button[data-act]');
 await pg.waitForTimeout(600);
 check('rejected locally', /Write a message first/.test((await pg.locator('#m-intro').textContent()) || ''));
 check('nothing was sent', POSTS.length === 0, `${POSTS.length} posts`);
+
+console.log('\n=== F4. the room field: the rule is furniture, not something to type');
+await ensureOpen('room');
+check('the d- is shown, outside the box', (await pg.locator('#roomWrap .pfx').textContent()).trim() === 'd-');
+check('and it is not in the input', (await pg.locator('#roomName').inputValue()) === '');
+check('the placeholder no longer teaches a prefix',
+  (await pg.locator('#roomName').getAttribute('placeholder')) === 'yourname');
+
+await pg.fill('#roomName', 'taken');
+await pg.waitForFunction(() => /is taken/.test(document.getElementById('roomAvail').textContent), null, { timeout: 6000 });
+check('a claimed name says so before anything is signed',
+  /d-taken is taken/.test(await pg.locator('#roomAvail').textContent()),
+  await pg.locator('#roomAvail').textContent());
+check('in red', (await pg.locator('#roomAvail').getAttribute('class')).includes('bad'));
+POSTS = [];
+await pg.click('#t-room .actionrow button[data-act]');
+await pg.waitForTimeout(600);
+check('and claiming it never reaches the network', POSTS.length === 0, `${POSTS.length} posts`);
+
+await pg.fill('#roomName', 'my-lab');
+await pg.waitForFunction(() => /is available/.test(document.getElementById('roomAvail').textContent), null, { timeout: 6000 });
+check('a free one says available', /d-my-lab is available/.test(await pg.locator('#roomAvail').textContent()));
+check('in green', (await pg.locator('#roomAvail').getAttribute('class')).includes('free'));
+await pg.click('#t-room .actionrow button[data-act]');
+await pg.waitForFunction(() => document.getElementById('t-room').className.includes('done'), null, { timeout: 10000 });
+const claim = POSTS.find(p => p.kind === 'claim');
+check('the claim carries the WHOLE name, prefix and all', claim?.room === 'd-my-lab', claim?.room);
+check('and a shareable link comes back', await pg.locator('#roomOut').isVisible());
+check('pointing at the room just claimed',
+  (await pg.locator('#roomLink').textContent()) === 'technocore.chat/r/d-my-lab',
+  await pg.locator('#roomLink').textContent());
+
+console.log('\n=== F4b. a name too short to be worth a permanent slot');
+POSTS = [];
+await pg.fill('#roomName', '11');
+await pg.waitForTimeout(700);
+check('says so while typing, not after signing', /Too short/.test(await pg.locator('#roomAvail').textContent()),
+  await pg.locator('#roomAvail').textContent());
+
+console.log('\n=== F5. the private room hands back something copyable');
+// open it first: a closed rung's body is a 0fr grid row, so its button has no
+// height to be clicked at
+await ensureOpen('priv');
+await pg.click('#t-priv .actionrow button[data-act]');
+await pg.waitForFunction(() => document.getElementById('t-priv').className.includes('done'), null, { timeout: 10000 });
+check('the address is shown', /technocore\.chat\/r\/p-[0-9a-f]{24}/.test(await pg.locator('#privName').textContent()),
+  await pg.locator('#privName').textContent());
+check('with a copy button beside it', (await pg.locator('#privOut [data-copyval="privName"]').count()) === 1);
+await pg.locator('#privOut [data-copyval="privName"]').click();
+await pg.waitForTimeout(300);
+check('that says it copied', /Copied/.test(await pg.locator('#privOut [data-copyval="privName"]').textContent()));
+
+console.log('\n=== F6. the page is about making one, full stop');
+check('no unlock panel at all', (await pg.locator('#unlock').count()) === 0);
+const back = await ctx.newPage();
+await back.addInitScript(() => localStorage.setItem('overheard.identity',
+  JSON.stringify({ v: 1, did: 'did:key:z6MkTEST', salt: 'x', iv: 'y', data: 'z' })));
+await back.goto('http://localhost:8888/create.html'); await back.waitForTimeout(600);
+check('not even for a browser that holds an identity', (await back.locator('#unlock').count()) === 0);
+check('the only passphrase fields left are the backup file\'s own two',
+  (await back.locator('input[type=password]').count()) === 2,
+  `${await back.locator('input[type=password]').count()}`);
+await back.close();
+
+console.log('\n=== F6b. the end of the ladder, and the party');
+// skip what is left, which is what somebody does when the network refuses one
+for (const id of ['intro', 'proof', 'priv']) {
+  if ((await stateOf(id)) === 'done') continue;
+  await ensureOpen(id);
+  await pg.click(`#t-${id} [data-skip]`);
+  await pg.waitForTimeout(600);
+}
+check('every rung is settled', await pg.evaluate(() =>
+  [...document.querySelectorAll('.step')].every(s =>
+    s.classList.contains('done') || s.classList.contains('skipped'))));
+check('NOW the finish appears', await pg.locator('#finish').isVisible());
+check('it says the setup is correct', /Set up correctly/.test((await pg.locator('#finishTitle').textContent()) || ''));
+check('it arrives rather than appearing', (await pg.locator('#finish').getAttribute('class')).includes('arrive'));
+await pg.waitForTimeout(700);
+check('and there is confetti', (await pg.locator('canvas.confetti').count()) === 1);
+await pg.screenshot({ path: '/tmp/create-4-party.png' });
+await pg.waitForTimeout(4200);
+check('which cleans itself up', (await pg.locator('canvas.confetti').count()) === 0);
+
+console.log('\n=== F6c. reduced motion gets the result without the party');
+const calm = await ctx.newPage(); await calm.emulateMedia({ reducedMotion: 'reduce' });
+await calm.goto('http://localhost:8888/create.html'); await calm.waitForTimeout(400);
+await calm.click('#gen'); await calm.waitForTimeout(1500);
+await calm.click('#saveTxt').catch(() => {});
+await calm.waitForTimeout(600);
+await calm.click('#gateGo'); await calm.waitForTimeout(700);
+for (const id of ['note', 'hello']) {
+  await calm.click(`#t-${id} .actionrow button[data-act]`).catch(() => {});
+  await calm.waitForTimeout(900);
+}
+for (const id of ['intro', 'room', 'proof', 'priv']) {
+  const open = await calm.evaluate((i) => document.getElementById('t-' + i).className.includes('open'), id);
+  if (!open) { await calm.click(`#t-${id} .shead`); await calm.waitForTimeout(300); }
+  await calm.click(`#t-${id} [data-skip]`).catch(() => {});
+  await calm.waitForTimeout(400);
+}
+check('the finish still arrives', await calm.locator('#finish').isVisible());
+check('but no confetti for anyone who asked for less motion',
+  (await calm.locator('canvas.confetti').count()) === 0);
+await calm.close();
+
+console.log('\n=== F7. the footer matches the card page');
+const foot = await pg.evaluate(() => document.querySelector('footer').innerText);
+check('two rows', (await pg.locator('footer .frow').count()) === 2);
+const fw = await pg.evaluate(() => {
+  const f = document.querySelector('footer').getBoundingClientRect();
+  const s = document.querySelector('.shell').getBoundingClientRect();
+  return { footer: Math.round(f.width), column: Math.round(s.width), doc: document.documentElement.clientWidth };
+});
+console.log('   ', JSON.stringify(fw));
+check('a full-bleed footer does not give the page a sideways scrollbar',
+  await pg.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth),
+  await pg.evaluate(() => `${document.documentElement.scrollWidth}/${document.documentElement.clientWidth}`));
+check('and it is the page width, not the column width', fw.footer > fw.column + 200 && fw.footer <= fw.doc,
+  `${fw.footer} vs a ${fw.column} column`);
+check('names the builder and links X', /Built by\s+Pranjal Bora/.test(foot)
+  && (await pg.locator('footer a[href="https://x.com/Crypto_Pranjal"]').count()) === 1);
+check('carries the whole DID', foot.includes('did:key:z6MkngD8RZKCgJQCkJvHfGyYoCcNCG5rz9Tc7yRmWrMZExaz'));
+check('and the DID opens its own card',
+  (await pg.locator('footer .bydid').getAttribute('href')) === '/?did=did:key:z6MkngD8RZKCgJQCkJvHfGyYoCcNCG5rz9Tc7yRmWrMZExaz');
 
 console.log('\n=== I. phone');
 const pg2 = await ctx.newPage(); await pg2.setViewportSize({ width: 390, height: 844 });
