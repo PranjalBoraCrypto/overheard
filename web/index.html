@@ -353,7 +353,14 @@ h1 em{
 .provebar.done .pb-txt b::after{content:"  ·  proven";color:var(--cy-hi);font-weight:600}
 
 .pmodal{
-  width:min(560px,calc(100vw - 32px));padding:26px;border:0;border-radius:20px;color:var(--txt);
+  /* Centred against the TRUE viewport. `inset:0; margin:auto` centres inside
+     the layout area, and this page sets `scrollbar-gutter: stable` — so with
+     the modal open (which hides the page scrollbar but keeps its reserved
+     gutter) the dialog sat 15px left of where the eye expects it. 50vw
+     includes the gutter; the translate does the rest. */
+  position:fixed;top:50%;left:50vw;transform:translate(-50%,-50%);margin:0;
+  width:min(560px,calc(100vw - 32px));height:fit-content;max-height:calc(100vh - 40px);
+  overflow:auto;padding:26px;border:0;border-radius:20px;color:var(--txt);
   background:linear-gradient(rgba(6,24,32,.98),rgba(3,12,17,.99)) padding-box,var(--bevel) border-box;
   border:1px solid transparent;box-shadow:0 40px 90px -30px rgba(0,0,0,.9);
 }
@@ -385,6 +392,12 @@ h1 em{
 .ptab.on{color:var(--txt);background:rgba(0,180,215,.16);box-shadow:inset 0 0 0 1px rgba(0,180,215,.3)}
 .ptab:disabled{opacity:.4;cursor:not-allowed}
 
+.pfile{display:flex;align-items:center;gap:10px;margin-bottom:10px;padding:12px 14px;border-radius:12px;
+  cursor:pointer;background:rgba(0,7,10,.6);border:1px dashed rgba(0,180,215,.34);
+  color:var(--dim);font-size:13.5px;transition:.2s var(--ease)}
+.pfile:hover{border-color:var(--cy);color:var(--txt)}
+.pfile input{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}
+.pfile.has{border-style:solid;border-color:rgba(0,180,215,.5);color:var(--txt)}
 .prow{display:flex;gap:10px;margin-top:4px;flex-wrap:wrap}
 .prow input{
   flex:1;min-width:180px;padding:13px 15px;border-radius:12px;font:inherit;font-size:14.5px;color:var(--txt);
@@ -943,41 +956,6 @@ footer a:hover{color:var(--cy-hi)}
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7"/><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"/></svg>Copy proof link</button>
     </div>
 
-    <dialog class="pmodal" id="pmodal" aria-labelledby="pmtitle">
-      <button class="pclose" id="pclose" type="button" aria-label="Close">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
-      </button>
-
-      <div class="phead"><span class="ptag">Optional</span><h3 id="pmtitle">Prove this card is yours</h3></div>
-      <p class="pbody">Anyone can look up any public DID, including someone else&rsquo;s — so a card on its own says who the identity <em>is</em>, never who is holding it. Sign one line with this identity and the card says so instead, with a link anyone can check for themselves.</p>
-      <p class="psafe"><b>Nothing leaves this device.</b> The signing happens in this tab, and only the signature is ever shown.</p>
-
-      <div class="ptabs" role="tablist">
-        <button class="ptab on" id="tabPass" type="button" role="tab" aria-selected="true">Passphrase</button>
-        <button class="ptab" id="tabSeed" type="button" role="tab" aria-selected="false">Seed</button>
-      </div>
-
-      <div class="ppane" id="panePass">
-        <p class="phint" id="passHint">Unlocks the identity this browser already holds. No seed is needed or asked for here.</p>
-        <div class="prow">
-          <input id="ppw" type="password" autocomplete="current-password" placeholder="passphrase for the identity in this browser">
-          <button class="act primary" id="proveGo" type="button">Prove it&rsquo;s mine</button>
-        </div>
-        <p class="pmsg" id="pmsg"></p>
-      </div>
-
-      <div class="ppane" id="paneSeed" hidden>
-        <p class="pcaution"><b>A seed is the key itself.</b> This is the only place on this site that ever asks for one, and it asks once: it derives the key, checks it really belongs to this card, encrypts it with a passphrase you choose, hands you the encrypted file, and never wants the seed again.</p>
-        <textarea id="pseed" rows="2" spellcheck="false" autocomplete="off" placeholder="64 hex characters, or 43 of base64url"></textarea>
-        <p class="phint">Choose a passphrase to encrypt it with. You will need this to use the identity again — it is not recoverable.</p>
-        <div class="prow">
-          <input id="pnp1" type="password" autocomplete="new-password" placeholder="new passphrase">
-          <input id="pnp2" type="password" autocomplete="new-password" placeholder="again">
-        </div>
-        <button class="act primary wide" id="seedGo" type="button">Import, prove, and download my backup</button>
-        <p class="pmsg" id="smsg"></p>
-      </div>
-    </dialog>
 
     <!-- Shown instead of a card when there is nothing yet to put on one. It
          used to be a table of failed checks and a paragraph of instructions,
@@ -3512,6 +3490,34 @@ function setupProve(did){
 
 const smsg=(t,cls="")=>{ const el=$("smsg"); el.textContent=t; el.className="pmsg "+cls; };
 
+/** A backup file chosen in this dialog, held in memory only for as long as
+ *  the dialog is open. It is an encrypted vault, so it is useless without
+ *  the passphrase — but there is still no reason to keep it around. */
+let pickedVault=null;
+
+$("pfile").addEventListener("change", async (e)=>{
+  const f=e.target.files?.[0]; if(!f) return;
+  pmsg("");
+  try{
+    const v=JSON.parse(await f.text());
+    if(!(v && v.did && v.salt && v.iv && v.data)) throw new Error("shape");
+    if(v.did!==current?.did){
+      pickedVault=null;
+      $("pfileRow").classList.remove("has");
+      $("pfileName").textContent="Choose your backup file";
+      return pmsg(`That file is for ${String(v.did).slice(8,16)}…${String(v.did).slice(-4)}, not the identity on this card.`,"err");
+    }
+    pickedVault=v;
+    $("pfileRow").classList.add("has");
+    $("pfileName").textContent=f.name;
+    pmsg("File loaded. Now its passphrase.","ok");
+    $("ppw").focus();
+  }catch{
+    pickedVault=null;
+    pmsg("That is not an Overheard backup file.","err");
+  }
+});
+
 function proveTab(which){
   const pass=which==="pass";
   $("tabPass").classList.toggle("on",pass);  $("tabPass").setAttribute("aria-selected",String(pass));
@@ -3530,18 +3536,36 @@ $("provebar").addEventListener("click",()=>{
   $("ppw").value=""; $("pseed").value=""; $("pnp1").value=""; $("pnp2").value="";
   pmsg(""); smsg("");
 
-  // The tab that CAN work is the one that opens. Presenting a passphrase box
-  // to somebody whose key is not in this browser is an invitation to type a
-  // passphrase that cannot possibly be right.
-  $("tabPass").disabled=!mine;
+  /* THE PASSPHRASE TAB IS NEVER DISABLED.
+
+     It was, whenever this browser did not already hold the identity — which
+     is wrong for the commonest case there is: somebody made an identity days
+     ago, has the backup file and remembers the passphrase, and arrives in a
+     fresh browser or on another machine. Their passphrase is exactly the
+     thing they have. So the route stays open and simply asks for the file
+     first when there is nothing here to unlock. */
+  pickedVault=null;
+  $("tabPass").disabled=false;
+  $("pfileRow").hidden = mine;
+  $("pfileRow").classList.remove("has");
+  $("pfileName").textContent="Choose your backup file";
   $("passHint").textContent = mine
-    ? "Unlocks the identity this browser already holds. No seed is needed or asked for here."
+    ? "Unlocks the identity saved in this browser."
     : savedIdentity?.did
-    ? `The identity saved in this browser is ${savedIdentity.did.slice(8,16)}…${savedIdentity.did.slice(-4)}, which is not the one on this card.`
-    : "No identity is saved in this browser, so there is nothing here to unlock.";
-  proveTab(mine ? "pass" : "seed");
+    ? "The identity saved here is a different one — choose this card's backup file, then its passphrase."
+    : "Choose your backup file, then its passphrase.";
+  proveTab("pass");
   $("pmodal").showModal();
 });
+
+/** Save this identity into the browser so next time it is one passphrase —
+ *  but NEVER on top of a different identity that is already here. Somebody
+ *  proving a second card should not silently lose the first one. */
+function keepVault(vault, jwk){
+  if(savedIdentity?.did && savedIdentity.did!==vault.did) return;
+  try{ localStorage.setItem("overheard.identity",JSON.stringify(vault)); }catch{}
+  savedIdentity=vault; openKey=jwk;
+}
 
 /** Sign the card line and check our own work before claiming anything. A
  *  vault holding the wrong key would otherwise produce a proof that fails
@@ -3565,17 +3589,20 @@ async function proveWith(jwk){
 }
 
 $("proveGo").addEventListener("click", async () => {
+  const vault = pickedVault ?? (savedIdentity?.did===current?.did ? savedIdentity : null);
+  if(!vault) return pmsg("Choose the backup file for this identity first.","err");
   const pass=$("ppw").value;
-  if(!pass) return pmsg("Enter the passphrase for the identity in this browser.","err");
+  if(!pass) return pmsg("Enter the passphrase for this identity.","err");
   pmsg("Unlocking on this device…");
   try{
-    const jwk=await openVault(savedIdentity,pass);
+    const jwk=await openVault(vault,pass);
     if(!(await proveWith(jwk))) return pmsg("That identity did not produce a valid signature for this DID.","err");
-    $("ppw").value="";
+    keepVault(vault, jwk);
+    $("ppw").value=""; pickedVault=null;
     pmsg("Proven. The card says so now.","ok");
     setTimeout(()=>$("pmodal").close(),900);
   }catch{
-    pmsg("Wrong passphrase, or the identity stored in this browser is damaged.","err");
+    pmsg("Wrong passphrase, or that backup is damaged.","err");
   }
 });
 
@@ -3605,8 +3632,7 @@ $("seedGo").addEventListener("click", async () => {
       a.click(); URL.revokeObjectURL(a.href);
     }catch{}
 
-    try{ localStorage.setItem("overheard.identity",JSON.stringify(vault)); }catch{}
-    savedIdentity=vault; openKey=jwk;
+    keepVault(vault,jwk);
 
     if(!(await proveWith(jwk))){ btn.disabled=false; return smsg("The key derived, but its signature did not verify.","err"); }
     $("pseed").value=$("pnp1").value=$("pnp2").value="";
@@ -4284,5 +4310,54 @@ document.querySelectorAll(".stagger").forEach(el=>ioS.observe(el));
 document.fonts.ready.then(()=>drawCard(EXAMPLES[0],parseDid(EXAMPLES[0]).pub,null));
 </script>
 
+
+<!-- TOP LEVEL ON PURPOSE.
+
+     This was inside <section class="stage">, which sets `perspective:1500px`
+     for the card's tilt. Perspective, like transform and filter, makes an
+     element the containing block for FIXED-position descendants — and a
+     modal <dialog> is positioned fixed by the browser's own stylesheet. So
+     it anchored to the stage's top-left corner instead of the viewport and
+     opened in the corner of the screen. Nothing to do with the dialog's own
+     CSS; it simply cannot be a descendant of anything transformed. -->
+    <dialog class="pmodal" id="pmodal" aria-labelledby="pmtitle">
+      <button class="pclose" id="pclose" type="button" aria-label="Close">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      </button>
+
+      <div class="phead"><span class="ptag">Optional</span><h3 id="pmtitle">Prove this card is yours</h3></div>
+      <p class="pbody">A card shows who an identity <em>is</em>. Signing one line shows who <em>holds</em> it — and the proof link checks out anywhere, without us.</p>
+      <p class="psafe"><b>Signed in this tab.</b> Nothing is uploaded.</p>
+
+      <div class="ptabs" role="tablist">
+        <button class="ptab on" id="tabPass" type="button" role="tab" aria-selected="true">Passphrase</button>
+        <button class="ptab" id="tabSeed" type="button" role="tab" aria-selected="false">Seed</button>
+      </div>
+
+      <div class="ppane" id="panePass">
+        <p class="phint" id="passHint">Unlocks the identity saved in this browser.</p>
+        <label class="pfile" id="pfileRow" hidden>
+          <input id="pfile" type="file" accept="application/json,.json">
+          <span id="pfileName">Choose your backup file</span>
+        </label>
+        <div class="prow">
+          <input id="ppw" type="password" autocomplete="current-password" placeholder="passphrase">
+          <button class="act primary" id="proveGo" type="button">Prove it&rsquo;s mine</button>
+        </div>
+        <p class="pmsg" id="pmsg"></p>
+      </div>
+
+      <div class="ppane" id="paneSeed" hidden>
+        <p class="pcaution"><b>A seed is the key itself.</b> Asked once, here only: we derive it, check it matches this card, encrypt it under a passphrase you choose, and hand you the file.</p>
+        <textarea id="pseed" rows="2" spellcheck="false" autocomplete="off" placeholder="64 hex characters, or 43 of base64url"></textarea>
+        <p class="phint">A passphrase to encrypt it with. Not recoverable.</p>
+        <div class="prow">
+          <input id="pnp1" type="password" autocomplete="new-password" placeholder="new passphrase">
+          <input id="pnp2" type="password" autocomplete="new-password" placeholder="again">
+        </div>
+        <button class="act primary wide" id="seedGo" type="button">Import, prove, download backup</button>
+        <p class="pmsg" id="smsg"></p>
+      </div>
+    </dialog>
 </body>
 </html>
