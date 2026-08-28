@@ -91,6 +91,100 @@ const offsiteButtons = await pg.evaluate(() =>
   [...document.querySelectorAll('#intro .go')].filter(a => /^https?:/.test(a.getAttribute('href') || '')).length);
 check('the way to read is our own page, not somebody else\'s site', offsiteButtons === 0);
 
+console.log('\n=== A2. the toy');
+/* A physics toy is the one thing on a page that cannot be checked by reading
+   the markup: it either behaves or it does not. Everything here is measured
+   off the running simulation. */
+/* Wait for it to go quiet rather than guessing a number: the claim is that a
+   heap SETTLES, and a deadline is the honest way to state it. */
+await pg.waitForFunction(() =>
+  window.__toy && window.__toy.coins.length >= 20
+  && window.__toy.coins.every(c => Math.hypot(c.vx, c.vy) < 1), null, { timeout: 12000 });
+const toy = () => pg.evaluate(() => {
+  const t = window.__toy;
+  return {
+    n: t.coins.length, fed: t.fed, floor: t.FLOOR, wall: t.WALL, w: t.WORLD,
+    asleep: t.coins.filter(c => c.still > 0.55).length,
+    below: t.coins.filter(c => c.y + c.r > t.FLOOR + 1.5).length,
+    outside: t.coins.filter(c => c.x - c.r < t.WALL - 2 || c.x + c.r > t.WORLD - t.WALL + 2).length,
+    stacked: t.coins.filter(c => c.still > 0.55 && c.y + c.r < t.FLOOR - 6).length,
+    head: { dx: t.HEAD.dx, dy: t.HEAD.dy },
+  };
+});
+const t0 = await toy();
+console.log('   ', JSON.stringify(t0));
+check('the tokens arrived', t0.n >= 15, `${t0.n} on the field`);
+/* Nothing may sink through the floor or squeeze through a wall — the two
+   failures that make a solver look broken at a glance. */
+check('none of them fell through the floor', t0.below === 0);
+check('and none squeezed out of the well', t0.outside === 0);
+/* A heap is the proof the contact solver holds: tokens resting ON tokens,
+   asleep, rather than buzzing or sinking into each other. */
+check('they settle into a heap that holds', t0.stacked >= 5, `${t0.stacked} resting off the floor`);
+/* The strong claim is above, in the waitForFunction: not one token is moving.
+   This is the cheaper one — that the solver has actually PARKED them rather
+   than holding them still frame by frame. */
+check('and the heap goes to sleep rather than being held still',
+  t0.asleep >= t0.n - 3, `${t0.asleep} of ${t0.n} asleep`);
+
+/* THROWING. Velocity comes from the last few pointer samples, so a flick has
+   to actually throw — a drop is the bug this replaces. */
+const tbox = await pg.locator('#toy').boundingBox();
+const w2s = (wx, wy) => ({ x: tbox.x + wx / 470 * tbox.width, y: tbox.y + wy / 452 * tbox.height });
+/* Tagged, not indexed: eating splices the array, and an index into a list
+   that shifts under you measures the wrong token. */
+await pg.evaluate(() => {
+  const c = window.__toy.coins.find(k => k.still > 0.55) || window.__toy.coins[0];
+  /* Parked and asleep, so it is still where the test last saw it when the
+     grab lands — a falling token has moved on by the time a round trip
+     through the browser gets back. */
+  c.__tag = 1; c.x = 90; c.y = 250; c.vx = 0; c.vy = 0; c.still = 9;
+});
+const tagged = () => pg.evaluate(() => window.__toy.coins.find(k => k.__tag) || null);
+await pg.waitForTimeout(40);
+let g = await tagged();
+let sp = w2s(g.x, g.y);
+await pg.mouse.move(sp.x, sp.y); await pg.mouse.down();
+for (let i = 1; i <= 9; i++) { const q = w2s(g.x + 22 * i, g.y - 7 * i); await pg.mouse.move(q.x, q.y); await pg.waitForTimeout(8); }
+const at = await tagged();
+await pg.mouse.up();
+const flung = await pg.evaluate(() => { const c = window.__toy.coins.find(k => k.__tag);
+  return c ? Math.round(Math.hypot(c.vx, c.vy)) : -1; });
+check('a flick throws it', flung > 300, `${flung} px/s off the hand`);
+/* Speed on release is only half the claim — the other half is that it keeps
+   going. A number in a variable that the next frame eats is not a throw. */
+await pg.waitForTimeout(260);
+const went = await pg.evaluate((from) => { const c = window.__toy.coins.find(k => k.__tag);
+  return c ? Math.round(Math.hypot(c.x - from.x, c.y - from.y)) : -1; }, { x: at.x, y: at.y });
+check('and it carries', went > 60, `${went}px travelled after release`);
+
+/* THE HEAD. It resists — pull it a long way and it barely moves, because the
+   restoring force grows with the cube of the displacement. */
+const pulled = await pg.evaluate(() => {
+  window.__toy.pull(300, -160);
+  return { d: Math.round(Math.hypot(window.__toy.HEAD.dx, window.__toy.HEAD.dy)), max: window.__toy.MAXPULL };
+});
+check('the head resists being pulled', pulled.d <= pulled.max + 1 && pulled.d > 10,
+  `300px of pull moved it ${pulled.d}px, limit ${pulled.max}`);
+await pg.evaluate(() => window.__toy.drop());
+await pg.waitForTimeout(240);
+const landed = await pg.evaluate(() => ({ shake: window.__toy.shake, cap: document.getElementById('toyCap').textContent }));
+check('and letting go lands it with an impact', landed.shake > 0.02, `shake ${landed.shake.toFixed(2)}`);
+check('which the page says out loud', /felt that/i.test(landed.cap), landed.cap);
+await pg.waitForTimeout(900);
+const rested = await pg.evaluate(() => Math.round(Math.hypot(window.__toy.HEAD.dx, window.__toy.HEAD.dy) * 10) / 10);
+check('then it settles back', rested < 2, `${rested}px off centre`);
+
+/* FEEDING — the point of the whole object. */
+const fedBefore = (await toy()).fed;
+await pg.evaluate(() => window.__toy.feed());
+await pg.waitForTimeout(1400);
+const fedAfter = await toy();
+check('a token dropped down the slot is eaten', fedAfter.fed === fedBefore + 1, `${fedBefore} → ${fedAfter.fed}`);
+check('and the caption says so', /Fed|ate that/i.test(await pg.locator('#toyCap').textContent()));
+await pg.waitForTimeout(900);
+check('and another one arrives to replace it', (await toy()).n >= t0.n - 1);
+
 console.log('\n=== B. the briefing');
 await pg.click('#toBrief');
 await pg.waitForTimeout(400);
@@ -631,7 +725,7 @@ check('and it says where the runs actually live',
 await go();
 check('it is on the start page too', await pg.locator('#histIntro .hrow').count() === 2);
 check('and it is below the start card, not above it', await pg.evaluate(() => {
-  const a = document.querySelector('.panel.start').getBoundingClientRect();
+  const a = document.querySelector('.hero').getBoundingClientRect();
   const b = document.getElementById('histIntro').getBoundingClientRect();
   return b.top > a.top;
 }));

@@ -31,6 +31,10 @@ body{background:var(--void);color:var(--txt);font-family:var(--display);font-siz
 @keyframes d1{50%{transform:translate(110px,80px) scale(1.15)}}
 @keyframes d2{50%{transform:translate(-80px,130px) scale(1.1)}}
 .shell{max-width:780px;margin:0 auto;padding:0 22px 40px;position:relative;z-index:2}
+/* The first section is the only one that wants the whole page — the toy needs
+   room to be an object rather than an illustration, and the reading column
+   below it stays 780px because that is what reading wants. */
+.wide{max-width:1180px;margin:0 auto;padding:0 22px}
 
 h1{font-weight:800;font-size:clamp(32px,5.4vw,48px);letter-spacing:-.035em;line-height:1.03;margin:16px 0 10px;text-wrap:balance}
 .lede{color:var(--dim);font-size:16.5px;line-height:1.65;max-width:56ch}
@@ -55,12 +59,43 @@ h1{font-weight:800;font-size:clamp(32px,5.4vw,48px);letter-spacing:-.035em;line-
 .go.ghost{background:rgba(7,34,48,.9);border:1px solid var(--edge);color:var(--dim);box-shadow:none;font-weight:600}
 .go.ghost:hover{color:var(--txt);border-color:var(--edge-lit)}
 .go .i{width:17px;height:17px;stroke-width:2.1}
+/* The page is called Play. The thing it is for gets the size of the thing it
+   is for, and the briefing sits beside it rather than in front of it. */
+.go.big{padding:19px 32px;font-size:17.5px;border-radius:16px;letter-spacing:-.01em;
+  box-shadow:0 20px 44px -18px rgba(0,180,215,.95)}
+.go.big .i{width:20px;height:20px}
+.go.big:hover:not(:disabled){box-shadow:0 26px 52px -18px rgba(0,180,215,1)}
+.go.wide{padding:17px 26px;font-size:15.5px;border-radius:15px}
+.hint2{margin-top:13px;font-size:13px;color:var(--faint);line-height:1.5}
+.hint2 b{color:var(--dim);font-weight:600}
 
-/* ── the start card ─────────────────────────────────────────────────────── */
-.start{margin-top:26px;padding:30px 32px;animation:rise .5s var(--ease) both}
+/* ── the first section ───────────────────────────────────────────────────
+   Text on the left with room to breathe, the toy on its own on the right.
+   No panel around either: a box drawn around the headline made the whole
+   thing read as a form, and the toy needs to look like it is sitting in the
+   page rather than inside a widget. */
 @keyframes rise{from{opacity:0;transform:translateY(14px)}}
-@media (max-width:620px){.start{padding:22px 20px}}
-.facts{display:grid;grid-template-columns:repeat(3,1fr);gap:11px;margin:22px 0}
+/* The hero leans out of the reading column by a measured amount rather than
+   by 100vw. 100vw includes the scrollbar, and the bar reserves a scrollbar
+   gutter, so a viewport-width break-out here hangs past the document and
+   gives every page a sideways scroll — a bug this codebase has already paid
+   for once in the footer. A bleed that is zero until there is provably room
+   for it cannot do that. */
+.hero{display:grid;grid-template-columns:minmax(0,1fr) 470px;gap:52px;align-items:center;
+  padding:26px 0 12px;
+  margin-left:calc(-1 * var(--bleed,0px));margin-right:calc(-1 * var(--bleed,0px))}
+@media (min-width:1010px){.hero{--bleed:104px}}
+@media (min-width:1250px){.hero{--bleed:200px}}
+.hcopy{animation:rise .55s var(--ease) both}
+.hero h1{margin:18px 0 12px;font-size:clamp(34px,4.3vw,52px)}
+.hero .lede{font-size:17px;max-width:42ch}
+@media (max-width:1040px){
+  .hero{grid-template-columns:1fr;gap:26px;padding-top:16px}
+  /* On a narrow screen the toy goes FIRST. It is the reason to stay on the
+     page, and burying it under three paragraphs wastes it. */
+  .toywrap{order:-1}
+}
+.facts{display:grid;grid-template-columns:repeat(3,1fr);gap:11px;margin:26px 0 24px;max-width:520px}
 @media (max-width:620px){.facts{grid-template-columns:1fr}}
 .fact{padding:15px 16px;border-radius:14px;background:rgba(0,20,26,.55);border:1px solid rgba(0,180,215,.18);
   transition:transform .25s var(--ease),border-color .25s var(--ease)}
@@ -73,6 +108,21 @@ h1{font-weight:800;font-size:clamp(32px,5.4vw,48px);letter-spacing:-.035em;line-
 .fact:nth-child(3){animation-delay:.18s}
 .fact:hover{transform:translateY(-3px);border-color:rgba(95,235,255,.45)}
 .fact .i{width:19px;height:19px;color:var(--cy);display:block;margin-bottom:9px}
+
+/* ── the toy ─────────────────────────────────────────────────────────────
+   `touch-action` is deliberately NOT `none`: that would eat the page scroll
+   on a phone, where most of this canvas is empty space. It is set per
+   gesture instead — the pointer only gets captured when it actually lands on
+   something you can pick up. */
+.toywrap{display:flex;flex-direction:column;align-items:center;gap:13px;
+  animation:rise .7s .1s var(--ease) both}
+#toy{display:block;width:470px;height:452px;max-width:100%;cursor:grab;touch-action:manipulation}
+#toy.holding{cursor:grabbing}
+@media (max-width:1040px){#toy{width:420px;height:404px}}
+@media (max-width:620px){#toy{width:min(340px,88vw);height:min(327px,85vw)}}
+.toycap{font-family:var(--mono);font-size:10.5px;letter-spacing:.13em;text-transform:uppercase;
+  color:var(--faint);text-align:center;min-height:1.4em;transition:color .3s var(--ease)}
+.toycap b{color:var(--cy-hi);font-weight:600}
 .fact b{display:block;font-family:var(--mono);font-size:19px;color:var(--cy-hi);letter-spacing:-.02em}
 .fact span{display:block;font-size:12.5px;color:var(--faint);line-height:1.45;margin-top:3px}
 
@@ -763,19 +813,26 @@ canvas.confetti{position:fixed;inset:0;width:100%;height:100%;pointer-events:non
 
   <!-- ══ THE START ═══════════════════════════════════════════════════════ -->
   <section id="intro">
-    <span class="eyebrow"><svg class="i"><use href="#i-bolt"/></svg>Proof of Learning</span>
-    <h1>You are an agent.<br>You have just booted.</h1>
-    <p class="lede">Read the briefing, take the run, post the card. Every answer is in the briefing.</p>
-
-    <div class="panel start">
-      <div class="facts">
-        <div class="fact"><svg class="i"><use href="#i-seal"/></svg><b>12</b><span>gates, four levels</span></div>
-        <div class="fact"><svg class="i"><use href="#i-clock"/></svg><b>~3 min</b><span>a full run</span></div>
-        <div class="fact"><svg class="i"><use href="#i-bolt"/></svg><b>Points</b><span>and a card to post</span></div>
+    <div class="hero">
+      <div class="hcopy">
+        <span class="eyebrow"><svg class="i"><use href="#i-bolt"/></svg>Proof of Learning</span>
+        <h1>Your agent is <em style="font-style:normal;color:var(--cy-hi)">hungry</em>.<br>Feed it.</h1>
+        <p class="lede">&ldquo;$FLOP is food for your AI agent.&rdquo; Twelve gates on what that actually means &mdash; about three minutes, and a card worth posting at the end.</p>
+        <div class="facts">
+          <div class="fact"><svg class="i"><use href="#i-seal"/></svg><b>12</b><span>gates, four levels</span></div>
+          <div class="fact"><svg class="i"><use href="#i-clock"/></svg><b>~3 min</b><span>a full run</span></div>
+          <div class="fact"><svg class="i"><use href="#i-bolt"/></svg><b>Points</b><span>and a card to post</span></div>
+        </div>
+        <div class="nextrow" style="justify-content:flex-start">
+          <button class="go big" id="begin" type="button"><svg class="i"><use href="#i-play"/></svg>Start the run</button>
+          <button class="go ghost wide" id="toBrief" type="button"><svg class="i"><use href="#i-book"/></svg>Read the briefing first</button>
+        </div>
+        <p class="hint2">Twelve questions, and <b>every answer is in the briefing</b> &mdash; two minutes of reading makes the run a victory lap.</p>
       </div>
-      <div class="nextrow" style="justify-content:flex-start">
-        <button class="go" id="toBrief" type="button"><svg class="i"><use href="#i-book"/></svg>Read the briefing</button>
-        <button class="go ghost" id="begin" type="button"><svg class="i"><use href="#i-play"/></svg>Skip it &mdash; start the run</button>
+
+      <div class="toywrap">
+        <canvas id="toy" width="940" height="904" aria-hidden="true"></canvas>
+        <p class="toycap" id="toyCap">Throw them &middot; <b>they fall, bounce and stack</b></p>
       </div>
     </div>
 
@@ -2609,6 +2666,631 @@ function celebrate(){
     if(++n<210) requestAnimationFrame(step); else c.remove();
   })();
 }
+
+/* ══ THE TOY ══════════════════════════════════════════════════════════════
+   "$FLOP is food for your AI agent" is Flop's own front-page line. This is
+   that sentence as an object: a well of tokens and a heavy little agent that
+   eats them. Throw one in and it thinks.
+
+   It is a real solver, not a loop of eased transforms, because the difference
+   is the entire point — a thrown coin has to land where its speed says it
+   will, a heap has to hold its shape, and the head has to feel like it weighs
+   something. What is simulated:
+
+     · gravity, integrated at a FIXED 180Hz substep with an accumulator, so
+       the same flick throws the same distance on a 60Hz laptop and a 120Hz
+       phone. Variable-dt integration is how physics toys get springy on fast
+       displays and sluggish on slow ones;
+     · circle-circle contacts with restitution, tangential friction and
+       positional correction over several relaxation passes, which is what
+       lets coins rest ON each other instead of sinking or buzzing;
+     · rolling — a tangential impulse becomes spin, so coins visibly roll down
+       the side of the heap and settle;
+     · sleeping: a coin under the motion threshold for a moment stops being
+       integrated, which kills the last of the jitter and the battery drain;
+     · throw velocity taken from the last few pointer samples rather than the
+       last one, so a flick throws and a slow drag drops;
+     · the cursor itself is a body. Sweep it through the pile and the pile
+       goes, because an infinitely heavy circle is exactly what a hand is;
+     · the head is a stiffening spring on a pivot, with roughly forty times a
+       coin's mass. A coin bouncing off it nudges it. Pulling it moves it a
+       little and then almost not at all, because the restoring force grows
+       with the cube of the displacement — and letting go returns it, past
+       centre, into an impact that shakes the frame and throws the nearest
+       coins clear.
+   ───────────────────────────────────────────────────────────────────────── */
+(function toy(){
+  const cv=$("toy"); if(!cv) return;
+  const g2=cv.getContext("2d");
+  const WORLD=470, WH=452;               // physics units; the canvas scales to it
+  /* A jar, not a tray. Across the full width the tokens landed in a single
+     edge-to-edge row and read as a hedge; at three hundred and thirty across
+     they pile two and three deep, which is what a heap looks like. The margin
+     either side is where the glow lives. */
+  const FLOOR=WH-14, WALL=58, ROOF=6;
+
+  /* ── the mark ──────────────────────────────────────────────────────────
+     Flop's own logo, drawn rather than loaded: a chamfered octagon cut into
+     a four-by-four grid, with a rounded square punched out of the middle and
+     a swoosh running from it to the lower-left corner. Two colours and no
+     network request, which is what lets twenty of them spin at 120Hz. */
+  const CHAMFER=26;
+  /** The silhouette on its own, centred on (0,0) — the shape the tokens ARE,
+   *  so the collider and the drawing are talking about the same object. */
+  function markPath(x,S){
+    const u=S/100, P=(n)=>n*u-S/2, c=CHAMFER;
+    x.beginPath();
+    x.moveTo(P(c),P(0)); x.lineTo(P(100-c),P(0)); x.lineTo(P(100),P(c));
+    x.lineTo(P(100),P(100-c)); x.lineTo(P(100-c),P(100)); x.lineTo(P(c),P(100));
+    x.lineTo(P(0),P(100-c)); x.lineTo(P(0),P(c)); x.closePath();
+  }
+  function flopMark(x,S,ink,gap){
+    const u=S/100, P=(n)=>n*u-S/2;
+    x.save();
+    markPath(x,S);
+    x.fillStyle=ink; x.fill();
+    x.clip();                                   // gutters stop at the silhouette
+    /* Measured off the real mark rather than guessed: the gutters are hairlines
+       and the tiles are chunky. Thicker gutters — the first thing that looks
+       right in isolation — turn the whole thing into a waffle at this size. */
+    x.strokeStyle=gap; x.lineWidth=(S/100)*3.8; x.lineCap="butt";
+    for(const t of [25,50,75]){
+      x.beginPath(); x.moveTo(P(t),P(-6)); x.lineTo(P(t),P(106)); x.stroke();
+      x.beginPath(); x.moveTo(P(-6),P(t)); x.lineTo(P(106),P(t)); x.stroke();
+    }
+    // the punched-out centre
+    const U=S/100;
+    x.fillStyle=gap;
+    roundRect(x,P(34),P(31),U*30,U*30,U*9); x.fill();
+    // and the swoosh down to the lower-left
+    x.lineWidth=U*7; x.lineCap="round";
+    x.beginPath(); x.moveTo(P(37),P(60)); x.quadraticCurveTo(P(26),P(70),P(11),P(88)); x.stroke();
+    x.restore();
+  }
+  /* The silhouette is a chamfered square, so its radius runs between 0.50 of
+     the side across the flats and 0.554 at a corner — near enough round that a
+     circle collider is honest, and far cheaper than polygon contacts for
+     twenty bodies at 180Hz. The collision radius is taken in the middle of
+     that range so nothing looks like it is overlapping or floating. */
+  const SIDE_OF=(r)=>r/0.524;
+
+  /* ── bodies ───────────────────────────────────────────────────────────── */
+  const G=1500, AIR=0.28, REST_W=0.30, REST_C=0.06, REST_H=0.52, FRIC=0.13;
+  const SLEEP_V=16, SLEEP_FOR=0.5;
+  const coins=[];
+  const rnd=(a,b)=>a+Math.random()*(b-a);
+
+  function addCoin(x0,y0,vx=0,vy=0){
+    coins.push({ x:x0, y:y0, vx, vy, r:rnd(15,18.5),
+                 a:rnd(0,6.28), av:rnd(-2,2), still:0, held:false, lean:rnd(-.07,.07),
+                 ox:x0, oy:y0, wake:0,
+                 trail:[] });
+  }
+  const HEAD={ bx:WORLD/2, by:FLOOR, w:96, h:84, r:48, cy:-44,
+               dx:0, dy:0, vx:0, vy:0, held:false, hx:0, hy:0,
+               squash:0, flash:0, tilt:0 };
+  const MAXPULL=34;                      // it will not go much past this, ever
+  let fed=0, shake=0, shakeA=0, rings=[], spark=[];
+
+  /* ── the pointer, as a body ───────────────────────────────────────────── */
+  const P={ x:-999, y:-999, px:-999, py:-999, vx:0, vy:0, down:false, in:false };
+  const hist=[];                          // recent samples, for throwing
+
+  /* ── the solver ───────────────────────────────────────────────────────── */
+  function step(dt){
+    // the head: a stiffening spring on a pivot
+    if(HEAD.held){
+      /* Resistance, and an honest reason for it. The raw pull is squashed
+         through tanh, so the first few pixels come easily and the rest do
+         not: pull twice as hard past the limit and you gain almost nothing,
+         which is what a heavy thing on a stiff mount actually feels like. */
+      /* Squash the MAGNITUDE, not each axis on its own. Clamping x and y
+         separately lets a diagonal pull reach √2 times the limit, which is a
+         mount that is stiffer sideways than it is corner-ways — nothing is
+         built like that, and it shows. */
+      const rx=(P.x-HEAD.hx), ry=(P.y-HEAD.hy);
+      const raw=Math.hypot(rx,ry)||1e-6;
+      const mag=MAXPULL*Math.tanh(raw/MAXPULL);
+      const nx=rx/raw*mag, ny=ry/raw*mag;
+      HEAD.vx=(nx-HEAD.dx)/Math.max(dt,1e-4); HEAD.vy=(ny-HEAD.dy)/Math.max(dt,1e-4);
+      HEAD.dx=nx; HEAD.dy=ny;
+    }else{
+      const d=Math.hypot(HEAD.dx,HEAD.dy);
+      const stiff=1 + 6*Math.pow(d/MAXPULL,2);   // cubic restoring force
+      const K=760*stiff, C=11.5;
+      HEAD.vx+=(-K*HEAD.dx - C*HEAD.vx)*dt;
+      HEAD.vy+=(-K*HEAD.dy - C*HEAD.vy)*dt;
+      const wasOut=d>4;
+      HEAD.dx+=HEAD.vx*dt; HEAD.dy+=HEAD.vy*dt;
+      // and it is allowed to be properly still
+      if(Math.hypot(HEAD.dx,HEAD.dy)<0.5 && Math.hypot(HEAD.vx,HEAD.vy)<9){
+        HEAD.dx=HEAD.dy=HEAD.vx=HEAD.vy=0;
+      }
+      const now=Math.hypot(HEAD.dx,HEAD.dy);
+      const sp=Math.hypot(HEAD.vx,HEAD.vy);
+      /* It lands when it comes back through the middle with speed still on
+         it. That is the thud, and everything loose nearby knows about it. */
+      if(wasOut && now<=4 && sp>150) impact(sp);
+    }
+    HEAD.tilt += ((HEAD.dx*0.0042) - HEAD.tilt) * Math.min(1,dt*14);
+    HEAD.squash = Math.max(0, HEAD.squash - dt*4.2);
+    HEAD.flash  = Math.max(0, HEAD.flash  - dt*2.6);
+
+    for(const c of coins){
+      if(c.held){ c.still=0; continue; }
+      if(c.still>SLEEP_FOR){ c.av*=1-Math.min(1,dt*6); continue; }   // asleep
+      c.vy+=G*dt;
+      c.vx-=c.vx*AIR*dt; c.vy-=c.vy*AIR*dt;
+      /* Extra viscous drag at crawling speed. Positional correction is not
+         energy-conserving, so a dense heap trickles a little energy back in
+         every frame; this drains it faster than the contacts can add it, and
+         it is invisible on anything actually moving. */
+      const slow=Math.hypot(c.vx,c.vy);
+      if(slow<95){ const k=1-Math.min(0.6,4.5*dt); c.vx*=k; c.vy*=k; }
+      c.x+=c.vx*dt; c.y+=c.vy*dt; c.a+=c.av*dt;
+      c.av-=c.av*2.4*dt;
+    }
+
+    /* Walls, head and pairs are relaxed TOGETHER, several times. Resolving
+       them once each, in sequence, is what made the deep jar buzz: the pair
+       pass would squeeze the bottom row into the floor, the floor pass next
+       frame would pop it back out, and the pile traded that energy around
+       for ever instead of going to sleep. Interleaving them lets the stack
+       reach a state where every constraint is satisfied at once, which is
+       the state a real pile is in. */
+    const PASSES=5;
+    for(let pass=0;pass<PASSES;pass++){
+      const first = pass===0;
+
+      for(const c of coins){
+        if(c.held) continue;
+        if(c.x-c.r<WALL){ c.x=WALL+c.r; if(first&&c.vx<0){ c.vx=-c.vx*REST_W; c.av+=c.vy*0.004; } }
+        if(c.x+c.r>WORLD-WALL){ c.x=WORLD-WALL-c.r; if(first&&c.vx>0){ c.vx=-c.vx*REST_W; c.av-=c.vy*0.004; } }
+        if(c.y-c.r<ROOF){ c.y=ROOF+c.r; if(first&&c.vy<0) c.vy=-c.vy*REST_W; }
+        if(c.y+c.r>FLOOR){
+          c.y=FLOOR-c.r;
+          if(first){
+            if(c.vy>0) c.vy=-c.vy*REST_W;
+            c.vx*=1-FRIC;                  // ground friction
+            c.av=c.av*0.86 - c.vx*0.010;   // and it rolls
+          }
+        }
+      }
+
+      /* The head is a dome to bounce off, with one genuine hole in it: the
+         slot across its crown. A token aimed at the slot is not deflected —
+         the collision is skipped while it is in the throat — which is the
+         only way "throw it in" can mean anything. Aim wide and it bounces. */
+      for(const c of coins){
+        if(c.held) continue;
+        const bx=HEAD.bx+HEAD.dx, by=HEAD.by+HEAD.dy;
+        const lx=c.x-bx, lyb=c.y-by;               // base-relative; up is negative
+        /* Narrow, and only for something actually falling into it. An open
+           window the height of the well turned the toy into a machine that
+           fed itself. */
+        if(Math.abs(lx)<26 && lyb>-150 && lyb<-40 && c.vy>40){
+          if(first && lyb>-84) eat(c);
+          continue;
+        }
+        /* A ROUNDED BOX, not a sphere. This was a circle, and a pile leaning
+           on a circle has no resting state: every token on the curve is on a
+           slope, so it slides, gets pushed back by the one behind it and
+           slides again — seven of twenty never went to sleep, and which
+           seven changed from load to load. Flat sides are what a stack can
+           actually rest against. Closest point on the box, then push out
+           along it, with the same slop and partial correction as a pair. */
+        const HW=44, TOP=-80, BOT=10, CR=22;
+        const qx=Math.max(-(HW-CR),Math.min(HW-CR,lx));
+        const qy=Math.max(TOP+CR,Math.min(BOT-CR,lyb));
+        const ex=lx-qx, ey=lyb-qy, d=Math.hypot(ex,ey)||1e-6;
+        const min=CR+c.r;
+        if(d<min){
+          const nx=ex/d, ny=ey/d, pen=Math.max(0,(min-d)-0.5)*0.42;
+          c.x+=nx*pen; c.y+=ny*pen;
+          if(!first) continue;
+          const rel=c.vx*nx+c.vy*ny;
+          if(rel<0){
+            const j=-(1+REST_H)*rel;
+            c.vx+=nx*j; c.vy+=ny*j;
+            c.av+=(c.vx*ny-c.vy*nx)*0.006;
+            /* The head is about forty tokens heavy, so a HIT moves it a
+               little — which is the whole reason to give it a mass rather
+               than making it scenery. A token merely leaning on it is not a
+               hit, and passing resting contacts into the spring had the head
+               humming against the pile it was propping up. */
+            if(!HEAD.held && j>70){ HEAD.vx-=nx*j*0.022; HEAD.vy-=ny*j*0.022; }
+            if(j>120){ HEAD.squash=Math.min(1,j/900); ping(c.x,c.y,j); }
+          }
+        }
+      }
+
+      for(let i=0;i<coins.length;i++) for(let k=i+1;k<coins.length;k++){
+        const a=coins[i], b=coins[k];
+        if(a.still>SLEEP_FOR && b.still>SLEEP_FOR) continue;
+        const dx=b.x-a.x, dy=b.y-a.y, d=Math.hypot(dx,dy), min=a.r+b.r;
+        if(d>=min || d<0.001) continue;
+        /* Slop and a partial correction. Pushing every overlap out in full,
+           every pass, is the other half of the buzzing: the pairs take turns
+           shoving each other and nothing ever gets quiet. */
+        const nx=dx/d, ny=dy/d, pen=Math.max(0,(min-d)-0.5)*0.38;
+        const wa=a.held?0:(b.held?1:0.5), wb=a.held?1:(b.held?0:0.5);
+        a.x-=nx*pen*wa; a.y-=ny*pen*wa;
+        b.x+=nx*pen*wb; b.y+=ny*pen*wb;
+        if(!first) continue;
+        const rvx=b.vx-a.vx, rvy=b.vy-a.vy, rel=rvx*nx+rvy*ny;
+        if(rel>=0) continue;
+        // a real knock wakes a sleeper; leaning on one does not
+        if(rel<-40){ a.still=0; b.still=0; a.ox=a.x; a.oy=a.y; b.ox=b.x; b.oy=b.y; }
+        const j=-(1+REST_C)*rel/2;
+        if(!a.held){ a.vx-=nx*j; a.vy-=ny*j; }
+        if(!b.held){ b.vx+=nx*j; b.vy+=ny*j; }
+        // tangential friction becomes spin: this is what makes them roll
+        const tx=-ny, ty=nx, vt=(rvx*tx+rvy*ty)*FRIC;
+        if(!a.held){ a.vx+=tx*vt/2; a.vy+=ty*vt/2; a.av+=vt*0.02; }
+        if(!b.held){ b.vx-=tx*vt/2; b.vy-=ty*vt/2; b.av-=vt*0.02; }
+      }
+    }
+
+    // the cursor is a body too, when it is not carrying one
+    if(P.in && !coins.some(c=>c.held) && !HEAD.held){
+      const R=24;
+      for(const c of coins){
+        const dx=c.x-P.x, dy=c.y-P.y, d=Math.hypot(dx,dy), min=R+c.r;
+        if(d<min && d>0.01){
+          const nx=dx/d, ny=dy/d;
+          c.x+=nx*(min-d); c.y+=ny*(min-d);
+          const push=Math.hypot(P.vx,P.vy);
+          c.vx+=nx*(60+push*0.55); c.vy+=ny*(60+push*0.55);
+          c.av+=(P.vx*ny-P.vy*nx)*0.004;
+          c.still=0; c.ox=c.x; c.oy=c.y; c.wake=0;
+        }
+      }
+    }
+
+    // sleep, so a settled heap costs nothing and never buzzes
+    for(const c of coins){
+      if(c.held){ c.still=0; continue; }
+      /* Spin does NOT keep a body awake. It is cosmetic here — nothing reads
+         `av` back into the motion — and letting it gate sleep left tokens
+         permanently awake, buzzing against their neighbours. A body that is
+         not translating is at rest. */
+      const moving=Math.hypot(c.vx,c.vy)>SLEEP_V;
+      c.still = moving ? 0 : c.still+dt;
+
+      /* DISPLACEMENT, not speed, is the honest test for a jammed pile.
+         A token wedged between the wall, the head and three neighbours can
+         hold thirty pixels a second of velocity for ever while going
+         precisely nowhere — the constraints hand it back every frame. Speed
+         says "moving"; the distance it has actually covered in the last
+         third of a second says the truth. Nothing that is really sliding
+         down the heap covers less than three pixels in that time, so this
+         cannot freeze anything mid-slide. */
+      c.wake+=dt;
+      if(c.wake>0.34){
+        const went=Math.hypot(c.x-c.ox, c.y-c.oy);
+        c.ox=c.x; c.oy=c.y; c.wake=0;
+        if(went<3) c.still=SLEEP_FOR+0.01;
+      }
+      if(c.still>SLEEP_FOR){ c.vx=c.vy=0; c.av*=0.6; }
+      /* A flat-sided thing does not come to rest at a random angle: it tips
+         onto a face. Once a token has stopped, its angle eases to the nearest
+         eighth-turn, which is the symmetry the silhouette actually has. */
+      if(c.still>SLEEP_FOR*0.8){
+        /* Eased, not snapped, and with a degree or two of per-token bias:
+           twenty octagons all perfectly square to the world tessellate into
+           a tiled wall, which is tidier than any real pile has ever been. */
+        const q=Math.PI/4, near=Math.round(c.a/q)*q + c.lean;
+        c.a+=(near-c.a)*Math.min(1,dt*3);
+      }
+    }
+
+    shake=Math.max(0,shake-dt*3.4); shakeA+=dt*46;
+    rings=rings.filter(r=>(r.t+=dt)<r.life);
+    spark=spark.filter(s=>(s.t+=dt)<0.4);
+  }
+
+  function ping(x0,y0,j){
+    rings.push({x:x0,y:y0,t:0,life:.5,r0:6,r1:30+j*0.05,w:2.4,col:"cy"});
+  }
+  function impact(sp){
+    shake=Math.min(1,sp/900);
+    HEAD.squash=Math.min(1,sp/700);
+    HEAD.flash=1;
+    rings.push({x:HEAD.bx,y:FLOOR-6,t:0,life:.72,r0:20,r1:150,w:4,col:"hi"});
+    for(let i=0;i<10;i++) spark.push({x:HEAD.bx+rnd(-40,40),y:FLOOR-8,
+      vx:rnd(-190,190),vy:rnd(-260,-70),t:0});
+    /* Everything loose nearby learns about it. Inverse-square-ish falloff,
+       so the coins at its feet jump and the ones across the well do not. */
+    for(const c of coins){
+      if(c.held) continue;
+      const dx=c.x-HEAD.bx, dy=c.y-(FLOOR-20), d=Math.max(28,Math.hypot(dx,dy));
+      const f=Math.min(420, 16000*sp/900/(d*d)*40);
+      c.vx+=dx/d*f; c.vy+=dy/d*f - f*0.55;
+      c.still=0; c.ox=c.x; c.oy=c.y; c.wake=0;
+    }
+    say("It felt that &middot; <b>the whole frame did</b>");
+  }
+  function eat(c){
+    const i=coins.indexOf(c); if(i>=0) coins.splice(i,1);
+    fed++;
+    HEAD.flash=1; HEAD.squash=Math.max(HEAD.squash,.5);
+    HEAD.vy+=40;                                  // it takes the weight
+    rings.push({x:HEAD.bx+HEAD.dx,y:HEAD.by+HEAD.dy-88,t:0,life:.6,r0:10,r1:96,w:3,col:"good"});
+    say(fed===1 ? "It ate that &middot; <b>keep going</b>"
+               : `Fed <b>${fed}</b> &middot; that is what $FLOP is for`);
+    setTimeout(()=>{ if(coins.length<COUNT) addCoin(spawnX(),-24,rnd(-40,40),40); },520);
+  }
+  let sayTimer=0;
+  const CAP="Drag them &middot; <b>throw one into the slot</b> &middot; try pulling its head";
+  function say(t){
+    const el2=$("toyCap"); if(!el2) return;
+    el2.innerHTML=t; el2.style.color="var(--dim)";
+    clearTimeout(sayTimer);
+    sayTimer=setTimeout(()=>{ el2.innerHTML=CAP; el2.style.color=""; },2600);
+  }
+  $("toyCap").innerHTML=CAP;
+
+  /* ── drawing ──────────────────────────────────────────────────────────── */
+  function paint(){
+    const S=cv.width/WORLD;
+    g2.setTransform(S,0,0,S,0,0);
+    g2.clearRect(0,0,WORLD,WH);
+    g2.save();
+    if(shake>0.01){
+      g2.translate(Math.sin(shakeA)*shake*7, Math.cos(shakeA*1.4)*shake*5);
+    }
+
+    // the well
+    const wg=g2.createLinearGradient(0,ROOF,0,FLOOR);
+    wg.addColorStop(0,"rgba(0,180,215,.035)"); wg.addColorStop(1,"rgba(0,180,215,.13)");
+    g2.fillStyle=wg; roundRect(g2,WALL-10,ROOF,WORLD-(WALL-10)*2,FLOOR-ROOF+8,34); g2.fill();
+    g2.lineWidth=1.6; g2.strokeStyle="rgba(0,180,215,.26)"; g2.stroke();
+
+    // contact shadows, so nothing floats
+    for(const c of coins){
+      const h=Math.max(0,FLOOR-(c.y+c.r)), k=Math.max(0,1-h/150);
+      if(k<=0) continue;
+      g2.save(); g2.globalAlpha=.34*k; g2.fillStyle="#000";
+      g2.beginPath(); g2.ellipse(c.x,FLOOR-2,c.r*(0.55+0.55*k),c.r*0.28,0,0,7); g2.fill(); g2.restore();
+    }
+
+    drawHead();
+
+    for(const c of coins) drawCoin(c);
+
+    for(const r of rings){
+      const k=r.t/r.life, rr2=r.r0+(r.r1-r.r0)*(1-Math.pow(1-k,3));
+      g2.save(); g2.globalAlpha=(1-k)*.65; g2.lineWidth=r.w;
+      g2.strokeStyle=r.col==="good"?"#3BE3B0":r.col==="hi"?"#5FEBFF":"rgba(95,235,255,.8)";
+      g2.beginPath(); g2.arc(r.x,r.y,rr2,0,7); g2.stroke(); g2.restore();
+    }
+    for(const p of spark){
+      const k=p.t/0.4;
+      g2.save(); g2.globalAlpha=1-k; g2.fillStyle="#F2B33D";
+      g2.beginPath(); g2.arc(p.x+p.vx*p.t, p.y+p.vy*p.t+700*p.t*p.t/2, 2.6*(1-k), 0,7); g2.fill(); g2.restore();
+    }
+
+    // the tally
+    g2.textAlign="center"; g2.textBaseline="alphabetic";
+    g2.fillStyle="rgba(255,255,255,.34)"; g2.font="600 11px 'IBM Plex Mono',monospace";
+    g2.fillText(`FED · ${fed}`, WORLD/2, ROOF+24);
+    g2.restore();
+  }
+
+  function drawCoin(c){
+    // a trail only while it is genuinely quick
+    const sp=Math.hypot(c.vx,c.vy);
+    const S=SIDE_OF(c.r);
+    if(sp>430 && !c.held){
+      for(let k=3;k>0;k--){
+        g2.save(); g2.globalAlpha=.05*k;
+        g2.translate(c.x-c.vx*0.008*k, c.y-c.vy*0.008*k); g2.rotate(c.a);
+        g2.fillStyle="#5FEBFF"; markPath(g2,S*(1-k*.06)); g2.fill(); g2.restore();
+      }
+    }
+    g2.save(); g2.translate(c.x,c.y);
+    const gl=g2.createRadialGradient(0,0,c.r*.4,0,0,c.r*2.1);
+    gl.addColorStop(0,"rgba(0,180,215,.17)"); gl.addColorStop(1,"rgba(0,180,215,0)");
+    g2.fillStyle=gl; g2.beginPath(); g2.arc(0,0,c.r*2.1,0,7); g2.fill();
+
+    g2.rotate(c.a);
+    // top-lit, so a flat tile still reads as an object with a top and a bottom
+    const gg=g2.createLinearGradient(-S/2,-S/2,S/2*.4,S/2);
+    gg.addColorStop(0,"#8DF3FF"); gg.addColorStop(.45,"#21BCE0"); gg.addColorStop(1,"#0578A0");
+    flopMark(g2,S,gg,"#03151D");
+    // rim light along the upper edge, and a dark lower edge for weight
+    g2.save(); markPath(g2,S); g2.clip();
+    g2.lineWidth=S*.055;
+    const rim=g2.createLinearGradient(0,-S/2,0,S/2*.1);
+    rim.addColorStop(0,"rgba(220,253,255,.9)"); rim.addColorStop(1,"rgba(255,255,255,0)");
+    g2.strokeStyle=rim; markPath(g2,S*0.985); g2.stroke();
+    const low=g2.createLinearGradient(0,S/2*.2,0,S/2);
+    low.addColorStop(0,"rgba(0,0,0,0)"); low.addColorStop(1,"rgba(0,0,0,.45)");
+    g2.strokeStyle=low; markPath(g2,S*0.985); g2.stroke();
+    g2.restore();
+    g2.restore();
+  }
+
+  function drawHead(){
+    const x0=HEAD.bx+HEAD.dx, y0=HEAD.by+HEAD.dy;
+    g2.save(); g2.translate(x0,y0); g2.rotate(HEAD.tilt);
+    const sq=1-HEAD.squash*0.11;
+    g2.scale(1/sq, sq);                              // squash and stretch
+
+    const sh=g2.createRadialGradient(0,8,0,0,8,74);
+    sh.addColorStop(0,"rgba(0,0,0,.62)"); sh.addColorStop(1,"rgba(0,0,0,0)");
+    g2.fillStyle=sh; g2.beginPath(); g2.ellipse(0,8,72,12,0,0,7); g2.fill();
+
+    // body
+    const hg=g2.createLinearGradient(0,-88,0,6);
+    hg.addColorStop(0,"#22738D"); hg.addColorStop(1,"#052029");
+    g2.fillStyle=hg; roundRect(g2,-52,-88,104,94,24); g2.fill();
+    const hr=g2.createLinearGradient(0,-88,0,-46);
+    hr.addColorStop(0,`rgba(185,251,255,${.9+HEAD.flash*.1})`); hr.addColorStop(1,"rgba(0,180,215,0)");
+    g2.lineWidth=1.6; g2.strokeStyle=hr; roundRect(g2,-52,-88,104,94,24); g2.stroke();
+
+    /* THE HOPPER. It is on top because that is where you can drop something
+       into — a slot in the face would be a hole nothing could fall through,
+       and the collider has a real gap here to match. */
+    g2.fillStyle="rgba(0,0,0,.78)"; roundRect(g2,-30,-93,60,13,6.5); g2.fill();
+    const sg=g2.createLinearGradient(-30,-93,30,-80);
+    sg.addColorStop(0,`rgba(95,235,255,${.5+HEAD.flash*.5})`); sg.addColorStop(1,"rgba(0,180,215,.28)");
+    g2.fillStyle=sg; roundRect(g2,-26,-90,52,6,3); g2.fill();
+    g2.save(); g2.globalAlpha=.35+HEAD.flash*.5;
+    g2.strokeStyle="#5FEBFF"; g2.lineWidth=1.4;
+    roundRect(g2,-31,-94,62,15,7.5); g2.stroke(); g2.restore();
+
+    // the face
+    const vg=g2.createLinearGradient(-38,-66,38,-36);
+    vg.addColorStop(0,"#0BE3FF"); vg.addColorStop(1,"#0086AE");
+    g2.fillStyle=vg; g2.shadowColor="rgba(11,227,255,.9)"; g2.shadowBlur=14+HEAD.flash*30;
+    roundRect(g2,-38,-66,76,30,14); g2.fill(); g2.shadowBlur=0;
+    g2.save(); g2.globalAlpha=.45; g2.fillStyle="#fff"; roundRect(g2,-32,-62,26,7,3.5); g2.fill(); g2.restore();
+
+    // a fill gauge along the chin, which is what the tally means
+    g2.fillStyle="rgba(0,0,0,.5)"; roundRect(g2,-26,-24,52,9,4.5); g2.fill();
+    const lvl=Math.min(1,fed/8);
+    if(lvl>0){ g2.fillStyle="#3BE3B0"; g2.shadowColor="rgba(59,227,176,.8)"; g2.shadowBlur=8;
+      roundRect(g2,-24,-22,Math.max(5,48*lvl),5,2.5); g2.fill(); g2.shadowBlur=0; }
+
+    // the antenna, off to one side so it is not standing in the slot
+    g2.strokeStyle="rgba(160,244,255,.8)"; g2.lineWidth=3; g2.lineCap="round";
+    g2.beginPath(); g2.moveTo(45,-72); g2.quadraticCurveTo(58,-84,56,-104); g2.stroke();
+    g2.fillStyle="#3BE3B0"; g2.shadowColor="rgba(59,227,176,.95)"; g2.shadowBlur=12+HEAD.flash*22;
+    g2.beginPath(); g2.arc(56,-110,6,0,7); g2.fill(); g2.shadowBlur=0;
+    g2.restore();
+  }
+
+  /* ── the hand ─────────────────────────────────────────────────────────── */
+  /* The well is wider than it is tall, so the two axes do NOT share a scale.
+     Mapping y through the width put every pointer nine per cent too low —
+     grabs missed the token under the cursor by a couple of pixels and the
+     stirrer shoved things it was nowhere near. */
+  const toWorld=(e)=>{ const r=cv.getBoundingClientRect();
+    return { x:(e.clientX-r.left)/r.width*WORLD, y:(e.clientY-r.top)/r.height*WH }; };
+
+  cv.addEventListener("pointerdown",(e)=>{
+    const p=toWorld(e); P.x=p.x; P.y=p.y; P.px=p.x; P.py=p.y; P.in=true;
+    hist.length=0; hist.push({x:p.x,y:p.y,t:performance.now()});
+    // a coin first, then the head — you cannot grab through a coin
+    let hit=null, best=1e9;
+    for(const c of coins){ const d=Math.hypot(c.x-p.x,c.y-p.y);
+      if(d<c.r+7 && d<best){ best=d; hit=c; } }
+    if(hit){ hit.held=true; hit.still=0; hit.ox=hit.x; hit.oy=hit.y; hit.wake=0; }
+    else{
+      const hx=HEAD.bx+HEAD.dx, hy=HEAD.by+HEAD.dy;
+      if(Math.abs(p.x-hx)<58 && p.y-hy>-100 && p.y-hy<12){
+        HEAD.held=true; HEAD.hx=p.x-HEAD.dx; HEAD.hy=p.y-HEAD.dy;
+        say("Heavier than it looks &middot; <b>let go</b>");
+      }
+    }
+    /* Only take the gesture when it landed on something. Anywhere else the
+       page still scrolls, which on a phone is most of this canvas. */
+    if(hit||HEAD.held){ P.down=true; cv.classList.add("holding");
+      cv.setPointerCapture?.(e.pointerId); e.preventDefault(); }
+  });
+  cv.addEventListener("pointermove",(e)=>{
+    const p=toWorld(e); P.x=p.x; P.y=p.y; P.in=true;
+    hist.push({x:p.x,y:p.y,t:performance.now()});
+    if(hist.length>6) hist.shift();
+    const held=coins.find(c=>c.held);
+    if(held){ held.x=p.x; held.y=p.y; held.a+=(p.x-P.px)*0.012; }
+  });
+  const release=()=>{
+    cv.classList.remove("holding"); P.down=false;
+    HEAD.held=false;
+    const held=coins.find(c=>c.held);
+    if(held){
+      held.held=false;
+      /* Throw speed from the last few samples, not the last one. A single
+         frame of pointer delta is noise, and it is the difference between a
+         flick that throws and a flick that drops. */
+      const now=performance.now();
+      const old=hist.find(h=>now-h.t<110) || hist[0];
+      const dt=Math.max(0.016,(now-old.t)/1000);
+      held.vx=(P.x-old.x)/dt; held.vy=(P.y-old.y)/dt;
+      const sp=Math.hypot(held.vx,held.vy);
+      if(sp>1900){ held.vx*=1900/sp; held.vy*=1900/sp; }
+      held.av=held.vx*0.02; held.still=0;
+    }
+  };
+  cv.addEventListener("pointerup",release);
+  cv.addEventListener("pointercancel",release);
+  cv.addEventListener("pointerleave",()=>{ P.in=false; release(); });
+
+  /* ── the loop ─────────────────────────────────────────────────────────── */
+  const COUNT=20;                        // enough for a heap rather than a row
+  function fit(){
+    const dpr=Math.min(2,devicePixelRatio||1);
+    const w=Math.round(cv.getBoundingClientRect().width*dpr);
+    if(w>0 && w!==cv.width){ cv.width=w; cv.height=Math.round(w*WH/WORLD); }
+  }
+  addEventListener("resize",fit,{passive:true});
+  fit();
+
+  /* Away from the slot: a token that spawns above the hopper is eaten before
+     anybody touches it, and the count on screen goes up on its own. */
+  const spawnX=()=>{
+    const x0=rnd(WALL+26,WORLD-WALL-26);
+    return Math.abs(x0-HEAD.bx)<62 ? x0+(x0<HEAD.bx?-70:70) : x0;
+  };
+  // they arrive by falling in, one after another
+  let seeded=0;
+  const seed=setInterval(()=>{
+    if(seeded>=COUNT){ clearInterval(seed); return; }
+    addCoin(spawnX(), -24, rnd(-70,70), rnd(30,120));
+    seeded++;
+  },95);
+
+  let last=0, acc=0, live=true;
+  const FIXED=1/180;
+  function frame(now){
+    if(!live){ return; }
+    const dt=Math.min(0.05,(now-last)/1000||0.016); last=now;
+    P.vx=(P.x-P.px)/Math.max(dt,1e-4); P.vy=(P.y-P.py)/Math.max(dt,1e-4);
+    P.px=P.x; P.py=P.y;
+    acc+=dt;
+    let n=0;
+    while(acc>=FIXED && n<9){ step(FIXED); acc-=FIXED; n++; }
+    if(acc>FIXED*9) acc=0;
+    paint();
+    requestAnimationFrame(frame);
+  }
+
+  /* Nothing runs while the section is hidden or off screen: a physics loop
+     behind a hidden section is a laptop fan for no reason. */
+  const wake=()=>{ if(!live){ live=true; last=performance.now(); requestAnimationFrame(frame); } };
+  const sleep=()=>{ live=false; };
+  if("IntersectionObserver" in window){
+    new IntersectionObserver((rows)=>{
+      const on = rows[0].isIntersecting && !$("intro").hidden;
+      on ? wake() : sleep();
+    },{threshold:0}).observe(cv);
+  }
+  document.addEventListener("visibilitychange",()=>document.hidden?sleep():wake());
+
+  if(calm()){
+    /* Reduced motion: it is furniture, not a toy. Lay the heap out once and
+       never animate. */
+    for(let i=0;i<COUNT;i++) addCoin(rnd(WALL+40,WORLD-WALL-40), FLOOR-20-((i%3)*34), 0,0);
+    for(let i=0;i<600;i++) step(FIXED);
+    coins.forEach(c=>{c.vx=c.vy=0;c.still=9;});
+    paint();
+    $("toyCap").textContent="A well of $FLOP, and something that eats it";
+    clearInterval(seed);
+  }else{
+    last=performance.now(); requestAnimationFrame(frame);
+  }
+
+  // published so the motion can be measured rather than trusted
+  window.__toy={ coins, HEAD, step, WORLD, WH, FLOOR, WALL, MAXPULL,
+                 get fed(){return fed;}, get shake(){return shake;},
+                 pull:(dx,dy)=>{ HEAD.held=true; HEAD.hx=HEAD.bx; HEAD.hy=HEAD.by;
+                   P.x=HEAD.bx+dx; P.y=HEAD.by+dy; for(let i=0;i<20;i++) step(1/180); },
+                 drop:()=>{ HEAD.held=false; },
+                 feed:()=>{ const c=coins.find(k=>!k.held); if(!c) return;
+                   c.x=HEAD.bx+HEAD.dx; c.y=HEAD.by-200; c.vx=0; c.vy=300; c.still=0; } };
+})();
 
 /* Deep links: /play#go drops straight into a run, /play#brief into the read. */
 if(location.hash==="#go") begin();
