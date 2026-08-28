@@ -52,6 +52,13 @@ const src = fs.readFileSync(path.join(ROOT, 'play.html'), 'utf8');
 const ANSWERS = [...src.matchAll(/\bright:(\d)/g)].map(m => Number(m[1]));
 if (ANSWERS.length !== 12) { console.log('  FAIL  the answer key did not parse', ANSWERS.length); process.exit(1); }
 
+const clearLevelCard = async () => {
+  if (await pg.locator('.levelup').count()) {
+    await pg.click('.levelup');
+    await pg.waitForTimeout(200);
+  }
+};
+
 console.log('=== A. the start');
 await go();
 check('it opens as a run, not a lecture', /agent/i.test(await pg.locator('h1').textContent()));
@@ -68,13 +75,34 @@ check('nothing is graded before it starts', await pg.locator('#run').isHidden())
 console.log('\n=== B. a perfect run');
 await pg.click('#begin');
 await pg.waitForTimeout(400);
+/* Each level is announced before its first gate — the breath between rounds
+   that stops twelve questions being a form. It is skippable, which is what
+   makes it a flourish rather than a wait. */
+check('the level is announced before its first gate', await pg.locator('.levelup').isVisible());
+check('and names what is coming', /Boot/.test(await pg.locator('.levelup h3').textContent()));
+await pg.click('.levelup'); await pg.waitForTimeout(250);
+check('one tap skips it', (await pg.locator('.levelup').count()) === 0);
 check('the first gate is on screen', await pg.locator('.opt').first().isVisible());
+check('with a clock that shows the speed bonus draining', await pg.locator('.clock').isVisible());
+
+/* A game is played with hands on the keyboard, and the letter is printed on
+   every answer so the shortcut is discoverable rather than a secret. */
+await pg.keyboard.press(String(ANSWERS[0] + 1));
+await pg.waitForSelector('.after', { timeout: 8000 });
+check('the number keys answer', /Right/.test(await pg.locator('.after .head').textContent()));
+await pg.keyboard.press('Enter');
+await pg.waitForTimeout(350);
+await clearLevelCard();
+check('and Enter moves on', (await pg.locator('#gateNo').textContent()) === '2');
+/* Back to the top, so the run below starts clean. */
+await go(); await pg.click('#begin'); await pg.waitForTimeout(400);
 
 /* Every gate teaches before it asks. That is the whole difference between a
    game and an exam, so it is checked at every single gate rather than once. */
 const play = async (pickRight) => {
   const seen = [];
   for (let i = 0; i < 12; i++) {
+    await clearLevelCard();
     await pg.waitForSelector('.opt:not([disabled])', { timeout: 10000 });
     const gate = await pg.evaluate(() => ({
       beat: document.querySelector('.beat')?.textContent || '',
@@ -193,6 +221,7 @@ await pg.click('#begin');
 await pg.waitForTimeout(300);
 const wrongSeen = [];
 for (let i = 0; i < 12; i++) {
+  await clearLevelCard();
   await pg.waitForSelector('.opt:not([disabled])', { timeout: 10000 });
   await pg.locator('.opt').nth((ANSWERS[i] + 1) % 4).click();
   await pg.waitForSelector('.after.wrong', { timeout: 10000 });

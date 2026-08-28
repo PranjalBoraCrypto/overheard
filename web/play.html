@@ -134,6 +134,36 @@ h1{font-weight:800;font-size:clamp(32px,5.4vw,48px);letter-spacing:-.035em;line-
 .meter .cell i{position:absolute;inset:0 100% 0 0;background:linear-gradient(90deg,var(--cy),var(--cy-hi));
   transition:right .6s var(--ease)}
 
+/* ── the moment between levels ────────────────────────────────────────────
+   A run of twelve questions with no punctuation is a form. The level card is
+   the breath between rounds: it names what is coming, and it is skippable by
+   anybody who does not want the breath. */
+.levelup{position:absolute;inset:0;z-index:5;display:grid;place-items:center;text-align:center;padding:20px;
+  background:linear-gradient(rgba(3,17,24,.97),rgba(2,11,16,.98));
+  animation:fadein .3s var(--ease) both;cursor:pointer}
+@keyframes fadein{from{opacity:0}}
+.levelup .big{font-family:var(--mono);font-size:12px;letter-spacing:.24em;text-transform:uppercase;color:var(--cy);
+  animation:rise .45s .05s var(--ease) both}
+.levelup h3{font-size:clamp(28px,5vw,38px);font-weight:800;letter-spacing:-.03em;margin:10px 0 6px;
+  animation:rise .5s .12s var(--ease) both}
+.levelup p{color:var(--dim);font-size:15.5px;animation:rise .5s .2s var(--ease) both}
+.levelup .dots{display:flex;gap:8px;justify-content:center;margin-top:20px;animation:rise .5s .28s var(--ease) both}
+.levelup .dots i{width:9px;height:9px;border-radius:50%;background:rgba(0,180,215,.25)}
+.levelup .dots i.on{background:var(--cy-hi);box-shadow:0 0 12px var(--cy-hi)}
+.levelup .hint{margin-top:18px;font-family:var(--mono);font-size:11px;letter-spacing:.12em;
+  text-transform:uppercase;color:var(--faint);animation:rise .5s .36s var(--ease) both}
+
+/* ── the clock, as a bar rather than a threat ─────────────────────────────
+   It never fails anybody. It drains over the window in which a fast answer is
+   worth extra, so the pressure is visible and the cost of ignoring it is a
+   few points. */
+.clock{height:4px;border-radius:99px;background:rgba(0,180,215,.14);overflow:hidden;margin:2px 0 18px}
+.clock i{display:block;height:100%;width:100%;transform-origin:left;
+  background:linear-gradient(90deg,var(--cy-hi),var(--cy));
+  animation:drain 12s linear forwards}
+@keyframes drain{to{transform:scaleX(0)}}
+.clock.spent i{background:rgba(147,182,192,.3);animation-play-state:paused}
+
 /* ── the end ────────────────────────────────────────────────────────────── */
 .done{margin-top:22px;padding:30px 32px;text-align:center;animation:land .6s var(--ease) both}
 @keyframes land{from{opacity:0;transform:translateY(20px) scale(.97)}}
@@ -453,7 +483,8 @@ let at=0, score=0, streak=0, best=0, correct=0, asked=0, shownAt=0, missed=[];
 const rank=()=>RANKS.find(r=>correct>=r.min);
 
 function begin(){
-  at=0; score=0; streak=0; best=0; correct=0; asked=0; missed=[];
+  if(keys){ removeEventListener("keydown",keys); keys=null; }
+  at=0; score=0; streak=0; best=0; correct=0; asked=0; missed=[]; lastLevel=-1;
   $("intro").hidden=true; $("end").hidden=true; $("run").hidden=false;
   paintHud();
   drawGate();
@@ -477,12 +508,40 @@ function icon(id){ const s=document.createElementNS("http://www.w3.org/2000/svg"
   const u=document.createElementNS("http://www.w3.org/2000/svg","use");
   u.setAttribute("href","#"+id); s.appendChild(u); return s; }
 
+/** The card between levels. Auto-advances, and any key or click skips it —
+ *  nobody should have to wait for a flourish they have already read. */
+function levelCard(L,then){
+  const box=el("div","levelup"); box.tabIndex=-1;
+  box.append(el("div","big",`Level ${L.n} of ${LEVELS.length}`));
+  box.append(el("h3",null,L.name));
+  box.append(el("p",null,L.sub));
+  const dots=el("div","dots");
+  LEVELS.forEach((x,i)=>{ const d=el("i"); if(i<=L.n-1) d.className="on"; dots.append(d); });
+  box.append(dots);
+  box.append(el("div","hint","Tap or press any key to go on"));
+  $("stage").append(box);
+  let gone=false;
+  const leave=()=>{ if(gone) return; gone=true;
+    removeEventListener("keydown",leave,true); box.remove(); then(); };
+  box.addEventListener("click",leave);
+  addEventListener("keydown",leave,true);
+  setTimeout(leave,1500);
+}
+
+let lastLevel=-1;
+
 function drawGate(){
   /* The counter is painted HERE as well as after an answer. It used to be
      updated only on answering, so it read "gate 1" while gate two was on the
      screen — the test caught it walking 1,1,2,3… */
   paintHud();
   const g=GATES[at], L=LEVELS[g.lvl];
+  if(g.lvl!==lastLevel && !calm()){
+    lastLevel=g.lvl;
+    $("stage").replaceChildren();
+    return levelCard(L,()=>drawGate());
+  }
+  lastLevel=g.lvl;
   const stage=$("stage"); stage.replaceChildren();
 
   const head=el("div","lvl");
@@ -497,6 +556,8 @@ function drawGate(){
 
   const q=el("div","q",g.q); q.style.marginTop="20px"; stage.append(q);
 
+  const clock=el("div","clock"); clock.append(el("i")); stage.append(clock);
+
   const opts=el("div","opts");
   g.opts.forEach((text,i)=>{
     const b=el("button","opt"); b.type="button";
@@ -507,10 +568,28 @@ function drawGate(){
   });
   stage.append(opts);
   shownAt=performance.now();
+
+  /* A game is played with hands on the keyboard. 1-4 and A-D pick, Enter
+     moves on — and the letter is already printed on every answer, so the
+     shortcut is discoverable rather than a secret. */
+  keys=(e)=>{
+    if(e.metaKey||e.ctrlKey||e.altKey) return;
+    const k=e.key.toLowerCase();
+    const live=[...opts.children].some(b=>!b.disabled);
+    if(live){
+      const i="1234".indexOf(k)>=0 ? "1234".indexOf(k) : "abcd".indexOf(k);
+      if(i>=0 && i<g.opts.length){ e.preventDefault(); opts.children[i].click(); }
+      return;
+    }
+    if(k==="enter"||k===" "){ const n=$("stage").querySelector(".nextrow .go"); if(n){ e.preventDefault(); n.click(); } }
+  };
+  addEventListener("keydown",keys);
 }
+let keys=null;
 
 function answer(picked,opts,g){
   const right = picked===g.right;
+  $("stage").querySelector(".clock")?.classList.add("spent");
   const took = performance.now()-shownAt;
   [...opts.children].forEach((b,i)=>{
     b.disabled=true;
@@ -558,6 +637,7 @@ function answer(picked,opts,g){
 let PROOF=null;
 
 async function finish(){
+  if(keys){ removeEventListener("keydown",keys); keys=null; }
   $("run").hidden=true; $("end").hidden=false;
   const r=rank();
   $("rankWord").textContent="Rank";
