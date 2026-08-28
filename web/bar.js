@@ -209,6 +209,34 @@ function ensureFont() {
   document.head.appendChild(link);
 }
 
+/* ── the scrollbars, everywhere ────────────────────────────────────────────
+   A dark instrument panel with a light grey operating-system scrollbar down
+   the side of it looks like two different programs. This is document-level
+   rather than per-page for the reason the bar itself is a component: four
+   copies of a rule are four things that rot separately.
+
+   Firefox takes the two-value `scrollbar-color`; Chromium and Safari take the
+   shadow parts. Both land on the same thin cyan rail, and the thumb keeps a
+   transparent border clipped to the padding box so it reads as inset rather
+   than filling the gutter. */
+const SCROLLBARS = `
+*{scrollbar-width:thin;scrollbar-color:rgba(0,180,215,.42) transparent}
+::-webkit-scrollbar{width:11px;height:11px}
+::-webkit-scrollbar-track{background:rgba(0,7,10,.5)}
+::-webkit-scrollbar-thumb{background:linear-gradient(rgba(0,180,215,.55),rgba(0,120,160,.55));
+  border-radius:99px;border:3px solid transparent;background-clip:padding-box}
+::-webkit-scrollbar-thumb:hover{background:linear-gradient(rgba(95,235,255,.85),rgba(0,180,215,.85));
+  border:3px solid transparent;background-clip:padding-box}
+::-webkit-scrollbar-corner{background:transparent}
+`;
+function styleScrollbars() {
+  if (document.getElementById("oh-scrollbars")) return;
+  const st = document.createElement("style");
+  st.id = "oh-scrollbars";
+  st.textContent = SCROLLBARS;
+  document.head.appendChild(st);
+}
+
 /** Right-aligned tabs follow the viewport width, and the viewport width moves
  *  when a page is long enough to need a scrollbar. Reserve it always, so the
  *  bar cannot shift between a long page and a short one. */
@@ -221,6 +249,7 @@ class OverheardBar extends HTMLElement {
     if (this.shadowRoot) return;
     ensureFont();
     stabiliseGutter();
+    styleScrollbars();
 
     const root = this.attachShadow({ mode: "open" });
     const style = document.createElement("style");

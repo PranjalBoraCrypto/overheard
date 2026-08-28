@@ -68,6 +68,17 @@ h1{font-weight:800;font-size:clamp(30px,4.4vw,44px);letter-spacing:-.035em;margi
 .rbtn.on{background:rgba(0,180,215,.16);color:var(--cy-hi);font-weight:600}
 .rbtn .nm{font-family:var(--mono);font-size:12.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .rbtn .sc{font-family:var(--mono);font-size:11px;color:var(--faint)}
+/* The room being read, and the ones kept at the top. */
+.rbtn{grid-template-columns:1fr auto auto}
+.rbtn.on{background:linear-gradient(90deg,rgba(0,180,215,.24),rgba(0,180,215,.08));
+  color:var(--cy-hi);font-weight:600;box-shadow:inset 2px 0 0 var(--cy-hi)}
+.rbtn.on .nm{color:var(--cy-hi)}
+.pinbtn{display:grid;place-items:center;width:22px;height:22px;border-radius:7px;cursor:pointer;
+  color:var(--faint);opacity:0;transition:.18s var(--ease)}
+.pinbtn .i{width:13px;height:13px;stroke-width:1.7}
+.rbtn:hover .pinbtn,.rbtn.pin .pinbtn,.pinbtn:focus-visible{opacity:1}
+.rbtn.pin .pinbtn{color:var(--cy);fill:rgba(0,180,215,.25)}
+.pinbtn:hover{background:rgba(0,180,215,.16);color:var(--cy-hi)}
 
 .main{display:flex;flex-direction:column;min-height:60vh}
 .rhead{display:flex;align-items:center;gap:12px;padding:16px 20px;border-bottom:1px solid rgba(16,57,74,.8);flex-wrap:wrap}
@@ -112,7 +123,11 @@ h1{font-weight:800;font-size:clamp(30px,4.4vw,44px);letter-spacing:-.035em;margi
 .nameline:focus-within{border-color:rgba(95,235,255,.55);box-shadow:0 0 0 4px rgba(0,180,215,.10)}
 .nameline .pre{padding:0 2px 0 14px;font-family:var(--mono);font-size:15px;color:var(--faint)}
 .nameline input{flex:1;min-width:0;background:none;border:0;outline:none;
-  font-family:var(--mono);font-size:15px;color:var(--txt);padding:12px 14px 12px 2px}
+  font-family:var(--mono);font-size:15px;color:var(--txt);padding:12px 14px}
+/* The left padding used to live on the `d-` chip, so an open room — which has
+   no chip — put its text against the border. The input carries its own
+   padding now, and only gives it up when there is a prefix to sit behind. */
+.nameline .pre:not([hidden]) + input{padding-left:2px}
 .ownsay{margin-top:10px;font-size:13px;color:var(--faint);min-height:19px}
 .ownsay.ok{color:var(--cy)}
 .ownsay.err{color:#FF9B9B}
@@ -339,6 +354,34 @@ footer a{color:var(--cy);text-decoration:none}
 .steps{display:flex;align-items:center;gap:8px;margin-bottom:14px}
 .steps span{height:3px;flex:1;border-radius:2px;background:rgba(0,180,215,.16);overflow:hidden}
 .steps span.on{background:linear-gradient(90deg,var(--cy-hi),var(--cy))}
+.pick{display:flex;gap:8px;margin-bottom:16px}
+.pk{flex:1;display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:10px 12px;
+  border-radius:11px;cursor:pointer;background:rgba(0,20,26,.5);border:1px solid rgba(0,180,215,.2);
+  color:var(--dim);font-family:var(--display);font-size:13px;font-weight:600;transition:.22s var(--ease)}
+.pk .i{width:15px;height:15px}
+.pk:hover{border-color:rgba(0,180,215,.42);color:var(--txt)}
+.pk.on{border-color:rgba(95,235,255,.55);background:rgba(0,60,74,.45);color:var(--cy-hi);
+  box-shadow:0 0 0 3px rgba(0,180,215,.09)}
+.opt{font-family:var(--display);font-size:10.5px;letter-spacing:.04em;text-transform:none;color:var(--faint)}
+.warnbox{display:flex;gap:10px;align-items:flex-start;margin-bottom:15px;padding:12px 14px;border-radius:12px;
+  font-size:12.5px;line-height:1.6;color:var(--dim);
+  background:linear-gradient(rgba(242,179,61,.09),rgba(242,179,61,.03));
+  border:1px solid rgba(242,179,61,.34)}
+.warnbox b{color:var(--warn)}
+.warnbox em{font-style:normal;color:var(--txt)}
+.warnbox .i{width:15px;height:15px;margin-top:2px;color:var(--warn)}
+
+.allowpre{margin-top:16px;padding-top:15px;border-top:1px solid rgba(0,180,215,.14)}
+.allowpre label{display:block;font-size:13.5px;font-weight:600;color:var(--txt);margin-bottom:8px}
+.allowpre .lhint{font-weight:400;color:var(--faint);font-size:12.5px}
+.allowpre code{font-family:var(--mono);font-size:12px;color:var(--dim)}
+.allowpre textarea{width:100%;min-height:74px;resize:vertical;border-radius:12px;
+  background:rgba(0,20,26,.6);border:1px solid rgba(0,180,215,.22);color:var(--txt);
+  font-family:var(--mono);font-size:12.5px;line-height:1.6;padding:12px 14px;outline:none;
+  transition:border-color .2s var(--ease),box-shadow .2s var(--ease)}
+.allowpre textarea:focus{border-color:rgba(95,235,255,.5);box-shadow:0 0 0 4px rgba(0,180,215,.09)}
+.allowpre .fine{font-size:12px;color:var(--faint);margin-top:8px;line-height:1.55}
+
 </style>
 <script src="/bar.js" type="module"></script>
 </head>
@@ -463,8 +506,19 @@ footer a{color:var(--cy);text-decoration:none}
          not. It is not decoration — it is the prefix Technocore lets a key
          own, and putting it on an open room would hand somebody else the
          power to claim that room and lock everyone out of it. -->
-    <p class="hintline" id="ownhint"><svg class="i"><use href="#ic-info"/></svg>
-      <span>Open rooms have no <code>d-</code>. Only <code>d-</code> names can be owned, so a name with it is a name somebody could claim and lock &mdash; which is exactly what an open room must never be.</span></p>
+    <p class="hintline" id="ownhint" hidden><svg class="i"><use href="#ic-info"/></svg>
+      <span>The <code>d-</code> is added for you &mdash; it is the only prefix Technocore lets a key own, and the first signed claim takes the name for good.</span></p>
+
+    <!-- Asked for: the people you are claiming the room FOR, decided while
+         you are claiming it. A claimed room refuses every write except the
+         owner's, so without a list a shared room is a page other people can
+         read and cannot answer in — and the list used to appear only AFTER
+         the claim, which is one screen too late to be part of the decision. -->
+    <div class="allowpre" id="allowbox" hidden>
+      <label for="allowPre">Who else can post <span class="lhint">optional &middot; one <code>did:key</code> per line</span></label>
+      <textarea id="allowPre" spellcheck="false" placeholder="did:key:z6Mk&#8230;&#10;did:key:z6Mk&#8230;"></textarea>
+      <p class="fine">You can always post, and everyone can read. Leave it empty and the room is yours alone &mdash; the list can be changed any time.</p>
+    </div>
 
     <div class="capbox" id="ownCap" hidden></div>
     <div class="owndone" id="owndone" hidden></div>
@@ -511,24 +565,53 @@ footer a{color:var(--cy);text-decoration:none}
       </div>
 
       <div class="mpane" id="paneHave" hidden>
-        <div class="mfield">
-          <label for="hDid">Your DID</label>
-          <input id="hDid" type="text" spellcheck="false" autocomplete="off" placeholder="did:key:z6Mk…">
-          <p class="hint">Filled in from the card you last looked up. Change it if that is not the one.</p>
+        <!-- Two things can bring an identity in and they are not equally
+             safe, so the page picks the safe one first and says why. A backup
+             file is already encrypted; a seed is the identity itself in
+             plain text. -->
+        <div class="pick" role="radiogroup" aria-label="What you have">
+          <button class="pk on" id="wayFile" type="button" role="radio" aria-checked="true">
+            <svg class="i"><use href="#ic-file"/></svg>Backup file</button>
+          <button class="pk" id="waySeed" type="button" role="radio" aria-checked="false">
+            <svg class="i"><use href="#ic-key"/></svg>Seed</button>
         </div>
+
         <div class="mfield">
-          <label for="hFile">Its backup file</label>
-          <label class="filepick" for="hFileInput">
-            <svg class="i"><use href="#ic-file"/></svg>
-            <span id="hFileName">Choose overheard-identity-….json</span>
-            <input id="hFileInput" type="file" accept="application/json,.json">
-          </label>
-          <textarea id="hFile" spellcheck="false" placeholder="or paste what is inside it, braces included" style="margin-top:10px"></textarea>
-          <p class="hint">The encrypted file this site gave you when the identity was made. Not your seed &mdash; no page here ever needs that.</p>
+          <label for="hDid">Your DID <span class="opt" id="didOpt" hidden>optional</span></label>
+          <input id="hDid" type="text" spellcheck="false" autocomplete="off" placeholder="did:key:z6Mk&#8230;">
+          <p class="hint" id="didHint">Filled in from the card you last looked up. Change it if that is not the one.</p>
         </div>
+
+        <div id="wayFileBox">
+          <div class="mfield">
+            <label for="hFile">Its backup file</label>
+            <label class="filepick" for="hFileInput">
+              <svg class="i"><use href="#ic-file"/></svg>
+              <span id="hFileName">Choose overheard-identity-&#8230;.json</span>
+              <input id="hFileInput" type="file" accept="application/json,.json">
+            </label>
+            <textarea id="hFile" spellcheck="false" placeholder="or paste what is inside it, braces included" style="margin-top:10px"></textarea>
+            <p class="hint">The encrypted file this site gave you when the identity was made.</p>
+          </div>
+        </div>
+
+        <div id="waySeedBox" hidden>
+          <div class="warnbox">
+            <svg class="i"><use href="#ic-info"/></svg>
+            <span><b>A seed is the identity itself.</b> Whoever has it <em>is</em> you, everywhere, for good. It is encrypted here on your device and never sent anywhere &mdash; but make it a habit to check the address bar before typing one into any site, including this one.</span>
+          </div>
+          <div class="mfield">
+            <label for="hSeed">Your seed</label>
+            <textarea id="hSeed" spellcheck="false" placeholder="64 hex characters, or paste the whole technocore-identity-&#8230;.txt"></textarea>
+            <p class="hint" id="seedHint">The DID is worked out from the seed, so you do not have to know it.</p>
+          </div>
+        </div>
+
         <div class="mfield">
-          <label for="hPw">The passphrase you set for it</label>
+          <label for="hPw" id="hPwLabel">The passphrase you set for it</label>
           <input id="hPw" type="password" autocomplete="current-password" placeholder="passphrase">
+          <input id="hPw2" type="password" autocomplete="new-password" placeholder="type it once more" style="margin-top:9px" hidden>
+          <p class="hint" id="hPwHint" hidden>A new passphrase for this browser, at least 12 characters. It encrypts the seed here; there is no reset.</p>
         </div>
         <div class="mrow">
           <button class="go" id="doHave" type="button"><svg class="i"><use href="#ic-key"/></svg>Bring it into this browser</button>
@@ -674,20 +757,70 @@ async function loadRooms(){
   }catch{ ROOMS=[{room:"lobby"},{room:"technocore"},{room:"meta"},{room:"nano"}]; }
   paintRooms("");
 }
+/* ── the list, and what is on it ───────────────────────────────────────────
+   Two things were missing and they are the same bug. The list came from the
+   published roster, so a room opened from a LINK — the whole point of the
+   claim panel handing you one — was not on it, and the page gave no sign
+   anywhere of which room you were reading. And a room you come back to every
+   day sat wherever the roster's ranking put it.
+
+   So the list is built from three sources: the rooms you pinned, the room you
+   are in, and the roster. The room you are in is always present, marked, and
+   at the top; pins hold their place under it and survive a reload.
+   ──────────────────────────────────────────────────────────────────────── */
+const PINKEY="overheard.pins";
+let PINS=(()=>{ try{ const v=JSON.parse(localStorage.getItem(PINKEY)||"[]");
+  return Array.isArray(v)?v.filter(x=>typeof x==="string"&&/^[a-z0-9][a-z0-9_-]{0,63}$/.test(x)):[]; }
+  catch{ return []; } })();
+const pinned=(r)=>PINS.includes(r);
+function togglePin(r){
+  PINS = pinned(r) ? PINS.filter(x=>x!==r) : [r,...PINS].slice(0,30);
+  try{ localStorage.setItem(PINKEY,JSON.stringify(PINS)); }catch{}
+  paintRooms($("find").value.trim().toLowerCase());
+}
+
 function paintRooms(filter){
   const box=$("rlist"); box.textContent="";
-  const list=ROOMS.filter(x=>!filter||x.room.includes(filter)).slice(0,60);
-  for(const x of list){
+  const known=new Map(ROOMS.map(x=>[x.room,x]));
+  /* Order: where you are, then what you pinned, then the roster. Each name
+     once — a pinned room you are currently in is one row, not two. */
+  const order=[room,...PINS,...ROOMS.map(x=>x.room)];
+  const seenName=new Set();
+  const rows=[];
+  for(const name of order){
+    if(seenName.has(name)) continue;
+    seenName.add(name);
+    if(filter && !name.includes(filter) && name!==room) continue;
+    rows.push({room:name,score:known.get(name)?.score ?? null});
+    if(rows.length>=60) break;
+  }
+  for(const x of rows){
     const b=document.createElement("button");
-    b.className="rbtn"+(x.room===room?" on":""); b.type="button";
+    b.className="rbtn"+(x.room===room?" on":"")+(pinned(x.room)?" pin":""); b.type="button";
+    b.title=x.room;
+
     const nm=document.createElement("span"); nm.className="nm"; nm.textContent=x.room;
+
+    /* A pin is a control, not a label, so it is its own button — nested
+       inside a button is invalid, so the row is a button and the pin is a
+       span that stops the click from reaching it. */
+    const pin=document.createElement("span");
+    pin.className="pinbtn"; pin.setAttribute("role","button"); pin.tabIndex=0;
+    pin.title=pinned(x.room)?`Unpin ${x.room}`:`Pin ${x.room} to the top`;
+    pin.setAttribute("aria-label",pin.title);
+    pin.innerHTML='<svg class="i" viewBox="0 0 24 24"><path d="M9 3h6l-1 6 4 3v2H6v-2l4-3z"/><path d="M12 14v7"/></svg>';
+    const hit=(e)=>{ e.stopPropagation(); e.preventDefault(); togglePin(x.room); };
+    pin.addEventListener("click",hit);
+    pin.addEventListener("keydown",(e)=>{ if(e.key==="Enter"||e.key===" ") hit(e); });
+
     const sc=document.createElement("span"); sc.className="sc";
     sc.textContent=x.score!=null?String(Math.round(x.score*100)):"";
-    b.append(nm,sc);
+
+    b.append(nm,sc,pin);
     b.addEventListener("click",()=>switchRoom(x.room));
     box.appendChild(b);
   }
-  if(!list.length){
+  if(!rows.length){
     const p=document.createElement("p"); p.className="sc";
     p.textContent="No listed room matches. Type a full name and press Enter to open it anyway.";
     box.appendChild(p);
@@ -1038,7 +1171,100 @@ $("hFileInput").addEventListener("change",async(e)=>{
   try{ $("hFile").value=await f.text(); }catch{ msay("haveSay","Could not read that file.","err"); }
 });
 
+/* ── the two ways in ───────────────────────────────────────────────────────
+   A backup file is already encrypted and its passphrase is one that exists.
+   A seed is the identity in the clear, and taking one means MAKING a
+   passphrase here rather than asking for one — so the fields, the labels and
+   the button all change with the choice rather than a seed being quietly
+   bolted onto a form written for something else. */
+let way="file";
+function setWay(w){
+  way=w;
+  $("wayFile").classList.toggle("on",w==="file");
+  $("waySeed").classList.toggle("on",w==="seed");
+  $("wayFile").setAttribute("aria-checked",String(w==="file"));
+  $("waySeed").setAttribute("aria-checked",String(w==="seed"));
+  $("wayFileBox").hidden = w!=="file";
+  $("waySeedBox").hidden = w!=="seed";
+  /* Order follows importance. With a file, the DID is the thing being matched
+     and comes first. With a seed, what comes first is the warning about what
+     a seed IS — reading that after pasting one is reading it too late. */
+  const pane=$("paneHave"), didField=$("hDid").closest(".mfield");
+  if(w==="seed") pane.insertBefore($("waySeedBox"),didField);
+  else           pane.insertBefore($("waySeedBox"),$("wayFileBox").nextSibling);
+  $("didOpt").hidden = w!=="seed";
+  $("hPw2").hidden = w!=="seed";
+  $("hPwHint").hidden = w!=="seed";
+  $("hPwLabel").textContent = w==="seed" ? "Choose a passphrase for this browser" : "The passphrase you set for it";
+  $("hPw").placeholder = w==="seed" ? "at least 12 characters" : "passphrase";
+  $("hPw").autocomplete = w==="seed" ? "new-password" : "current-password";
+  $("didHint").textContent = w==="seed"
+    ? "Optional here — the DID is worked out from the seed. Fill it in and it is checked against what the seed produces."
+    : "Filled in from the card you last looked up. Change it if that is not the one.";
+  $("doHave").lastChild.textContent = w==="seed" ? "Encrypt it and sign in" : "Bring it into this browser";
+  msay("haveSay","");
+}
+$("wayFile").addEventListener("click",()=>setWay("file"));
+$("waySeed").addEventListener("click",()=>setWay("seed"));
+
+/** A seed is 32 bytes. It is written as hex by every Technocore tool, and
+ *  this site hands it over inside a text file with other lines around it, so
+ *  the whole file is a legitimate paste — take the first 64-hex run in it. */
+function readSeed(text){
+  const m=String(text).replace(/[^0-9a-fA-F]+/g," ").match(/\b[0-9a-fA-F]{64}\b/);
+  if(!m) return null;
+  const hex=m[0].toLowerCase();
+  const b=new Uint8Array(32);
+  for(let i=0;i<32;i++) b[i]=parseInt(hex.slice(i*2,i*2+2),16);
+  return b;
+}
+/** WebCrypto will not hand back a public key from a private one, and there is
+ *  no Ed25519 scalar multiply in it either. But it WILL import a PKCS#8 key
+ *  and export the JWK — which carries `x`, the public half — so wrapping the
+ *  32 seed bytes in the fixed PKCS#8 preamble derives the DID with nothing
+ *  but the platform's own arithmetic. */
+async function keyFromSeed(seed){
+  const pre=[0x30,0x2e,0x02,0x01,0x00,0x30,0x05,0x06,0x03,0x2b,0x65,0x70,0x04,0x22,0x04,0x20];
+  const pkcs8=new Uint8Array([...pre,...seed]);
+  const key=await crypto.subtle.importKey("pkcs8",pkcs8,{name:"Ed25519"},true,["sign"]);
+  const jwk=await crypto.subtle.exportKey("jwk",key);
+  const pub=fromB64u(jwk.x);
+  return {did:"did:key:z"+b58(new Uint8Array([0xed,0x01,...pub])),jwk};
+}
+
+async function bringSeed(){
+  const seed=readSeed($("hSeed").value);
+  const typed=$("hDid").value.trim();
+  const p1=$("hPw").value, p2=$("hPw2").value;
+  if(!seed)        return msay("haveSay","That is not a seed yet — it is 64 hex characters. Pasting the whole identity .txt works too.","err");
+  if(p1.length<12) return msay("haveSay","Choose a passphrase of at least 12 characters. It encrypts the seed on this device.","err");
+  if(p1!==p2)      return msay("haveSay","The two passphrases do not match.","err");
+  $("doHave").disabled=true;
+  msay("haveSay","Working out the identity from the seed…");
+  try{
+    const {did,jwk}=await keyFromSeed(seed);
+    if(typed && typed!==did){
+      msay("haveSay",`That seed belongs to ${shortDid(did,10,6)}, not the DID above. Clear the DID field to use the seed's own.`,"err");
+      $("doHave").disabled=false; return;
+    }
+    msay("haveSay","Encrypting it on this device…");
+    const vault=await seal(did,jwk,p1);
+    try{ localStorage.setItem("overheard.identity",JSON.stringify(vault)); }catch{}
+    /* The seed went in as text; what stays behind is the encrypted form of
+       it, and a copy of that goes to the person as a file. From here on the
+       passphrase is the only thing they need to type. */
+    download(new Blob([JSON.stringify(vault,null,2)],{type:"application/json"}),
+      `overheard-identity-${did.slice(-8)}.json`);
+    $("hSeed").value=""; $("hPw2").value="";
+    closeModal();
+    signIn(did,jwk);
+    say("Signed in. The seed is encrypted in this browser now — from here it is only the passphrase.","ok");
+  }catch(err){ msay("haveSay","That seed did not produce a key: "+(err?.message||err),"err"); }
+  $("doHave").disabled=false;
+}
+
 $("doHave").addEventListener("click",async()=>{
+  if(way==="seed") return bringSeed();
   const did=$("hDid").value.trim(), raw=$("hFile").value.trim(), pw=$("hPw").value;
   if(!DID_RE.test(did)) return msay("haveSay","That is not a did:key. It starts did:key:z6Mk and is 48 characters after the z.","err");
   if(!raw)  return msay("haveSay","Choose the backup file, or paste what is inside it.","err");
@@ -1103,11 +1329,11 @@ function setKind(k){
   $("kOwned").setAttribute("aria-checked",String(k==="owned"));
   $("rpre").hidden = k!=="owned";
   $("claim").textContent = k==="owned" ? "Claim it" : "Open it";
-  /* The prefix is the difference between the two kinds, so the line under the
-     field explains whichever one is selected rather than one of them. */
-  $("ownhint").lastElementChild.innerHTML = k==="owned"
-    ? 'The <code>d-</code> is added for you. It is the only prefix Technocore lets a key own, and the first signed claim takes the name permanently &mdash; there is no releasing it later.'
-    : 'Open rooms have no <code>d-</code>. Only <code>d-</code> names can be owned, so a name with it is a name somebody could claim and lock &mdash; which is exactly what an open room must never be.';
+  /* Explaining the absence of a prefix on the kind that never has one is a
+     paragraph about something that is not on the screen. It appears only for
+     the kind it belongs to. */
+  $("ownhint").hidden = k!=="owned";
+  $("allowbox").hidden = k!=="owned";
   $("ownCap").hidden=true;
   scheduleCheck();
 }
@@ -1150,20 +1376,61 @@ function capNotice(title,body,when,fine){
   ownSay("");
   box.scrollIntoView({behavior:calmish()?"auto":"smooth",block:"center"});
 }
+/* THREE walls, not one, and they were being reported in each other's words.
+
+   ROOMS   19,116 of 20,480. Spent by a room coming into existence, which for
+           an open room happens on its first message.
+   NOTES   the permanent-note store. A room CLAIM is a signed note, so a full
+           note store refuses every claim on the network while open rooms go
+           on working perfectly — the two failures have nothing to do with
+           each other and must never share a sentence.
+   PER DAY twenty new rooms per site per day. Ours, not yours, and the only
+           one of the three with a time that can be quoted.
+
+   All three are readable in advance: /api/capacity carries the counters
+   Technocore publishes beside its room list. */
+const showRoomsFull = (left) => capNotice(
+  "Technocore has no room left for new rooms.",
+  "The network holds up to 20,480 rooms at once and it is at that number, so a room that does not already exist cannot be started right now — by anybody, on any site. Rooms that already exist carry on as normal, and you can post in one of those.",
+  "Worth trying again in a few hours",
+  "Space comes back on its own: an idle room is reclaimed after 7 days, and a room still on its first message after 24 hours." + (left==null?"":` Right now: ${left} free.`));
+
+const showNotesFull = () => capNotice(
+  "Technocore cannot take new room claims right now.",
+  "Claiming a room writes a permanent record, and the store those live in is at its limit — so no claim from anybody, on any site, will be accepted until space frees up. This is not about your name and not about your key. An open room does not need a claim and still works.",
+  "Worth trying again tomorrow",
+  "Records are released after 7 days without a write, so the ceiling moves throughout the day. Rooms already claimed are unaffected.");
+
+const showDailyFull = () => capNotice(
+  "This site has opened all the rooms it can today.",
+  "Technocore allows each site twenty new rooms a day and Overheard has used them. Nothing is wrong with your name or your key — the allowance resets at midnight UTC, and the name will still be there unless somebody else takes it.",
+  `Try again in about ${untilUTCMidnight()}`);
+
+/** What the network has left. Asked at most every 30 seconds — the counters
+ *  move slowly and every visitor typing a room name shares the same answer. */
+let capCache=null, capAt=0;
+async function capacity(){
+  if(capCache && Date.now()-capAt<30000) return capCache;
+  try{
+    const r=await fetch("/api/capacity");
+    const j=await r.json();
+    if(j && j.known){ capCache=j; capAt=Date.now(); return j; }
+  }catch{}
+  return null;                    // unknown is not the same as fine
+}
+
 /** True when the refusal was a limit rather than anything about this name. */
 function refused(d){
   const t=String(d?.error||d?.body||"");
-  if(/rooms?[ _-]?per[ _-]?day|new_rooms|too many rooms/i.test(t)){
-    capNotice("This site has opened all the rooms it can today.",
-      "Technocore allows each site twenty new rooms a day and Overheard has used them. Nothing is wrong with your name or your key — the allowance resets at midnight UTC and the name will still be free unless somebody else takes it.",
-      `Try again in about ${untilUTCMidnight()}`);
-    return true;
-  }
-  if(/limit reached|too many|capacity|full/i.test(t)){
-    capNotice("Technocore has run out of space for new rooms.",
-      "It can only hold so many room owners at once, and it is at that number — so right now nobody can claim a new room, on any site, whatever name they pick. This is not about your name and not about your key.",
-      "Worth trying again tomorrow",
-      "Space comes back on its own: an ownership record is released after 7 days without a write, so the ceiling moves throughout the day. Rooms already claimed are unaffected.");
+  if(/rooms?[ _-]?per[ _-]?day|new_rooms|too many rooms/i.test(t)){ showDailyFull(); return true; }
+  if(/room limit reached/i.test(t)){ showRoomsFull(null); return true; }
+  if(/note limit reached/i.test(t)){ showNotesFull(); return true; }
+  if(/limit reached|capacity|full/i.test(t)){
+    // Unrecognised wording, but plainly a limit. Say which operation it
+    // refused rather than inventing which store ran out.
+    capNotice("Technocore refused this, and not because of your name.",
+      "It answered with a limit rather than anything about the name or the key: " + t.slice(0,180),
+      "Worth trying again later");
     return true;
   }
   return false;
@@ -1189,26 +1456,47 @@ function scheduleCheck(){
     checkTimer = setTimeout(async()=>{
       lastChecked = raw;
       try{
-        const r = await fetch(`/api/room?room=${encodeURIComponent(raw)}&limit=200`);
-        const j = await r.json();
+        /* Both questions at once: is anybody in it, and can the network take
+           a new room at all. The second was only ever asked by trying — so a
+           room was opened, somebody was sent to it, and the refusal arrived
+           on their first message, in a room that did not exist. */
+        const [j,cap] = await Promise.all([
+          fetch(`/api/room?room=${encodeURIComponent(raw)}&limit=200`).then(r=>r.json()),
+          capacity(),
+        ]);
         if($("rn").value.trim().toLowerCase() !== lastChecked) return;
         const n = Array.isArray(j.messages) ? j.messages.length : 0;
-        ownSay(n ? `${raw} already exists and has people in it — you can post there, it is open to everyone.`
-                 : `${raw} is empty. It comes into existence the moment you post.`,"ok");
+        if(n){
+          ownSay(`${raw} already exists and has people in it — you can post there, it is open to everyone.`,"warn");
+          $("claim").disabled=false; return;
+        }
+        if(cap?.rooms?.full){
+          // A room that does not exist cannot be started right now, and the
+          // page knows that BEFORE anybody is sent anywhere.
+          showRoomsFull(cap.rooms.left);
+          $("claim").disabled=true; return;
+        }
+        ownSay(`${raw} is available. It comes into existence the moment you post.`
+          + (cap?.rooms?.left!=null && cap.rooms.left<500 ? ` Only ${cap.rooms.left} room slots left on the network.` : ""),"ok");
       }catch{ ownSay(`${raw} looks fine. Open rooms need no claim.`,"ok"); }
       $("claim").disabled=false;
     }, 420);
     return;
   }
 
-  ownSay("Checking whether d-"+raw+" is free…","busy");
+  ownSay("Checking whether d-"+raw+" is available…","busy");
   checkTimer = setTimeout(async()=>{
     lastChecked = raw;
     try{
       const r = await fetch(`/api/owner?room=${encodeURIComponent("d-"+raw)}`);
       const j = await r.json();
       if($("rn").value.trim().toLowerCase() !== lastChecked) return;   // typed on
-      if(j.status === "free"){ ownSay(`d-${raw} is free. Claim it and it is yours permanently.`,"ok"); $("claim").disabled=false; }
+      if(j.status === "free"){
+        const cap=await capacity();
+        if($("rn").value.trim().toLowerCase() !== lastChecked) return;
+        if(cap?.notes?.full){ showNotesFull(); $("claim").disabled=true; return; }
+        ownSay(`d-${raw} is available. Claim it and it is yours permanently.`,"ok"); $("claim").disabled=false;
+      }
       else if(j.status === "unknown") ownSay("Could not reach the registry just now — try again in a moment.","err");
       else if(j.owner === ID?.did) ownSay(`You already own d-${raw}.`,"ok");
       else ownSay(`d-${raw} is already claimed. Claims are permanent, so pick another name.`,"err");
@@ -1223,8 +1511,21 @@ $("claim").addEventListener("click",async()=>{
   if(!NAME_RE.test(raw) || !ID) return;
 
   if(kind==="open"){
-    // Nothing to sign and nothing to reserve. Open the room, put the cursor
-    // in the box, and let the first message bring it into existence.
+    /* Nothing to sign and nothing to reserve — but an open room that does not
+       exist yet is a room the network still has to have space for, and the
+       only place that used to surface was somebody's first message. Checked
+       here, one read, before anyone is sent anywhere. */
+    $("claim").disabled = true;
+    ownSay("Checking there is room on the network…","busy");
+    try{
+      const [j,cap] = await Promise.all([
+        fetch(`/api/room?room=${encodeURIComponent(raw)}&limit=1`).then(r=>r.json()),
+        capacity(),
+      ]);
+      const exists = Number(j?.count||0) > 0 || (j?.last_seq && j.last_seq !== "0");
+      if(!exists && cap?.rooms?.full){ showRoomsFull(cap.rooms.left); $("claim").disabled=false; return; }
+    }catch{ /* the check failing is not a reason to refuse; the post will say */ }
+    $("claim").disabled = false;
     ownState = { name: raw, open: true };
     ownSay("");
     showOwned(raw, true);
@@ -1249,8 +1550,41 @@ $("claim").addEventListener("click",async()=>{
     ownState = { name: full, claimNonce: nonce };
     ownSay("");
     showOwned(full);
+    /* The list was written as part of the decision, so it is saved as part of
+       the claim rather than left as a second job on a panel that has just
+       appeared. It needs its own signature, and its own nonce ABOVE the
+       claim's — one replay counter covers both. */
+    const pre=$("allowPre").value.trim();
+    if(pre) await saveAllow(full, pre.split(/\s+/).filter(Boolean), null);
   }catch(err){ ownSay("Could not sign the claim: "+err.message,"err"); $("claim").disabled=false; }
 });
+
+/** Write the allow-list for a claimed room. Shared by the list typed while
+ *  claiming and the one edited afterwards, so there is one definition of what
+ *  a valid list is and one place that reports what Technocore said.
+ *
+ *  The nonce must EXCEED the claim's — one replay counter is shared by both
+ *  operations, and a nonce that is merely different silently fails. */
+async function saveAllow(room, raw, el){
+  const put=(t,cls)=>{ if(el){ el.textContent=t; el.className="ownsay "+cls; } else ownSay(t,cls); };
+  const list=raw.map(x=>x.trim()).filter(Boolean);
+  const bad=list.find(d=>!/^did:key:z6Mk[1-9A-HJ-NP-Za-km-z]{44}$/.test(d));
+  if(bad) return put(`Not a did:key: ${bad.slice(0,32)}…`,"err");
+  if(list.length>64) return put("At most 64 identities.","err");
+  put("Signing the list on this device…","busy");
+  try{
+    const value=list.join(" ");
+    const nonce=nextNonce();
+    const key=await crypto.subtle.importKey("jwk",ID.jwk,{name:"Ed25519"},false,["sign"]);
+    const sig=b64u(await crypto.subtle.sign({name:"Ed25519"},key,
+      enc.encode(`room-allow|${room}|${nonce}|${value}`)));
+    const r=await fetch("/api/post",{method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({kind:"allow",did:ID.did,room,sig,nonce,value})});
+    const d=await r.json();
+    if(d.ok) put(list.length?`Saved. ${list.length} identit${list.length===1?"y":"ies"} can post here, besides you.`:"Saved. Only you can post here.","ok");
+    else put(`Technocore refused the list: ${(d.error||d.body||"failed").slice(0,140)}`,"err");
+  }catch(err){ put("Could not sign the list: "+err.message,"err"); }
+}
 
 function showOwned(full, open=false){
   const box = $("owndone"); box.replaceChildren(); box.hidden=false;
@@ -1296,27 +1630,11 @@ function showOwned(full, open=false){
   const note=document.createElement("p"); note.style.marginTop="10px"; note.style.marginBottom="0";
 
   save.addEventListener("click",async()=>{
-    const list=ta.value.split(/\s+/).map(x=>x.trim()).filter(Boolean);
-    const bad=list.find(d=>!/^did:key:z6Mk[1-9A-HJ-NP-Za-km-z]{44}$/.test(d));
-    if(bad){ note.textContent=`Not a did:key: ${bad.slice(0,32)}…`; note.className="ownsay err"; return; }
-    if(list.length>64){ note.textContent="At most 64 identities."; note.className="ownsay err"; return; }
-    save.disabled=true; note.textContent="Signing on this device…"; note.className="ownsay busy";
-    try{
-      const value=list.join(" ");
-      // Must EXCEED the claim nonce — one replay counter is shared by both
-      // operations, and a nonce that is merely different silently fails.
-      const nonce=nextNonce();
-      const key=await crypto.subtle.importKey("jwk",ID.jwk,{name:"Ed25519"},false,["sign"]);
-      const sig=b64u(await crypto.subtle.sign({name:"Ed25519"},key,
-        enc.encode(`room-allow|${ownState.name}|${nonce}|${value}`)));
-      const r=await fetch("/api/post",{method:"POST",headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({kind:"allow",did:ID.did,room:ownState.name,sig,nonce,value})});
-      const d=await r.json();
-      if(d.ok){ note.textContent=list.length?`Saved. ${list.length} identit${list.length===1?"y":"ies"} can post here.`:"Saved. Only you can post here."; note.className="ownsay ok"; }
-      else { note.textContent=`Technocore refused it: ${(d.error||d.body||"failed").slice(0,140)}`; note.className="ownsay err"; }
-    }catch(err){ note.textContent="Could not sign: "+err.message; note.className="ownsay err"; }
+    save.disabled=true;
+    await saveAllow(ownState.name, ta.value.split(/\s+/).filter(Boolean), note);
     save.disabled=false;
   });
+  if($("allowPre").value.trim()) ta.value=$("allowPre").value.trim();
 
   al.append(ah,ap,ta,save,note); box.appendChild(al);
   box.scrollIntoView({behavior:calmish()?"auto":"smooth",block:"center"});

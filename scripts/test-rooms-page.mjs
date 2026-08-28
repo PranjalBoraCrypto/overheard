@@ -24,6 +24,8 @@ const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'web'
 let POSTS = [];
 let CLAIM = { ok: true };            // what /api/post says to a claim
 let OWNER = 'free';
+let CAP = { known: true, rooms: { total: 19116, capacity: 20480, left: 1364, full: false },
+            notes: { total: 600000, capacity: 655360, left: 55360, full: false } };
 
 const srv = http.createServer((req, res) => {
   const u = new URL(req.url, 'http://x');
@@ -41,11 +43,15 @@ const srv = http.createServer((req, res) => {
   }
   if (p === '/api/room') {
     const room = u.searchParams.get('room') || '';
+    // A room nobody has ever posted in: the case where opening one has to
+    // spend a room slot, which is the case the capacity check exists for.
+    if (/^brand-new/.test(room)) return J({ room, first_seq: null, last_seq: '0', count: 0, messages: [] });
     return J({ room, first_seq: '1', last_seq: '4', count: 1, messages: [
       { seq: '4', ts: new Date().toISOString(), from: null, nick: 'someone', text: 'a line from a stranger', sig: null, nonce: null },
     ] });
   }
   if (p === '/api/owner') return J({ room: u.searchParams.get('room'), status: OWNER, owner: null });
+  if (p === '/api/capacity') return J(CAP);
   if (p === '/data/roster.json') return J({ rooms: [{ room: 'lobby', score: .9 }, { room: 'technocore', score: .8 }] });
   if (p.startsWith('/api/') || p.startsWith('/data/')) return J({});
 
@@ -165,13 +171,26 @@ await pg.fill('#say', '');
 
 console.log('\n=== G. the room field, and the prefix question');
 check('an open room gets no d- prefix', await pg.locator('#rpre').isHidden());
-const openHint = (await pg.locator('#ownhint').textContent()) || '';
-check('and the page says WHY, rather than leaving it to be noticed',
-  /never be|could claim/.test(openHint), openHint.trim().slice(0, 70) + '…');
+/* Explaining the absence of a prefix, on the kind that never has one, is a
+   paragraph about something not on the screen. */
+check('and no paragraph about a prefix that is not there', await pg.locator('#ownhint').isHidden());
+check('nor an allow-list for a room nobody owns', await pg.locator('#allowbox').isHidden());
+const padOpen = await pg.evaluate(() => {
+  const i = document.getElementById('rn');
+  return { pad: getComputedStyle(i).paddingLeft, gap: Math.round(i.getBoundingClientRect().left - i.closest('.nameline').getBoundingClientRect().left) };
+});
+check('and its text is not against the border', parseInt(padOpen.pad, 10) >= 12, JSON.stringify(padOpen));
+
 await pg.click('#kOwned');
-await pg.waitForTimeout(150);
-check('a claimed room gets it, as furniture', await pg.locator('#rpre').isVisible());
-check('and the line changes with the choice', (await pg.locator('#ownhint').textContent()) !== openHint);
+await pg.waitForTimeout(200);
+check('a claimed room gets the prefix, as furniture', await pg.locator('#rpre').isVisible());
+check('with the explanation that belongs to it', await pg.locator('#ownhint').isVisible());
+/* Asked for: decide who the room is FOR while you are claiming it, not on a
+   panel that appears afterwards. */
+check('and a place to name who else may post', await pg.locator('#allowbox').isVisible());
+check('the field still clears the border with a prefix in front of it',
+  await pg.evaluate(() => Math.round(document.getElementById('rn').getBoundingClientRect().left
+    - document.getElementById('rpre').getBoundingClientRect().right) >= 0));
 
 console.log('\n=== H. a wall that is not your fault does not read like one');
 await pg.fill('#rn', 'my-own-room');
@@ -181,10 +200,22 @@ await pg.click('#claim');
 await pg.waitForFunction(() => !document.getElementById('ownCap').hidden, null, { timeout: 8000 });
 const cap = (await pg.locator('#ownCap').textContent()) || '';
 console.log('   ', cap.replace(/\s+/g, ' ').slice(0, 120), '…');
-check('it leads with the plain fact', /run out of space for new rooms/.test(cap));
+check('it says what was refused: a claim, not a room', /cannot take new room claims/.test(cap));
 check('and says it is not about your name', /not about your name/.test(cap));
 check('and gives a time to come back', /tomorrow|hour|minute/.test(cap));
+check('and points at the thing that still works', /open room/i.test(cap));
 check('in a grey notice, not a red error line', (await pg.locator('#ownsay').textContent()).trim() === '');
+
+/* The other store, and the two must never be reported in each other's
+   words: a full ROOM store leaves claims alone, a full NOTE store leaves
+   open rooms alone. */
+CLAIM = { ok: false, status: 400, error: '400 room limit reached (20480 is the cap, and this would be a new one).' };
+await pg.fill('#rn', 'yet-another');
+await pg.waitForFunction(() => !document.getElementById('claim').disabled, null, { timeout: 8000 });
+await pg.click('#claim'); await pg.waitForTimeout(900);
+const capR = (await pg.locator('#ownCap').textContent()) || '';
+check('a full room store is told apart from a full note store',
+  /no room left for new rooms/.test(capR) && !/room claims/.test(capR), capR.slice(0, 60));
 
 CLAIM = { ok: false, status: 429, error: 'too many new rooms per day for this ip' };
 await pg.fill('#rn', 'another-room');
@@ -196,6 +227,46 @@ console.log('   ', cap2.replace(/\s+/g, ' ').slice(0, 110), '…');
 check('the daily allowance is told apart from the register being full',
   /today/.test(cap2) && /midnight UTC/.test(cap2));
 check('and that one can quote a real time', /Try again in about/.test(cap2));
+
+console.log('\n=== H2. the open-room wall, found before anybody is sent to the room');
+/* REPORTED: an open room was created, the page said fine, and the refusal
+   turned up later — on the first message, in a room that did not exist. */
+CAP = { known: true, rooms: { total: 20480, capacity: 20480, left: 0, full: true },
+        notes: { total: 1, capacity: 655360, left: 655359, full: false } };
+await go();                       // a fresh page, so the 30-second capacity memo is not answering
+await pg.click('#kOpen'); await pg.waitForTimeout(150);
+await pg.fill('#rn', 'brand-new-room');
+await pg.waitForFunction(() => !document.getElementById('ownCap').hidden, null, { timeout: 8000 });
+const capO = (await pg.locator('#ownCap').textContent()) || '';
+check('it says so while the name is being typed', /no room left for new rooms/.test(capO), capO.slice(0, 58));
+check('and the button does not offer to do it anyway', await pg.locator('#claim').isDisabled());
+check('the reason names the cap and what still works',
+  /20,480/.test(capO) && /already exist/.test(capO));
+CAP = { known: true, rooms: { total: 19116, capacity: 20480, left: 1364, full: false },
+        notes: { total: 1, capacity: 655360, left: 655359, full: false } };
+
+console.log('\n=== H3. pinning, and the room you are actually in');
+await pg.goto('http://localhost:8895/rooms.html?room=from-a-link');
+await pg.waitForTimeout(900);
+const rowNames = await pg.evaluate(() => [...document.querySelectorAll('#rlist .rbtn .nm')].map(x => x.textContent));
+check('a room opened from a link is on the list', rowNames.includes('from-a-link'), JSON.stringify(rowNames));
+check('at the top of it', rowNames[0] === 'from-a-link');
+check('and marked as the one being read',
+  await pg.evaluate(() => document.querySelector('#rlist .rbtn').classList.contains('on')));
+const lit = await pg.evaluate(() => {
+  const el = document.querySelector('#rlist .rbtn.on');
+  return getComputedStyle(el).boxShadow + ' | ' + getComputedStyle(el.querySelector('.nm')).color;
+});
+check('in the brand blue, not the same grey as the rest', /rgb\(95, 235, 255\)/.test(lit), lit.slice(0, 60));
+await pg.evaluate(() => document.querySelectorAll('#rlist .rbtn')[1].querySelector('.pinbtn').click());
+await pg.waitForTimeout(200);
+const pins = await pg.evaluate(() => JSON.parse(localStorage.getItem('overheard.pins') || '[]'));
+check('a room can be pinned', pins.length === 1, JSON.stringify(pins));
+await pg.goto('http://localhost:8895/rooms.html?room=from-a-link');
+await pg.waitForTimeout(900);
+const after = await pg.evaluate(() => [...document.querySelectorAll('#rlist .rbtn .nm')].map(x => x.textContent));
+check('and it holds its place under the open one after a reload',
+  after[1] === pins[0], JSON.stringify(after.slice(0, 3)));
 
 console.log('\n=== I. signing out');
 await pg.click('#me #signout');
@@ -234,6 +305,53 @@ await pg.click('#doHave');
 await pg.waitForFunction(() => !document.getElementById('open').hidden, null, { timeout: 20000 });
 check('and the right one signs you in', await pg.locator('#open').isVisible());
 check('with the identity stored for next time', await pg.evaluate(() => !!localStorage.getItem('overheard.identity')));
+
+console.log('\n=== J2. the other thing people have: a seed');
+/* Asked for. A seed is the identity in the clear, so this path MAKES a
+   passphrase rather than asking for one, works the DID out for itself, and
+   says what a seed is before anybody pastes one. */
+await pg.evaluate(() => { localStorage.clear(); });
+await go();
+await pg.click('#noPass'); await pg.click('#tabHave');
+check('the safe way in is the one offered first',
+  (await pg.locator('#wayFile').getAttribute('class')).includes('on'));
+await pg.click('#waySeed'); await pg.waitForTimeout(150);
+check('a seed gets a warning before it gets a field',
+  /A seed is the identity itself/.test(await pg.locator('#waySeedBox').textContent()));
+check('and the DID becomes optional, because the seed carries it',
+  await pg.locator('#didOpt').isVisible());
+check('the passphrase field asks you to choose one', await pg.locator('#hPw2').isVisible());
+
+await pg.fill('#hSeed', 'not a seed'); await pg.fill('#hPw', PASS); await pg.fill('#hPw2', PASS);
+await pg.click('#doHave'); await pg.waitForTimeout(300);
+check('rubbish is refused with what a seed looks like',
+  /64 hex characters/.test(await pg.locator('#haveSay').textContent()));
+
+/* A real one, generated here, handed over the way the Create page hands it
+   over: as the whole .txt with other lines around it. */
+const seedHex = await pg.evaluate(async () => {
+  const kp = await crypto.subtle.generateKey({ name: 'Ed25519' }, true, ['sign', 'verify']);
+  const jwk = await crypto.subtle.exportKey('jwk', kp.privateKey);
+  const raw = await crypto.subtle.exportKey('raw', kp.publicKey);
+  const d = Uint8Array.from(atob(jwk.d.replace(/-/g, '+').replace(/_/g, '/')), c => c.charCodeAt(0));
+  const B58 = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
+  let n = 0n; for (const b of [0xed, 0x01, ...new Uint8Array(raw)]) n = n * 256n + BigInt(b);
+  let out = ''; while (n > 0n) { out = B58[Number(n % 58n)] + out; n /= 58n; }
+  return { hex: [...d].map(b => b.toString(16).padStart(2, '0')).join(''), did: 'did:key:z' + out };
+});
+await pg.fill('#hDid', '');
+await pg.fill('#hSeed', `Technocore identity\n\nSEED (private)\n${seedHex.hex}\n\nKeep this file offline.`);
+const dl2 = pg.waitForEvent('download').catch(() => null);
+await pg.click('#doHave');
+await pg.waitForFunction(() => !document.getElementById('open').hidden, null, { timeout: 25000 });
+check('the whole identity .txt is a fine thing to paste', await pg.locator('#open').isVisible());
+check('and the DID it worked out is the right one',
+  (await pg.evaluate(() => JSON.parse(localStorage.getItem('overheard.session')).did)) === seedHex.did);
+check('the seed is encrypted here, not stored as itself', await pg.evaluate(() => {
+  const all = JSON.stringify(localStorage);
+  return !!localStorage.getItem('overheard.identity') && !/[0-9a-f]{64}/.test(all);
+}));
+check('and its encrypted backup comes out too', !!(await dl2));
 
 console.log('\n=== K. phone');
 const ph = await ctx.newPage(); ph.on('pageerror', e => errs.push(e.message));
