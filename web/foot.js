@@ -84,8 +84,13 @@ function spanViewport(el) {
   const fit = () => {
     el.style.marginLeft = "0px";
     el.style.width = "auto";
-    const left = el.getBoundingClientRect().left;
     const full = document.documentElement.clientWidth;
+    /* A document with no width yet — an offscreen frame, a page still laying
+       out — would otherwise be handed a 0px footer. Leave it in the flow and
+       try again on the next frame; the natural width is wrong but visible,
+       which a zero-width footer is not. */
+    if (!(full > 320)) { requestAnimationFrame(fit); return; }
+    const left = el.getBoundingClientRect().left;
     el.style.marginLeft = `${-left}px`;
     el.style.width = `${full}px`;
   };
