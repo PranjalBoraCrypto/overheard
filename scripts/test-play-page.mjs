@@ -539,8 +539,44 @@ await pg.evaluate(() => {
     }],
   }));
 });
+await pg.evaluate(() => { try { localStorage.removeItem('overheard.pol.open'); } catch {} });
 await go();
-check('a signed-out browser is shown nothing', await pg.locator('#histIntro').isHidden());
+/* The bar is there for everybody — "sign in to keep your runs" is worth
+   saying to somebody who has never seen it — but it must not leak the runs
+   sitting in the same storage under a different key. */
+check('the bar is there even signed out', await pg.locator('#histIntro .histtoggle').isVisible());
+check('but somebody else\'s runs are not shown', (await pg.locator('#histIntro .hrow').count()) === 0);
+check('it says why there is nothing',
+  /Sign in to see your runs/.test(await pg.locator('#histIntro').textContent()));
+/* The title and the subtitle are two lines. They ran together into one when
+   the rules that make them stack were scoped to the open panel only. */
+check('the bar label is not one run-on line', await pg.evaluate(() => {
+  const g = document.querySelector('#histIntro .histtoggle .grow');
+  return Math.round(g.querySelector('.hsub').getBoundingClientRect().top
+                  - g.querySelector('b').getBoundingClientRect().top) >= 14;
+}));
+check('with a way to do it', (await pg.locator('#histIntro .histempty .go').count()) === 1);
+check('and nothing at the foot of a result either', await pg.locator('#histEnd').isHidden());
+
+/* CLOSED by default. A table of past scores above the start button is a
+   question nobody has asked yet — the complaint that produced this drawer. */
+check('and it starts closed', (await pg.locator('#histIntro .histpanel.open').count()) === 0);
+const drawerH = async () => pg.evaluate(() =>
+  Math.round(document.querySelector('#histIntro .histwrap').getBoundingClientRect().height));
+check('so it takes up no room', (await drawerH()) === 0, `${await drawerH()}px`);
+await pg.click('#histIntro .histtoggle');
+await pg.waitForTimeout(700);
+check('one tap opens it', (await drawerH()) > 40, `${await drawerH()}px`);
+check('and the sign-in offer is what is inside',
+  await pg.locator('#histIntro .histempty .go').isVisible());
+await pg.locator('#histIntro .histempty .go').click();
+await pg.waitForTimeout(400);
+check('which opens the same pop-up as everywhere else', await pg.locator('#scrim').isVisible());
+await pg.keyboard.press('Escape'); await pg.waitForTimeout(300);
+/* Opened once, it stays opened — somebody who wants to see their runs on
+   arrival should not have to say so on every visit. */
+await go();
+check('and it remembers being opened', (await drawerH()) > 40, `${await drawerH()}px`);
 
 /* Sign back in, play twice, and the history should describe both runs — from
    the intro as well as from the result. */
@@ -560,7 +596,6 @@ const hist = async () => pg.evaluate(() => {
     shown: !h.hidden,
     rows: [...h.querySelectorAll('.hrow')].map(r => r.textContent.replace(/\s+/g, ' ').trim()),
     stats: [...h.querySelectorAll('.hstat')].map(r => r.textContent.replace(/\s+/g, ' ').trim()),
-    bars: h.querySelectorAll('.htrend i').length,
     signed: h.querySelectorAll('.hsign').length,
   };
 });
@@ -571,7 +606,8 @@ await pg.waitForSelector('#end:not([hidden])', { timeout: 10000 });
 const h1 = await hist();
 check('a signed run is kept', h1.shown && h1.rows.length === 1, JSON.stringify(h1.rows));
 check('and marked as signed', h1.signed === 1);
-check('one run is not a trend, so no chart is drawn', h1.bars === 0);
+check('the summary and the run are open at the foot of a result, not folded away',
+  (await pg.locator('#histEnd .histwrap').count()) === 0 && await pg.locator('#histEnd .hstat').first().isVisible());
 await pg.click('#again'); await pg.waitForTimeout(400);
 for (let i = 0; i < 12; i++) {
   await clearLevelCard();
@@ -585,7 +621,6 @@ const h2 = await hist();
 console.log('   ', JSON.stringify(h2.rows));
 check('a second run joins it, newest first',
   h2.rows.length === 2 && /^4of 12Freshly booted/.test(h2.rows[0]), h2.rows[0].slice(0, 40));
-check('and now there is a trend to draw', h2.bars === 2);
 check('the summary is of the best, not the last',
   h2.stats.some(t => /^12\/12best run$/.test(t)) && h2.stats.some(t => /^Foundation gradebest rank$/.test(t)),
   JSON.stringify(h2.stats));
@@ -600,6 +635,21 @@ check('and it is below the start card, not above it', await pg.evaluate(() => {
   const b = document.getElementById('histIntro').getBoundingClientRect();
   return b.top > a.top;
 }));
+
+/* Signed in with nothing played yet is its own sentence, not the signed-out
+   one with the button removed. */
+const keptRuns = await pg.evaluate(() => {
+  const r = localStorage.getItem('overheard.pol.runs');
+  localStorage.removeItem('overheard.pol.runs');
+  return r;
+});
+await go();
+check('a signed-in browser with no runs says so',
+  /No runs yet/.test(await pg.locator('#histIntro').textContent()));
+check('and does not ask you to sign in again',
+  (await pg.locator('#histIntro .histempty .go').count()) === 0);
+await pg.evaluate((r) => localStorage.setItem('overheard.pol.runs', r), keptRuns);
+await go();
 
 console.log('\n=== I2. opening a past run');
 await pg.locator('#histIntro .hrow').first().click();
@@ -616,6 +666,19 @@ const past = await pg.evaluate(() => {
   return lit;
 });
 check('and the card is rebuilt, not stored', past > 4000, `${past} lit pixels`);
+/* The same object in the hand as the one on the result page. */
+await pg.waitForTimeout(1300);
+const hbox = await pg.locator('#hwrap').boundingBox();
+await pg.mouse.move(hbox.x + hbox.width * 0.88, hbox.y + hbox.height * 0.25);
+await pg.waitForTimeout(450);
+const hTilted = await pg.evaluate(() => getComputedStyle(document.getElementById('hwrap')).transform);
+check('and it tilts to the cursor here too',
+  hTilted !== 'none' && hTilted !== 'matrix(1, 0, 0, 1, 0, 0)', hTilted.slice(0, 44));
+check('with air between it and the buttons', await pg.evaluate(() => {
+  const c = document.querySelector('.rstage').getBoundingClientRect();
+  const m = document.getElementById('rMeta').getBoundingClientRect();
+  return Math.round(m.top - c.bottom);
+}) >= 20);
 check('with the things anybody would want to do with it',
   (await pg.locator('#rRow button, #rRow a').count()) === 5,
   (await pg.locator('#rRow').textContent()).replace(/\s+/g, ' ').trim());

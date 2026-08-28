@@ -577,13 +577,47 @@ canvas.confetti{position:fixed;inset:0;width:100%;height:100%;pointer-events:non
 .hist{display:block}
 .histpanel{margin-top:22px;padding:22px 24px;animation:riseY .5s var(--ease) both}
 @media (max-width:620px){.histpanel{padding:19px 17px}}
+
+/* On the way IN this is a closed drawer, not a wall. Somebody arriving to
+   play should see one line about their runs and a way to open it — a table of
+   past scores above the start button is a question nobody asked yet. */
+.histpanel.bar{padding:0;overflow:hidden}
+.histtoggle{display:flex;align-items:center;gap:13px;width:100%;padding:16px 22px;cursor:pointer;
+  background:none;border:0;color:var(--txt);font-family:var(--display);text-align:left;
+  transition:background .22s var(--ease)}
+@media (max-width:620px){.histtoggle{padding:14px 17px}}
+.histtoggle:hover{background:rgba(0,180,215,.05)}
+.histtoggle:focus-visible{outline:2px solid var(--cy-hi);outline-offset:-3px}
+.hcount{flex:none;padding:4px 11px;border-radius:999px;font-family:var(--mono);font-size:12px;font-weight:600;
+  color:#001016;background:linear-gradient(120deg,var(--cy-hi),var(--cy))}
+.histtoggle .chev{width:17px;height:17px;flex:none;color:var(--faint);
+  transition:transform .35s var(--ease),color .22s var(--ease)}
+.histtoggle:hover .chev{color:var(--cy-hi)}
+.histpanel.open .histtoggle .chev{transform:rotate(90deg);color:var(--cy-hi)}
+/* A grid row from 0fr to 1fr animates height without anybody having to know
+   the height — which is the one thing max-height transitions cannot do. */
+.histwrap{display:grid;grid-template-rows:0fr;transition:grid-template-rows .42s var(--ease)}
+.histpanel.open .histwrap{grid-template-rows:1fr}
+.histwrap>div{overflow:hidden;min-height:0}
+.histinner{padding:0 22px 20px}
+@media (max-width:620px){.histinner{padding:0 17px 18px}}
+.histinner>.hstats:first-child{margin-top:2px}
+.histempty{display:flex;gap:12px;align-items:flex-start;padding:14px 15px;border-radius:13px;margin-top:2px;
+  font-size:13.5px;line-height:1.6;color:var(--faint);
+  background:rgba(0,20,26,.5);border:1px solid rgba(0,180,215,.16)}
+.histempty b{display:block;color:var(--txt);font-size:14.5px;margin-bottom:3px}
+.histempty .i{width:16px;height:16px;margin-top:2px;color:var(--cy);flex:none}
+.histempty .go{margin-top:11px;padding:10px 16px;font-size:13.5px}
 .hhead{display:flex;gap:13px;align-items:center}
 .hic{width:38px;height:38px;flex:none;border-radius:13px;display:grid;place-items:center;
   background:rgba(0,180,215,.12);color:var(--cy-hi)}
 .hic .i{width:19px;height:19px}
-.hhead b{display:block;color:var(--txt);font-size:16.5px;font-weight:700;letter-spacing:-.015em}
-.hhead .hsub{display:block;font-size:12.8px;color:var(--faint);line-height:1.5;margin-top:2px}
-.hhead .grow{flex:1 1 auto;min-width:0}
+/* Scoped to .grow, not to .hhead. These two lines are also the label inside
+   the drawer's toggle, and when the rules only matched the open panel the
+   title and the subtitle ran together on one line there. */
+.grow{flex:1 1 auto;min-width:0}
+.grow b{display:block;color:var(--txt);font-size:16.5px;font-weight:700;letter-spacing:-.015em}
+.grow .hsub{display:block;font-size:12.8px;color:var(--faint);line-height:1.5;margin-top:2px}
 .hstats{display:grid;grid-template-columns:repeat(4,1fr);gap:9px;margin-top:16px}
 @media (max-width:620px){.hstats{grid-template-columns:1fr 1fr}}
 .hstat{padding:11px 13px;border-radius:12px;background:rgba(0,20,26,.55);border:1px solid rgba(0,180,215,.16)}
@@ -592,15 +626,6 @@ canvas.confetti{position:fixed;inset:0;width:100%;height:100%;pointer-events:non
 .hstat span{display:block;font-size:11.5px;color:var(--faint);margin-top:3px}
 
 /* every run so far, oldest on the left — the shape of getting better */
-.trendbox{margin-top:18px}
-.htrend{display:flex;align-items:flex-end;gap:4px;height:56px;padding:0 2px 0;
-  border-bottom:1px solid rgba(0,180,215,.22)}
-.htrend i{flex:1 1 0;min-width:3px;border-radius:3px 3px 1px 1px;background:var(--cy);opacity:.85;
-  animation:grow .6s var(--ease) both;transform-origin:bottom;transition:opacity .2s var(--ease)}
-.htrend i:hover{opacity:1}
-@keyframes grow{from{transform:scaleY(0)}}
-.trendkey{display:flex;justify-content:space-between;margin-top:7px;
-  font-family:var(--mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--faint)}
 
 .hlist{list-style:none;display:flex;flex-direction:column;gap:8px;margin-top:16px}
 .hrow{display:flex;align-items:center;gap:13px;padding:12px 14px;border-radius:14px;cursor:pointer;width:100%;
@@ -631,13 +656,23 @@ canvas.confetti{position:fixed;inset:0;width:100%;height:100%;pointer-events:non
 .hmore{margin-top:12px;text-align:center}
 
 /* one run, opened */
-.rmodal{width:min(660px,100%)}
-.rmodal canvas{width:100%;border-radius:14px;display:block;margin:16px 0 4px;
-  border:1px solid rgba(0,180,215,.3);box-shadow:0 30px 70px -40px rgba(0,0,0,.95)}
-.rrow{display:flex;gap:9px;flex-wrap:wrap;margin-top:14px}
-.rrow .go{padding:11px 16px;font-size:13.5px}
-.rmeta{display:flex;gap:14px;flex-wrap:wrap;margin-top:4px;font-family:var(--mono);font-size:11.5px;color:var(--faint)}
+.rmodal{width:min(680px,100%)}
+/* The card is the thing somebody opened the row to look at, so it gets the
+   same treatment here as on the result: a stage with perspective, a deal on
+   arrival, and a tilt that follows the cursor. */
+.rstage{max-width:none;margin:20px 0 0}
+.rmodal canvas{width:100%;border-radius:14px;display:block;
+  border:1px solid rgba(0,180,215,.3);box-shadow:0 34px 74px -40px rgba(0,0,0,.95)}
+.rmodal .cardwrap{border-radius:14px}
+.rmodal .glare{border-radius:14px}
+/* Air. The buttons were sitting on the card's shadow, which read as one
+   object with a row of controls welded to its bottom edge. */
+.rmeta{display:flex;gap:16px;flex-wrap:wrap;margin-top:26px;padding-top:18px;
+  border-top:1px dashed rgba(0,180,215,.18);
+  font-family:var(--mono);font-size:11.5px;color:var(--faint)}
 .rmeta b{color:var(--cy-hi)}
+.rrow{display:flex;gap:9px;flex-wrap:wrap;margin-top:16px}
+.rrow .go{padding:11px 16px;font-size:13.5px;animation:riseY .42s var(--ease) both}
 .danger{background:rgba(255,107,107,.08);border:1px solid rgba(255,107,107,.3);color:#FF9B9B;
   box-shadow:none;font-weight:600}
 .danger:hover:not(:disabled){background:rgba(255,107,107,.16);color:#FFC9C9;transform:translateY(-2px)}
@@ -1042,7 +1077,13 @@ canvas.confetti{position:fixed;inset:0;width:100%;height:100%;pointer-events:non
         <h2 id="rTitle">A run</h2>
         <p class="sub" id="rSub"></p>
       </div>
-      <canvas id="hcard" width="1200" height="630" aria-label="The card from this run"></canvas>
+      <div class="stagewrap rstage">
+        <div class="cardwrap" id="hwrap">
+          <canvas id="hcard" width="1200" height="630" aria-label="The card from this run"></canvas>
+          <div class="sheen" aria-hidden="true"></div>
+          <div class="glare" aria-hidden="true"></div>
+        </div>
+      </div>
       <div class="rmeta" id="rMeta"></div>
       <div class="rrow" id="rRow"></div>
       <p class="msay" id="rSay"></p>
@@ -2199,55 +2240,63 @@ $("post").addEventListener("click",()=>postRun(snapshot()));
    forces a layout on every pointer event for a number that only changes on
    scroll or resize. TAU is the time constant: below ~50ms the ramp reads as
    the snap it replaces, above ~120ms it reads as the lag it replaces. */
-const wrap=$("cardwrap");
 const TAU=0.08;
-let tYaw=0,tPit=0,cYaw=0,cPit=0,tSx=0,tSy=0,cSx=0,cSy=0;
-let tiltRaf=0,tiltLast=0,tiltOver=false,wrapRect=null;
-const dropRect=()=>{ wrapRect=null; };
-addEventListener("scroll",dropRect,{passive:true});
-addEventListener("resize",dropRect,{passive:true});
+/** One engine, wired to as many cards as there are — the result's, and the
+ *  one in an opened past run. Both are the same object and should behave the
+ *  same way in the hand. */
+function makeTilt(wrap){
+  let tYaw=0,tPit=0,cYaw=0,cPit=0,tSx=0,tSy=0,cSx=0,cSy=0;
+  let raf=0,last=0,over=false,rect=null;
+  const dropRect=()=>{ rect=null; };
+  addEventListener("scroll",dropRect,{passive:true});
+  addEventListener("resize",dropRect,{passive:true});
 
-/* The deal owns the transform while it runs, and an animation's value beats
-   an inline style — so a tilt built up underneath it would appear all at once
-   the instant the animation stopped. Hold flat until it is done. */
-const dealing=()=>{
-  try{ return wrap.getAnimations().some(a=>a.animationName==="deal"&&a.playState==="running"); }
-  catch{ return false; }
-};
+  /* The deal owns the transform while it runs, and an animation's value beats
+     an inline style — so a tilt built up underneath it would appear all at
+     once the instant the animation stopped. Hold flat until it is done. */
+  const dealing=()=>{
+    try{ return wrap.getAnimations().some(a=>a.animationName==="deal"&&a.playState==="running"); }
+    catch{ return false; }
+  };
+  function step(now){
+    const dt=Math.min(0.05,(now-last)/1000||0.0166); last=now;
+    if(dealing()){ raf=requestAnimationFrame(step); return; }
+    const k=1-Math.exp(-dt/TAU);
+    cYaw+=(tYaw-cYaw)*k; cPit+=(tPit-cPit)*k;
+    cSx+=(tSx-cSx)*k;    cSy+=(tSy-cSy)*k;
+    wrap.style.transform=`rotateY(${cYaw.toFixed(3)}deg) rotateX(${cPit.toFixed(3)}deg)`;
+    wrap.style.setProperty("--sx",`${cSx.toFixed(1)}px`);
+    wrap.style.setProperty("--sy",`${cSy.toFixed(1)}px`);
+    /* A twentieth of a degree is not a tilt anybody can see, and holding a rAF
+       open to chase the last thousandth is a frame a minute for nothing. */
+    const settled=Math.abs(tYaw-cYaw)+Math.abs(tPit-cPit)<0.05
+               && Math.abs(tSx-cSx)+Math.abs(tSy-cSy)<0.5;
+    if(over||!settled) raf=requestAnimationFrame(step);
+    else { wrap.style.transform=""; raf=0; }
+  }
+  const run=()=>{ if(!raf){ last=performance.now(); raf=requestAnimationFrame(step); } };
 
-function tiltStep(now){
-  const dt=Math.min(0.05,(now-tiltLast)/1000||0.0166); tiltLast=now;
-  if(dealing()){ tiltRaf=requestAnimationFrame(tiltStep); return; }
-  const k=1-Math.exp(-dt/TAU);
-  cYaw+=(tYaw-cYaw)*k; cPit+=(tPit-cPit)*k;
-  cSx+=(tSx-cSx)*k;    cSy+=(tSy-cSy)*k;
-  wrap.style.transform=`rotateY(${cYaw.toFixed(3)}deg) rotateX(${cPit.toFixed(3)}deg)`;
-  wrap.style.setProperty("--sx",`${cSx.toFixed(1)}px`);
-  wrap.style.setProperty("--sy",`${cSy.toFixed(1)}px`);
-  /* A twentieth of a degree is not a tilt anybody can see, and holding a rAF
-     open to chase the last thousandth is a frame a minute for nothing. */
-  const settled=Math.abs(tYaw-cYaw)+Math.abs(tPit-cPit)<0.05
-             && Math.abs(tSx-cSx)+Math.abs(tSy-cSy)<0.5;
-  if(tiltOver||!settled) tiltRaf=requestAnimationFrame(tiltStep);
-  else { wrap.style.transform=""; tiltRaf=0; }
+  wrap.addEventListener("pointerenter",()=>{ if(!calm()){ over=true; run(); } });
+  wrap.addEventListener("pointermove",(e)=>{
+    if(calm()) return;
+    const r=rect||(rect=wrap.getBoundingClientRect());
+    if(!r.width) return;
+    const px=(e.clientX-r.left)/r.width, py=(e.clientY-r.top)/r.height;
+    over=true;
+    tYaw=(px-.5)*11; tPit=(.5-py)*9;
+    tSx=(px-.5)*r.width; tSy=(py-.5)*r.height;
+    run();
+  });
+  wrap.addEventListener("pointerleave",()=>{
+    over=false; tYaw=0; tPit=0; tSx=0; tSy=0;
+    rect=null; run();
+  });
+  /* The pop-up moves under the card without the pointer moving, so the cached
+     rectangle has to be dropped when it opens. */
+  return { forget:dropRect };
 }
-const tiltRun=()=>{ if(!tiltRaf){ tiltLast=performance.now(); tiltRaf=requestAnimationFrame(tiltStep); } };
-
-wrap.addEventListener("pointerenter",()=>{ if(!calm()){ tiltOver=true; tiltRun(); } });
-wrap.addEventListener("pointermove",(e)=>{
-  if(calm()) return;
-  const r=wrapRect||(wrapRect=wrap.getBoundingClientRect());
-  if(!r.width) return;
-  const px=(e.clientX-r.left)/r.width, py=(e.clientY-r.top)/r.height;
-  tiltOver=true;
-  tYaw=(px-.5)*11; tPit=(.5-py)*9;
-  tSx=(px-.5)*r.width; tSy=(py-.5)*r.height;
-  tiltRun();
-});
-wrap.addEventListener("pointerleave",()=>{
-  tiltOver=false; tYaw=0; tPit=0; tSx=0; tSy=0;
-  wrapRect=null; tiltRun();
-});
+makeTilt($("cardwrap"));
+const hTilt=makeTilt($("hwrap"));
 
 /* The glow on a missed-gate card follows the cursor across it. Delegated,
    because the cards are rebuilt after every run. */
@@ -2302,27 +2351,10 @@ const when=(iso)=>{
   return d.toLocaleDateString([], {day:"numeric",month:"short",year:"numeric"});
 };
 
-function buildHistory(list,s){
-  const wrap=el("div","panel histpanel");
-
-  const head=el("div","hhead");
-  const hic=el("span","hic"); hic.append(icon("i-hist"));
-  const grow=el("div","grow");
-  grow.append(el("b",null,"Your runs"));
-  grow.append(el("span","hsub",
-    `${list.length} ${list.length===1?"run":"runs"} by ${shortDid(s.did,8,5)} · kept in this browser only`));
-  head.append(hic,grow);
-  /* Two taps to clear, and the second one is labelled. A confirm() blocks the
-     page and a single tap on "Clear" throws away the only copy there is. */
-  const clr=el("button","linkalt"); clr.type="button"; clr.textContent="Clear";
-  let armed=false;
-  clr.addEventListener("click",()=>{
-    if(!armed){ armed=true; clr.textContent="Really clear all?"; clr.style.color="#FF9B9B";
-      setTimeout(()=>{ if(armed){ armed=false; clr.textContent="Clear"; clr.style.color=""; } },4000); return; }
-    putRuns(s.did,[]); paintHistory();
-  });
-  head.append(clr);
-  wrap.append(head);
+/** The body: what somebody came to look at. Used open at the foot of a
+ *  result, and inside the drawer on the way in. */
+function historyBody(list,s){
+  const box=el("div","histinner");
 
   const bestRun=list.reduce((a,b)=>b.correct>a.correct||(b.correct===a.correct&&b.score>a.score)?b:a,list[0]);
   const bestPts=Math.max(...list.map(r=>r.score));
@@ -2333,27 +2365,7 @@ function buildHistory(list,s){
                stat(bestPts.toLocaleString(),"best points"),
                stat(String(avg),"average gates"),
                stat(bestRun.rank,"best rank"));
-  wrap.append(stats);
-
-  /* Oldest on the left, because the shape people want to see is whether they
-     are getting better. One run is not a trend, so it is not drawn. */
-  if(list.length>1){
-    const box=el("div","trendbox");
-    const tr=el("div","htrend");
-    const top=Math.max(1,bestPts);
-    [...list].reverse().forEach((r,i)=>{
-      const bar=el("i");
-      bar.style.height=`${Math.max(8,Math.round(r.score/top*100))}%`;
-      bar.style.background=(SKIN[r.rank]||SKIN["Validator"]).a;
-      bar.style.animationDelay=`${i*34}ms`;
-      bar.title=`${when(r.at)} — ${r.correct}/${r.total}, ${r.score.toLocaleString()} points`;
-      tr.append(bar);
-    });
-    const key=el("div","trendkey");
-    key.append(el("span",null,"first run"), el("span",null,"points per run"), el("span",null,"latest"));
-    box.append(tr,key);
-    wrap.append(box);
-  }
+  box.append(stats);
 
   const ul=el("ul","hlist");
   const shown = showAll ? list : list.slice(0,5);
@@ -2378,31 +2390,126 @@ function buildHistory(list,s){
     row.addEventListener("click",()=>openRun(r,s));
     li.append(row); ul.append(li);
   });
-  wrap.append(ul);
+  box.append(ul);
 
+  const foot=el("div","hmore");
   if(list.length>5){
-    const more=el("div","hmore");
     const b=el("button","linkalt"); b.type="button";
     b.textContent = showAll ? "Show fewer" : `Show all ${list.length} runs`;
     b.addEventListener("click",()=>{ showAll=!showAll; paintHistory(); });
-    more.append(b); wrap.append(more);
+    foot.append(b);
   }
+  /* Two taps to clear, and the second one is labelled. A confirm() blocks the
+     page and a single tap on "Clear" throws away the only copy there is. */
+  const clr=el("button","linkalt"); clr.type="button"; clr.textContent="Clear all runs";
+  clr.style.marginLeft=list.length>5?"14px":"0";
+  let armed=false;
+  clr.addEventListener("click",()=>{
+    if(!armed){ armed=true; clr.textContent="Really clear all?"; clr.style.color="#FF9B9B";
+      setTimeout(()=>{ if(armed){ armed=false; clr.textContent="Clear all runs"; clr.style.color=""; } },4000); return; }
+    putRuns(s.did,[]); paintHistory();
+  });
+  foot.append(clr);
+  box.append(foot);
+  return box;
+}
+
+/** Nothing to show yet, said in the shape of the reason. Three different
+ *  people read this panel and only one of them has runs. */
+function historyEmpty(s){
+  const box=el("div","histinner");
+  const e=el("div","histempty");
+  e.append(icon(s?"i-hist":"i-key"));
+  const body=el("div");
+  if(s){
+    body.append(el("b",null,"No runs yet."));
+    body.append(document.createTextNode(
+      "Play one and it is kept here, signed with your key — so the next one has something to beat."));
+  }else{
+    body.append(el("b",null,"Sign in to see your runs."));
+    body.append(document.createTextNode(
+      "Runs are kept against the key that signed them, in this browser. Without one there is nothing to keep them under."));
+    const go=el("button","go"); go.type="button";
+    go.append(icon("i-key"), el("span",null,"Sign in"));
+    go.addEventListener("click",()=>openModal());
+    body.append(go);
+  }
+  e.append(body);
+  box.append(e);
+  return box;
+}
+
+const OPENKEY="overheard.pol.open";
+const isOpen=()=>{ try{ return localStorage.getItem(OPENKEY)==="1"; }catch{ return false; } };
+
+/** The same content in two shapes. At the foot of a result it is open — the
+ *  run just happened and the comparison is the point. On the way in it is a
+ *  closed drawer, because somebody who came to play should be looking at the
+ *  start button, not at a table. */
+function buildHistory(list,s,drawer){
+  const wrap=el("div","panel histpanel");
+  const body = list.length ? historyBody(list,s) : historyEmpty(s);
+
+  if(!drawer){
+    const head=el("div","hhead"); head.style.padding="0 0 4px";
+    const hic=el("span","hic"); hic.append(icon("i-hist"));
+    const grow=el("div","grow");
+    grow.append(el("b",null,"Your runs"));
+    grow.append(el("span","hsub",
+      `${list.length} ${list.length===1?"run":"runs"} by ${shortDid(s.did,8,5)} · kept in this browser only`));
+    head.append(hic,grow);
+    wrap.append(head);
+    body.style.padding="0";
+    wrap.append(body);
+    return wrap;
+  }
+
+  wrap.classList.add("bar");
+  if(isOpen()) wrap.classList.add("open");
+  const t=el("button","histtoggle"); t.type="button";
+  t.setAttribute("aria-expanded",String(isOpen()));
+  const hic=el("span","hic"); hic.append(icon("i-hist"));
+  const grow=el("div","grow");
+  grow.append(el("b",null,"Your runs"));
+  grow.append(el("span","hsub",
+    !s ? "Sign in to see runs you have kept"
+       : list.length ? `${list.length} ${list.length===1?"run":"runs"} · kept in this browser only`
+                     : "Nothing here yet — your first run starts the list"));
+  t.append(hic,grow);
+  if(list.length) t.append(el("span","hcount",String(list.length)));
+  const ch=icon("i-chev"); ch.classList.add("chev"); t.append(ch);
+  t.addEventListener("click",()=>{
+    const open=!wrap.classList.contains("open");
+    wrap.classList.toggle("open",open);
+    t.setAttribute("aria-expanded",String(open));
+    try{ localStorage.setItem(OPENKEY,open?"1":"0"); }catch{}
+  });
+  wrap.append(t);
+
+  const fold=el("div","histwrap");
+  const inner=document.createElement("div");
+  inner.append(body);
+  fold.append(inner);
+  wrap.append(fold);
   return wrap;
 }
 
-/** The same panel in two places — under the start card, and at the foot of a
- *  result — because those are the two moments somebody wants it. Built twice
- *  rather than moved: one node cannot be in two sections at once. */
+/** The same panel in two places — a drawer under the start card, and open at
+ *  the foot of a result — because those are the two moments somebody wants
+ *  it. Built twice rather than moved: one node cannot be in two sections. */
 function paintHistory(){
   const s=getSession();
   const list=s?runsFor(s.did):[];
-  for(const id of ["histIntro","histEnd"]){
-    const host=$(id);
-    host.replaceChildren();
-    if(!s || !list.length){ host.hidden=true; continue; }
-    host.hidden=false;
-    host.append(buildHistory(list,s));
-  }
+  /* On the way in the bar is always there, because "sign in to keep your
+     runs" is worth saying to somebody who has never seen it. At the foot of a
+     result it appears only when there is something in it — the panel above it
+     already offers signing in, and saying it twice is nagging. */
+  $("histIntro").replaceChildren(buildHistory(list,s,true));
+  $("histIntro").hidden=false;
+  const end=$("histEnd");
+  end.replaceChildren();
+  if(s && list.length){ end.hidden=false; end.append(buildHistory(list,s,false)); }
+  else end.hidden=true;
 }
 
 /* ── one run, opened ────────────────────────────────────────────────────── */
@@ -2412,6 +2519,11 @@ function openRun(r,s){
   $("rTitle").textContent=`${r.rank} — ${r.correct} of ${r.total}`;
   $("rSub").textContent=`${when(r.at)} · ${r.score.toLocaleString()} points · best streak ${r.best}`;
   drawCard($("hcard"), r);
+  if(!calm()){
+    const w=$("hwrap");
+    w.classList.remove("reveal"); void w.offsetWidth; w.classList.add("reveal");
+  }
+  hTilt.forget();
   const meta=$("rMeta"); meta.replaceChildren();
   const bit=(l,v)=>{ const d=el("span"); d.append(document.createTextNode(l+" "), el("b",null,v)); return d; };
   meta.append(bit("gates",`${r.correct}/${r.total}`), bit("points",r.score.toLocaleString()),
@@ -2456,8 +2568,10 @@ function openRun(r,s){
   });
   row.append(del);
 
+  [...row.children].forEach((b,i)=>{ b.style.animationDelay=`${180+i*55}ms`; });
   $("rscrim").hidden=false;
-  setTimeout(()=>$("rClose").focus(),60);
+  hTilt.forget();
+  setTimeout(()=>{ $("rClose").focus(); hTilt.forget(); },60);
 }
 function closeRun(){ $("rscrim").hidden=true; openedRun=null; }
 $("rClose").addEventListener("click",closeRun);
