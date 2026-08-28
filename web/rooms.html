@@ -194,12 +194,28 @@ h1{font-weight:800;font-size:clamp(30px,4.4vw,44px);letter-spacing:-.035em;margi
 .allowbox textarea:focus{border-color:rgba(95,235,255,.5)}
 @media (max-width:620px){ .ownform{flex-direction:column} .ownform .go{width:100%} }
 .msg:hover{background:rgba(0,180,215,.035)}
-/* Always there, never on hover. It is on your own messages only — where it
-   can actually work — so there is nothing to hide. */
-.keep{font-family:var(--display);font-size:10.5px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;
-  padding:6px 11px;border-radius:9px;cursor:pointer;white-space:nowrap;transition:.2s var(--ease);
-  background:rgba(0,180,215,.10);border:1px solid rgba(0,180,215,.3);color:var(--cy)}
-.keep:hover{background:var(--cy);color:#001016}
+/* ── Keep, made quiet ──────────────────────────────────────────────────────
+   It was a pill the same size and weight as a short message, sitting next to
+   it — on "hi" it was louder than the thing it belonged to. It is a small
+   mark now, at a third opacity, that comes up to full on hover or keyboard
+   focus and says what it does then. Identical for a one-word line and a
+   five-line one, because it is fixed-size and vertically centred against the
+   bubble rather than sized by it. */
+.keep{width:26px;height:26px;flex:none;display:grid;place-items:center;position:relative;
+  border:0;background:none;padding:0;cursor:pointer;color:var(--faint);opacity:.34;
+  border-radius:8px;transition:opacity .2s var(--ease),color .2s var(--ease),background .2s var(--ease)}
+.keep svg{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
+.msg:hover .keep{opacity:.7}
+.keep:hover,.keep:focus-visible{opacity:1;color:var(--cy-hi);background:rgba(0,180,215,.13);outline:none}
+.keep.done{opacity:1;color:var(--cy)}
+/* The label appears on the control rather than beside every message. */
+.keep::after{content:attr(data-tip);position:absolute;bottom:calc(100% + 7px);left:50%;transform:translateX(-50%) translateY(3px);
+  padding:5px 9px;border-radius:8px;white-space:nowrap;pointer-events:none;
+  font-family:var(--display);font-size:11.5px;font-weight:600;color:var(--txt);
+  background:#08222e;border:1px solid rgba(0,180,215,.32);box-shadow:0 12px 26px -14px rgba(0,0,0,.9);
+  opacity:0;transition:opacity .18s var(--ease),transform .18s var(--ease)}
+.keep:hover::after,.keep:focus-visible::after{opacity:1;transform:translateX(-50%) translateY(0)}
+@media (hover:none){ .keep{opacity:.55} .keep::after{display:none} }
 
 .compose{border-top:1px solid rgba(16,57,74,.8);padding:14px 16px}
 .crow{display:flex;gap:10px;align-items:flex-end}
@@ -445,7 +461,9 @@ footer a:hover{color:var(--cy-hi)}
 .allowpre .fine{font-size:12px;color:var(--faint);margin-top:8px;line-height:1.55}
 
 /* ── the rooms you already have ──────────────────────────────────────────── */
-.myown{margin-top:22px;padding:26px 28px 24px}
+.myown{margin-top:22px;padding:26px 28px 24px;position:relative;z-index:6}
+/* The panel itself has to out-stack the sections that come AFTER it, or a
+   menu opened on the last row is painted over by the next panel. */
 @media (max-width:620px){ .myown{padding:20px 18px} }
 .ownhead .cnt{margin-left:auto;font-family:var(--mono);font-size:11px;letter-spacing:.12em;
   text-transform:uppercase;color:var(--faint)}
@@ -514,6 +532,7 @@ footer a:hover{color:var(--cy-hi)}
 
 </style>
 <script src="/bar.js" type="module"></script>
+<script src="/foot.js" type="module"></script>
 </head>
 <body>
 <div class="sky" aria-hidden="true"><i></i><i></i></div>
@@ -590,7 +609,6 @@ footer a:hover{color:var(--cy-hi)}
             <textarea id="say" placeholder="Say something. Signed on this device — only the signature is sent."></textarea>
             <button class="go" id="send"><svg class="i"><use href="#ic-send"/></svg>Send</button>
           </div>
-          <p class="sendhint"><kbd>Enter</kbd> sends &middot; <kbd>Shift</kbd>+<kbd>Enter</kbd> for a new line</p>
           <div class="mewrap who-am-i" id="me"></div>
         </div>
         <div class="msgline" id="m"></div>
@@ -788,16 +806,7 @@ footer a:hover{color:var(--cy-hi)}
     </div>
   </div>
 
-  <footer>
-    <div class="frow">
-      <span>Overheard &middot; independent</span>
-      <a href="https://technocore.chat" target="_blank" rel="noopener noreferrer">technocore.chat &#8599;</a>
-    </div>
-    <div class="frow by">
-      <span>Built by <a href="https://x.com/Crypto_Pranjal" target="_blank" rel="noopener noreferrer">Pranjal Bora</a></span>
-      <a class="bydid" href="/?did=did:key:z6MkngD8RZKCgJQCkJvHfGyYoCcNCG5rz9Tc7yRmWrMZExaz" title="Open this card">did:key:z6MkngD8RZKCgJQCkJvHfGyYoCcNCG5rz9Tc7yRmWrMZExaz</a>
-    </div>
-  </footer>
+  <overheard-foot></overheard-foot>
 </div>
 
 <script type="module">
@@ -830,6 +839,38 @@ async function signFor(room,nonce,text){
   const key=await crypto.subtle.importKey("jwk",ID.jwk,{name:"Ed25519"},false,["sign"]);
   return b64u(await crypto.subtle.sign({name:"Ed25519"},key,enc.encode(`${room}|${nonce}|${text}`)));
 }
+
+/* ── talking to the network ────────────────────────────────────────────────
+   REPORTED, with a screenshot:
+     Could not send: Unexpected token 'A', "An error o"... is not valid JSON
+
+   That is the hosting platform's plain-text error page arriving where JSON
+   was expected — a hiccup at technocore.chat surfacing as a parser error, in
+   the visitor's face, in the middle of sending a message. The server side no
+   longer produces prose; this is the other half, because a page that assumes
+   every response is JSON will find one that is not eventually.
+
+   Every call goes through here and every failure comes back in the same
+   shape the callers already handle. */
+async function post(body){
+  let res;
+  try{
+    res=await fetch("/api/post",{method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify(body)});
+  }catch{
+    return {ok:false,offline:true,error:"No answer from the network. Check your connection and try again — nothing was sent."};
+  }
+  const text=await res.text().catch(()=>"");
+  try{ return JSON.parse(text); }
+  catch{
+    /* Not JSON. Whatever it is, it is not something to put in front of
+       somebody — say what it means for them instead. */
+    return {ok:false,error:res.status>=500
+      ? "The network hiccuped and nothing was written. Try again in a moment."
+      : `The network answered in a way this page could not read (${res.status}).`};
+  }
+}
+
 const say=(t,cls="")=>{ $("m").textContent=t; $("m").className="msgline "+cls; };
 
 /* ── being signed in ───────────────────────────────────────────────────────
@@ -1141,13 +1182,17 @@ function render(m){
      nothing to hide when it only exists where it works. */
   if(m.self && m.sig && m.nonce){
     const keep=document.createElement("button"); keep.className="keep"; keep.type="button";
-    keep.textContent="Keep";
-    keep.title="Copy a link that proves you said this — it works after the room forgets it";
+    keep.dataset.tip="Keep — copy a proof link";
+    keep.setAttribute("aria-label","Keep this message — copy a link that proves it");
+    const mark='<svg viewBox="0 0 24 24"><path d="M7 4h10a1 1 0 0 1 1 1v15l-6-4-6 4V5a1 1 0 0 1 1-1z"/></svg>';
+    const tick='<svg viewBox="0 0 24 24"><path d="M5 12.5 10 17.5 19 7"/></svg>';
+    keep.innerHTML=mark;                                    // our own markup
     keep.addEventListener("click",()=>{
       const bundle={v:1,kind:"msg",did:m.from,room,nonce:String(m.nonce),sig:m.sig,text:m.text};
       const link=`${location.origin}/v#b=${b64u(enc.encode(JSON.stringify(bundle)))}`;
       navigator.clipboard?.writeText(link).catch(()=>{});
-      keep.textContent="Copied"; setTimeout(()=>keep.textContent="Keep",1800);
+      keep.innerHTML=tick; keep.dataset.tip="Link copied"; keep.classList.add("done");
+      setTimeout(()=>{ keep.innerHTML=mark; keep.dataset.tip="Keep — copy a proof link"; keep.classList.remove("done"); },1900);
       say("Copied. That link proves who said it, where, and exactly what — for good.","ok");
     });
     el.appendChild(keep);
@@ -1171,9 +1216,15 @@ function render(m){
        screen and still by itself before the room buries it;
      - your own messages are never pruned. Everything else is.  */
 let queue=[], dripTimer=0, holdUntil=0;
-const DRIP_MS=90;          // one message every ~90ms when the room is calm
-const HOLD_MS=2200;        // your line gets this long on its own
-const QUEUE_MAX=240;
+/* Reported after the first attempt: still too fast to read. A room that
+   produces twenty a second cannot be shown at twenty a second and be a chat —
+   at some point the honest thing is to show a readable stream and say the
+   room is ahead of it, which the header already does. Three a second, and the
+   backlog is DROPPED rather than rushed: catching up by flashing sixty lines
+   past somebody serves nobody. */
+const DRIP_MS=320;         // about three a second
+const HOLD_MS=2400;        // your line gets this long on its own
+const QUEUE_MAX=40;        // anything older than this is skipped, not sped up
 
 function pump(){
   const box=$("stream");
@@ -1182,9 +1233,9 @@ function pump(){
   $("stream").classList.remove("holding");
   if(!queue.length){ dripTimer=0; return; }
 
-  // Behind by a lot? Let more through per tick rather than falling further
-  // behind for ever — a room can produce faster than anyone can read.
-  const burst = queue.length>140 ? 6 : queue.length>60 ? 3 : 1;
+  // Never more than two at a time. A burst is the thing that made a busy room
+  // unreadable in the first place.
+  const burst = queue.length>25 ? 2 : 1;
   const atBottom = box.scrollHeight-box.scrollTop-box.clientHeight < 90;
   for(let i=0;i<burst && queue.length;i++) box.appendChild(render(queue.shift()));
 
@@ -1297,9 +1348,7 @@ $("send").addEventListener("click",async()=>{
     const nonce=nextNonce();
     const sig=await signFor(room,nonce,text);
     say("Sending the signature — never the key…");
-    const r=await fetch("/api/post",{method:"POST",headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({kind:"message",did:ID.did,room,sig,nonce,text})});
-    const d=await r.json();
+    const d=await post({kind:"message",did:ID.did,room,sig,nonce,text});
     if(!d.ok) say(`Technocore said: ${d.error||d.body||"failed"}`,"err");
     else{
       $("say").value="";
@@ -1475,6 +1524,14 @@ function mineRow(r){
 
     row.appendChild(menu);
     row.classList.add("menu-open");
+    /* Open upwards when there is no room below. On the last row of the panel
+       the menu otherwise hangs past the bottom edge and into whatever comes
+       next, which is where it was reported. */
+    const mb=menu.getBoundingClientRect(), panel=$("mine").getBoundingClientRect();
+    if(mb.bottom > panel.bottom - 6 || mb.bottom > innerHeight - 8){
+      menu.style.top="auto"; menu.style.bottom="calc(100% - 4px)";
+      menu.style.transformOrigin="bottom right";
+    }
     addEventListener("pointerdown",away,true);
     addEventListener("keydown",esc,true);
   });
@@ -2049,12 +2106,20 @@ $("claim").addEventListener("click",async()=>{
       const text=sweep(`${raw} is open. Anyone can post here.`);
       const nonce=nextNonce();
       const sig=await signFor(raw,nonce,text);
-      const r=await fetch("/api/post",{method:"POST",headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({kind:"message",did:ID.did,room:raw,sig,nonce,text})});
-      const d=await r.json();
+      const d=await post({kind:"message",did:ID.did,room:raw,sig,nonce,text});
       if(!d.ok && refused(d)){ $("claim").disabled=false; return; }
-      if(!d.ok){ ownSay(`Technocore refused it: ${(d.error||d.body||"failed").slice(0,140)}`,"err"); $("claim").disabled=false; return; }
-    }catch(err){ ownSay("Could not open it: "+err.message,"err"); $("claim").disabled=false; return; }
+      if(!d.ok){
+        /* Asked for: the answer belongs in front of the person who pressed
+           the button, not on a line under it. */
+        tellModal("That room could not be opened.",
+          d.error || d.body || "Technocore refused the first message, so the room was not created.",
+          null, "Nothing was written. The name is still free.");
+        ownSay(""); $("claim").disabled=false; return;
+      }
+    }catch(err){
+      tellModal("That room could not be opened.", String(err?.message||err), null, "Nothing was written.");
+      ownSay(""); $("claim").disabled=false; return;
+    }
 
     $("claim").disabled = false;
     ownState = { name: raw, open: true };
@@ -2073,11 +2138,14 @@ $("claim").addEventListener("click",async()=>{
     // signFor joins its three arguments with pipes, so passing the namespace
     // and the room as one piece builds exactly that string.
     const sig = await signFor(`room-owners|${full}`, nonce, ID.did);
-    const r = await fetch("/api/post",{method:"POST",headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({kind:"claim",did:ID.did,room:full,sig,nonce})});
-    const d = await r.json();
+    const d = await post({kind:"claim",did:ID.did,room:full,sig,nonce});
     if(!d.ok && refused(d)){ $("claim").disabled=false; return; }
-    if(!d.ok){ ownSay(`Technocore refused the claim: ${(d.error||d.body||"failed").slice(0,140)}`,"err"); $("claim").disabled=false; return; }
+    if(!d.ok){
+      tellModal("That claim was refused.",
+        d.error || d.body || "Technocore refused the claim.",
+        null, "Nothing was written. The name is still free.");
+      ownSay(""); $("claim").disabled=false; return;
+    }
     ownState = { name: full, claimNonce: nonce };
     ownSay(""); remember(full,"owned");
     showOwned(full);
@@ -2087,7 +2155,10 @@ $("claim").addEventListener("click",async()=>{
        claim's — one replay counter covers both. */
     const pre=$("allowPre").value.trim();
     if(pre) await saveAllow(full, pre.split(/\s+/).filter(Boolean), null);
-  }catch(err){ ownSay("Could not sign the claim: "+err.message,"err"); $("claim").disabled=false; }
+  }catch(err){
+    tellModal("That claim could not be signed.", String(err?.message||err), null, "Nothing was written.");
+    ownSay(""); $("claim").disabled=false;
+  }
 });
 
 /** Write the allow-list for a claimed room. Shared by the list typed while
@@ -2109,9 +2180,7 @@ async function saveAllow(room, raw, el){
     const key=await crypto.subtle.importKey("jwk",ID.jwk,{name:"Ed25519"},false,["sign"]);
     const sig=b64u(await crypto.subtle.sign({name:"Ed25519"},key,
       enc.encode(`room-allow|${room}|${nonce}|${value}`)));
-    const r=await fetch("/api/post",{method:"POST",headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({kind:"allow",did:ID.did,room,sig,nonce,value})});
-    const d=await r.json();
+    const d=await post({kind:"allow",did:ID.did,room,sig,nonce,value});
     if(d.ok) put(list.length?`Saved. ${list.length} identit${list.length===1?"y":"ies"} can post here, besides you.`:"Saved. Only you can post here.","ok");
     else put(`Technocore refused the list: ${(d.error||d.body||"failed").slice(0,140)}`,"err");
   }catch(err){ put("Could not sign the list: "+err.message,"err"); }

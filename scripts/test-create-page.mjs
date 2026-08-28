@@ -492,24 +492,31 @@ check('but no confetti for anyone who asked for less motion',
 await calm.close();
 
 console.log('\n=== F7. the footer matches the card page');
-const foot = await pg.evaluate(() => document.querySelector('footer').innerText);
-check('two rows', (await pg.locator('footer .frow').count()) === 2);
-const fw = await pg.evaluate(() => {
-  const f = document.querySelector('footer').getBoundingClientRect();
+/* It IS the card page's footer now — one component in a shadow root, on every
+   page, so "matches" is a fact about the code rather than a thing to keep
+   re-checking by eye. What is worth checking here is that a 760px column does
+   not squeeze it. */
+const F = await pg.evaluate(() => {
+  const r = document.querySelector('overheard-foot')?.shadowRoot;
+  if (!r) return null;
+  const f = r.querySelector('footer').getBoundingClientRect();
   const s = document.querySelector('.shell').getBoundingClientRect();
-  return { footer: Math.round(f.width), column: Math.round(s.width), doc: document.documentElement.clientWidth };
+  const did = r.querySelector('a.did');
+  return { text: r.querySelector('footer').innerText, rows: r.querySelectorAll('.row').length,
+           x: !!r.querySelector('a[href="https://x.com/Crypto_Pranjal"]'),
+           didHref: did?.getAttribute('href') || '',
+           footer: Math.round(f.width), column: Math.round(s.width), doc: document.documentElement.clientWidth };
 });
-console.log('   ', JSON.stringify(fw));
+console.log('   ', JSON.stringify({ footer: F.footer, column: F.column, doc: F.doc }));
+check('two rows', F.rows === 2);
 check('a full-bleed footer does not give the page a sideways scrollbar',
   await pg.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth),
   await pg.evaluate(() => `${document.documentElement.scrollWidth}/${document.documentElement.clientWidth}`));
-check('and it is the page width, not the column width', fw.footer > fw.column + 200 && fw.footer <= fw.doc,
-  `${fw.footer} vs a ${fw.column} column`);
-check('names the builder and links X', /Built by\s+Pranjal Bora/.test(foot)
-  && (await pg.locator('footer a[href="https://x.com/Crypto_Pranjal"]').count()) === 1);
-check('carries the whole DID', foot.includes('did:key:z6MkngD8RZKCgJQCkJvHfGyYoCcNCG5rz9Tc7yRmWrMZExaz'));
-check('and the DID opens its own card',
-  (await pg.locator('footer .bydid').getAttribute('href')) === '/?did=did:key:z6MkngD8RZKCgJQCkJvHfGyYoCcNCG5rz9Tc7yRmWrMZExaz');
+check('and it is not squeezed into this page\'s narrow column', F.footer > F.column + 200 && F.footer <= F.doc,
+  `${F.footer} vs a ${F.column} column`);
+check('names the builder and links X', /Built by\s+Pranjal Bora/.test(F.text) && F.x);
+check('carries the whole DID', F.text.includes('did:key:z6MkngD8RZKCgJQCkJvHfGyYoCcNCG5rz9Tc7yRmWrMZExaz'));
+check('and the DID opens its own card', /^\/\?did=did(%3A|:)key/.test(F.didHref), F.didHref.slice(0, 30));
 
 console.log('\n=== I. phone');
 const pg2 = await ctx.newPage(); await pg2.setViewportSize({ width: 390, height: 844 });

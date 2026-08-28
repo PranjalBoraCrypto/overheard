@@ -231,11 +231,52 @@ check('and it is never pruned away, however loud the room gets',
     .some(b => b.textContent === 'MINE-IN-THE-FLOOD'))) === true);
 const flow = await pg.evaluate(() => ({ shown: document.querySelectorAll('.msg').length }));
 check('the room is let out at a readable rate, not eighty in a frame', flow.shown <= 320, JSON.stringify(flow));
-check('Keep is there without hovering over it', await pg.evaluate(() => {
+/* Keep is present without a hover — but quiet. It was a pill the same size
+   and weight as a short message, which on "hi" was louder than the message.
+   Fixed size, low opacity, full on hover, and it says what it does then. */
+const keepLook = await pg.evaluate(() => {
   const el = [...document.querySelectorAll('.msg.mine')].find(m => m.textContent.includes('MINE-IN-THE-FLOOD'));
   const k = el?.querySelector('.keep');
-  return !!k && getComputedStyle(k).opacity === '1';
-}));
+  if (!k) return null;
+  const s = getComputedStyle(k), r = k.getBoundingClientRect();
+  const bubble = el.querySelector('.body').getBoundingClientRect();
+  return { op: +s.opacity, w: Math.round(r.width), h: Math.round(r.height),
+           tip: k.dataset.tip, area: Math.round(r.width * r.height),
+           bubbleArea: Math.round(bubble.width * bubble.height) };
+});
+check('Keep is there without hovering over it', !!keepLook && keepLook.w > 0, JSON.stringify(keepLook));
+check('but quiet — not competing with the message', keepLook.op < 0.6, `opacity ${keepLook.op}`);
+check('and it says what it does, on the control', /Keep/.test(keepLook.tip || ''), keepLook.tip);
+
+/* Asked for: check it on a one-word message, a middling one and a long one —
+   the control must be the same size in all three, so it never reads as more
+   important than what it belongs to. */
+const sizes = [];
+for (const [name, text] of [['one word', 'hi'],
+                            ['a sentence', 'Setting up my agent identity on Technocore today.'],
+                            ['a paragraph', 'A much longer line: '.repeat(12)]]) {
+  await pg.fill('#say', text);
+  await pg.press('#say', 'Enter');
+  await pg.waitForTimeout(600);
+  sizes.push([name, await pg.evaluate((t) => {
+    const el = [...document.querySelectorAll('.msg.mine')].reverse().find(m => m.textContent.includes(t.slice(0, 12)));
+    const k = el.querySelector('.keep').getBoundingClientRect();
+    const b = el.querySelector('.body').getBoundingClientRect();
+    const g = el.querySelector('.keep svg').getBoundingClientRect();
+    // The button keeps a 26px touch target; what a person SEES is the glyph,
+    // at a third opacity. That is the thing to compare with the message.
+    return { keep: Math.round(k.width) + 'x' + Math.round(k.height),
+             glyph: Math.round(g.width), narrower: k.width < b.width,
+             ratio: +(g.width * g.height / (b.width * b.height)).toFixed(3) };
+  }, text)]);
+}
+console.log('   ', JSON.stringify(sizes));
+check('the same control on a word, a sentence and a paragraph',
+  new Set(sizes.map(([, v]) => v.keep)).size === 1, sizes.map(([n, v]) => n + ' ' + v.keep).join(' | '));
+check('a small glyph in every case, never a pill',
+  sizes.every(([, v]) => v.glyph <= 16), JSON.stringify(sizes.map(([n, v]) => [n, v.glyph])));
+check('and smaller than the message it belongs to, even a two-letter one',
+  sizes.every(([, v]) => v.narrower && v.ratio < 0.2), JSON.stringify(sizes.map(([n, v]) => [n, v.ratio])));
 
 console.log('\n=== F3. the chat scrolls wherever the cursor is in it');
 const scroller = await pg.evaluate(() => {
@@ -451,12 +492,12 @@ console.log('   ', JSON.stringify(items));
 check('the menu offers the practical things', items.some(t => /Copy the link/.test(t)) &&
   items.some(t => /Pin/.test(t)) && items.some(t => /Who can post/.test(t)), JSON.stringify(items));
 await pg.evaluate(() => [...document.querySelectorAll('#mrooms .rmenu button')].find(b => /Who can post/.test(b.textContent)).click());
-await pg.waitForFunction(() => !!document.querySelector('#mrooms .who textarea:not([disabled])'), null, { timeout: 9000 });
+await pg.waitForFunction(() => !!document.querySelector('#mrooms .whobox textarea:not([disabled])'), null, { timeout: 9000 });
 check('and editing the list starts from what Technocore holds now',
-  (await pg.inputValue('#mrooms .who textarea')) === 'did:key:z6MkAllowedOne');
+  (await pg.inputValue('#mrooms .whobox textarea')) === 'did:key:z6MkAllowedOne');
 POSTS = [];
-await pg.fill('#mrooms .who textarea', 'did:key:z6Mkmw4xM1EycqDvmDdPYUJHnLYAMBEWCpz6DohcTBBLLLLL');
-await pg.click('#mrooms .who .go:not(.ghost)');
+await pg.fill('#mrooms .whobox textarea', 'did:key:z6Mkmw4xM1EycqDvmDdPYUJHnLYAMBEWCpz6DohcTBBLLLLL');
+await pg.click('#mrooms .whobox .go:not(.ghost)');
 await pg.waitForTimeout(1200);
 check('saving signs a new list', POSTS.some(p => p.kind === 'allow' && p.room === 'd-my-lab'),
   JSON.stringify(POSTS.map(p => p.kind)));

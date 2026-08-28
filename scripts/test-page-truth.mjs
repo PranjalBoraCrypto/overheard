@@ -73,14 +73,27 @@ console.log('  icon strokes:', colors.join('  |  '));
 check('different accents per side', colors[0] !== colors[1]);
 
 console.log('\n=== the footer credit');
-await pg.locator('footer').scrollIntoViewIfNeeded(); await pg.waitForTimeout(400);
-const foot = await pg.evaluate(() => document.querySelector('footer').innerText);
-check('names the builder', /Built by\s+Pranjal Bora/.test(foot), JSON.stringify(foot.slice(0, 120)));
-check('links the X profile', await pg.locator('footer a[href="https://x.com/Crypto_Pranjal"]').count() === 1);
-check('carries the WHOLE did, not an ellipsis', foot.includes(DID), foot.includes('…') ? 'trimmed' : 'full');
-check('and the did opens its own card', (await pg.locator('footer .bydid').getAttribute('href')) === `/?did=${DID}`);
+/* One footer, in a shadow root, on every page — so it cannot drift the way
+   four copies of it did. Read through the root rather than from the page. */
+const readFoot = (page) => page.evaluate(() => {
+  const r = document.querySelector('overheard-foot')?.shadowRoot;
+  if (!r) return null;
+  const did = r.querySelector('a.did');
+  return { text: r.querySelector('footer').innerText,
+           x: !!r.querySelector('a[href="https://x.com/Crypto_Pranjal"]'),
+           didHref: did?.getAttribute('href') || '',
+           box: (() => { const b = r.querySelector('footer').getBoundingClientRect();
+                         return { l: Math.round(b.left), w: Math.round(b.width) }; })() };
+});
+await pg.locator('overheard-foot').scrollIntoViewIfNeeded(); await pg.waitForTimeout(400);
+const F = await readFoot(pg);
+check('names the builder', /Built by\s+Pranjal Bora/.test(F.text), JSON.stringify(F.text.slice(0, 120)));
+check('links the X profile', F.x);
+check('carries the WHOLE did, not an ellipsis', F.text.includes(DID), F.text.includes('…') ? 'trimmed' : 'full');
+check('and the did opens its own card', F.didHref === `/?did=${encodeURIComponent(DID)}` || F.didHref === `/?did=${DID}`,
+  F.didHref.slice(0, 40));
 await pg.locator('#truth').screenshot({ path: '/tmp/truth.png' });
-await pg.locator('footer').screenshot({ path: '/tmp/foot.png' });
+await pg.locator('overheard-foot').screenshot({ path: '/tmp/foot.png' });
 
 console.log('\n=== phone');
 const pg2 = await b.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 }); await killWebGL(pg2);
@@ -92,16 +105,25 @@ check('no horizontal scroll', ov[0] <= ov[1], ov.join('/'));
 check('the ledger stacks to one column', await pg2.evaluate(() =>
   getComputedStyle(document.querySelector('.ledger')).gridTemplateColumns.split(' ').length === 1));
 await pg2.locator('#truth').screenshot({ path: '/tmp/truth-phone.png' });
-await pg2.locator('footer').scrollIntoViewIfNeeded(); await pg2.waitForTimeout(300);
-await pg2.locator('footer').screenshot({ path: '/tmp/foot-phone.png' });
+await pg2.locator('overheard-foot').scrollIntoViewIfNeeded(); await pg2.waitForTimeout(300);
+await pg2.locator('overheard-foot').screenshot({ path: '/tmp/foot-phone.png' });
 
-console.log('\n=== the other pages carry the credit too');
-for (const page of ['/create.html', '/rooms.html', '/v']) {
-  const url = page === '/v' ? '/v.html' : page;
-  await pg.goto('http://localhost:8991' + url); await pg.waitForTimeout(400);
-  const f = await pg.evaluate(() => document.querySelector('footer')?.innerText || '');
-  check(`${url}`, /Pranjal Bora/.test(f) && f.includes(DID), f.includes(DID) ? 'ok' : 'missing');
+console.log('\n=== every page, the SAME footer');
+/* The point of the component: not merely that each page has a credit, but
+   that the credit is laid out identically on a 680px column and an 1180px
+   one. Four hand-written copies could never manage that, and did not. */
+const geo = { '/index.html': F.box };
+for (const url of ['/create.html', '/rooms.html', '/v.html']) {
+  await pg.goto('http://localhost:8991' + url); await pg.waitForTimeout(500);
+  await pg.locator('overheard-foot').scrollIntoViewIfNeeded(); await pg.waitForTimeout(200);
+  const f = await readFoot(pg);
+  check(`${url} carries the credit`, !!f && /Pranjal Bora/.test(f.text) && f.text.includes(DID));
+  geo[url] = f?.box;
 }
+const widths = Object.values(geo).map(b => b?.w);
+const lefts = Object.values(geo).map(b => b?.l);
+check('and every one of them is the same width', new Set(widths).size === 1, JSON.stringify(geo));
+check('in the same place', new Set(lefts).size === 1, JSON.stringify(lefts));
 
 console.log('\nerrors:', errs);
 if (errs.length) bad++;

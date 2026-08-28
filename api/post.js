@@ -55,15 +55,53 @@ function looksLikeKeyMaterial(payload) {
   );
 }
 
+/**
+ * Forward, and NEVER throw.
+ *
+ * REPORTED, with a screenshot: the page said
+ *   Could not send: Unexpected token 'A', "An error o"... is not valid JSON
+ *
+ * That string is Vercel's own plain-text error page. This function had no
+ * try/catch and no deadline, so when the upstream fetch failed or hung — a
+ * reset, a slow moment at technocore.chat, the platform's invocation limit —
+ * the exception escaped the handler, the platform answered with prose instead
+ * of JSON, and the browser tried to parse prose. The visitor was shown a
+ * parser error for a network hiccup that had nothing to do with them.
+ *
+ * A refusal, a timeout and an unreachable upstream are now three ordinary
+ * JSON answers, all of which the page already knows how to read.
+ */
 async function forward(path) {
-  const res = await fetch(`${BASE}${path}`, {
-    headers: { Accept: "application/json", "User-Agent": "overheard-post/1.0" },
-  });
-  const body = await res.text();
-  return { status: res.status, body: body.slice(0, 2000) };
+  try {
+    const res = await fetch(`${BASE}${path}`, {
+      headers: { Accept: "application/json", "User-Agent": "overheard-post/1.0" },
+      signal: AbortSignal.timeout(12000),
+    });
+    const body = await res.text();
+    return { status: res.status, body: body.slice(0, 2000) };
+  } catch (err) {
+    const timedOut = String(err?.name || "") === "TimeoutError" || /abort/i.test(String(err?.message || ""));
+    return {
+      status: 504,
+      body: timedOut
+        ? "technocore.chat did not answer in time — nothing was written, and trying again usually works"
+        : "could not reach technocore.chat — nothing was written, and trying again usually works",
+      upstream: false,
+    };
+  }
 }
 
 export default async function handler(request) {
+  /* One more net under the whole thing. Anything unforeseen in here used to
+     become the platform's HTML error page, which the browser then tried to
+     parse as JSON; whatever goes wrong, the answer stays JSON. */
+  try { return await route(request); }
+  catch (err) {
+    return json({ ok: false, error: `the forwarder failed: ${String(err?.message || err).slice(0, 160)}` }, 502);
+  }
+}
+
+async function route(request) {
   if (request.method === "OPTIONS") return new Response(null, { headers: CORS });
   if (request.method !== "POST") return json({ error: "POST only" }, 405);
 
