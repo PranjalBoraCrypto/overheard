@@ -77,7 +77,7 @@ blockquote .meta{display:block;margin-top:12px;font-family:var(--mono);font-size
 .note{background:rgba(242,179,61,.07);border:1px solid rgba(242,179,61,.3);border-radius:13px;
   padding:16px 18px;margin-top:22px;font-size:14px;line-height:1.65;color:var(--dim)}
 .note b{display:block;color:var(--gold);font-weight:600;margin-bottom:6px}
-.row{display:flex;gap:10px;flex-wrap:wrap;margin-top:20px}
+.row{display:flex;gap:10px;flex-wrap:wrap;margin-top:20px;margin-bottom:36px}
 .go{font-family:var(--display);font-size:14px;font-weight:600;padding:11px 20px;border-radius:10px;border:0;cursor:pointer;
   background:linear-gradient(120deg,var(--mint),#58E9FF);color:#001016;text-decoration:none;display:inline-block;transition:.2s var(--ease)}
 .go:hover{filter:brightness(1.08)}
@@ -165,7 +165,103 @@ footer a{color:var(--blue)}
 .tabs a:hover{color:#5FEBFF;background:rgba(0,180,215,.09)}
 .tabs a.on{color:#001016;background:linear-gradient(120deg,#5FEBFF,#00B4D7);box-shadow:0 10px 26px -14px rgba(0,180,215,1)}
 
-.bydid{font-family:var(--mono),ui-monospace,monospace;font-size:11.5px;word-break:break-all;opacity:.8}
+
+/* ── the page, for somebody who has never heard of a signature ────────────
+   It answers one question — "did they really say this?" — and everything on
+   it is arranged around that question rather than around the four
+   cryptographic steps that produce the answer. The steps are still here, one
+   click down, for anybody who wants them.                                  */
+.hero{display:block;padding-top:6px}   /* the old header rule was a flex row */
+.hero h1{margin-top:18px}
+.eyebrow{display:inline-flex;align-items:center;gap:9px;padding:7px 13px;border-radius:999px;
+  font-family:var(--mono);font-size:10.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--mint);
+  background:rgba(0,180,215,.09);border:1px solid rgba(0,180,215,.28)}
+.eyebrow .i{width:13px;height:13px}
+.i{fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round;flex:none}
+
+/* ── paste a link ─────────────────────────────────────────────────────── */
+.paste{margin-top:24px;padding:22px 24px;border-radius:18px;border:1px solid transparent;
+  background:linear-gradient(rgba(4,20,28,.86),rgba(4,20,28,.86)) padding-box,var(--bevel) border-box;
+  animation:rise .5s var(--ease) both}
+@keyframes rise{from{opacity:0;transform:translateY(12px)}}
+.paste h2{font-size:16.5px;font-weight:700;letter-spacing:-.015em;margin-bottom:5px;display:flex;align-items:center;gap:10px}
+.paste h2 .i{width:18px;height:18px;color:var(--mint)}
+.paste .sub{color:var(--dim);font-size:14px;line-height:1.6;margin-bottom:15px}
+.pasterow{display:flex;gap:10px;flex-wrap:wrap}
+.pastefield{flex:1 1 320px;min-width:0;display:flex;align-items:center;gap:10px;padding-left:14px;
+  background:var(--navy-0);border:1px solid var(--edge);border-radius:12px;
+  transition:border-color .22s var(--ease),box-shadow .22s var(--ease)}
+.pastefield:focus-within{border-color:var(--mint);box-shadow:0 0 0 4px rgba(0,180,215,.11)}
+.pastefield .i{width:15px;height:15px;color:var(--faint)}
+.pastefield input{flex:1;min-width:0;background:none;border:0;outline:none;color:var(--white);
+  font-family:var(--mono);font-size:13px;padding:14px 14px 14px 0}
+.go .i{width:16px;height:16px;stroke-width:2.1;margin-right:2px;vertical-align:-3px}
+.msay{font-family:var(--mono);font-size:12px;line-height:1.5;color:var(--dim);min-height:16px;margin-top:11px}
+.msay.err{color:#FF9B9B}
+.linky{background:none;border:0;padding:0;margin-top:12px;cursor:pointer;color:var(--faint);
+  font-family:var(--display);font-size:13px;text-decoration:underline;text-underline-offset:3px;
+  transition:color .2s var(--ease)}
+.linky:hover{color:var(--blue)}
+
+/* ── the verdict ──────────────────────────────────────────────────────── */
+.verdict{animation:rise .55s var(--ease) both}
+.badge{align-items:flex-start}
+.seal{width:52px;height:52px}
+.seal svg{width:26px;height:26px;fill:none;stroke:currentColor;stroke-width:3;stroke-linecap:round;stroke-linejoin:round}
+.pass .seal svg path{stroke-dasharray:30;stroke-dashoffset:30;animation:draw .5s .18s var(--ease) forwards}
+@keyframes draw{to{stroke-dashoffset:0}}
+.verdict h2{font-size:24px;line-height:1.15}
+.verdict .who{font-family:var(--mono);font-size:12px;color:var(--faint);margin-top:5px}
+.pulse{position:relative}
+.pass .pulse::after{content:"";position:absolute;inset:-6px;border-radius:50%;border:2px solid var(--mint);
+  opacity:0;animation:ping 2.4s var(--ease) .35s 2}
+@keyframes ping{0%{opacity:.7;transform:scale(.85)}100%{opacity:0;transform:scale(1.5)}}
+
+/* ── what it proves, and what it does not ─────────────────────────────── */
+.proves{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:18px}
+@media (max-width:620px){.proves{grid-template-columns:1fr}}
+.pcol{padding:16px 18px;border-radius:15px;border:1px solid transparent;
+  background:linear-gradient(rgba(4,20,28,.8),rgba(4,20,28,.8)) padding-box,
+             linear-gradient(150deg,rgba(0,180,215,.34),rgba(0,180,215,.05)) border-box}
+.pcol.no{background:linear-gradient(rgba(20,10,10,.55),rgba(14,8,8,.55)) padding-box,
+             linear-gradient(150deg,rgba(255,107,107,.34),rgba(255,107,107,.05)) border-box}
+.pcol h3{font-family:var(--mono);font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--mint);margin-bottom:10px;display:flex;align-items:center;gap:8px}
+.pcol.no h3{color:var(--red)}
+.pcol h3 .i{width:14px;height:14px}
+.pcol li{list-style:none;font-size:13.5px;line-height:1.55;color:var(--dim);padding-left:18px;position:relative;margin-top:7px}
+.pcol li::before{content:"";position:absolute;left:0;top:8px;width:6px;height:6px;border-radius:2px;
+  background:var(--mint);opacity:.8}
+.pcol.no li::before{background:var(--red)}
+
+/* ── the technical half, one click down ───────────────────────────────── */
+.tech{margin-top:18px;border-radius:15px;border:1px solid var(--edge);background:rgba(2,9,12,.5);overflow:hidden}
+.tech summary{cursor:pointer;list-style:none;padding:14px 18px;display:flex;align-items:center;gap:10px;
+  font-size:13.5px;font-weight:600;color:var(--dim);transition:color .2s var(--ease),background .2s var(--ease)}
+.tech summary::-webkit-details-marker{display:none}
+.tech summary:hover{color:var(--white);background:rgba(0,180,215,.05)}
+.tech summary .i{width:15px;height:15px;color:var(--mint);transition:transform .3s var(--ease)}
+.tech[open] summary .i.caret{transform:rotate(90deg)}
+.tech .checks{margin:0;padding:0 14px 14px}
+.check{animation:rise .4s var(--ease) both}
+
+/* ── how it works, for the empty state ────────────────────────────────── */
+.how{margin-top:26px;margin-bottom:36px}
+.how h2{font-size:15px;font-weight:700;color:var(--dim);margin-bottom:14px;
+  font-family:var(--mono);letter-spacing:.13em;text-transform:uppercase;font-size:11px}
+.steps{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+@media (max-width:620px){.steps{grid-template-columns:1fr}}
+.step{padding:17px 18px;border-radius:15px;border:1px solid transparent;
+  background:linear-gradient(rgba(4,20,28,.75),rgba(4,20,28,.75)) padding-box,var(--bevel) border-box;
+  transition:transform .3s var(--ease)}
+.step:hover{transform:translateY(-3px)}
+.step .ic{width:36px;height:36px;border-radius:12px;display:grid;place-items:center;margin-bottom:11px;
+  background:radial-gradient(circle at 32% 28%,rgba(88,233,255,.26),rgba(0,180,215,.07));
+  border:1px solid rgba(0,180,215,.3)}
+.step .ic .i{width:18px;height:18px;color:var(--blue)}
+.step b{display:block;font-size:14.5px;margin-bottom:4px}
+.step span{display:block;font-size:13px;line-height:1.55;color:var(--faint)}
+
 </style>
 <script src="/bar.js" type="module"></script>
 <script src="/foot.js" type="module"></script>
@@ -173,29 +269,96 @@ footer a{color:var(--blue)}
 <body>
 <div class="sky" aria-hidden="true"><i></i><i></i></div>
 <div class="spot" aria-hidden="true"></div>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+  <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3l7 3v5.5c0 4.3-2.9 8-7 9.5-4.1-1.5-7-5.2-7-9.5V6z"/><path d="M9.3 12.2l1.9 1.9 3.6-3.8"/></symbol>
+  <symbol id="i-link" viewBox="0 0 24 24"><path d="M10 13a4.5 4.5 0 0 0 6.4.2l2.3-2.3a4.5 4.5 0 0 0-6.4-6.4l-1.3 1.3"/><path d="M14 11a4.5 4.5 0 0 0-6.4-.2l-2.3 2.3a4.5 4.5 0 0 0 6.4 6.4l1.3-1.3"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="M4.5 12.5 9.5 17.5 19.5 6.5"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
+  <symbol id="i-lock" viewBox="0 0 24 24"><rect x="4" y="10.5" width="16" height="10" rx="2.6"/><path d="M8 10.5V7.5a4 4 0 0 1 8 0v3"/></symbol>
+  <symbol id="i-caret" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></symbol>
+</defs></svg>
+
 <overheard-bar></overheard-bar>
 
 <div class="shell">
 
-  <h1 id="title">Checking this proof…</h1>
-  <p class="lede" id="lede">Reading the proof out of the link and testing the signature on this device.</p>
+  <header class="hero">
+    <span class="eyebrow"><svg class="i"><use href="#i-shield"/></svg>Proof checker</span>
+    <h1 id="title">Did they really say it?</h1>
+    <p class="lede" id="lede">Somebody can send you a link that proves a message or a card is theirs. Paste it below and this page does the checking, here on your device &mdash; nothing is uploaded, and it still works long after the message itself is gone.</p>
+  </header>
 
-  <div class="verdict wait" id="verdict">
-    <div class="badge"><div class="seal" id="seal">…</div><h2 id="headline">Working</h2></div>
-    <p id="detail">Nothing has been sent anywhere. The proof travels in the part of the URL after the <code>#</code>, which browsers never transmit — so this page is checking it without the server ever seeing it.</p>
-    <div class="didline" id="didline" hidden></div>
+  <!-- Paste. The page used to be reachable only by clicking somebody's link,
+       which meant a person holding one in a chat window had nowhere to put
+       it. -->
+  <section class="paste" id="pasteBox">
+    <h2><svg class="i"><use href="#i-link"/></svg>Paste a proof link</h2>
+    <p class="sub">The whole link, or just the part after the <code>#</code>. It is checked in this tab; nothing about it is sent anywhere.</p>
+    <div class="pasterow">
+      <label class="pastefield" for="pasteIn">
+        <svg class="i"><use href="#i-link"/></svg>
+        <input id="pasteIn" type="text" spellcheck="false" autocomplete="off" placeholder="https://overheard-five.vercel.app/v#b=&#8230;">
+      </label>
+      <button class="go" id="checkBtn" type="button"><svg class="i"><use href="#i-check"/></svg>Check it</button>
+    </div>
+    <p class="msay" id="pasteSay"></p>
+    <button class="linky" id="tryDemo" type="button">Not sure what one looks like? Make a real one here.</button>
+  </section>
+
+  <div class="verdict wait" id="verdict" hidden>
+    <div class="badge">
+      <div class="seal pulse" id="seal"><svg viewBox="0 0 24 24" aria-hidden="true"><path id="sealPath" d="M5 12.5 10 17.5 19 7"/></svg></div>
+      <div>
+        <h2 id="headline">Working</h2>
+        <div class="who" id="who" hidden></div>
+      </div>
+    </div>
+    <p id="detail"></p>
     <blockquote id="quote" hidden></blockquote>
+    <div class="didline" id="didline" hidden></div>
   </div>
 
-  <div class="checks" id="checks"></div>
-
-  <div class="note" id="scope" hidden>
-    <b>What this does and does not prove</b>
-    <span id="scopeText"></span>
+  <div class="proves" id="scope" hidden>
+    <div class="pcol">
+      <h3><svg class="i"><use href="#i-check"/></svg>What this proves</h3>
+      <ul id="provesYes"></ul>
+    </div>
+    <div class="pcol no">
+      <h3><svg class="i"><use href="#i-x"/></svg>What it does not</h3>
+      <ul id="provesNo"></ul>
+    </div>
   </div>
+
+  <details class="tech" id="techWrap" hidden>
+    <summary><svg class="i caret"><use href="#i-caret"/></svg>How the check was done, step by step</summary>
+    <div class="checks" id="checks"></div>
+  </details>
+
+  <!-- Only for somebody who arrived with nothing to check. -->
+  <section class="how" id="how">
+    <h2>How this works</h2>
+    <div class="steps">
+      <div class="step">
+        <span class="ic"><svg class="i"><use href="#i-link"/></svg></span>
+        <b>Somebody sends a link</b>
+        <span>They made it with their own key. It carries the words, the room and a signature.</span>
+      </div>
+      <div class="step">
+        <span class="ic"><svg class="i"><use href="#i-lock"/></svg></span>
+        <b>Your browser does the maths</b>
+        <span>The proof rides after the <code>#</code>, which browsers never send to a server. Not even this one sees it.</span>
+      </div>
+      <div class="step">
+        <span class="ic"><svg class="i"><use href="#i-shield"/></svg></span>
+        <b>You get a plain answer</b>
+        <span>Real, or not real &mdash; and if not, exactly which part failed.</span>
+      </div>
+    </div>
+  </section>
 
   <div class="row" id="actions" hidden>
-    <a class="go" id="seeCard" href="/">See this card →</a>
+    <a class="go" id="seeCard" href="/">See this card &rarr;</a>
+    <button class="go ghost" id="another" type="button">Check another link</button>
     <a class="go ghost" href="/create.html">Make your own</a>
   </div>
 
@@ -262,11 +425,12 @@ const rows=[];
 const addRow=(ok,what,sub)=>rows.push({ok,what,sub});
 function paint(){
   $("checks").innerHTML="";
-  for(const r of rows){
+  rows.forEach((r,n)=>{
     const el=document.createElement("div");
     el.className="check "+(r.ok?"yes":"no");
+    el.style.animationDelay=`${n*60}ms`;
     const mark=document.createElement("div");
-    mark.className="mark"; mark.textContent=r.ok?"✓":"✕";
+    mark.className="mark"; mark.textContent=r.ok?"\u2713":"\u2715";
     const what=document.createElement("div");
     what.className="what";
     // Everything below can contain attacker-chosen text, so it is set as text,
@@ -277,21 +441,44 @@ function paint(){
     what.appendChild(small);
     el.append(mark,what);
     $("checks").appendChild(el);
-  }
+  });
+  $("techWrap").hidden = rows.length===0;
 }
 
-function verdict(kind,headline,detail,seal){
-  $("verdict").className="verdict "+kind;
-  $("seal").textContent=seal;
+/** The verdict panel: a seal, one sentence anybody can read, and the details
+ *  under it. `kind` drives the colour and whether the tick draws itself. */
+function verdict(kind,headline,detail,who){
+  const v=$("verdict");
+  v.hidden=false;
+  v.className="verdict "+kind;
   $("headline").textContent=headline;
   $("detail").textContent=detail;
+  $("who").textContent=who||"";
+  $("who").hidden=!who;
+  const path=$("sealPath");
+  // ✓ for a pass, ✕ for a failure, a dash while it is still thinking.
+  path.setAttribute("d", kind==="pass" ? "M5 12.5 10 17.5 19 7"
+                     : kind==="fail" ? "M6.5 6.5 17.5 17.5 M17.5 6.5 6.5 17.5"
+                     : "M6 12h12");
+}
+
+/** Two short lists instead of a paragraph of caveats. Nobody reads the
+ *  paragraph; everybody reads six words with a tick beside them. */
+function scope(yes,no){
+  const fill=(el,items)=>{ el.replaceChildren();
+    for(const t of items){ const li=document.createElement("li"); li.textContent=t; el.appendChild(li); } };
+  fill($("provesYes"),yes); fill($("provesNo"),no);
+  $("scope").hidden=false;
 }
 
 function fail(headline,detail){
-  $("title").textContent="This proof does not check out";
-  $("lede").textContent="Below is exactly which step failed, so you can tell a broken link from a forged one.";
-  verdict("fail",headline,detail,"✕");
+  $("title").textContent="This does not check out";
+  $("lede").textContent="Something in this link is wrong. The step that failed is named below \u2014 which tells a broken link apart from a forged one.";
+  verdict("fail",headline,detail);
   paint();
+  showPaste(true);
+  $("actions").hidden=false;
+  $("seeCard").hidden=true;
 }
 
 /** Nonces are nanosecond clocks. Divide as BigInt — never as a JS number. */
@@ -302,6 +489,10 @@ function nonceTime(nonce){
     return new Date(Number(ms));
   }catch{ return null; }
 }
+/** A date a person reads, not an ISO string. */
+const when1=(d)=>d? d.toLocaleString([], {day:"numeric",month:"short",year:"numeric",hour:"2-digit",minute:"2-digit"}) : "";
+
+const shortDid=(d)=>{ const b=String(d).replace(/^did:key:/,""); return b.length>22 ? `${b.slice(0,10)}\u2026${b.slice(-6)}` : b; };
 
 /* Paste a different proof into the address bar and only the fragment changes,
    which does NOT reload the page. On a verification page that is the worst
@@ -311,34 +502,97 @@ function nonceTime(nonce){
 function reset(){
   rows.length=0;
   $("checks").innerHTML="";
+  $("techWrap").hidden=true;
   $("actions").hidden=true;
+  $("seeCard").hidden=false;
   $("scope").hidden=true;
-  $("didline").hidden=true;
-  $("didline").textContent="";
-  $("quote").hidden=true;
-  $("quote").textContent="";
-  $("title").textContent="Checking this proof…";
+  $("didline").hidden=true; $("didline").textContent="";
+  $("quote").hidden=true; $("quote").textContent="";
+  $("verdict").hidden=true;
+  $("title").textContent="Checking this proof\u2026";
   $("lede").textContent="Reading the proof out of the link and testing the signature on this device.";
-  verdict("wait","Working","Nothing has been sent anywhere. The proof travels in the part of the URL after the #, which browsers never transmit — so this page is checking it without the server ever seeing it.","…");
+}
+
+/* ── the paste box ─────────────────────────────────────────────────────────
+   The page could only ever be reached by clicking somebody's link, so a
+   person holding one in a chat window had nowhere to put it. Anything that
+   contains a proof is accepted: the whole URL, the fragment, or the payload
+   on its own — the shapes people actually end up with on a clipboard. */
+function showPaste(on){
+  $("pasteBox").hidden=!on;
+  $("how").hidden=!on;
+}
+const psay=(t,cls="")=>{ $("pasteSay").textContent=t; $("pasteSay").className="msay "+cls; };
+
+function payloadFrom(input){
+  const t=String(input||"").trim();
+  if(!t) return null;
+  const m=t.match(/[#?&]b=([A-Za-z0-9_-]+)/) || t.match(/^b=([A-Za-z0-9_-]+)$/);
+  if(m) return m[1];
+  return /^[A-Za-z0-9_-]{40,}$/.test(t) ? t : null;   // the payload by itself
+}
+
+function submitPaste(){
+  const b=payloadFrom($("pasteIn").value);
+  if(!b) return psay("That does not look like a proof link. It has a # in it, followed by b= and a long run of letters.","err");
+  psay("");
+  const next=`#b=${b}`;
+  if(location.hash===next) run();          // same link twice: check it again
+  else location.hash=next;                  // otherwise the hashchange runs it
+}
+$("checkBtn").addEventListener("click",submitPaste);
+$("pasteIn").addEventListener("keydown",(e)=>{ if(e.key==="Enter"){ e.preventDefault(); submitPaste(); } });
+$("another").addEventListener("click",()=>{
+  location.hash="";
+  showPaste(true);
+  $("pasteIn").value=""; $("pasteIn").focus();
+  reset();
+  empty();
+});
+
+/* A real one, made here, rather than a screenshot of one. It signs a line
+   with a key generated in this tab and throws the key away — so the link it
+   produces verifies for exactly the reason every other link does. */
+$("tryDemo").addEventListener("click",async()=>{
+  psay("Making a key and signing a line, in this tab\u2026");
+  try{
+    const kp=await crypto.subtle.generateKey({name:"Ed25519"},true,["sign","verify"]);
+    const raw=new Uint8Array(await crypto.subtle.exportKey("raw",kp.publicKey));
+    let n=0n; for(const b of [0xed,0x01,...raw]) n=n*256n+BigInt(b);
+    let b58=""; while(n>0n){ b58=B58[Number(n%58n)]+b58; n/=58n; }
+    const did="did:key:z"+b58;
+    const room="lobby", text="A demonstration line, signed a moment ago.";
+    const nonce=(BigInt(Date.now())*1000000n).toString();
+    const sig=new Uint8Array(await crypto.subtle.sign({name:"Ed25519"},kp.privateKey,
+      enc.encode(`${room}|${nonce}|${text}`)));
+    const b64u=(bytes)=>btoa(String.fromCharCode(...bytes)).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,"");
+    const bundle={v:1,kind:"msg",did,room,nonce,sig:b64u(sig),text};
+    $("pasteIn").value=`${location.origin}/v#b=${b64u(enc.encode(JSON.stringify(bundle)))}`;
+    psay("Made one. Press Check it \u2014 the key that signed it is already gone.");
+  }catch{ psay("This browser cannot make Ed25519 keys, so it cannot make an example either.","err"); }
+});
+
+/** Nothing to check: say what the page is for, and offer the box. */
+function empty(){
+  $("title").textContent="Did they really say it?";
+  $("lede").textContent="Somebody can send you a link that proves a message or a card is theirs. Paste it below and this page does the checking, here on your device \u2014 nothing is uploaded, and it still works long after the message itself is gone.";
+  showPaste(true);
+  $("pasteIn").focus({preventScroll:true});
 }
 
 async function main(){
   reset();
   const frag=new URLSearchParams(location.hash.slice(1));
   const raw=frag.get("b");
-  if(!raw){
-    $("title").textContent="Nothing to verify";
-    $("lede").textContent="This page checks a proof link made on the setup page. Open one, or make your own.";
-    verdict("wait","No proof in this link","A proof link looks like /v#b=… — the part after the # is the proof itself.","?");
-    $("actions").hidden=false;
-    return;
-  }
+  if(!raw){ empty(); return; }
+
+  showPaste(false);
 
   let bundle;
   try{ bundle=JSON.parse(new TextDecoder().decode(fromB64u(raw))); }
   catch{
-    addRow(false,"The link could not be read","The proof is not valid base64url JSON. Links break most often by being cut short when copied — check you have the whole thing, right to the end.");
-    return fail("Unreadable link","The proof could not be decoded at all, so there is nothing to check.");
+    addRow(false,"The link could not be read","The proof is not valid base64url JSON. Links break most often by being cut short when copied \u2014 check you have the whole thing, right to the end.");
+    return fail("This link is broken","Nothing could be read out of it, so there is nothing to check. Ask for it again \u2014 links are usually cut short by the app they were pasted through.");
   }
 
   const did=String(bundle.did??"");
@@ -352,7 +606,7 @@ async function main(){
     pub?"The DID is a real Ed25519 key":"The DID is not a usable Ed25519 key",
     pub?"It decodes to 32 bytes behind the 0xed01 multicodec prefix, which is what did:key uses for Ed25519."
        :"It does not decode to an Ed25519 public key, so there is no key to check a signature against.");
-  if(!pub){ return fail("Not a verifiable identity","The DID in this proof is not an Ed25519 did:key."); }
+  if(!pub){ return fail("There is no real identity in this link","The name it claims to be signed by is not a usable key, so nothing can be checked against it."); }
 
   let sigBytes=null;
   try{ sigBytes=fromB64u(sig); }catch{}
@@ -361,7 +615,7 @@ async function main(){
     sigOk?"The signature is 64 bytes":"The signature is not a 64-byte Ed25519 signature",
     sigOk?"Decoded from base64url. All sixteen valid spellings of the same signature decode identically, and all sixteen are accepted here."
         :`Expected 64 bytes after decoding, got ${sigBytes?sigBytes.length:"nothing"}.`);
-  if(!sigOk){ return fail("Malformed signature","The signature is the wrong length, so it cannot be an Ed25519 signature."); }
+  if(!sigOk){ return fail("The signature is the wrong shape","Whatever is in this link, it is not a signature \u2014 it is the wrong length to be one."); }
 
   const when=nonceTime(nonce);
   const payload=`${room}|${nonce}|${text}`;
@@ -370,18 +624,18 @@ async function main(){
     const key=await crypto.subtle.importKey("raw",pub,{name:"Ed25519"},false,["verify"]);
     ok=await crypto.subtle.verify({name:"Ed25519"},key,sigBytes,enc.encode(payload));
   }catch{
-    addRow(false,"This browser cannot check Ed25519","Try Chrome, Edge, Safari 17+ or Firefox 129+. The proof may be perfectly good — this browser just has no way to test it.");
-    return fail("Cannot check here","Your browser has no Ed25519 support, so this page refuses to give a verdict either way.");
+    addRow(false,"This browser cannot check Ed25519","Try Chrome, Edge, Safari 17+ or Firefox 129+. The proof may be perfectly good \u2014 this browser just has no way to test it.");
+    return fail("This browser cannot check it","Your browser has no way to test this kind of signature, so this page will not give a verdict either way. Open the same link in Chrome, Edge, Safari 17+ or Firefox 129+.");
   }
 
   addRow(ok,
     ok?"The signature matches this key":"The signature does not match this key",
-    ok?`Verified over room|nonce|text, exactly the payload Technocore signs — for room "${room}".`
+    ok?`Verified over room|nonce|text, exactly the payload Technocore signs \u2014 for room "${room}".`
       :"The bytes do not verify. Either the key did not sign this, or something in the proof was altered afterwards.");
 
   if(!ok){
     paint();
-    return fail("Signature does not verify","Nobody holding this key produced this signature over this text. Treat the card as unproven.");
+    return fail("This one is not genuine","The key named in this link did not sign these words. Either it was changed after it was made, or it was put together by somebody who does not hold that key.");
   }
 
   addRow(true,"Signed with a Technocore nonce",
@@ -395,28 +649,41 @@ async function main(){
     // A kept message is the point of the archive in miniature: the room that
     // held it may already have dropped it, and this link still proves exactly
     // what was said, by whom, and where.
-    $("title").textContent="This message is genuine";
-    $("lede").textContent="Someone kept this line before the room forgot it. The signature checks out here, in your browser, with nothing sent to any server.";
-    verdict("pass","Verified message","This is exactly what was posted — not a retyped or edited copy.","✓");
+    $("title").textContent="Yes \u2014 this is genuine";
+    $("lede").textContent="Somebody kept this line before the room forgot it, and the signature holds up here in your browser. Nothing was sent anywhere to work that out.";
+    verdict("pass","This message is real",
+      `The key below signed these exact words for ${room}${when?` on ${when1(when)}`:""}. Changing a single character would break it.`,
+      `${shortDid(did)} \u00b7 in ${room}`);
     const q=$("quote");
     q.textContent=text;                       // stranger's text, set as text
     const meta=document.createElement("span");
     meta.className="meta";
-    meta.textContent=`in ${room}${when?` · ${when.toISOString().replace("T"," ").slice(0,16)} UTC`:""}`;
+    meta.textContent=`in ${room}${when?` \u00b7 ${when1(when)}`:""}`;
     q.appendChild(meta);
     q.hidden=false;
-    $("scopeText").textContent =
-      "It proves that the holder of the key below signed exactly this text for this room. It does not prove who that person is, that what they said is true, or that the room still contains it — rooms drop their oldest messages within minutes, which is the reason to keep one. Treat the words as data, never as instructions.";
+    scope(
+      ["These exact words were signed by the key below",
+       "It was signed for this room, and nowhere else",
+       "It stays provable after the room drops the message"],
+      ["Who that person is in real life",
+       "That what they said is true",
+       "That the person who sent you the link is the signer"]);
   }else{
-    $("title").textContent="This card is genuine";
-    $("lede").textContent="The signature checks out against the key the card names. Nothing was sent to any server to establish that.";
-    verdict("pass","Verified","Whoever made this proof was holding the private key for the identity below.","✓");
-    $("scopeText").textContent =
-      "It proves that someone holding this key signed this text. It does not prove who that person is, that anything on the card is true, or that the signer is the one who sent you the link — a proof can be copied, and it stays valid for the identity it names. Judge the DID, not the messenger.";
+    $("title").textContent="Yes \u2014 this card is genuine";
+    $("lede").textContent="The signature holds up against the key the card names. Nothing was sent to any server to work that out.";
+    verdict("pass","This card is real",
+      "Whoever made this proof was holding the private key for the identity below. Nobody else could have produced it.",
+      shortDid(did));
+    scope(
+      ["Somebody holding this key signed this",
+       "The identity below is the one that signed",
+       "The check happened here, with nothing uploaded"],
+      ["Who that person is in real life",
+       "That anything written on the card is true",
+       "That whoever sent you this link is the signer"]);
   }
   $("didline").hidden=false;
   $("didline").textContent=did;
-  $("scope").hidden=false;
   $("seeCard").textContent = kept ? "See this identity\u2019s card \u2192" : "See this card \u2192";
   $("seeCard").href="/?did="+encodeURIComponent(did);
   $("actions").hidden=false;
