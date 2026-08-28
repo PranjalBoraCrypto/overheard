@@ -569,6 +569,79 @@ canvas.confetti{position:fixed;inset:0;width:100%;height:100%;pointer-events:non
 .mfoot a{color:var(--cy);text-decoration:none;font-weight:600}
 .mfoot a:hover{color:var(--cy-hi)}
 
+/* ── your runs ────────────────────────────────────────────────────────────
+   A score with nothing to compare it against is a number. Kept per identity
+   and in this browser only, which is the honest description of where it
+   lives — there is no account behind this and pretending otherwise would be
+   the one lie the page cannot afford. */
+.hist{display:block}
+.histpanel{margin-top:22px;padding:22px 24px;animation:riseY .5s var(--ease) both}
+@media (max-width:620px){.histpanel{padding:19px 17px}}
+.hhead{display:flex;gap:13px;align-items:center}
+.hic{width:38px;height:38px;flex:none;border-radius:13px;display:grid;place-items:center;
+  background:rgba(0,180,215,.12);color:var(--cy-hi)}
+.hic .i{width:19px;height:19px}
+.hhead b{display:block;color:var(--txt);font-size:16.5px;font-weight:700;letter-spacing:-.015em}
+.hhead .hsub{display:block;font-size:12.8px;color:var(--faint);line-height:1.5;margin-top:2px}
+.hhead .grow{flex:1 1 auto;min-width:0}
+.hstats{display:grid;grid-template-columns:repeat(4,1fr);gap:9px;margin-top:16px}
+@media (max-width:620px){.hstats{grid-template-columns:1fr 1fr}}
+.hstat{padding:11px 13px;border-radius:12px;background:rgba(0,20,26,.55);border:1px solid rgba(0,180,215,.16)}
+.hstat b{display:block;font-family:var(--mono);font-size:16.5px;color:var(--cy-hi);letter-spacing:-.02em;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hstat span{display:block;font-size:11.5px;color:var(--faint);margin-top:3px}
+
+/* every run so far, oldest on the left — the shape of getting better */
+.trendbox{margin-top:18px}
+.htrend{display:flex;align-items:flex-end;gap:4px;height:56px;padding:0 2px 0;
+  border-bottom:1px solid rgba(0,180,215,.22)}
+.htrend i{flex:1 1 0;min-width:3px;border-radius:3px 3px 1px 1px;background:var(--cy);opacity:.85;
+  animation:grow .6s var(--ease) both;transform-origin:bottom;transition:opacity .2s var(--ease)}
+.htrend i:hover{opacity:1}
+@keyframes grow{from{transform:scaleY(0)}}
+.trendkey{display:flex;justify-content:space-between;margin-top:7px;
+  font-family:var(--mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--faint)}
+
+.hlist{list-style:none;display:flex;flex-direction:column;gap:8px;margin-top:16px}
+.hrow{display:flex;align-items:center;gap:13px;padding:12px 14px;border-radius:14px;cursor:pointer;width:100%;
+  text-align:left;background:rgba(0,20,26,.5);border:1px solid rgba(0,180,215,.16);color:var(--txt);
+  font-family:var(--display);position:relative;overflow:hidden;
+  transition:transform .24s var(--ease),border-color .24s var(--ease),box-shadow .24s var(--ease);
+  animation:riseY .45s var(--ease) both}
+.hrow:hover{transform:translateX(3px);border-color:rgba(95,235,255,.45);
+  box-shadow:0 16px 34px -24px rgba(0,180,215,.9)}
+.hrow:focus-visible{outline:2px solid var(--cy-hi);outline-offset:2px}
+.hgrade{width:52px;height:52px;flex:none;border-radius:15px;display:grid;place-items:center;line-height:1;
+  font-family:var(--mono);font-size:19px;font-weight:600;color:#001016}
+.hgrade em{font-style:normal;font-size:10px;opacity:.72;display:block;margin-top:2px}
+.hmid{flex:1 1 auto;min-width:0}
+.hmid b{display:block;font-size:14.5px;font-weight:700;letter-spacing:-.01em}
+.hwhen{display:block;font-family:var(--mono);font-size:11px;color:var(--faint);margin-top:3px;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hpips{display:flex;gap:3px;margin-top:7px}
+.hpips i{width:13px;height:5px;border-radius:99px;background:rgba(255,107,107,.42)}
+.hpips i.hit{background:var(--good)}
+.hsign{flex:none;display:inline-flex;align-items:center;gap:5px;padding:4px 9px;border-radius:999px;
+  font-family:var(--mono);font-size:10px;letter-spacing:.08em;text-transform:uppercase;
+  color:var(--good);background:rgba(59,227,176,.1);border:1px solid rgba(59,227,176,.3)}
+.hsign .i{width:11px;height:11px}
+.hrow .chev{width:16px;height:16px;flex:none;color:var(--faint);transition:transform .24s var(--ease)}
+.hrow:hover .chev{transform:translateX(3px);color:var(--cy-hi)}
+@media (max-width:620px){.hsign{display:none}}
+.hmore{margin-top:12px;text-align:center}
+
+/* one run, opened */
+.rmodal{width:min(660px,100%)}
+.rmodal canvas{width:100%;border-radius:14px;display:block;margin:16px 0 4px;
+  border:1px solid rgba(0,180,215,.3);box-shadow:0 30px 70px -40px rgba(0,0,0,.95)}
+.rrow{display:flex;gap:9px;flex-wrap:wrap;margin-top:14px}
+.rrow .go{padding:11px 16px;font-size:13.5px}
+.rmeta{display:flex;gap:14px;flex-wrap:wrap;margin-top:4px;font-family:var(--mono);font-size:11.5px;color:var(--faint)}
+.rmeta b{color:var(--cy-hi)}
+.danger{background:rgba(255,107,107,.08);border:1px solid rgba(255,107,107,.3);color:#FF9B9B;
+  box-shadow:none;font-weight:600}
+.danger:hover:not(:disabled){background:rgba(255,107,107,.16);color:#FFC9C9;transform:translateY(-2px)}
+
 .prov{display:flex;gap:10px;align-items:flex-start;margin-top:26px;padding:14px 16px;border-radius:13px;
   font-size:12.5px;line-height:1.6;color:var(--faint);
   background:linear-gradient(rgba(242,179,61,.07),rgba(242,179,61,.02));border:1px solid rgba(242,179,61,.28)}
@@ -640,6 +713,9 @@ canvas.confetti{position:fixed;inset:0;width:100%;height:100%;pointer-events:non
   <symbol id="i-user" viewBox="0 0 24 24"><circle cx="12" cy="8.4" r="3.7"/><path d="M4.8 20a7.2 7.2 0 0 1 14.4 0"/></symbol>
   <symbol id="i-warn" viewBox="0 0 24 24"><path d="M12 4.2 21 19.5H3z"/><path d="M12 10v4M12 17v.1"/></symbol>
   <symbol id="i-play" viewBox="0 0 24 24"><path d="M7 4.5 19 12 7 19.5z"/></symbol>
+  <symbol id="i-hist" viewBox="0 0 24 24"><path d="M3.5 12a8.5 8.5 0 1 0 2.6-6.1"/><path d="M3 4v4.2h4.2"/><path d="M12 7.6V12l3 1.9"/></symbol>
+  <symbol id="i-chev" viewBox="0 0 24 24"><path d="M9 5.5 15.5 12 9 18.5"/></symbol>
+  <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4 6.5h16M9.5 6.5V4.6A1.1 1.1 0 0 1 10.6 3.5h2.8a1.1 1.1 0 0 1 1.1 1.1v1.9"/><path d="M6.5 6.5 7.4 20a1.1 1.1 0 0 0 1.1 1h7a1.1 1.1 0 0 0 1.1-1l.9-13.5"/></symbol>
   <symbol id="i-key" viewBox="0 0 24 24"><circle cx="8" cy="12" r="4.2"/><path d="M12.2 12H21M18 12v3.3M15 12v2.4"/></symbol>
   <symbol id="i-file" viewBox="0 0 24 24"><path d="M14 3H7a1.6 1.6 0 0 0-1.6 1.6v14.8A1.6 1.6 0 0 0 7 21h10a1.6 1.6 0 0 0 1.6-1.6V7.6z"/><path d="M13.8 3v4.6h4.8"/></symbol>
   <symbol id="i-copy" viewBox="0 0 24 24"><rect x="9" y="9" width="11.4" height="11.4" rx="2.2"/><path d="M5.6 15H4.6A1.6 1.6 0 0 1 3 13.4V4.6A1.6 1.6 0 0 1 4.6 3h8.8A1.6 1.6 0 0 1 15 4.6v1"/></symbol>
@@ -667,6 +743,8 @@ canvas.confetti{position:fixed;inset:0;width:100%;height:100%;pointer-events:non
         <button class="go ghost" id="begin" type="button"><svg class="i"><use href="#i-play"/></svg>Skip it &mdash; start the run</button>
       </div>
     </div>
+
+    <section class="hist" id="histIntro" hidden></section>
 
     <div class="prov"><svg class="i"><use href="#i-info"/></svg>
       <div><b>Flop has not launched.</b> Its numbers come from a teaser marked <b>version 0.1, draft</b> &mdash; provisional by the project&rsquo;s own admission.
@@ -857,6 +935,8 @@ canvas.confetti{position:fixed;inset:0;width:100%;height:100%;pointer-events:non
       </div>
       <div class="miss" id="missed" hidden></div>
     </div>
+    <section class="hist" id="histEnd" hidden></section>
+
     <div class="panel sources">
       <div class="shead">
         <span class="sic"><svg class="i"><use href="#i-info"/></svg></span>
@@ -949,6 +1029,23 @@ canvas.confetti{position:fixed;inset:0;width:100%;height:100%;pointer-events:non
         <p class="msay" id="haveSay"></p>
         <p class="mfoot">No identity yet? <a href="/create.html">Make one on the Create page &rarr;</a> It takes about a minute and never leaves your browser.</p>
       </div>
+    </div>
+  </div>
+
+  <!-- One past run, opened. The card is redrawn from the numbers rather than
+       stored as an image: a PNG per run would be megabytes of localStorage
+       for something six lines of canvas can rebuild exactly. -->
+  <div class="scrim" id="rscrim" hidden>
+    <div class="modal rmodal" role="dialog" aria-modal="true" aria-labelledby="rTitle">
+      <div class="mhead">
+        <button class="mx" id="rClose" type="button" aria-label="Close"><svg class="i"><use href="#i-x"/></svg></button>
+        <h2 id="rTitle">A run</h2>
+        <p class="sub" id="rSub"></p>
+      </div>
+      <canvas id="hcard" width="1200" height="630" aria-label="The card from this run"></canvas>
+      <div class="rmeta" id="rMeta"></div>
+      <div class="rrow" id="rRow"></div>
+      <p class="msay" id="rSay"></p>
     </div>
   </div>
 
@@ -1159,7 +1256,8 @@ const RANKS=[
 
 let at=0, score=0, streak=0, best=0, correct=0, asked=0, shownAt=0, missed=[];
 let marks=[];                       // per gate: undefined | true | false
-const rank=()=>RANKS.find(r=>correct>=r.min);
+const rankOf=(n)=>RANKS.find(r=>n>=r.min);
+const rank=()=>rankOf(correct);
 
 function el(tag,cls,txt){ const e=document.createElement(tag); if(cls) e.className=cls;
   if(txt!=null) e.textContent=txt; return e; }
@@ -1529,6 +1627,10 @@ let PROOF=null;
 
 async function finish(){
   if(keys){ removeEventListener("keydown",keys); keys=null; }
+  /* Stamped now, not when it is saved. Somebody who finishes, sees
+     "unsigned" and then unlocks their key is still on THIS run — the id is
+     what lets the row be written once and rewritten in place. */
+  runId=Date.now().toString(36)+Math.random().toString(36).slice(2,7);
   $("run").hidden=true; $("end").hidden=false;
   const r=rank();
   $("rankWord").textContent="Rank";
@@ -1573,9 +1675,14 @@ async function finish(){
      five ranks can be compared side by side — by a test, and by anybody who
      wants to see what they are aiming at. It changes the picture, never the
      score that was signed. */
-  window.__setCorrect=(n)=>{ correct=Math.max(0,Math.min(GATES.length,n|0)); drawCard(); };
+  window.__setCorrect=(n)=>{
+    const k=Math.max(0,Math.min(GATES.length,n|0));
+    drawCard($("card"),{ ...snapshot(), correct:k, rank:rankOf(k).word,
+      marks:Array.from({length:GATES.length},(_,i)=>i<k) });
+  };
   await sign();
   drawCard();
+  recordRun();
   /* Retrigger the deal on a re-run: removing the class, forcing a reflow and
      putting it back is the only way to replay a CSS animation on an element
      that never left the document. */
@@ -1634,6 +1741,7 @@ async function sign(){
           signIn(vault.did,jwk);
           await sign();                 // repaint this panel as the signed one
           drawCard();                   // and put the signature on the card
+          recordRun(); paintHistory();  // and keep the run that was just played
         }catch{ say("Wrong passphrase, or the stored identity is damaged.","err"); go.disabled=false; }
       };
       go.addEventListener("click",tryIt);
@@ -1827,6 +1935,8 @@ async function afterSignIn(){
   closeModal();
   await sign();
   drawCard();
+  recordRun();
+  paintHistory();
 }
 
 async function bringSeed(){
@@ -1906,9 +2016,8 @@ function roundRect(x,rx,ry,w,h,r){
 
 /** The seal. Rim notches are the run; the arc is the score; the middle is the
  *  number somebody came for. */
-function drawSeal(x,cx,cy,R,skin){
-  const missedQ=new Set(missed.map(g=>g.q));
-  const frac=correct/GATES.length;
+function drawSeal(x,cx,cy,R,skin,run){
+  const frac=run.correct/run.total;
 
   const halo=x.createRadialGradient(cx,cy,R*.2,cx,cy,R*1.75);
   halo.addColorStop(0,skin.glow+".34)"); halo.addColorStop(1,skin.glow+"0)");
@@ -1921,16 +2030,16 @@ function drawSeal(x,cx,cy,R,skin){
 
   // twelve notches: the shape of the run, not just its total
   const RN=R-16;
-  GATES.forEach((g,i)=>{
-    const a=-Math.PI/2 + (i/GATES.length)*Math.PI*2;
-    const took=!missedQ.has(g.q);
+  for(let i=0;i<run.total;i++){
+    const a=-Math.PI/2 + (i/run.total)*Math.PI*2;
+    const took=!!run.marks[i];
     x.save(); x.translate(cx+Math.cos(a)*RN, cy+Math.sin(a)*RN); x.rotate(a+Math.PI/2);
     if(took){ x.fillStyle=skin.a; x.shadowColor=skin.glow+".9)"; x.shadowBlur=14;
               roundRect(x,-3.5,-11,7,22,3.5); x.fill(); }
     else    { x.strokeStyle="rgba(255,255,255,.22)"; x.lineWidth=2;
               roundRect(x,-3.5,-11,7,22,3.5); x.stroke(); }
     x.restore();
-  });
+  }
 
   const AR=R-46;
   x.lineWidth=9; x.lineCap="round";
@@ -1946,9 +2055,9 @@ function drawSeal(x,cx,cy,R,skin){
 
   x.textAlign="center"; x.textBaseline="alphabetic";
   x.fillStyle="#FFFFFF"; x.font="800 84px Outfit,sans-serif";
-  x.fillText(String(correct), cx, cy+10);
+  x.fillText(String(run.correct), cx, cy+10);
   x.fillStyle=skin.ring; x.font="600 26px 'IBM Plex Mono',monospace";
-  x.fillText(`of ${GATES.length}`, cx, cy+46);
+  x.fillText(`of ${run.total}`, cx, cy+46);
   x.fillStyle="rgba(255,255,255,.42)"; x.font="600 15px 'IBM Plex Mono',monospace";
   /* This label used to sit at cy-52, close enough to touch the ascender of an
      84px numeral. It gets its own air. */
@@ -1956,10 +2065,20 @@ function drawSeal(x,cx,cy,R,skin){
   x.textAlign="left";
 }
 
-function drawCard(){
-  const c=$("card"), x=c.getContext("2d");
+/** Everything the card needs, as data. Pulling it out of module state is what
+ *  lets a run from last Tuesday be drawn with the same twelve lines as the one
+ *  that just finished — and it is why the history keeps numbers rather than a
+ *  PNG per run. */
+function snapshot(){
+  return { correct, total:GATES.length, score, best,
+           marks:Array.from({length:GATES.length},(_,i)=>marks[i]===true),
+           rank:rank().word, proof:PROOF?PROOF.link:null, did:PROOF?PROOF.did:null };
+}
+
+function drawCard(c=$("card"), run=snapshot()){
+  const x=c.getContext("2d");
   const W=c.width, H=c.height;
-  const skin=SKIN[rank().word]||SKIN["Validator"];
+  const skin=SKIN[run.rank]||SKIN["Validator"];
   x.clearRect(0,0,W,H);
 
   const bg=x.createLinearGradient(0,0,W,H);
@@ -1983,7 +2102,7 @@ function drawCard(){
   x.fillStyle=sheen; x.fillRect(0,0,W,H);
   x.restore();
 
-  drawSeal(x, W-282, H/2-14, 176, skin);
+  drawSeal(x, W-282, H/2-14, 176, skin, run);
 
   x.fillStyle=skin.b; x.font="600 21px 'IBM Plex Mono',monospace";
   x.fillText("PROOF OF LEARNING", 72, 100);
@@ -1994,10 +2113,10 @@ function drawCard(){
   x.fillStyle="#FFFFFF";
   let size=86;
   do { x.font=`800 ${size}px Outfit,sans-serif`; size-=3; }
-  while(x.measureText(rank().word).width>560 && size>44);
-  x.fillText(rank().word, 72, 248);
+  while(x.measureText(run.rank).width>560 && size>44);
+  x.fillText(run.rank, 72, 248);
 
-  const rw=Math.min(560,x.measureText(rank().word).width);
+  const rw=Math.min(560,x.measureText(run.rank).width);
   const rule=x.createLinearGradient(72,0,72+rw,0);
   rule.addColorStop(0,skin.a); rule.addColorStop(1,skin.glow+"0)");
   x.fillStyle=rule; x.fillRect(72,276,rw,4);
@@ -2010,14 +2129,14 @@ function drawCard(){
   };
   /* POINTS. Never "$FLOP earned" — no token is handed out here, and a card
      that says one was would be a lie in the most screenshotted place we have. */
-  stat("POINTS", score.toLocaleString(), 72);
-  stat("BEST STREAK", String(best), 300);
+  stat("POINTS", run.score.toLocaleString(), 72);
+  stat("BEST STREAK", String(run.best), 300);
 
   x.fillStyle="rgba(255,255,255,.55)"; x.font="500 24px Outfit,sans-serif";
   x.fillText("What Flop is, in twelve gates. Three minutes.", 72, 452);
 
   x.fillStyle="rgba(255,255,255,.07)"; x.fillRect(72,496,W-144,1);
-  if(PROOF){
+  if(run.proof && run.did){
     x.save(); x.translate(72,524);
     x.strokeStyle=skin.a; x.lineWidth=2.4; x.lineJoin="round"; x.lineCap="round";
     x.beginPath(); x.moveTo(11,1); x.lineTo(21,5); x.lineTo(21,13);
@@ -2026,7 +2145,7 @@ function drawCard(){
     x.beginPath(); x.moveTo(6.5,13.5); x.lineTo(9.5,16.5); x.lineTo(15.5,10); x.stroke();
     x.restore();
     x.fillStyle=skin.ring; x.font="600 20px 'IBM Plex Mono',monospace";
-    x.fillText(`signed · ${shortDid(PROOF.did,10,6)}`, 106, 546);
+    x.fillText(`signed · ${shortDid(run.did,10,6)}`, 106, 546);
   }else{
     x.fillStyle="rgba(255,255,255,.32)"; x.font="500 20px 'IBM Plex Mono',monospace";
     x.fillText("unsigned run", 72, 546);
@@ -2056,25 +2175,23 @@ $("dl").addEventListener("click",()=>{
    signed version within a few characters of the 280 limit; the last line is
    worded to leave room rather than to be as long as it could be. The test
    measures it with those rules and fails if it goes over. */
-function shareLines(){
-  const r=rank();
+function shareLines(run=snapshot()){
   const out=[
     "I just completed my first Proof of Learning session on what @flop_labs actually is.",
     "",
-    `\u{1F449}\u{1F3FB} Score: ${correct}/${GATES.length}`,
-    `\u{1FA99} Points: ${score.toLocaleString()}`,
-    `\u{1F3C1} Best streak: ${best}`,
-    `\u2705 ${r.word}`,
+    `\u{1F449}\u{1F3FB} Score: ${run.correct}/${run.total}`,
+    `\u{1FA99} Points: ${run.score.toLocaleString()}`,
+    `\u{1F3C1} Best streak: ${run.best}`,
+    `\u2705 ${run.rank}`,
     "",
     `Try yourself: ${location.origin}/play`,
   ];
-  if(PROOF) out.push("", `I signed it with my own key, so anyone can verify it: ${PROOF.link}`);
+  if(run.proof) out.push("", `I signed it with my own key, so anyone can verify it: ${run.proof}`);
   return out.join("\n");
 }
+const postRun=(run)=>open("https://x.com/intent/tweet?text="+encodeURIComponent(shareLines(run)),"_blank","noopener");
 window.__share=shareLines;      // published so the length can be measured
-$("post").addEventListener("click",()=>{
-  open("https://x.com/intent/tweet?text="+encodeURIComponent(shareLines()),"_blank","noopener");
-});
+$("post").addEventListener("click",()=>postRun(snapshot()));
 
 /* ── the card in the hand ──────────────────────────────────────────────────
    Lifted from the credential card, mistakes and all already paid for there.
@@ -2141,6 +2258,213 @@ $("missed").addEventListener("pointermove",(e)=>{
   li.style.setProperty("--bx",`${e.clientX-r.left}px`);
   li.style.setProperty("--by",`${e.clientY-r.top}px`);
 });
+
+/* ══ YOUR RUNS ════════════════════════════════════════════════════════════
+   A score with nothing beside it is a number. Runs are kept per identity, in
+   this browser, and the page says exactly that rather than implying an
+   account that does not exist. Numbers, not pictures: a PNG per run would be
+   megabytes of localStorage for something the card code rebuilds exactly.
+
+   Signing in AFTER a run counts. Somebody who finishes, sees "unsigned" and
+   unlocks their key should not have to play it again to have it kept, so the
+   run carries an id from the moment it finishes and the row is written or
+   rewritten under that id. */
+const HKEY="overheard.pol.runs", HMAX=40;
+let runId=null, showAll=false;
+
+const allRuns=()=>{ try{ const r=JSON.parse(localStorage.getItem(HKEY)||"{}");
+  return (r && typeof r==="object" && !Array.isArray(r)) ? r : {}; }catch{ return {}; } };
+const runsFor=(did)=>{ const a=allRuns()[did]; return Array.isArray(a)?a:[]; };
+function putRuns(did,list){
+  const all=allRuns(); all[did]=list.slice(0,HMAX);
+  try{ localStorage.setItem(HKEY,JSON.stringify(all)); }catch{}
+}
+
+function recordRun(){
+  const s=getSession();
+  if(!s || !runId) return;
+  const list=runsFor(s.did);
+  const row={ ...snapshot(), id:runId, at:new Date().toISOString(), did:s.did };
+  const i=list.findIndex(r=>r.id===runId);
+  if(i>=0) list[i]=row; else list.unshift(row);
+  putRuns(s.did,list);
+  paintHistory();
+}
+
+const when=(iso)=>{
+  const d=new Date(iso), now=new Date();
+  const hm=d.toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"});
+  const day=Math.round((new Date(now.getFullYear(),now.getMonth(),now.getDate())
+                      - new Date(d.getFullYear(),d.getMonth(),d.getDate()))/86400000);
+  if(day===0) return `Today, ${hm}`;
+  if(day===1) return `Yesterday, ${hm}`;
+  if(day<7)   return `${d.toLocaleDateString([], {weekday:"short"})}, ${hm}`;
+  return d.toLocaleDateString([], {day:"numeric",month:"short",year:"numeric"});
+};
+
+function buildHistory(list,s){
+  const wrap=el("div","panel histpanel");
+
+  const head=el("div","hhead");
+  const hic=el("span","hic"); hic.append(icon("i-hist"));
+  const grow=el("div","grow");
+  grow.append(el("b",null,"Your runs"));
+  grow.append(el("span","hsub",
+    `${list.length} ${list.length===1?"run":"runs"} by ${shortDid(s.did,8,5)} · kept in this browser only`));
+  head.append(hic,grow);
+  /* Two taps to clear, and the second one is labelled. A confirm() blocks the
+     page and a single tap on "Clear" throws away the only copy there is. */
+  const clr=el("button","linkalt"); clr.type="button"; clr.textContent="Clear";
+  let armed=false;
+  clr.addEventListener("click",()=>{
+    if(!armed){ armed=true; clr.textContent="Really clear all?"; clr.style.color="#FF9B9B";
+      setTimeout(()=>{ if(armed){ armed=false; clr.textContent="Clear"; clr.style.color=""; } },4000); return; }
+    putRuns(s.did,[]); paintHistory();
+  });
+  head.append(clr);
+  wrap.append(head);
+
+  const bestRun=list.reduce((a,b)=>b.correct>a.correct||(b.correct===a.correct&&b.score>a.score)?b:a,list[0]);
+  const bestPts=Math.max(...list.map(r=>r.score));
+  const avg=Math.round(list.reduce((n,r)=>n+r.correct,0)/list.length*10)/10;
+  const stats=el("div","hstats");
+  const stat=(v,l)=>{ const d=el("div","hstat"); d.append(el("b",null,v),el("span",null,l)); return d; };
+  stats.append(stat(`${bestRun.correct}/${bestRun.total}`,"best run"),
+               stat(bestPts.toLocaleString(),"best points"),
+               stat(String(avg),"average gates"),
+               stat(bestRun.rank,"best rank"));
+  wrap.append(stats);
+
+  /* Oldest on the left, because the shape people want to see is whether they
+     are getting better. One run is not a trend, so it is not drawn. */
+  if(list.length>1){
+    const box=el("div","trendbox");
+    const tr=el("div","htrend");
+    const top=Math.max(1,bestPts);
+    [...list].reverse().forEach((r,i)=>{
+      const bar=el("i");
+      bar.style.height=`${Math.max(8,Math.round(r.score/top*100))}%`;
+      bar.style.background=(SKIN[r.rank]||SKIN["Validator"]).a;
+      bar.style.animationDelay=`${i*34}ms`;
+      bar.title=`${when(r.at)} — ${r.correct}/${r.total}, ${r.score.toLocaleString()} points`;
+      tr.append(bar);
+    });
+    const key=el("div","trendkey");
+    key.append(el("span",null,"first run"), el("span",null,"points per run"), el("span",null,"latest"));
+    box.append(tr,key);
+    wrap.append(box);
+  }
+
+  const ul=el("ul","hlist");
+  const shown = showAll ? list : list.slice(0,5);
+  shown.forEach((r,i)=>{
+    const li=document.createElement("li");
+    const row=el("button","hrow"); row.type="button";
+    row.style.animationDelay=`${i*45}ms`;
+    const sk=SKIN[r.rank]||SKIN["Validator"];
+    const g=el("span","hgrade");
+    g.style.background=`linear-gradient(135deg,${sk.a},${sk.b})`;
+    g.append(document.createTextNode(String(r.correct)), el("em",null,`of ${r.total}`));
+    const mid=el("div","hmid");
+    mid.append(el("b",null,r.rank));
+    mid.append(el("span","hwhen",
+      `${when(r.at)} · ${r.score.toLocaleString()} points · streak ${r.best}`));
+    const pips=el("div","hpips");
+    r.marks.forEach(m=>{ const p=el("i"); if(m) p.className="hit"; pips.append(p); });
+    mid.append(pips);
+    row.append(g,mid);
+    if(r.proof){ const sg=el("span","hsign"); sg.append(icon("i-seal"),el("span",null,"signed")); row.append(sg); }
+    const ch=icon("i-chev"); ch.classList.add("chev"); row.append(ch);
+    row.addEventListener("click",()=>openRun(r,s));
+    li.append(row); ul.append(li);
+  });
+  wrap.append(ul);
+
+  if(list.length>5){
+    const more=el("div","hmore");
+    const b=el("button","linkalt"); b.type="button";
+    b.textContent = showAll ? "Show fewer" : `Show all ${list.length} runs`;
+    b.addEventListener("click",()=>{ showAll=!showAll; paintHistory(); });
+    more.append(b); wrap.append(more);
+  }
+  return wrap;
+}
+
+/** The same panel in two places — under the start card, and at the foot of a
+ *  result — because those are the two moments somebody wants it. Built twice
+ *  rather than moved: one node cannot be in two sections at once. */
+function paintHistory(){
+  const s=getSession();
+  const list=s?runsFor(s.did):[];
+  for(const id of ["histIntro","histEnd"]){
+    const host=$(id);
+    host.replaceChildren();
+    if(!s || !list.length){ host.hidden=true; continue; }
+    host.hidden=false;
+    host.append(buildHistory(list,s));
+  }
+}
+
+/* ── one run, opened ────────────────────────────────────────────────────── */
+let openedRun=null;
+function openRun(r,s){
+  openedRun=r;
+  $("rTitle").textContent=`${r.rank} — ${r.correct} of ${r.total}`;
+  $("rSub").textContent=`${when(r.at)} · ${r.score.toLocaleString()} points · best streak ${r.best}`;
+  drawCard($("hcard"), r);
+  const meta=$("rMeta"); meta.replaceChildren();
+  const bit=(l,v)=>{ const d=el("span"); d.append(document.createTextNode(l+" "), el("b",null,v)); return d; };
+  meta.append(bit("gates",`${r.correct}/${r.total}`), bit("points",r.score.toLocaleString()),
+              bit("streak",String(r.best)), bit("signed", r.proof?"yes":"no"));
+  const row=$("rRow"); row.replaceChildren();
+  $("rSay").textContent="";
+
+  const post=el("button","go"); post.type="button";
+  post.append(icon("i-share"), el("span",null,"Post on X"));
+  post.addEventListener("click",()=>postRun(r));
+  row.append(post);
+
+  const dl=el("button","go ghost"); dl.type="button";
+  dl.append(icon("i-down"), el("span",null,"Save the card"));
+  dl.addEventListener("click",()=>{
+    $("hcard").toBlob((b)=>download(b,`proof-of-learning-${r.correct}-of-${r.total}.png`),"image/png");
+  });
+  row.append(dl);
+
+  if(r.proof){
+    const open2=document.createElement("a");
+    open2.className="go ghost"; open2.href=r.proof; open2.target="_blank"; open2.rel="noopener noreferrer";
+    open2.append(icon("i-seal"), el("span",null,"Check the proof"));
+    row.append(open2);
+    const cp=el("button","go ghost"); cp.type="button";
+    cp.append(icon("i-copy"), el("span",null,"Copy the link"));
+    cp.addEventListener("click",async()=>{
+      try{ await navigator.clipboard.writeText(r.proof); $("rSay").textContent="Link copied."; $("rSay").className="msay ok"; }
+      catch{ $("rSay").textContent="This browser would not let the page copy. Open the proof and copy from the address bar."; $("rSay").className="msay err"; }
+    });
+    row.append(cp);
+  }
+
+  const del=el("button","go ghost danger"); del.type="button";
+  del.append(icon("i-trash"), el("span",null,"Delete this run"));
+  let armed=false;
+  del.addEventListener("click",()=>{
+    if(!armed){ armed=true; del.lastChild.textContent="Really delete?";
+      setTimeout(()=>{ if(armed){ armed=false; del.lastChild.textContent="Delete this run"; } },4000); return; }
+    putRuns(s.did, runsFor(s.did).filter(x=>x.id!==r.id));
+    closeRun(); paintHistory();
+  });
+  row.append(del);
+
+  $("rscrim").hidden=false;
+  setTimeout(()=>$("rClose").focus(),60);
+}
+function closeRun(){ $("rscrim").hidden=true; openedRun=null; }
+$("rClose").addEventListener("click",closeRun);
+$("rscrim").addEventListener("pointerdown",(e)=>{ if(e.target===$("rscrim")) closeRun(); });
+addEventListener("keydown",(e)=>{ if(e.key==="Escape" && !$("rscrim").hidden) closeRun(); });
+
+paintHistory();
 
 /* ── the party ─────────────────────────────────────────────────────────── */
 function celebrate(){

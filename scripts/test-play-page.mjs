@@ -526,7 +526,115 @@ const xLen = (t) => [...t.replace(/https?:\/\/\S+/g, 'x'.repeat(23))]
   .reduce((n, ch) => n + (ch.codePointAt(0) > 0x2000 && !'—–…‘’“”·'.includes(ch) ? 2 : 1), 0);
 check('it fits in a post', xLen(post) <= 280, `${xLen(post)} of 280`);
 
-console.log('\n=== I. the sources are named, not alluded to');
+console.log('\n=== I. your runs');
+/* Runs belong to an identity, not to a browser. Somebody signed out sees
+   nothing — including, and especially, somebody else's runs sitting in the
+   same localStorage on a shared machine. */
+await pg.evaluate(() => {
+  localStorage.removeItem('overheard.session');
+  localStorage.setItem('overheard.pol.runs', JSON.stringify({
+    'did:key:z6MkngD8RZKCgJQCkJvHfGyYoCcNCG5rz9Tc7yRmWrMZExaz': [{
+      id: 'x', at: new Date().toISOString(), correct: 9, total: 12, score: 999, best: 4,
+      marks: Array(12).fill(true), rank: 'Verified miner', proof: null,
+    }],
+  }));
+});
+await go();
+check('a signed-out browser is shown nothing', await pg.locator('#histIntro').isHidden());
+
+/* Sign back in, play twice, and the history should describe both runs — from
+   the intro as well as from the result. */
+await pg.evaluate(async () => {
+  localStorage.removeItem('overheard.pol.runs');
+  const kp = await crypto.subtle.generateKey({ name: 'Ed25519' }, true, ['sign', 'verify']);
+  const jwk = await crypto.subtle.exportKey('jwk', kp.privateKey);
+  const raw = new Uint8Array(await crypto.subtle.exportKey('raw', kp.publicKey));
+  const B58 = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
+  let n = 0n; for (const x of [0xed, 0x01, ...raw]) n = n * 256n + BigInt(x);
+  let out = ''; while (n > 0n) { out = B58[Number(n % 58n)] + out; n /= 58n; }
+  localStorage.setItem('overheard.session', JSON.stringify({ did: 'did:key:z' + out, jwk }));
+});
+const hist = async () => pg.evaluate(() => {
+  const h = document.getElementById('histEnd');
+  return {
+    shown: !h.hidden,
+    rows: [...h.querySelectorAll('.hrow')].map(r => r.textContent.replace(/\s+/g, ' ').trim()),
+    stats: [...h.querySelectorAll('.hstat')].map(r => r.textContent.replace(/\s+/g, ' ').trim()),
+    bars: h.querySelectorAll('.htrend i').length,
+    signed: h.querySelectorAll('.hsign').length,
+  };
+});
+await go();
+await pg.click('#begin'); await pg.waitForTimeout(300);
+await play(true);
+await pg.waitForSelector('#end:not([hidden])', { timeout: 10000 });
+const h1 = await hist();
+check('a signed run is kept', h1.shown && h1.rows.length === 1, JSON.stringify(h1.rows));
+check('and marked as signed', h1.signed === 1);
+check('one run is not a trend, so no chart is drawn', h1.bars === 0);
+await pg.click('#again'); await pg.waitForTimeout(400);
+for (let i = 0; i < 12; i++) {
+  await clearLevelCard();
+  await pg.waitForSelector('.opt:not([disabled])', { timeout: 10000 });
+  await pg.locator('.opt:not([disabled])').nth(i < 4 ? ANSWERS[i] : (ANSWERS[i] + 1) % 4).click();
+  await pg.waitForSelector('.cleared', { timeout: 10000 });
+  await pg.click('#stage .nextrow .go'); await pg.waitForTimeout(400);
+}
+await pg.waitForSelector('#end:not([hidden])', { timeout: 10000 });
+const h2 = await hist();
+console.log('   ', JSON.stringify(h2.rows));
+check('a second run joins it, newest first',
+  h2.rows.length === 2 && /^4of 12Freshly booted/.test(h2.rows[0]), h2.rows[0].slice(0, 40));
+check('and now there is a trend to draw', h2.bars === 2);
+check('the summary is of the best, not the last',
+  h2.stats.some(t => /^12\/12best run$/.test(t)) && h2.stats.some(t => /^Foundation gradebest rank$/.test(t)),
+  JSON.stringify(h2.stats));
+check('and it says where the runs actually live',
+  /kept in this browser only/.test(await pg.locator('#histEnd .hsub').textContent()));
+/* The same panel belongs on the way IN — that is where somebody decides to
+   beat their own score. */
+await go();
+check('it is on the start page too', await pg.locator('#histIntro .hrow').count() === 2);
+check('and it is below the start card, not above it', await pg.evaluate(() => {
+  const a = document.querySelector('.panel.start').getBoundingClientRect();
+  const b = document.getElementById('histIntro').getBoundingClientRect();
+  return b.top > a.top;
+}));
+
+console.log('\n=== I2. opening a past run');
+await pg.locator('#histIntro .hrow').first().click();
+await pg.waitForTimeout(600);
+check('it opens', await pg.locator('#rscrim').isVisible());
+check('titled with the run it is', /4 of 12/.test(await pg.locator('#rTitle').textContent()),
+  await pg.locator('#rTitle').textContent());
+/* The card is REDRAWN from the numbers — the history keeps no images — so
+   the pixels are the proof that it survived the round trip. */
+const past = await pg.evaluate(() => {
+  const c = document.getElementById('hcard'), x = c.getContext('2d');
+  const d = x.getImageData(0, 0, c.width, c.height).data;
+  let lit = 0; for (let i = 0; i < d.length; i += 4) if (d[i] + d[i + 1] + d[i + 2] > 240) lit++;
+  return lit;
+});
+check('and the card is rebuilt, not stored', past > 4000, `${past} lit pixels`);
+check('with the things anybody would want to do with it',
+  (await pg.locator('#rRow button, #rRow a').count()) === 5,
+  (await pg.locator('#rRow').textContent()).replace(/\s+/g, ' ').trim());
+check('including the proof, because that run was signed',
+  (await pg.locator('#rRow a[href*="/v#b="]').count()) === 1);
+/* Deleting takes two taps, and the first one says what the second will do. */
+const del = pg.locator('#rRow button.danger');
+await del.click(); await pg.waitForTimeout(250);
+check('delete asks once', /Really delete/.test(await del.textContent()));
+await del.click(); await pg.waitForTimeout(500);
+check('and then does it', await pg.locator('#rscrim').isHidden()
+  && (await pg.locator('#histIntro .hrow').count()) === 1);
+await pg.evaluate(() => {
+  localStorage.removeItem('overheard.pol.runs');
+  localStorage.removeItem('overheard.identity');
+  localStorage.removeItem('overheard.session');
+});
+
+console.log('\n=== J. the sources are named, not alluded to');
 const srcs = await pg.evaluate(() => [...document.querySelectorAll('.srccard')].map(a => ({
   href: a.getAttribute('href'), text: a.textContent.replace(/\s+/g, ' ').trim(),
 })));
@@ -539,12 +647,12 @@ check('the draft status travels with the link', /0\.1|draft/i.test(srcs.map(x =>
 check('and the page still says the score goes nowhere',
   /never leaves this browser/i.test(await pg.locator('.srcnote').textContent()));
 
-console.log('\n=== J. nowhere on the page is a token handed out');
+console.log('\n=== K. nowhere on the page is a token handed out');
 const pageText = await pg.evaluate(() => document.body.innerText);
 check('no "$FLOP earned" anywhere in the run or the end',
   !/\$?FLOP\s+earned/i.test(pageText) && !/earned.{0,12}\$FLOP/i.test(pageText));
 
-console.log('\n=== K. phone');
+console.log('\n=== L. phone');
 const ph = await ctx.newPage(); ph.on('pageerror', e => errs.push(e.message));
 await ph.setViewportSize({ width: 390, height: 844 });
 await ph.goto('http://localhost:8909/play'); await ph.waitForTimeout(700);
