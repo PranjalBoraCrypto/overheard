@@ -50,11 +50,40 @@ export function getVault() {
   return v && DID_RE.test(String(v.did || "")) && v.data ? v : null;
 }
 
+/** Sign in, and CHECK that it stuck.
+ *
+ *  Reported: "I closed it and it asked for the passphrase again." A write to
+ *  localStorage can silently do nothing — a private window, storage blocked
+ *  for the site, a full quota — and the old version could not tell the
+ *  difference between "remembered" and "quietly forgotten", so the page said
+ *  you would stay signed in and then did not.
+ *
+ *  It reads the record back. `false` from `persisted` means this browser
+ *  refused to keep it and the caller should say so rather than promise
+ *  something it cannot deliver. */
 export function signIn(did, jwk) {
   if (!DID_RE.test(String(did || "")) || !jwk) return null;
-  try { localStorage.setItem(SESSION_KEY, JSON.stringify({ did, jwk, at: new Date().toISOString() })); } catch {}
+  let persisted = false;
+  try {
+    localStorage.setItem(SESSION_KEY, JSON.stringify({ did, jwk, at: new Date().toISOString() }));
+    persisted = !!getSession();
+  } catch {}
   announce();
-  return { did, jwk };
+  return { did, jwk, persisted };
+}
+
+/** Rewrite the record with today's date on every visit.
+ *
+ *  Some browsers evict script-written storage that has not been touched in a
+ *  while — Safari's cap is the well-known one. Nothing can be done about a
+ *  browser that clears it on close, but a record that is rewritten every time
+ *  the site is opened is never the stale one an eviction policy reaches for
+ *  first. Cheap, and it costs nothing when it is not needed. */
+export function touchSession() {
+  const s = getSession();
+  if (!s) return null;
+  try { localStorage.setItem(SESSION_KEY, JSON.stringify({ ...s, at: new Date().toISOString() })); } catch {}
+  return s;
 }
 
 /** Sign out clears the unlocked key and NOTHING else. The vault stays: this

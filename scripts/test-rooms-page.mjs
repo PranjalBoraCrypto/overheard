@@ -46,6 +46,16 @@ const srv = http.createServer((req, res) => {
   }
   if (p === '/api/room') {
     const room = u.searchParams.get('room') || '';
+    // A firehose, like the real lobby: 200 messages per read. This is the
+    // room where "my message vanished" was reported.
+    if (room === 'busylobby') {
+      const base = Number(u.searchParams.get('since') || 0) || 0;
+      return J({ room, first_seq: String(base + 1), last_seq: String(base + 200), count: 200,
+        messages: Array.from({ length: 200 }, (_, i) => ({
+          seq: String(base + 1 + i), ts: new Date().toISOString(),
+          from: 'did:key:z6MkngD8RZKCgJQCkJvHfGyYoCcNCG5rz9Tc7yRmWrMZExaz',
+          nick: null, text: 'firehose line ' + (base + 1 + i), sig: null, nonce: null })) });
+    }
     // A room nobody has ever posted in: the case where opening one has to
     // spend a room slot, which is the case the capacity check exists for.
     if (/^brand-new/.test(room)) return J({ room, first_seq: null, last_seq: '0', count: 0, messages: [] });
@@ -76,6 +86,11 @@ const errs = []; pg.on('pageerror', e => errs.push(e.message));
 let bad = 0;
 const check = (n, ok, d = '') => { console.log(`  ${ok ? 'ok  ' : 'FAIL'}  ${n}${d ? '   ' + d : ''}`); if (!ok) bad++; };
 const go = async () => { await pg.goto('http://localhost:8895/rooms.html'); await pg.waitForTimeout(600); };
+/* Refusals now come up in front of the page, so every one of them has to be
+   dismissed before the next thing can be clicked — which is the point. */
+const dismiss = async () => {
+  if (await pg.locator('#tellScrim').isVisible()) { await pg.click('#tellOk'); await pg.waitForTimeout(250); }
+};
 
 const PASS = 'a-good-long-passphrase';
 
@@ -190,6 +205,80 @@ await pg.waitForTimeout(200);
 check('Shift+Enter still makes a new line', (await pg.inputValue('#say')).includes('\n'));
 await pg.fill('#say', '');
 
+console.log('\n=== F2. a busy room does not swallow your own line');
+/* REPORTED: "my message disappears too fast, and never shows in lobby." The
+   lobby does twenty a second; a poll returned eighty at once, appended them
+   in one frame, and the 300-line cap then pruned yours out of the DOM. */
+await pg.goto('http://localhost:8895/rooms.html?room=busylobby');
+await pg.waitForTimeout(2500);
+POSTS = [];
+await pg.fill('#say', 'MINE-IN-THE-FLOOD');
+await pg.press('#say', 'Enter');
+await pg.waitForTimeout(400);
+const mineAt = async () => pg.evaluate(() => {
+  const el = [...document.querySelectorAll('.msg.mine .body')].find(b => b.textContent === 'MINE-IN-THE-FLOOD');
+  if (!el) return null;
+  const box = document.getElementById('stream').getBoundingClientRect();
+  const r = el.getBoundingClientRect();
+  return { onScreen: r.bottom > box.top && r.top < box.bottom, below: Math.round(box.bottom - r.bottom) };
+});
+check('it is on screen the moment it is sent', (await mineAt())?.onScreen === true, JSON.stringify(await mineAt()));
+await pg.waitForTimeout(1500);
+check('and still on screen a second and a half later', (await mineAt())?.onScreen === true, JSON.stringify(await mineAt()));
+await pg.waitForTimeout(9000);
+check('and it is never pruned away, however loud the room gets',
+  (await pg.evaluate(() => [...document.querySelectorAll('.msg.mine .body')]
+    .some(b => b.textContent === 'MINE-IN-THE-FLOOD'))) === true);
+const flow = await pg.evaluate(() => ({ shown: document.querySelectorAll('.msg').length }));
+check('the room is let out at a readable rate, not eighty in a frame', flow.shown <= 320, JSON.stringify(flow));
+check('Keep is there without hovering over it', await pg.evaluate(() => {
+  const el = [...document.querySelectorAll('.msg.mine')].find(m => m.textContent.includes('MINE-IN-THE-FLOOD'));
+  const k = el?.querySelector('.keep');
+  return !!k && getComputedStyle(k).opacity === '1';
+}));
+
+console.log('\n=== F3. the chat scrolls wherever the cursor is in it');
+const scroller = await pg.evaluate(() => {
+  const box = document.getElementById('stream');
+  const s = getComputedStyle(box);
+  const panel = document.querySelector('.main').getBoundingClientRect();
+  const r = box.getBoundingClientRect();
+  return { overflow: s.overflowY, contain: s.overscrollBehaviorY,
+    scrollable: box.scrollHeight > box.clientHeight + 20,
+    // The scroller must fill the panel: it used to be a max-height inside an
+    // auto-height column, so part of what LOOKED like the chat was not it.
+    coversPanel: Math.abs(r.width - panel.width) <= 4 && r.height > panel.height * 0.4,
+    frac: Math.round(r.height / panel.height * 100) };
+});
+check('one scroller, and it is the chat', scroller.overflow === 'auto' && scroller.scrollable, JSON.stringify(scroller));
+check('filling the panel, so the wheel works anywhere over it', scroller.coversPanel, JSON.stringify(scroller));
+check('and a flick at the end does not take the page with it', scroller.contain === 'contain');
+/* A real wheel, from the browser, over three different places inside the
+   chat — a bubble, an avatar and the gap between rows. A synthetic
+   WheelEvent scrolls nothing in Chromium, so this goes through the mouse. */
+const box = await pg.locator('#stream').boundingBox();
+const spots = [
+  ['over a message bubble', box.x + 90, box.y + 40],
+  ['over the middle of the chat', box.x + box.width / 2, box.y + box.height / 2],
+  ['over the gap near the bottom', box.x + box.width - 60, box.y + box.height - 30],
+];
+for (const [what, x, y] of spots) {
+  await pg.evaluate(() => { const b = document.getElementById('stream'); b.scrollTop = b.scrollHeight; });
+  const before = await pg.evaluate(() => document.getElementById('stream').scrollTop);
+  await pg.mouse.move(x, y);
+  await pg.mouse.wheel(0, -400);
+  await pg.waitForTimeout(220);
+  const after = await pg.evaluate(() => document.getElementById('stream').scrollTop);
+  check('the wheel scrolls the chat ' + what, after < before, `${Math.round(before)} -> ${Math.round(after)}`);
+}
+
+console.log('\n=== F4. picking a room puts the cursor where you type');
+await pg.evaluate(() => document.querySelectorAll('#rlist .rbtn')[1].click());
+await pg.waitForTimeout(500);
+check('no second click needed to start typing',
+  (await pg.evaluate(() => document.activeElement?.id)) === 'say',
+  await pg.evaluate(() => document.activeElement?.id));
+
 console.log('\n=== G. the room field, and the prefix question');
 check('an open room gets no d- prefix', await pg.locator('#rpre').isHidden());
 /* Explaining the absence of a prefix, on the kind that never has one, is a
@@ -219,6 +308,11 @@ await pg.waitForFunction(() => !document.getElementById('claim').disabled, null,
 CLAIM = { ok: false, status: 400, error: '400 note limit reached (50960 is the cap, and this would be a new one).' };
 await pg.click('#claim');
 await pg.waitForFunction(() => !document.getElementById('ownCap').hidden, null, { timeout: 8000 });
+/* Reported: a notice under the button is missed by somebody who is looking
+   at the button. It comes up in front of the page now. */
+check('the refusal comes up in front of the page', await pg.locator('#tellScrim').isVisible());
+check('saying the same thing', /cannot take new room claims/.test(await pg.locator('#tellTitle').textContent()));
+await dismiss();
 const cap = (await pg.locator('#ownCap').textContent()) || '';
 console.log('   ', cap.replace(/\s+/g, ' ').slice(0, 120), '…');
 check('it says what was refused: a claim, not a room', /cannot take new room claims/.test(cap));
@@ -234,6 +328,7 @@ CLAIM = { ok: false, status: 400, error: '400 room limit reached (20480 is the c
 await pg.fill('#rn', 'yet-another');
 await pg.waitForFunction(() => !document.getElementById('claim').disabled, null, { timeout: 8000 });
 await pg.click('#claim'); await pg.waitForTimeout(900);
+await dismiss();
 const capR = (await pg.locator('#ownCap').textContent()) || '';
 check('a full room store is told apart from a full note store',
   /no room left for new rooms/.test(capR) && !/room claims/.test(capR), capR.slice(0, 60));
@@ -243,6 +338,7 @@ await pg.fill('#rn', 'another-room');
 await pg.waitForFunction(() => !document.getElementById('claim').disabled, null, { timeout: 8000 });
 await pg.click('#claim');
 await pg.waitForTimeout(900);
+await dismiss();
 const cap2 = (await pg.locator('#ownCap').textContent()) || '';
 console.log('   ', cap2.replace(/\s+/g, ' ').slice(0, 110), '…');
 check('the daily allowance is told apart from the register being full',
@@ -258,6 +354,7 @@ await go();                       // a fresh page, so the 30-second capacity mem
 await pg.click('#kOpen'); await pg.waitForTimeout(150);
 await pg.fill('#rn', 'brand-new-room');
 await pg.waitForFunction(() => !document.getElementById('ownCap').hidden, null, { timeout: 8000 });
+await dismiss();
 const capO = (await pg.locator('#ownCap').textContent()) || '';
 check('it says so while the name is being typed', /no room left for new rooms/.test(capO), capO.slice(0, 58));
 check('and the button does not offer to do it anyway', await pg.locator('#claim').isDisabled());
@@ -312,6 +409,7 @@ await pg.fill('#rn', 'brand-new-second');
 await pg.waitForFunction(() => /available/.test(document.getElementById('ownsay').textContent), null, { timeout: 9000 });
 await pg.click('#claim');
 await pg.waitForFunction(() => !document.getElementById('ownCap').hidden, null, { timeout: 15000 });
+await dismiss();
 const capW = (await pg.locator('#ownCap').textContent()) || '';
 check('a refusal lands on the panel, not two screens later',
   /no room left for new rooms/.test(capW), capW.slice(0, 52));
@@ -382,6 +480,13 @@ check('the bar chip goes with it', await pg.evaluate(() =>
 check('the session is gone', await pg.evaluate(() => !localStorage.getItem('overheard.session')));
 check('but the identity is NOT deleted', await pg.evaluate(() => !!localStorage.getItem('overheard.identity')));
 check('and the passphrase brings it straight back', await pg.locator('#pw').isEnabled());
+/* Asked for: the second door has to be there the moment you sign out, and it
+   has to offer what it can actually do — this browser HAS an identity, so
+   "no passphrase yet" would be talking to the wrong person. */
+check('the other way in is offered immediately', await pg.locator('#noPass').isVisible());
+check('and it says the thing that is true of this browser',
+  /Different identity/.test(await pg.locator('#noPass').textContent()),
+  (await pg.locator('#noPass').textContent()).trim());
 
 console.log('\n=== J. bringing in an identity that already exists');
 const vault = await pg.evaluate(() => localStorage.getItem('overheard.identity'));
