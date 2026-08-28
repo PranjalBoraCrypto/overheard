@@ -471,6 +471,103 @@ canvas.confetti{position:fixed;inset:0;width:100%;height:100%;pointer-events:non
   background:rgba(0,180,215,.12);color:var(--cy-hi)}
 .signed .sIcon .i{width:17px;height:17px}
 .signed em{font-style:normal;color:var(--cy-hi)}
+/* the link, and the one thing anybody wants to do with a link */
+.linkrow{display:flex;gap:8px;align-items:stretch;margin-top:10px}
+.linkrow .lk{flex:1 1 auto;min-width:0;margin-top:0}
+.copy{flex:none;display:inline-flex;align-items:center;gap:7px;padding:8px 13px;border-radius:9px;cursor:pointer;
+  font-family:var(--display);font-size:12.5px;font-weight:600;color:var(--cy-hi);
+  background:rgba(0,180,215,.1);border:1px solid rgba(0,180,215,.3);transition:.2s var(--ease)}
+.copy:hover{background:rgba(0,180,215,.2);color:var(--txt)}
+.copy.ok{color:var(--good);border-color:rgba(59,227,176,.5);background:rgba(59,227,176,.12)}
+.copy .i{width:14px;height:14px}
+/* the way back in, when this browser already holds a key */
+.pwrow{display:flex;gap:8px;margin-top:11px;flex-wrap:wrap}
+.pwrow input{flex:1 1 190px;min-width:0;background:rgba(0,7,10,.7);border:1px solid var(--edge);
+  border-radius:11px;color:var(--txt);font-family:var(--mono);font-size:13px;padding:10px 13px;outline:none;
+  transition:border-color .2s var(--ease),box-shadow .2s var(--ease)}
+.pwrow input:focus{border-color:var(--cy);box-shadow:0 0 0 4px rgba(0,180,215,.10)}
+.pwrow .go{flex:none;padding:11px 18px;font-size:13.5px}
+.signrow{display:flex;gap:9px;margin-top:12px;flex-wrap:wrap;align-items:center}
+.signrow .go{padding:11px 18px;font-size:13.5px}
+.linkalt{background:none;border:0;padding:0;cursor:pointer;color:var(--cy);font-family:var(--display);
+  font-weight:600;font-size:12.5px;text-decoration:none}
+.linkalt:hover{color:var(--cy-hi)}
+.saysm{font-family:var(--mono);font-size:11.5px;line-height:1.5;color:var(--faint);margin-top:9px;min-height:16px}
+.saysm.err{color:#FF9B9B} .saysm.ok{color:var(--good)}
+
+/* ── the pop-up ───────────────────────────────────────────────────────────
+   Ported from the Rooms page, which is where this flow was built and argued
+   over. Two ways to bring an identity in, and they are not equally safe: a
+   backup file is already encrypted, a seed is the identity itself in plain
+   text — so the safe one is offered first and the fields, labels and button
+   all change with the choice rather than a seed being bolted onto a form
+   written for something else.
+
+   The keyframes are named `mrise`/`mpanein` rather than the `rise`/`slidein`
+   they are called there: this page already owns both of those names, and a
+   silently redefined keyframe is the exact class of bug this codebase keeps
+   producing. */
+.scrim{position:fixed;inset:0;z-index:80;display:grid;place-items:center;padding:22px;
+  background:rgba(0,5,8,.72);backdrop-filter:blur(7px);animation:mfade .25s var(--ease) both}
+@keyframes mfade{from{opacity:0}}
+.modal{width:min(520px,100%);max-height:min(88vh,860px);overflow:auto;border-radius:20px;
+  padding:24px;border:1px solid transparent;
+  background:linear-gradient(rgba(5,24,33,.99),rgba(3,15,21,.99)) padding-box,var(--bevel) border-box;
+  box-shadow:0 40px 90px -40px rgba(0,0,0,.95);
+  animation:mrise .34s cubic-bezier(.2,.9,.3,1.15) both}
+@keyframes mrise{from{opacity:0;transform:translateY(14px) scale(.965)}}
+.modal h2{font-size:19px;font-weight:800;letter-spacing:-.02em;margin-bottom:5px}
+.modal .sub{color:var(--dim);font-size:13.5px;line-height:1.6}
+.mx{position:absolute;top:0;right:0;width:32px;height:32px;border-radius:10px;background:none;
+  border:1px solid rgba(0,180,215,.2);color:var(--dim);cursor:pointer;display:grid;place-items:center;
+  transition:.2s var(--ease)}
+.mx:hover{color:var(--txt);background:rgba(0,180,215,.1)}
+.mx .i{width:15px;height:15px}
+.mhead{position:relative;padding-right:42px}
+.mpane{padding-top:16px;animation:mpanein .3s var(--ease) both}
+@keyframes mpanein{from{opacity:0;transform:translateY(7px)}}
+.mfield{margin-bottom:13px}
+.mfield label{display:block;font-family:var(--mono);font-size:10.5px;letter-spacing:.13em;
+  text-transform:uppercase;color:var(--faint);margin-bottom:7px}
+.mfield input,.mfield textarea{width:100%;background:rgba(0,7,10,.7);border:1px solid var(--edge);
+  border-radius:11px;color:var(--txt);font-family:var(--mono);font-size:13px;padding:11px 13px;outline:none;
+  transition:border-color .2s var(--ease),box-shadow .2s var(--ease)}
+.mfield textarea{min-height:78px;resize:vertical;line-height:1.55}
+.mfield input:focus,.mfield textarea:focus{border-color:var(--cy);box-shadow:0 0 0 4px rgba(0,180,215,.10)}
+.mfield .hint{font-size:11.5px;color:var(--faint);margin-top:6px;line-height:1.5}
+.mrow{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:16px}
+.mrow .go{flex:1 1 auto;justify-content:center}
+.msay{font-family:var(--mono);font-size:12px;line-height:1.55;color:var(--dim);min-height:17px;margin-top:12px}
+.msay.err{color:#FF9B9B} .msay.ok{color:var(--good)}
+.filepick{display:flex;align-items:center;gap:10px;padding:11px 13px;border-radius:11px;cursor:pointer;
+  border:1px dashed rgba(0,180,215,.3);color:var(--dim);font-size:13px;transition:.22s var(--ease)}
+.filepick:hover{border-color:rgba(95,235,255,.55);background:rgba(0,180,215,.06);color:var(--txt)}
+.filepick .i{width:16px;height:16px;color:var(--cy)}
+.filepick input{display:none}
+.pick{display:flex;gap:8px;margin-bottom:16px}
+.pk{flex:1;display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:10px 12px;
+  border-radius:11px;cursor:pointer;background:rgba(0,20,26,.5);border:1px solid rgba(0,180,215,.2);
+  color:var(--dim);font-family:var(--display);font-size:13px;font-weight:600;transition:.22s var(--ease)}
+.pk .i{width:15px;height:15px}
+.pk:hover{border-color:rgba(0,180,215,.42);color:var(--txt)}
+.pk.on{border-color:rgba(95,235,255,.55);background:rgba(0,60,74,.45);color:var(--cy-hi);
+  box-shadow:0 0 0 3px rgba(0,180,215,.09)}
+.warnbox{display:flex;gap:10px;align-items:flex-start;margin-bottom:15px;padding:12px 14px;border-radius:12px;
+  font-size:12.5px;line-height:1.6;color:var(--dim);
+  background:linear-gradient(rgba(242,179,61,.09),rgba(242,179,61,.03));
+  border:1px solid rgba(242,179,61,.34)}
+.warnbox b{color:var(--warn)}
+.warnbox em{font-style:normal;color:var(--txt)}
+.warnbox .i{width:15px;height:15px;margin-top:2px;color:var(--warn)}
+.seeddid{margin-top:10px;padding:10px 12px;border-radius:11px;font-family:var(--mono);font-size:11.5px;
+  line-height:1.6;color:var(--cy-hi);word-break:break-all;background:rgba(0,180,215,.08);
+  border:1px solid rgba(0,180,215,.28);animation:mpanein .3s var(--ease) both}
+.seeddid::before{content:"This seed is";display:block;font-size:9.5px;letter-spacing:.14em;
+  text-transform:uppercase;color:var(--faint);margin-bottom:4px}
+.mfoot{margin-top:16px;padding-top:14px;border-top:1px solid rgba(0,180,215,.14);
+  font-size:12.5px;color:var(--faint);line-height:1.6}
+.mfoot a{color:var(--cy);text-decoration:none;font-weight:600}
+.mfoot a:hover{color:var(--cy-hi)}
 
 .prov{display:flex;gap:10px;align-items:flex-start;margin-top:26px;padding:14px 16px;border-radius:13px;
   font-size:12.5px;line-height:1.6;color:var(--faint);
@@ -543,6 +640,9 @@ canvas.confetti{position:fixed;inset:0;width:100%;height:100%;pointer-events:non
   <symbol id="i-user" viewBox="0 0 24 24"><circle cx="12" cy="8.4" r="3.7"/><path d="M4.8 20a7.2 7.2 0 0 1 14.4 0"/></symbol>
   <symbol id="i-warn" viewBox="0 0 24 24"><path d="M12 4.2 21 19.5H3z"/><path d="M12 10v4M12 17v.1"/></symbol>
   <symbol id="i-play" viewBox="0 0 24 24"><path d="M7 4.5 19 12 7 19.5z"/></symbol>
+  <symbol id="i-key" viewBox="0 0 24 24"><circle cx="8" cy="12" r="4.2"/><path d="M12.2 12H21M18 12v3.3M15 12v2.4"/></symbol>
+  <symbol id="i-file" viewBox="0 0 24 24"><path d="M14 3H7a1.6 1.6 0 0 0-1.6 1.6v14.8A1.6 1.6 0 0 0 7 21h10a1.6 1.6 0 0 0 1.6-1.6V7.6z"/><path d="M13.8 3v4.6h4.8"/></symbol>
+  <symbol id="i-copy" viewBox="0 0 24 24"><rect x="9" y="9" width="11.4" height="11.4" rx="2.2"/><path d="M5.6 15H4.6A1.6 1.6 0 0 1 3 13.4V4.6A1.6 1.6 0 0 1 4.6 3h8.8A1.6 1.6 0 0 1 15 4.6v1"/></symbol>
   <symbol id="i-out" viewBox="0 0 24 24"><path d="M14 4h6v6"/><path d="M20 4 11.5 12.5"/><path d="M18 14.5V19a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h4.5"/></symbol>
 </defs></svg>
 
@@ -782,11 +882,81 @@ canvas.confetti{position:fixed;inset:0;width:100%;height:100%;pointer-events:non
     </div>
   </section>
 
+  <!-- The way back in. Two things can bring an identity into this browser and
+       they are not equally safe, so the safe one is offered first and says
+       why. Making a NEW identity is not here — that is what the Create page
+       is for, and it is linked at the foot. -->
+  <div class="scrim" id="scrim" hidden>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="mTitle">
+      <div class="mhead">
+        <button class="mx" id="mClose" type="button" aria-label="Close"><svg class="i"><use href="#i-x"/></svg></button>
+        <h2 id="mTitle">Sign in with your identity</h2>
+        <p class="sub">It is decrypted here, in this browser. Nothing is uploaded, and your run stays yours.</p>
+      </div>
+
+      <div class="mpane">
+        <div class="pick" role="radiogroup" aria-label="What you have">
+          <button class="pk on" id="wayFile" type="button" role="radio" aria-checked="true">
+            <svg class="i"><use href="#i-file"/></svg>Backup file</button>
+          <button class="pk" id="waySeed" type="button" role="radio" aria-checked="false">
+            <svg class="i"><use href="#i-key"/></svg>Seed</button>
+        </div>
+
+        <div class="mfield" id="didField">
+          <label for="hDid">Your DID</label>
+          <input id="hDid" type="text" spellcheck="false" autocomplete="off" placeholder="did:key:z6Mk&#8230;">
+          <p class="hint">The public half. It is written on your backup file and on your card.</p>
+        </div>
+
+        <div id="wayFileBox">
+          <div class="mfield">
+            <label for="hFile">Its backup file</label>
+            <label class="filepick" for="hFileInput">
+              <svg class="i"><use href="#i-file"/></svg>
+              <span id="hFileName">Choose overheard-identity-&#8230;.json</span>
+              <input id="hFileInput" type="file" accept="application/json,.json">
+            </label>
+            <textarea id="hFile" spellcheck="false" placeholder="or paste what is inside it, braces included" style="margin-top:10px"></textarea>
+            <p class="hint">The encrypted file this site gave you when the identity was made.</p>
+          </div>
+        </div>
+
+        <div id="waySeedBox" hidden>
+          <div class="warnbox">
+            <svg class="i"><use href="#i-info"/></svg>
+            <span><b>A seed is the identity itself.</b> Whoever has it <em>is</em> you, for good. It is encrypted on your device and never sent anywhere &mdash; still, check the address bar before typing one into any site, this one included.</span>
+          </div>
+          <div class="mfield">
+            <label for="hSeed">Your seed</label>
+            <textarea id="hSeed" spellcheck="false" placeholder="64 hex characters, or the whole technocore-identity-&#8230;.txt"></textarea>
+            <!-- Shown, not asked for: the seed already contains the DID, so
+                 making somebody type the public half of the thing they just
+                 pasted the private half of is a field that can only be got
+                 wrong. -->
+            <div class="seeddid" id="seedDid" hidden></div>
+          </div>
+        </div>
+
+        <div class="mfield">
+          <label for="hPw" id="hPwLabel">The passphrase you set for it</label>
+          <input id="hPw" type="password" autocomplete="current-password" placeholder="passphrase">
+          <input id="hPw2" type="password" autocomplete="new-password" placeholder="type it once more" style="margin-top:9px" hidden>
+          <p class="hint" id="hPwHint" hidden>A new one, for this browser. It encrypts the seed here; there is no reset.</p>
+        </div>
+        <div class="mrow">
+          <button class="go" id="doHave" type="button"><svg class="i"><use href="#i-key"/></svg><span>Sign in</span></button>
+        </div>
+        <p class="msay" id="haveSay"></p>
+        <p class="mfoot">No identity yet? <a href="/create.html">Make one on the Create page &rarr;</a> It takes about a minute and never leaves your browser.</p>
+      </div>
+    </div>
+  </div>
+
   <overheard-foot></overheard-foot>
 </div>
 
 <script type="module">
-import { getSession, shortDid } from "/session.js";
+import { getSession, getVault, signIn, shortDid } from "/session.js";
 
 const $=(id)=>document.getElementById(id);
 const enc=new TextEncoder();
@@ -1429,47 +1599,282 @@ async function sign(){
   PROOF=null;
   const s=getSession();
   const box=$("signedBox");
+  box.hidden=false;
+  box.replaceChildren();
+  const ic=el("span","sIcon"); ic.append(icon("i-seal"));
+  const body=el("div");
+  box.append(ic,body);
+
   if(!s){
-    box.hidden=false;
-    box.replaceChildren();
-    const ic=el("span","sIcon"); ic.append(icon("i-seal"));
-    const body=el("div");
-    body.innerHTML='<b>Unsigned.</b> Anybody can edit a score into a picture &mdash; including this one.'
-      + '<details><summary>How to make yours checkable</summary><span>Make an identity and your next run is '
-      + 'signed with your own key, so the card carries a link anyone can check on the Verify page.</span></details>';
-    const a=document.createElement("a");
-    a.className="go ghost"; a.href="/create.html"; a.textContent="Make an identity";
-    a.style.marginTop="11px";
-    body.append(a);
-    box.append(ic,body);
+    /* Two different people are read this. Somebody whose browser already
+       holds a key wants a passphrase box, not a lecture; somebody with no key
+       wants to know that signing exists and how to get one. Same panel, two
+       shapes, decided by whether a vault is actually here. */
+    const vault=getVault();
+    body.innerHTML='<b>Unsigned.</b> Anybody can edit a score into a picture &mdash; including this one. '
+      + 'Sign in with your identity, or make one, and your next run is signed with your own key, so the card '
+      + 'carries a link anyone can check on the Verify page.';
+    if(vault){
+      const who=el("div","saysm",`This browser holds ${shortDid(vault.did,10,6)}. Enter its passphrase.`);
+      body.append(who);
+      const row=el("div","pwrow");
+      const pw=document.createElement("input");
+      pw.type="password"; pw.id="quickPw"; pw.autocomplete="current-password";
+      pw.placeholder="passphrase for the identity in this browser";
+      const go=el("button","go"); go.type="button";
+      go.append(icon("i-key"), el("span",null,"Unlock and sign"));
+      row.append(pw,go); body.append(row);
+      const said=el("div","saysm"); body.append(said);
+      const say=(t,cls="")=>{ said.textContent=t; said.className="saysm "+cls; };
+      const tryIt=async()=>{
+        if(!pw.value) return say("Enter your passphrase.","err");
+        go.disabled=true; say("Decrypting on this device…");
+        try{
+          const jwk=await openVault(vault,pw.value);
+          signIn(vault.did,jwk);
+          await sign();                 // repaint this panel as the signed one
+          drawCard();                   // and put the signature on the card
+        }catch{ say("Wrong passphrase, or the stored identity is damaged.","err"); go.disabled=false; }
+      };
+      go.addEventListener("click",tryIt);
+      pw.addEventListener("keydown",(e)=>{ if(e.key==="Enter"){ e.preventDefault(); tryIt(); } });
+      const alt=el("div","signrow");
+      const other=el("button","linkalt"); other.type="button";
+      other.textContent="Different identity? Sign in with a backup file or seed";
+      other.addEventListener("click",()=>openModal());
+      alt.append(other); body.append(alt);
+    }else{
+      const row=el("div","signrow");
+      const go=el("button","go"); go.type="button";
+      go.append(icon("i-key"), el("span",null,"Sign in"));
+      go.addEventListener("click",()=>openModal());
+      const mk=document.createElement("a");
+      mk.className="linkalt"; mk.href="/create.html"; mk.textContent="No identity yet? Make one →";
+      row.append(go,mk); body.append(row);
+    }
     return;
   }
+
   try{
     const room="proof-of-learning";
     const text=`Proof of Learning: ${correct}/${GATES.length}, ${score} points, rank ${rank().word}.`;
     const nonce=(BigInt(Date.now())*1000000n+BigInt(Math.floor(Math.random()*1e6))).toString();
     const key=await crypto.subtle.importKey("jwk",s.jwk,{name:"Ed25519"},false,["sign"]);
     const sig=await crypto.subtle.sign({name:"Ed25519"},key,enc.encode(`${room}|${nonce}|${text}`));
-    const b64u=(b)=>btoa(String.fromCharCode(...new Uint8Array(b))).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,"");
-    const bundle={v:1,kind:"msg",did:s.did,room,nonce,sig:b64u(sig),text};
-    PROOF={did:s.did,link:`${location.origin}/v#b=${b64u(enc.encode(JSON.stringify(bundle)))}`};
-    box.hidden=false;
-    box.replaceChildren();
-    const ic=el("span","sIcon"); ic.append(icon("i-seal"));
-    const body=el("div");
+    PROOF={did:s.did,link:`${location.origin}/v#b=${b64u(enc.encode(JSON.stringify({v:1,kind:"msg",did:s.did,room,nonce,sig:b64u(sig),text})))}`};
     body.innerHTML=`<b>Signed by ${shortDid(s.did,10,6)}.</b> The card carries a proof link, so the score cannot be `
       + `edited into a better one — anyone can check it on the Verify page.`
       + `<details><summary>What a signature proves here</summary><span>That <em>this key</em> claimed this score. `
       + `The questions run in your browser, so it is an honesty badge, not an invigilator.</span></details>`;
+    /* A link nobody can carry away is a link nobody uses: the whole point of
+       this one is that it goes into a post. */
+    const row=el("div","linkrow");
     const a=document.createElement("a");
     a.className="lk"; a.href=PROOF.link; a.textContent=PROOF.link;
-    body.append(a);
-    box.append(ic,body);
+    const cp=el("button","copy"); cp.type="button";
+    cp.append(icon("i-copy"), el("span",null,"Copy"));
+    cp.addEventListener("click",async()=>{
+      let ok=false;
+      try{ await navigator.clipboard.writeText(PROOF.link); ok=true; }
+      catch{
+        /* No clipboard permission, or an insecure context. Selecting the link
+           leaves somebody one keystroke from the same result, which beats a
+           button that silently does nothing. */
+        try{
+          const r=document.createRange(); r.selectNodeContents(a);
+          const sel=getSelection(); sel.removeAllRanges(); sel.addRange(r);
+          ok=document.execCommand?.("copy")||false;
+        }catch{}
+      }
+      cp.classList.toggle("ok",ok);
+      cp.lastChild.textContent = ok ? "Copied" : "Press ⌘C";
+      setTimeout(()=>{ cp.classList.remove("ok"); cp.lastChild.textContent="Copy"; },2200);
+    });
+    row.append(a,cp);
+    body.append(row);
   }catch{
-    box.hidden=false;
-    box.textContent="Could not sign this run in this browser, so the card is unsigned.";
+    body.textContent="Could not sign this run in this browser, so the card is unsigned.";
   }
 }
+
+/* ── bringing an identity in ───────────────────────────────────────────────
+   The same vault format the Create page writes, the Rooms page unlocks and
+   the card page reads. One format, four pages: PBKDF2-SHA256 at 310,000
+   rounds into an AES-GCM key, and the private JWK inside. */
+const b64u=(buf)=>btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,"");
+const fromB64u=(t)=>{ const p=String(t).replace(/-/g,"+").replace(/_/g,"/");
+  const b=atob(p+"=".repeat((4-p.length%4)%4)); const o=new Uint8Array(b.length);
+  for(let i=0;i<b.length;i++) o[i]=b.charCodeAt(i); return o; };
+const B58="123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
+const b58=(bytes)=>{ let n=0n; for(const b of bytes) n=n*256n+BigInt(b);
+  let out=""; while(n>0n){ out=B58[Number(n%58n)]+out; n/=58n; }
+  for(const b of bytes){ if(b===0) out="1"+out; else break; } return out; };
+const DID_RE=/^did:key:z6Mk[1-9A-HJ-NP-Za-km-z]{44}$/;
+const PW_MIN=6;
+
+async function openVault(vault,pass){
+  const base=await crypto.subtle.importKey("raw",enc.encode(pass),"PBKDF2",false,["deriveKey"]);
+  const aes=await crypto.subtle.deriveKey({name:"PBKDF2",salt:fromB64u(vault.salt),iterations:310000,hash:"SHA-256"},
+    base,{name:"AES-GCM",length:256},false,["decrypt"]);
+  const plain=await crypto.subtle.decrypt({name:"AES-GCM",iv:fromB64u(vault.iv)},aes,fromB64u(vault.data));
+  return JSON.parse(new TextDecoder().decode(plain));
+}
+async function seal(did,jwk,pass){
+  const salt=crypto.getRandomValues(new Uint8Array(16));
+  const iv=crypto.getRandomValues(new Uint8Array(12));
+  const base=await crypto.subtle.importKey("raw",enc.encode(pass),"PBKDF2",false,["deriveKey"]);
+  const aes=await crypto.subtle.deriveKey({name:"PBKDF2",salt,iterations:310000,hash:"SHA-256"},
+    base,{name:"AES-GCM",length:256},false,["encrypt"]);
+  const ct=await crypto.subtle.encrypt({name:"AES-GCM",iv},aes,enc.encode(JSON.stringify(jwk)));
+  const h=await crypto.subtle.digest("SHA-256",enc.encode(did));
+  const fingerprint=[...new Uint8Array(h)].map(b=>b.toString(16).padStart(2,"0")).join("").slice(0,16);
+  return {v:1,did,fingerprint,salt:b64u(salt),iv:b64u(iv),data:b64u(ct),created:new Date().toISOString()};
+}
+/** A seed is 32 bytes, written as hex by every Technocore tool and handed
+ *  over inside a text file with other lines around it — so the whole file is
+ *  a legitimate paste. Take the first 64-hex run in it. */
+function readSeed(text){
+  const m=String(text).replace(/[^0-9a-fA-F]+/g," ").match(/\b[0-9a-fA-F]{64}\b/);
+  if(!m) return null;
+  const hex=m[0].toLowerCase(); const b=new Uint8Array(32);
+  for(let i=0;i<32;i++) b[i]=parseInt(hex.slice(i*2,i*2+2),16);
+  return b;
+}
+/** WebCrypto will not hand back a public key from a private one, and there is
+ *  no Ed25519 scalar multiply in it either. But it WILL import a PKCS#8 key
+ *  and export the JWK — which carries `x`, the public half — so wrapping the
+ *  32 seed bytes in the fixed PKCS#8 preamble derives the DID with nothing
+ *  but the platform's own arithmetic. */
+async function keyFromSeed(seed){
+  const pre=[0x30,0x2e,0x02,0x01,0x00,0x30,0x05,0x06,0x03,0x2b,0x65,0x70,0x04,0x22,0x04,0x20];
+  const key=await crypto.subtle.importKey("pkcs8",new Uint8Array([...pre,...seed]),{name:"Ed25519"},true,["sign"]);
+  const jwk=await crypto.subtle.exportKey("jwk",key);
+  return {did:"did:key:z"+b58(new Uint8Array([0xed,0x01,...fromB64u(jwk.x)])),jwk};
+}
+function download(blob,name){
+  const u=URL.createObjectURL(blob), a=document.createElement("a");
+  a.href=u; a.download=name; a.click();
+  setTimeout(()=>URL.revokeObjectURL(u),4000);
+}
+
+const msay=(t,cls="")=>{ $("haveSay").textContent=t; $("haveSay").className="msay "+cls; };
+let lastFocus=null;
+function openModal(){
+  lastFocus=document.activeElement;
+  $("scrim").hidden=false;
+  const known=getVault()?.did || (()=>{ try{ return localStorage.getItem("overheard.lastdid")||""; }catch{ return ""; } })();
+  if(known && DID_RE.test(known) && !$("hDid").value) $("hDid").value=known;
+  setTimeout(()=>$("hDid").focus(),60);
+}
+function closeModal(){
+  $("scrim").hidden=true;
+  $("hPw").value=$("hPw2").value="";
+  msay("");
+  lastFocus?.focus?.();
+}
+$("mClose").addEventListener("click",closeModal);
+$("scrim").addEventListener("pointerdown",(e)=>{ if(e.target===$("scrim")) closeModal(); });
+addEventListener("keydown",(e)=>{ if(e.key==="Escape" && !$("scrim").hidden) closeModal(); });
+
+$("hFileInput").addEventListener("change",async(e)=>{
+  const f=e.target.files?.[0]; if(!f) return;
+  $("hFileName").textContent=f.name;
+  try{ $("hFile").value=await f.text(); }catch{ msay("Could not read that file.","err"); }
+});
+
+/* A backup file is already encrypted and its passphrase is one that exists.
+   A seed is the identity in the clear, and taking one means MAKING a
+   passphrase here rather than asking for one — so the fields, the labels and
+   the button all change with the choice. */
+let way="file";
+function setWay(w){
+  way=w;
+  $("wayFile").classList.toggle("on",w==="file");
+  $("waySeed").classList.toggle("on",w==="seed");
+  $("wayFile").setAttribute("aria-checked",String(w==="file"));
+  $("waySeed").setAttribute("aria-checked",String(w==="seed"));
+  $("wayFileBox").hidden = w!=="file";
+  $("waySeedBox").hidden = w!=="seed";
+  $("didField").hidden  = w!=="file";      // a seed carries its own DID
+  $("hPw2").hidden      = w!=="seed";
+  $("hPwHint").hidden   = w!=="seed";
+  $("hPwLabel").textContent = w==="seed" ? "Choose a passphrase for this browser" : "The passphrase you set for it";
+  $("hPw").placeholder = w==="seed" ? `at least ${PW_MIN} characters` : "passphrase";
+  $("hPw").autocomplete = w==="seed" ? "new-password" : "current-password";
+  $("doHave").lastChild.textContent = w==="seed" ? "Encrypt it and sign in" : "Sign in";
+  msay("");
+}
+$("wayFile").addEventListener("click",()=>setWay("file"));
+$("waySeed").addEventListener("click",()=>setWay("seed"));
+
+/* Show the DID the moment it can be worked out: a DID appearing under the box
+   is the clearest confirmation that the seed pasted is the seed meant. */
+let seedTimer=0;
+$("hSeed").addEventListener("input",()=>{
+  clearTimeout(seedTimer);
+  seedTimer=setTimeout(async()=>{
+    const bytes=readSeed($("hSeed").value);
+    if(!bytes){ $("seedDid").hidden=true; return; }
+    try{ const {did}=await keyFromSeed(bytes); $("seedDid").textContent=did; $("seedDid").hidden=false; }
+    catch{ $("seedDid").hidden=true; }
+  },250);
+});
+
+/** Signed in from the pop-up: repaint the panel and put the mark on the card,
+ *  so the run somebody just finished becomes the signed one rather than
+ *  making them play it again. */
+async function afterSignIn(){
+  closeModal();
+  await sign();
+  drawCard();
+}
+
+async function bringSeed(){
+  const seed=readSeed($("hSeed").value);
+  const p1=$("hPw").value, p2=$("hPw2").value;
+  if(!seed)            return msay("That is not a seed yet — it is 64 hex characters. The whole identity .txt works too.","err");
+  if(p1.length<PW_MIN) return msay(`Choose a passphrase of at least ${PW_MIN} characters.`,"err");
+  if(p1!==p2)          return msay("The two passphrases do not match.","err");
+  $("doHave").disabled=true;
+  msay("Working out the identity from the seed…");
+  try{
+    const {did,jwk}=await keyFromSeed(seed);
+    msay("Encrypting it on this device…");
+    const vault=await seal(did,jwk,p1);
+    try{ localStorage.setItem("overheard.identity",JSON.stringify(vault)); }catch{}
+    /* The seed went in as text; what stays behind is the encrypted form, and
+       a copy of that goes out as a file. From here it is just the passphrase. */
+    download(new Blob([JSON.stringify(vault,null,2)],{type:"application/json"}),
+      `overheard-identity-${did.slice(-8)}.json`);
+    $("hSeed").value=""; $("hPw2").value=""; $("seedDid").hidden=true;
+    signIn(did,jwk);
+    await afterSignIn();
+  }catch(err){ msay("That seed did not produce a key: "+(err?.message||err),"err"); }
+  $("doHave").disabled=false;
+}
+
+$("doHave").addEventListener("click",async()=>{
+  if(way==="seed") return bringSeed();
+  const did=$("hDid").value.trim(), raw=$("hFile").value.trim(), pw=$("hPw").value;
+  if(!DID_RE.test(did)) return msay("That is not a did:key. It starts did:key:z6Mk and is 48 characters after the z.","err");
+  if(!raw)  return msay("Choose the backup file, or paste what is inside it.","err");
+  if(!pw)   return msay("Enter the passphrase you set for that file.","err");
+  /* The commonest wrong paste by a long way, and it deserves the reason
+     rather than a refusal. */
+  if(DID_RE.test(raw)) return msay("That is the DID again — the public half. A passphrase decrypts your key FILE; it cannot turn a DID back into the key that signs.","err");
+  let vault=null; try{ vault=JSON.parse(raw); }catch{}
+  if(!vault?.did || !vault?.data) return msay("That does not look like an Overheard backup — it should be the whole file, braces included.","err");
+  if(vault.did!==did) return msay(`That backup belongs to ${shortDid(vault.did,10,6)}, not the DID above.`,"err");
+  $("doHave").disabled=true;
+  msay("Decrypting on this device…");
+  try{
+    const jwk=await openVault(vault,pw);
+    try{ localStorage.setItem("overheard.identity",JSON.stringify(vault)); }catch{}
+    signIn(vault.did,jwk);
+    await afterSignIn();
+  }catch{ msay("Wrong passphrase for that file, or the file is damaged.","err"); }
+  $("doHave").disabled=false;
+});
 
 /* ── the card ──────────────────────────────────────────────────────────────
    This is the artefact somebody posts, so it gets treated as one. A hero, not
@@ -1642,19 +2047,33 @@ $("dl").addEventListener("click",()=>{
   },"image/png");
 });
 
-/* The post is what somebody's followers see, so it says what was actually
-   done rather than shouting a number: the rank, the score, and — when the run
-   was signed — the link that proves it. */
-$("post").addEventListener("click",()=>{
+/* The post is what somebody's followers see. Scannable lines rather than a
+   paragraph, the project tagged so the people who care about it can find it,
+   and — when the run was signed — the link that makes the numbers checkable
+   instead of a screenshot.
+
+   X counts a URL as 23 characters and most emoji as two, which puts the
+   signed version within a few characters of the 280 limit; the last line is
+   worded to leave room rather than to be as long as it could be. The test
+   measures it with those rules and fails if it goes over. */
+function shareLines(){
   const r=rank();
-  const lines=[
-    `Proof of Learning: ${correct}/${GATES.length} on what Flop actually is.`,
-    `Rank: ${r.word}. ${score.toLocaleString()} points, best streak ${best}.`,
+  const out=[
+    "I just completed my first Proof of Learning session on what @flop_labs actually is.",
     "",
-    PROOF ? "Signed with my own key — the score is checkable, not a screenshot:" : "Three minutes, twelve gates:",
-    PROOF ? PROOF.link : `${location.origin}/play`,
+    `\u{1F449}\u{1F3FB} Score: ${correct}/${GATES.length}`,
+    `\u{1FA99} Points: ${score.toLocaleString()}`,
+    `\u{1F3C1} Best streak: ${best}`,
+    `\u2705 ${r.word}`,
+    "",
+    `Try yourself: ${location.origin}/play`,
   ];
-  open("https://x.com/intent/tweet?text="+encodeURIComponent(lines.join("\n")),"_blank","noopener");
+  if(PROOF) out.push("", `I signed it with my own key, so anyone can verify it: ${PROOF.link}`);
+  return out.join("\n");
+}
+window.__share=shareLines;      // published so the length can be measured
+$("post").addEventListener("click",()=>{
+  open("https://x.com/intent/tweet?text="+encodeURIComponent(shareLines()),"_blank","noopener");
 });
 
 /* ── the card in the hand ──────────────────────────────────────────────────

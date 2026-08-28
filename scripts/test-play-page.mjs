@@ -43,7 +43,10 @@ const srv = http.createServer((req, res) => {
 }).listen(8909);
 
 const b = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium' });
-const ctx = await b.newContext({ viewport: { width: 1100, height: 1000 } });
+const ctx = await b.newContext({
+  viewport: { width: 1100, height: 1000 },
+  permissions: ['clipboard-read', 'clipboard-write'],       // the copy button is measured, not assumed
+});
 const pg = await ctx.newPage();
 const errs = []; pg.on('pageerror', e => errs.push(e.message));
 
@@ -328,11 +331,87 @@ check('a perfect run is the green one', ladder[12][1] > ladder[12][0] + 40 && la
 check('and a middling run is not', ladder[6][1] < ladder[12][1] || ladder[6][0] > ladder[12][0],
   `6/12 rim rgb ${ladder[6]}`);
 
-console.log('\n=== E. an unsigned run says so');
+console.log('\n=== E. an unsigned run says so, and offers both ways in');
 const unsignedNote = (await pg.locator('#signedBox').textContent()) || '';
 check('it admits a picture proves nothing',
   /Unsigned/.test(unsignedNote) && /edit a score/i.test(unsignedNote), unsignedNote.slice(0, 60));
-check('and offers the way to fix that', (await pg.locator('#signedBox a').count()) === 1);
+check('it names both ways forward', /Sign in with your identity, or make one/.test(unsignedNote));
+check('signing in is a button, not a trip to another page',
+  (await pg.locator('#signedBox button.go').count()) === 1);
+check('and making one is the second, quieter offer',
+  (await pg.locator('#signedBox a[href="/create.html"]').count()) === 1);
+/* With no key in this browser there is nothing to type a passphrase INTO, so
+   the box must not be there. */
+check('no passphrase box, because there is no key here', (await pg.locator('#quickPw').count()) === 0);
+await pg.locator('#signedBox button.go').click();
+await pg.waitForTimeout(400);
+check('Sign in opens the pop-up rather than navigating away', await pg.locator('#scrim').isVisible());
+check('with the safe way offered first', await pg.locator('#wayFile.on').count() === 1);
+await pg.click('#waySeed'); await pg.waitForTimeout(250);
+check('a seed is the other way, and it warns what a seed is',
+  /identity itself/i.test(await pg.locator('.warnbox').textContent()));
+check('and it asks you to CHOOSE a passphrase for a seed, not recall one',
+  /Choose a passphrase/i.test(await pg.locator('#hPwLabel').textContent())
+  && await pg.locator('#hPw2').isVisible());
+await pg.click('#wayFile'); await pg.waitForTimeout(200);
+await pg.fill('#hDid', 'did:key:z6MkngD8RZKCgJQCkJvHfGyYoCcNCG5rz9Tc7yRmWrMZExaz');
+await pg.fill('#hFile', 'did:key:z6MkngD8RZKCgJQCkJvHfGyYoCcNCG5rz9Tc7yRmWrMZExaz');
+await pg.fill('#hPw', 'whatever');
+await pg.click('#doHave'); await pg.waitForTimeout(400);
+/* The commonest wrong paste by a long way, and it deserves the reason. */
+check('pasting the DID where the file goes is explained, not just refused',
+  /public half/i.test(await pg.locator('#haveSay').textContent()));
+await pg.keyboard.press('Escape'); await pg.waitForTimeout(300);
+check('Escape closes it', await pg.locator('#scrim').isHidden());
+
+console.log('\n=== E2. a browser that already holds a key is just asked for the passphrase');
+/* Build a real vault in the page — same PBKDF2/AES-GCM the Create page writes
+   — then reload and unlock it through the UI. This is the whole path somebody
+   returning to the site takes, so it gets walked rather than assumed. */
+await pg.evaluate(async () => {
+  const enc = new TextEncoder();
+  const b64u = (b) => btoa(String.fromCharCode(...new Uint8Array(b))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  const kp = await crypto.subtle.generateKey({ name: 'Ed25519' }, true, ['sign', 'verify']);
+  const jwk = await crypto.subtle.exportKey('jwk', kp.privateKey);
+  const raw = new Uint8Array(await crypto.subtle.exportKey('raw', kp.publicKey));
+  const B58 = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
+  let n = 0n; for (const x of [0xed, 0x01, ...raw]) n = n * 256n + BigInt(x);
+  let out = ''; while (n > 0n) { out = B58[Number(n % 58n)] + out; n /= 58n; }
+  const did = 'did:key:z' + out;
+  const salt = crypto.getRandomValues(new Uint8Array(16)), iv = crypto.getRandomValues(new Uint8Array(12));
+  const base = await crypto.subtle.importKey('raw', enc.encode('open sesame'), 'PBKDF2', false, ['deriveKey']);
+  const aes = await crypto.subtle.deriveKey({ name: 'PBKDF2', salt, iterations: 310000, hash: 'SHA-256' },
+    base, { name: 'AES-GCM', length: 256 }, false, ['encrypt']);
+  const ct = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, aes, enc.encode(JSON.stringify(jwk)));
+  localStorage.setItem('overheard.identity', JSON.stringify(
+    { v: 1, did, salt: b64u(salt), iv: b64u(iv), data: b64u(ct), created: new Date().toISOString() }));
+  localStorage.removeItem('overheard.session');
+});
+await go(); await pg.click('#begin'); await pg.waitForTimeout(300);
+await play(true);
+await pg.waitForSelector('#end:not([hidden])', { timeout: 10000 });
+check('the passphrase box is right there, not behind a pop-up', await pg.locator('#quickPw').isVisible());
+check('and it says whose key this browser is holding',
+  /This browser holds/.test(await pg.locator('#signedBox').textContent()));
+await pg.fill('#quickPw', 'not the passphrase');
+await pg.click('#signedBox .pwrow .go');
+await pg.waitForTimeout(1200);
+check('a wrong passphrase says so and stays put',
+  /Wrong passphrase/i.test(await pg.locator('#signedBox').textContent()));
+await pg.fill('#quickPw', 'open sesame');
+await pg.click('#signedBox .pwrow .go');
+await pg.waitForSelector('#signedBox a.lk', { timeout: 15000 });
+/* The point of doing it here rather than sending somebody to another page:
+   the run they just finished becomes the signed one. */
+check('unlocking signs THIS run, without replaying it',
+  /Signed by/.test(await pg.locator('#signedBox').textContent()));
+check('and the card is redrawn as signed', await pg.evaluate(() => {
+  const c = document.getElementById('card'), x = c.getContext('2d');
+  const d = x.getImageData(72, 512, 300, 44).data;   // the footing, left side
+  let lit = 0; for (let i = 0; i < d.length; i += 4) if (d[i] + d[i + 1] + d[i + 2] > 300) lit++;
+  return lit > 200;
+}));
+await pg.evaluate(() => { localStorage.removeItem('overheard.identity'); localStorage.removeItem('overheard.session'); });
 
 console.log('\n=== F. a bad run still teaches');
 await go();
@@ -406,6 +485,13 @@ check('with air between it and the card', await pg.evaluate(() => {
   const s = document.querySelector('#signedBox').getBoundingClientRect();
   return Math.round(s.top - c.bottom);
 }) >= 18);
+/* A link nobody can carry away is a link nobody uses. */
+check('there is a copy button on it', await pg.locator('#signedBox .copy').isVisible());
+await pg.click('#signedBox .copy');
+await pg.waitForTimeout(500);
+const clip = await pg.evaluate(() => navigator.clipboard.readText());
+check('and it copies the whole proof link', clip === link, clip.slice(0, 44) + '…');
+check('and says it did', /Copied/.test(await pg.locator('#signedBox .copy').textContent()));
 
 /* The claim has to survive the page that checks claims. Anything less and the
    "signed" badge is decoration. */
@@ -428,11 +514,17 @@ const post = await pg.evaluate(() => {
   return decodeURIComponent(new URL(u).searchParams.get('text'));
 });
 console.log(post.split('\n').filter(Boolean).map(l => '    ' + l).join('\n'));
-check('it says what was actually done', /12\/12/.test(post) && /Foundation grade/.test(post));
-check('it claims points, not tokens', /points/.test(post) && !/FLOP/.test(post));
+check('it says what was actually done', /Score: 12\/12/.test(post) && /Foundation grade/.test(post));
+check('it claims points, not tokens', /Points: [\d,]+/.test(post) && !/FLOP/.test(post));
+check('it tags the project it is about', /@flop_labs/.test(post));
+check('it invites somebody to try it', /Try yourself: http/.test(post));
 check('and a signed run posts the proof, not a screenshot', /\/v#b=/.test(post));
-check('it fits in a post', post.replace(/https?:\/\/\S+/, 'x'.repeat(23)).length <= 280,
-  `${post.replace(/https?:\/\/\S+/, 'x'.repeat(23)).length} chars`);
+/* X's own arithmetic, not the string length: every URL counts 23 whatever its
+   real length, and most emoji count two. The signed version lands within a
+   few characters of the limit, so it is measured rather than eyeballed. */
+const xLen = (t) => [...t.replace(/https?:\/\/\S+/g, 'x'.repeat(23))]
+  .reduce((n, ch) => n + (ch.codePointAt(0) > 0x2000 && !'—–…‘’“”·'.includes(ch) ? 2 : 1), 0);
+check('it fits in a post', xLen(post) <= 280, `${xLen(post)} of 280`);
 
 console.log('\n=== I. the sources are named, not alluded to');
 const srcs = await pg.evaluate(() => [...document.querySelectorAll('.srccard')].map(a => ({
