@@ -24,6 +24,8 @@ const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'web'
 let POSTS = [];
 let CLAIM = { ok: true };            // what /api/post says to a claim
 let OWNER = 'free';
+let OWNS = [];                       // rooms the archive says this key owns
+let POSTFAIL = null;                 // make the network refuse a message
 let CAP = { known: true, rooms: { total: 19116, capacity: 20480, left: 1364, full: false },
             notes: { total: 600000, capacity: 655360, left: 55360, full: false } };
 
@@ -38,6 +40,7 @@ const srv = http.createServer((req, res) => {
       const d = JSON.parse(body || '{}');
       POSTS.push(d);
       if (d.kind === 'claim') return J(CLAIM);
+      if (d.kind === 'message' && POSTFAIL) return J(POSTFAIL);
       return J({ ok: true });
     });
   }
@@ -50,8 +53,10 @@ const srv = http.createServer((req, res) => {
       { seq: '4', ts: new Date().toISOString(), from: null, nick: 'someone', text: 'a line from a stranger', sig: null, nonce: null },
     ] });
   }
-  if (p === '/api/owner') return J({ room: u.searchParams.get('room'), status: OWNER, owner: null });
+  if (p === '/api/owner') return J({ room: u.searchParams.get('room'), status: OWNER, owner: null,
+    allow: u.searchParams.get('room') === 'd-my-lab' ? ['did:key:z6MkAllowedOne'] : [] });
   if (p === '/api/capacity') return J(CAP);
+  if (p === '/api/profile') return J({ owned: { rooms: OWNS, owners: 300, claimed: 590 }, profile: null, standing: null });
   if (p === '/data/roster.json') return J({ rooms: [{ room: 'lobby', score: .9 }, { room: 'technocore', score: .8 }] });
   if (p.startsWith('/api/') || p.startsWith('/data/')) return J({});
 
@@ -107,11 +112,12 @@ check('it opens in the middle of the screen', await pg.locator('#scrim').isVisib
 check('on the "make a new one" side', (await pg.locator('#tabNew').getAttribute('class')).includes('on'));
 check('and the other way in is one tab away', await pg.locator('#tabHave').isVisible());
 
-await pg.fill('#np1', 'short');
+await pg.fill('#np1', 'xyz');
 await pg.click('#doNew');
 await pg.waitForTimeout(200);
-check('a weak passphrase is refused before any key is made',
-  /at least 12/.test(await pg.locator('#newSay').textContent()));
+check('a passphrase below the floor is refused before any key is made',
+  /at least 6/.test(await pg.locator('#newSay').textContent()),
+  await pg.locator('#newSay').textContent());
 
 await pg.fill('#np1', PASS); await pg.fill('#np2', PASS + 'x');
 await pg.click('#doNew'); await pg.waitForTimeout(200);
@@ -283,6 +289,89 @@ const after = await pg.evaluate(() => [...document.querySelectorAll('#rlist .rbt
 check('and it holds its place under the open one after a reload',
   after[1] === pins[0], JSON.stringify(after.slice(0, 3)));
 
+console.log('\n=== H4. opening a room IS posting in it');
+/* REPORTED: the panel said the room was open, sent somebody to it, and the
+   refusal — "room limit reached" — arrived on their first message, in a room
+   that had never existed. A room comes into being with its first message, so
+   that is what the button does, and whatever Technocore says lands here. */
+await go();
+POSTS = [];
+await pg.click('#kOpen');
+await pg.fill('#rn', 'brand-new-openroom');
+await pg.waitForFunction(() => /available/.test(document.getElementById('ownsay').textContent), null, { timeout: 9000 });
+await pg.click('#claim');
+await pg.waitForFunction(() => !document.getElementById('owndone').hidden, null, { timeout: 15000 });
+check('the room is opened by a signed first message, not by hope',
+  POSTS.some(p => p.kind === 'message' && p.room === 'brand-new-openroom'),
+  JSON.stringify(POSTS.map(p => p.kind + ':' + p.room)));
+check('and only then is a link handed over', await pg.locator('#owndone').isVisible());
+
+/* And when the network refuses that write, it is refused HERE. */
+POSTFAIL = { ok: false, status: 400, error: '400 room limit reached (20480 is the cap, and this would be a new one).' };
+await pg.fill('#rn', 'brand-new-second');
+await pg.waitForFunction(() => /available/.test(document.getElementById('ownsay').textContent), null, { timeout: 9000 });
+await pg.click('#claim');
+await pg.waitForFunction(() => !document.getElementById('ownCap').hidden, null, { timeout: 15000 });
+const capW = (await pg.locator('#ownCap').textContent()) || '';
+check('a refusal lands on the panel, not two screens later',
+  /no room left for new rooms/.test(capW), capW.slice(0, 52));
+POSTFAIL = null;
+
+console.log('\n=== H5. the rooms you already have');
+check('no panel at all for somebody with none', await pg.evaluate(() => {
+  localStorage.removeItem('overheard.myrooms');
+  return true;
+}) && true);
+OWNS = [];
+await go();
+check('nothing is shown when there is nothing to show', await pg.locator('#mine').isHidden());
+
+OWNS = ['d-my-lab', 'd-second-room'];
+await pg.evaluate(() => localStorage.setItem('overheard.myrooms',
+  JSON.stringify([{ name: 'open-hangout', kind: 'open', at: new Date().toISOString() }])));
+await go();
+await pg.waitForFunction(() => !document.getElementById('mine').hidden, null, { timeout: 9000 });
+const rooms = await pg.evaluate(() => [...document.querySelectorAll('#mroom, #mrooms .mroom')].map(r => ({
+  name: r.querySelector('.nm').textContent, tag: r.querySelector('.tag').textContent })));
+console.log('   ', JSON.stringify(rooms));
+check('claimed rooms come from the network', rooms.some(r => r.name === 'd-my-lab'));
+check('and the open one this browser started is remembered too',
+  rooms.some(r => r.name === 'open-hangout'));
+/* Not "private": everyone can READ a claimed room, and a chip saying
+   private would tell people otherwise. The chip names what a claim
+   actually controls. */
+check('each is tagged for who may post in it',
+  rooms.find(r => r.name === 'd-my-lab').tag === 'Invite only' &&
+  rooms.find(r => r.name === 'open-hangout').tag === 'Anyone posts',
+  JSON.stringify(rooms.map(r => r.tag)));
+check('with the owned ones first', rooms[0].name.startsWith('d-'));
+
+await pg.click('#mrooms .mroom:first-child .burger');
+await pg.waitForTimeout(300);
+const items = await pg.evaluate(() => [...document.querySelectorAll('#mrooms .rmenu button')].map(b => b.textContent.trim()));
+console.log('   ', JSON.stringify(items));
+check('the menu offers the practical things', items.some(t => /Copy the link/.test(t)) &&
+  items.some(t => /Pin/.test(t)) && items.some(t => /Who can post/.test(t)), JSON.stringify(items));
+await pg.evaluate(() => [...document.querySelectorAll('#mrooms .rmenu button')].find(b => /Who can post/.test(b.textContent)).click());
+await pg.waitForFunction(() => !!document.querySelector('#mrooms .who textarea:not([disabled])'), null, { timeout: 9000 });
+check('and editing the list starts from what Technocore holds now',
+  (await pg.inputValue('#mrooms .who textarea')) === 'did:key:z6MkAllowedOne');
+POSTS = [];
+await pg.fill('#mrooms .who textarea', 'did:key:z6Mkmw4xM1EycqDvmDdPYUJHnLYAMBEWCpz6DohcTBBLLLLL');
+await pg.click('#mrooms .who .go:not(.ghost)');
+await pg.waitForTimeout(1200);
+check('saving signs a new list', POSTS.some(p => p.kind === 'allow' && p.room === 'd-my-lab'),
+  JSON.stringify(POSTS.map(p => p.kind)));
+
+const openMenu = await pg.evaluate(() => {
+  const row = [...document.querySelectorAll('#mrooms .mroom')].find(r => r.querySelector('.nm').textContent === 'open-hangout');
+  row.querySelector('.burger').click();
+  return [...row.querySelectorAll('.rmenu button')].map(b => b.textContent.trim());
+});
+check('an open room offers no owner controls, because nobody owns it',
+  !openMenu.some(t => /Who can post/.test(t)) && openMenu.some(t => /Remove from this list/.test(t)),
+  JSON.stringify(openMenu));
+
 console.log('\n=== I. signing out');
 await pg.click('#me #signout');
 await pg.waitForFunction(() => !document.getElementById('locked').hidden, null, { timeout: 8000 });
@@ -333,8 +422,10 @@ check('the safe way in is the one offered first',
 await pg.click('#waySeed'); await pg.waitForTimeout(150);
 check('a seed gets a warning before it gets a field',
   /A seed is the identity itself/.test(await pg.locator('#waySeedBox').textContent()));
-check('and the DID becomes optional, because the seed carries it',
-  await pg.locator('#didOpt').isVisible());
+/* The seed already contains the DID, so asking for it is a field that can
+   only be got wrong. It is shown, not asked for. */
+check('the DID field disappears, because the seed carries it',
+  await pg.locator('#didField').isHidden());
 check('the passphrase field asks you to choose one', await pg.locator('#hPw2').isVisible());
 
 await pg.fill('#hSeed', 'not a seed'); await pg.fill('#hPw', PASS); await pg.fill('#hPw2', PASS);
@@ -354,8 +445,12 @@ const seedHex = await pg.evaluate(async () => {
   let out = ''; while (n > 0n) { out = B58[Number(n % 58n)] + out; n /= 58n; }
   return { hex: [...d].map(b => b.toString(16).padStart(2, '0')).join(''), did: 'did:key:z' + out };
 });
-await pg.fill('#hDid', '');
 await pg.fill('#hSeed', `Technocore identity\n\nSEED (private)\n${seedHex.hex}\n\nKeep this file offline.`);
+await pg.waitForFunction(() => !document.getElementById('seedDid').hidden, null, { timeout: 8000 });
+check('the DID appears under the box as soon as the seed is in',
+  (await pg.locator('#seedDid').textContent()).includes(seedHex.did), seedHex.did.slice(0, 26) + '…');
+check('and it is shown, not typed into a field',
+  (await pg.evaluate(() => document.getElementById('seedDid').tagName)) === 'DIV');
 const dl2 = pg.waitForEvent('download').catch(() => null);
 await pg.click('#doHave');
 await pg.waitForFunction(() => !document.getElementById('open').hidden, null, { timeout: 25000 });
