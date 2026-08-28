@@ -86,6 +86,21 @@ check('which says what a key buys you, in one line', /signed/i.test(why) && /Cre
 check('with the create button on the edge of the bar',
   await pg.locator('#idbar a.go[href="/create.html"]').isVisible());
 
+/* Checking whether a name is taken is two public reads. Refusing to answer
+   until somebody signs in asks them to commit before they know the name they
+   want is even there — so the answer comes, and the BUTTON waits. */
+await pg.click('#kOwned');
+await pg.fill('#rn', 'a-name-to-check');
+await pg.waitForFunction(() => {
+  const t = document.getElementById('ownsay').textContent;
+  return /available|taken|exists/.test(t) && !/^Checking/.test(t);
+}, null, { timeout: 9000 });
+const anon = (await pg.locator('#ownsay').textContent()) || '';
+check('a name can be checked before signing in', /available/.test(anon), anon.slice(0, 70));
+check('and the button is what waits for the key', await pg.locator('#claim').isDisabled());
+check('which it says rather than leaving it to be guessed', /Sign in above/.test(anon));
+await pg.fill('#rn', ''); await pg.click('#kOpen');
+
 console.log('\n=== B. the pop-up makes one, and then asks for the passphrase');
 await pg.click('#noPass');
 check('it opens in the middle of the screen', await pg.locator('#scrim').isVisible());

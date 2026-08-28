@@ -1446,7 +1446,16 @@ function scheduleCheck(){
   $("claim").disabled = true;
   if(!raw){ ownSay("Lowercase letters, numbers, hyphens and underscores."); return; }
   if(!NAME_RE.test(raw)){ ownSay("Lowercase letters, numbers, hyphens and underscores — starting with a letter or number.","err"); return; }
-  if(!ID){ ownSay("Sign in above first — a room is opened by a key, and claiming one is a signature.","warn"); return; }
+  /* Checking a name needs no key — it is two public reads — and refusing to
+     answer until somebody signs in is asking them to commit before they know
+     whether the name they want is even there. The KEY is needed to act, so
+     the button is what waits, not the answer. */
+  const armed = !!ID;
+  const arm = (msg,cls) => {
+    ownSay(armed ? msg : msg + " Sign in above to take it.", cls);
+    $("claim").disabled = !armed;
+    $("claim").title = armed ? "" : "Sign in first — opening or claiming a room is a signature";
+  };
 
   if(kind==="open"){
     // No registry to consult: an open room simply exists once something is
@@ -1467,8 +1476,8 @@ function scheduleCheck(){
         if($("rn").value.trim().toLowerCase() !== lastChecked) return;
         const n = Array.isArray(j.messages) ? j.messages.length : 0;
         if(n){
-          ownSay(`${raw} already exists and has people in it — you can post there, it is open to everyone.`,"warn");
-          $("claim").disabled=false; return;
+          arm(`${raw} already exists and has people in it — you can post there, it is open to everyone.`,"warn");
+          return;
         }
         if(cap?.rooms?.full){
           // A room that does not exist cannot be started right now, and the
@@ -1476,10 +1485,9 @@ function scheduleCheck(){
           showRoomsFull(cap.rooms.left);
           $("claim").disabled=true; return;
         }
-        ownSay(`${raw} is available. It comes into existence the moment you post.`
+        arm(`${raw} is available. It comes into existence the moment you post.`
           + (cap?.rooms?.left!=null && cap.rooms.left<500 ? ` Only ${cap.rooms.left} room slots left on the network.` : ""),"ok");
-      }catch{ ownSay(`${raw} looks fine. Open rooms need no claim.`,"ok"); }
-      $("claim").disabled=false;
+      }catch{ arm(`${raw} looks fine. Open rooms need no claim.`,"ok"); }
     }, 420);
     return;
   }
@@ -1495,7 +1503,7 @@ function scheduleCheck(){
         const cap=await capacity();
         if($("rn").value.trim().toLowerCase() !== lastChecked) return;
         if(cap?.notes?.full){ showNotesFull(); $("claim").disabled=true; return; }
-        ownSay(`d-${raw} is available. Claim it and it is yours permanently.`,"ok"); $("claim").disabled=false;
+        arm(`d-${raw} is available. Claim it and it is yours permanently.`,"ok");
       }
       else if(j.status === "unknown") ownSay("Could not reach the registry just now — try again in a moment.","err");
       else if(j.owner === ID?.did) ownSay(`You already own d-${raw}.`,"ok");
