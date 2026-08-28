@@ -125,6 +125,45 @@ const card = await pg.evaluate(() => {
 check('it is drawn, not blank', card.lit > 4000, JSON.stringify(card));
 check('at a size X will not crop badly', card.w === 1200 && card.h === 630);
 
+/* The card is the artefact somebody posts, so it is checked as one: a hero
+   that carries the result, and a look that differs by rank — two people with
+   different runs must not get the same picture with a different word in it. */
+const shape = await pg.evaluate(() => {
+  const c = document.getElementById('card'), x = c.getContext('2d');
+  // Average ink over the seal's square, against an equally sized square of
+  // background on the same row. A hero is a region, not a pixel.
+  // Bright ink per 10,000 pixels — the arc, the notches and the number are
+  // bright; the ground beside them is not. A hero is a region, not a pixel.
+  const ink = (X, Y, S) => {
+    const d = x.getImageData(X, Y, S, S).data;
+    let n = 0; for (let i = 0; i < d.length; i += 4) if (d[i] + d[i + 1] + d[i + 2] > 420) n++;
+    return Math.round(n / (d.length / 4) * 10000);
+  };
+  const whole = (() => {
+    const d = x.getImageData(0, 0, c.width, c.height).data;
+    let n = 0; for (let i = 0; i < d.length; i += 4) if (d[i] + d[i + 1] + d[i + 2] > 420) n++;
+    return Math.round(n / (d.length / 4) * 10000);
+  })();
+  return { seal: ink(742, 125, 352), whole };
+});
+check('the right-hand third carries a hero, not empty ground',
+  shape.seal >= 600 && shape.seal > shape.whole * 2, JSON.stringify(shape));
+
+const skins = await pg.evaluate(() => {
+  // Re-draw at each rank and fingerprint the accent, without replaying.
+  const c = document.getElementById('card'), x = c.getContext('2d');
+  const grab = () => { const d = x.getImageData(1080, 470, 1, 1).data; return `${d[0]},${d[1]},${d[2]}`; };
+  const out = [];
+  for (const n of [12, 10, 8, 5, 1]) {
+    window.__setCorrect(n);
+    out.push(grab());
+  }
+  window.__setCorrect(12);
+  return out;
+});
+console.log('   ', JSON.stringify(skins));
+check('and every rank has its own colour', new Set(skins).size === skins.length, JSON.stringify(skins));
+
 console.log('\n=== D. an unsigned run says so');
 const unsignedNote = (await pg.locator('#signedBox').textContent()) || '';
 check('it admits a picture proves nothing',

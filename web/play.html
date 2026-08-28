@@ -585,6 +585,11 @@ async function finish(){
      theirs to read. The answer key is deliberately NOT published — though see
      the note below about what a signature here can and cannot mean. */
   window.__run={correct,total:GATES.length,score,best,missed:missed.length};
+  /* Re-draw the card at another result without replaying twelve gates. It
+     exists so the five ranks can be compared side by side — by a test, and by
+     anybody who wants to see what they are aiming at. It changes the picture,
+     never the score that was signed. */
+  window.__setCorrect=(n)=>{ correct=Math.max(0,Math.min(GATES.length,n|0)); drawCard(); };
   await sign();
   drawCard();
   if(!calm() && correct>=8) celebrate();
@@ -629,63 +634,174 @@ async function sign(){
   }
 }
 
-/* ── the card ──────────────────────────────────────────────────────────── */
+/* ── the card ──────────────────────────────────────────────────────────────
+   This is the artefact somebody posts, so it gets treated as one. A hero,
+   not a receipt: a seal whose rim is the run itself — twelve notches, filled
+   for a gate you took, hollow for one you missed — with the tally inside it
+   and a progress arc around that. Two people with 9/12 get visibly different
+   seals, because they missed different gates.
+
+   The accent shifts with the rank, so the five outcomes are five looks rather
+   than one look with a different word in it. That is what makes a result
+   worth showing rather than worth reading.
+   ───────────────────────────────────────────────────────────────────────── */
+const SKIN={
+  "Foundation grade": { a:"#F7C463", b:"#F2B33D", glow:"rgba(242,179,61,", ring:"#FFE0A0" },
+  "Validator":        { a:"#7CF0FF", b:"#00B4D7", glow:"rgba(0,180,215,",  ring:"#BFF4FF" },
+  "Verified miner":   { a:"#5FE9C0", b:"#1FB894", glow:"rgba(59,227,176,", ring:"#B9F6E4" },
+  "Session accepted": { a:"#63C8E8", b:"#0090B8", glow:"rgba(0,144,184,",  ring:"#AEE4F2" },
+  "Freshly booted":   { a:"#A9C6D0", b:"#6E8C97", glow:"rgba(140,170,182,",ring:"#D5E6EC" },
+};
+
+function roundRect(x,rx,ry,w,h,r){
+  x.beginPath();
+  x.moveTo(rx+r,ry); x.arcTo(rx+w,ry,rx+w,ry+h,r); x.arcTo(rx+w,ry+h,rx,ry+h,r);
+  x.arcTo(rx,ry+h,rx,ry,r); x.arcTo(rx,ry,rx+w,ry,r); x.closePath();
+}
+
+/** The seal. Rim notches are the run; the arc is the score; the middle is
+ *  the number somebody came for. */
+function drawSeal(x,cx,cy,R,skin){
+  const missedQ=new Set(missed.map(g=>g.q));
+  const frac=correct/GATES.length;
+
+  // the bloom it sits in
+  const halo=x.createRadialGradient(cx,cy,R*.2,cx,cy,R*1.75);
+  halo.addColorStop(0,skin.glow+".34)"); halo.addColorStop(1,skin.glow+"0)");
+  x.fillStyle=halo; x.beginPath(); x.arc(cx,cy,R*1.75,0,Math.PI*2); x.fill();
+
+  // the disc
+  const face=x.createLinearGradient(cx-R,cy-R,cx+R,cy+R);
+  face.addColorStop(0,"rgba(9,38,50,.96)"); face.addColorStop(1,"rgba(2,14,20,.96)");
+  x.fillStyle=face; x.beginPath(); x.arc(cx,cy,R,0,Math.PI*2); x.fill();
+  x.lineWidth=2; x.strokeStyle=skin.glow+".55)"; x.stroke();
+
+  // twelve notches: the shape of the run, not just its total
+  const RN=R-16;
+  GATES.forEach((g,i)=>{
+    const a=-Math.PI/2 + (i/GATES.length)*Math.PI*2;
+    const took=!missedQ.has(g.q);
+    x.save(); x.translate(cx+Math.cos(a)*RN, cy+Math.sin(a)*RN); x.rotate(a+Math.PI/2);
+    if(took){ x.fillStyle=skin.a; x.shadowColor=skin.glow+".9)"; x.shadowBlur=14;
+              roundRect(x,-3.5,-11,7,22,3.5); x.fill(); }
+    else    { x.strokeStyle="rgba(255,255,255,.22)"; x.lineWidth=2;
+              roundRect(x,-3.5,-11,7,22,3.5); x.stroke(); }
+    x.restore();
+  });
+
+  // the arc: how much of the run was taken
+  const AR=R-46;
+  x.lineWidth=9; x.lineCap="round";
+  x.strokeStyle="rgba(255,255,255,.09)";
+  x.beginPath(); x.arc(cx,cy,AR,0,Math.PI*2); x.stroke();
+  if(frac>0){
+    const sweep=x.createLinearGradient(cx-AR,cy-AR,cx+AR,cy+AR);
+    sweep.addColorStop(0,skin.a); sweep.addColorStop(1,skin.b);
+    x.strokeStyle=sweep; x.shadowColor=skin.glow+".8)"; x.shadowBlur=22;
+    x.beginPath(); x.arc(cx,cy,AR,-Math.PI/2,-Math.PI/2+frac*Math.PI*2); x.stroke();
+    x.shadowBlur=0;
+  }
+
+  // the number
+  x.textAlign="center"; x.textBaseline="alphabetic";
+  x.fillStyle="#FFFFFF"; x.font="800 84px Outfit,sans-serif";
+  x.fillText(String(correct), cx, cy+10);
+  x.fillStyle=skin.ring; x.font="600 26px 'IBM Plex Mono',monospace";
+  x.fillText(`of ${GATES.length}`, cx, cy+46);
+  x.fillStyle="rgba(255,255,255,.42)"; x.font="600 15px 'IBM Plex Mono',monospace";
+  x.fillText("GATES TAKEN", cx, cy-52);
+  x.textAlign="left";
+}
+
 function drawCard(){
   const c=$("card"), x=c.getContext("2d");
   const W=c.width, H=c.height;
+  const skin=SKIN[rank().word]||SKIN["Validator"];
   x.clearRect(0,0,W,H);
 
+  // ── ground
   const bg=x.createLinearGradient(0,0,W,H);
-  bg.addColorStop(0,"#02141C"); bg.addColorStop(.55,"#00090E"); bg.addColorStop(1,"#031A24");
+  bg.addColorStop(0,"#02141C"); bg.addColorStop(.5,"#00080D"); bg.addColorStop(1,"#04202C");
   x.fillStyle=bg; x.fillRect(0,0,W,H);
 
-  const glow=x.createRadialGradient(W*.78,-60,40,W*.78,-60,640);
-  glow.addColorStop(0,"rgba(0,180,215,.30)"); glow.addColorStop(1,"rgba(0,180,215,0)");
-  x.fillStyle=glow; x.fillRect(0,0,W,H);
+  // a mesh, fading out to the right so the seal sits on quiet ground
+  x.save();
+  const mesh=x.createLinearGradient(0,0,W,0);
+  mesh.addColorStop(0,"rgba(0,180,215,.16)"); mesh.addColorStop(1,"rgba(0,180,215,0)");
+  x.strokeStyle=mesh; x.lineWidth=1;
+  for(let gx=0;gx<W;gx+=48){ x.beginPath(); x.moveTo(gx,0); x.lineTo(gx,H); x.stroke(); }
+  for(let gy=0;gy<H;gy+=48){ x.beginPath(); x.moveTo(0,gy); x.lineTo(W,gy); x.stroke(); }
+  x.restore();
 
-  x.strokeStyle="rgba(0,180,215,.10)"; x.lineWidth=1;
-  for(let i=1;i<4;i++){ x.beginPath(); x.moveTo(W*i/4,0); x.lineTo(W*i/4,H); x.stroke(); }
+  // one diagonal sweep of light
+  x.save();
+  const sheen=x.createLinearGradient(W*.1,H,W*.75,0);
+  sheen.addColorStop(0,"rgba(255,255,255,0)");
+  sheen.addColorStop(.5,"rgba(255,255,255,.045)");
+  sheen.addColorStop(1,"rgba(255,255,255,0)");
+  x.fillStyle=sheen; x.fillRect(0,0,W,H);
+  x.restore();
 
-  x.strokeStyle="rgba(0,180,215,.45)"; x.lineWidth=2;
-  x.strokeRect(24,24,W-48,H-48);
+  // ── the hero
+  drawSeal(x, W-282, H/2-14, 176, skin);
 
-  x.fillStyle="#5F8593"; x.font="600 22px 'IBM Plex Mono',monospace";
-  x.fillText("PROOF OF LEARNING", 68, 96);
-  x.fillStyle="rgba(0,180,215,.55)";
-  x.fillText("$FLOP", W-68-x.measureText("$FLOP").width, 96);
+  // ── the words
+  x.fillStyle=skin.b; x.font="600 21px 'IBM Plex Mono',monospace";
+  x.fillText("PROOF OF LEARNING", 72, 100);
 
-  x.fillStyle="#EDFAFE"; x.font="800 96px Outfit,sans-serif";
-  x.fillText(rank().word, 68, 214);
+  x.fillStyle="rgba(255,255,255,.34)"; x.font="500 19px 'IBM Plex Mono',monospace";
+  x.fillText("$FLOP · TECHNOCORE", 72, 132);
 
-  x.fillStyle="#5FEBFF"; x.font="700 150px Outfit,sans-serif";
-  const tally=`${correct}/${GATES.length}`;
-  x.fillText(tally, 68, 378);
-  const tw=x.measureText(tally).width;
+  // the rank, sized to fit whatever word it is
+  x.fillStyle="#FFFFFF";
+  let size=86;
+  do { x.font=`800 ${size}px Outfit,sans-serif`; size-=3; }
+  while(x.measureText(rank().word).width>560 && size>44);
+  x.fillText(rank().word, 72, 248);
 
-  x.fillStyle="#9CBFCB"; x.font="500 30px 'IBM Plex Mono',monospace";
-  x.fillText(`${score.toLocaleString()} $FLOP`, 68+tw+34, 344);
-  x.fillStyle="#5F8593"; x.font="500 24px 'IBM Plex Mono',monospace";
-  x.fillText(`best streak ${best}`, 68+tw+34, 384);
+  // a rule in the accent, the width of the rank
+  const rw=Math.min(560,x.measureText(rank().word).width);
+  const rule=x.createLinearGradient(72,0,72+rw,0);
+  rule.addColorStop(0,skin.a); rule.addColorStop(1,skin.glow+"0)");
+  x.fillStyle=rule; x.fillRect(72,276,rw,4);
 
-  /* Twelve pips: filled for a gate answered right, hollow for one missed.
-     The shape of the run, not just its total. */
-  const missedQ=new Set(missed.map(g=>g.q));
-  GATES.forEach((g,i)=>{
-    const px=68+i*44, py=442;
-    x.beginPath(); x.arc(px+13,py+13,13,0,Math.PI*2);
-    if(missedQ.has(g.q)){ x.strokeStyle="rgba(255,107,107,.65)"; x.lineWidth=3; x.stroke(); }
-    else { x.fillStyle="#5FEBFF"; x.fill(); }
-  });
+  // the two numbers that are not on the seal
+  const stat=(label,value,px)=>{
+    x.fillStyle="rgba(255,255,255,.38)"; x.font="600 15px 'IBM Plex Mono',monospace";
+    x.fillText(label, px, 336);
+    x.fillStyle="#EAF7FB"; x.font="700 40px Outfit,sans-serif";
+    x.fillText(value, px, 384);
+  };
+  stat("$FLOP EARNED", score.toLocaleString(), 72);
+  stat("BEST STREAK", String(best), 300);
 
-  x.fillStyle="#9CBFCB"; x.font="500 25px Outfit,sans-serif";
-  x.fillText("What Flop is, in twelve gates. Three minutes.", 68, 536);
+  x.fillStyle="rgba(255,255,255,.55)"; x.font="500 24px Outfit,sans-serif";
+  x.fillText("What Flop is, in twelve gates. Three minutes.", 72, 452);
 
-  x.fillStyle="#5F8593"; x.font="500 21px 'IBM Plex Mono',monospace";
-  const foot=PROOF ? `signed · ${shortDid(PROOF.did,10,6)}` : "unsigned run";
-  x.fillText(foot, 68, 574);
+  // ── the footing
+  x.fillStyle="rgba(255,255,255,.07)"; x.fillRect(72,496,W-144,1);
+  if(PROOF){
+    // A signed run says so with a mark, not just a word.
+    x.save(); x.translate(72,524);
+    x.strokeStyle=skin.a; x.lineWidth=2.4; x.lineJoin="round"; x.lineCap="round";
+    x.beginPath(); x.moveTo(11,1); x.lineTo(21,5); x.lineTo(21,13);
+    x.bezierCurveTo(21,20,17,25,11,27); x.bezierCurveTo(5,25,1,20,1,13);
+    x.lineTo(1,5); x.closePath(); x.stroke();
+    x.beginPath(); x.moveTo(6.5,13.5); x.lineTo(9.5,16.5); x.lineTo(15.5,10); x.stroke();
+    x.restore();
+    x.fillStyle=skin.ring; x.font="600 20px 'IBM Plex Mono',monospace";
+    x.fillText(`signed · ${shortDid(PROOF.did,10,6)}`, 106, 546);
+  }else{
+    x.fillStyle="rgba(255,255,255,.32)"; x.font="500 20px 'IBM Plex Mono',monospace";
+    x.fillText("unsigned run", 72, 546);
+  }
   const site="overheard-five.vercel.app/play";
-  x.fillStyle="rgba(0,180,215,.75)";
-  x.fillText(site, W-68-x.measureText(site).width, 574);
+  x.fillStyle=skin.glow+".85)"; x.font="600 20px 'IBM Plex Mono',monospace";
+  x.fillText(site, W-72-x.measureText(site).width, 546);
+
+  // ── the frame, last, over everything
+  x.strokeStyle=skin.glow+".45)"; x.lineWidth=2;
+  roundRect(x,18,18,W-36,H-36,22); x.stroke();
 }
 
 $("dl").addEventListener("click",()=>{
