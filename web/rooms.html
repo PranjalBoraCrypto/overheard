@@ -871,7 +871,18 @@ async function post(body){
   }
 }
 
-const say=(t,cls="")=>{ $("m").textContent=t; $("m").className="msgline "+cls; };
+/* A line that reports something finished has done its job in a few seconds;
+   leaving "Posted." under the box until the next thing happens makes it
+   furniture, and then nobody reads the line at all. Failures stay: those are
+   still true until something changes them. */
+let sayTimer=0;
+const say=(t,cls="")=>{
+  clearTimeout(sayTimer);
+  $("m").textContent=t; $("m").className="msgline "+cls;
+  if(cls==="ok" && t) sayTimer=setTimeout(()=>{
+    if($("m").textContent===t){ $("m").textContent=""; $("m").className="msgline"; }
+  },4500);
+};
 
 /* ── being signed in ───────────────────────────────────────────────────────
    REPORTED: unlock, refresh, and the passphrase box is back. A page that
@@ -1133,6 +1144,12 @@ function avatar(seedText,hue){
 }
 
 function render(m){
+  /* REPORTED: a message posted here came back from the room and was drawn as
+     a stranger's. It happens whenever the optimistic copy is missing — the
+     send timed out, or the page was reloaded — and the room's echo is then
+     just another line with a DID on it. Ownership is not a property of how a
+     message reached this page; it is whether the key is yours. */
+  if(!m.self && ID && m.from===ID.did) m.self=true;
   const signed = typeof m.from==="string" && m.from.startsWith("did:key:");
   const who = signed ? m.from : "~"+(m.nick||"anon");
   const el=document.createElement("div");
@@ -1198,6 +1215,69 @@ function render(m){
     el.appendChild(keep);
   }
   return el;
+}
+
+
+
+/* ── what Technocore said, in words ────────────────────────────────────────
+   Its refusals are written for whoever is reading a log:
+
+     "400 room limit reached (20480 is the cap, and this would be a new one).
+      Existing rooms still accept writes, so reuse one you already have —
+      GET /rooms shows what exists. Idle rooms are reclaimed after 7 days (a
+      room still on its first message goes after 24 hours)."
+
+   Every word true, none of it addressed to a person who just pressed a
+   button. Asked for: the real reason, with the real numbers, short, and
+   without the parts that only mean something to a developer. Anything not
+   recognised is passed through rather than replaced by a guess — a wrong
+   plain sentence is worse than a technical true one. */
+function plainly(d){
+  const t=String(d?.error||d?.body||"").trim();
+  const n=(re)=>{ const m=t.match(re); return m ? Number(m[1]).toLocaleString() : null; };
+
+  if(/room limit reached/i.test(t)){
+    const cap=n(/\((\d+) is the cap/) || "20,480";
+    return `Technocore is holding all ${cap} rooms it has space for, so a new one cannot be started right now. Rooms that already exist carry on working. Space frees up as unused rooms are reclaimed — a week for an idle room, a day for one that never got past its first message.`;
+  }
+  if(/note limit reached/i.test(t)){
+    const cap=n(/\((\d+) is the cap/) || "655,360";
+    return `Technocore keeps ${cap} permanent records and every one of them is taken, so it cannot store a new one right now. This is the whole network, not your key. Records are released after 7 days without a write.`;
+  }
+  if(/rooms?[ _-]?per[ _-]?day|new_rooms/i.test(t))
+    return "This site has opened all the new rooms Technocore allows it today. The allowance resets at midnight UTC.";
+  if(/rate limit|429|too many requests/i.test(t))
+    return "Technocore is rate-limiting right now. Wait a few seconds and try again.";
+  if(/signature does not verify/i.test(t))
+    return "Technocore did not accept the signature. Sign out and unlock again — the key in this browser may not be the one this room expects.";
+  if(/not allowed|forbidden|403/i.test(t) && /room/i.test(t))
+    return "Only the owner of this room and the identities they allow can post in it.";
+  if(/nonce/i.test(t))
+    return "Technocore rejected this as a repeat. Give it a moment and try once more.";
+  if(!t) return "Technocore refused it and did not say why.";
+  return t.length>240 ? t.slice(0,240)+"…" : t;
+}
+
+/* ── did it land? ──────────────────────────────────────────────────────────
+   A timeout is not a failed write. The request reached technocore.chat and
+   outlived our patience, so the message may be sitting in the room right now
+   — which is exactly what was reported: the page said nothing was written,
+   the line was in the room, and the next read drew it as a stranger's.
+
+   Rooms echo `from` and `text` (never the signature), and both are known
+   here, so the question is answerable rather than a guess. A few reads, a
+   couple of seconds; in a busy room the window is narrow, so "not found" is
+   reported as not knowing rather than as failure. */
+async function landed(roomName, text){
+  for(const w of [600,1200,2000]){
+    await new Promise(r=>setTimeout(r,w));
+    try{
+      const j=await fetch(`/api/room?room=${encodeURIComponent(roomName)}&since=0&limit=200&t=${Date.now()}`,
+        {cache:"no-store"}).then(r=>r.json());
+      if((j.messages||[]).some(m=>m && m.from===ID?.did && String(m.text??"")===text)) return true;
+    }catch{ /* keep looking */ }
+  }
+  return false;
 }
 
 /* ── the drip ──────────────────────────────────────────────────────────────
@@ -1349,7 +1429,16 @@ $("send").addEventListener("click",async()=>{
     const sig=await signFor(room,nonce,text);
     say("Sending the signature — never the key…");
     const d=await post({kind:"message",did:ID.did,room,sig,nonce,text});
-    if(!d.ok) say(`Technocore said: ${d.error||d.body||"failed"}`,"err");
+    if(!d.ok && d.unknown){
+      say("Slow answer from the network. Checking whether it went through…");
+      if(await landed(room,text)){
+        d.ok=true;                       // it is in the room; that is the answer
+      }else{
+        say("No answer in time, so we cannot say whether that one landed. Look in the room before sending it again.","warn");
+      }
+    }
+    else if(!d.ok) say(plainly(d),"err");
+    if(!d.ok){ /* already reported */ }
     else{
       $("say").value="";
       /* DRAWN IMMEDIATELY, not waited for.
@@ -1409,7 +1498,15 @@ function remember(name,kind){
   const list=myRooms().filter(x=>x.name!==name);
   list.unshift({name,kind,did:ID?.did||null,at:new Date().toISOString()});
   try{ localStorage.setItem(MINEKEY,JSON.stringify(list.slice(0,40))); }catch{}
+  /* Paint it NOW, from what just happened, rather than waiting for the next
+     read of the archive. Reported: a room was created and "Your rooms" stayed
+     empty until the page was reloaded — because this repainted the list it
+     already had in memory instead of the one that had just changed. The
+     archive catch-up still runs behind it and will confirm the claim. */
+  MINE=[{name,kind},...MINE.filter(x=>x.name!==name)]
+    .sort((a,b)=> (a.kind===b.kind?0:a.kind==="owned"?-1:1) || a.name.localeCompare(b.name));
   paintMine();
+  loadMine();
 }
 function forget(name){
   try{ localStorage.setItem(MINEKEY,JSON.stringify(myRooms().filter(x=>x.name!==name))); }catch{}
@@ -2108,12 +2205,22 @@ $("claim").addEventListener("click",async()=>{
       const sig=await signFor(raw,nonce,text);
       const d=await post({kind:"message",did:ID.did,room:raw,sig,nonce,text});
       if(!d.ok && refused(d)){ $("claim").disabled=false; return; }
-      if(!d.ok){
+      if(!d.ok && d.unknown){
+        /* No answer in time. Do not tell anybody it failed — go and look. */
+        ownSay("Slow answer from the network. Checking whether it went through…","busy");
+        if(!await landed(raw,text)){
+          tellModal("No answer from the network in time.",
+            `Nothing came back about ${raw}, so we cannot say whether it was created. Nothing here was lost — open the room and look, or try the button again in a moment.`,
+            null, "If it did go through, opening it again simply works.");
+          ownSay(""); $("claim").disabled=false; return;
+        }
+        // It landed after all. Carry on exactly as if it had answered.
+      }
+      else if(!d.ok){
         /* Asked for: the answer belongs in front of the person who pressed
            the button, not on a line under it. */
         tellModal("That room could not be opened.",
-          d.error || d.body || "Technocore refused the first message, so the room was not created.",
-          null, "Nothing was written. The name is still free.");
+          plainly(d), null, "Nothing was written. The name is still free.");
         ownSay(""); $("claim").disabled=false; return;
       }
     }catch(err){
@@ -2141,9 +2248,7 @@ $("claim").addEventListener("click",async()=>{
     const d = await post({kind:"claim",did:ID.did,room:full,sig,nonce});
     if(!d.ok && refused(d)){ $("claim").disabled=false; return; }
     if(!d.ok){
-      tellModal("That claim was refused.",
-        d.error || d.body || "Technocore refused the claim.",
-        null, "Nothing was written. The name is still free.");
+      tellModal("That claim was refused.", plainly(d), null, "Nothing was written. The name is still free.");
       ownSay(""); $("claim").disabled=false; return;
     }
     ownState = { name: full, claimNonce: nonce };
@@ -2182,7 +2287,7 @@ async function saveAllow(room, raw, el){
       enc.encode(`room-allow|${room}|${nonce}|${value}`)));
     const d=await post({kind:"allow",did:ID.did,room,sig,nonce,value});
     if(d.ok) put(list.length?`Saved. ${list.length} identit${list.length===1?"y":"ies"} can post here, besides you.`:"Saved. Only you can post here.","ok");
-    else put(`Technocore refused the list: ${(d.error||d.body||"failed").slice(0,140)}`,"err");
+    else put(plainly(d),"err");
   }catch(err){ put("Could not sign the list: "+err.message,"err"); }
 }
 

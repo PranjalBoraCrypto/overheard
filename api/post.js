@@ -75,17 +75,24 @@ async function forward(path) {
   try {
     const res = await fetch(`${BASE}${path}`, {
       headers: { Accept: "application/json", "User-Agent": "overheard-post/1.0" },
-      signal: AbortSignal.timeout(12000),
+      signal: AbortSignal.timeout(20000),
     });
     const body = await res.text();
     return { status: res.status, body: body.slice(0, 2000) };
   } catch (err) {
+    /* A timeout is NOT a failed write, and saying so was wrong: the request
+       reached technocore.chat and simply outlived our patience, so it may
+       well have landed. Reported exactly that way — the page said nothing was
+       written, the message was in the room, and the next read showed it as
+       somebody else's. The caller has to check rather than assume, and the
+       word for that is `unknown`, not `failed`. */
     const timedOut = String(err?.name || "") === "TimeoutError" || /abort/i.test(String(err?.message || ""));
     return {
       status: 504,
+      unknown: timedOut,
       body: timedOut
-        ? "technocore.chat did not answer in time — nothing was written, and trying again usually works"
-        : "could not reach technocore.chat — nothing was written, and trying again usually works",
+        ? "technocore.chat did not answer in time — it may still have gone through"
+        : "could not reach technocore.chat — nothing was written",
       upstream: false,
     };
   }

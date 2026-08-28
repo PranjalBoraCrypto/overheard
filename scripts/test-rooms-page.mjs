@@ -26,6 +26,8 @@ let CLAIM = { ok: true };            // what /api/post says to a claim
 let OWNER = 'free';
 let OWNS = [];                       // rooms the archive says this key owns
 let POSTFAIL = null;                 // make the network refuse a message
+let LANDS_LATE = false;              // the write times out but DOES land
+const LATE = [];
 let CAP = { known: true, rooms: { total: 19116, capacity: 20480, left: 1364, full: false },
             notes: { total: 600000, capacity: 655360, left: 55360, full: false } };
 
@@ -41,6 +43,8 @@ const srv = http.createServer((req, res) => {
       POSTS.push(d);
       if (d.kind === 'claim') return J(CLAIM);
       if (d.kind === 'message' && POSTFAIL) return J(POSTFAIL);
+      if (d.kind === 'message' && LANDS_LATE) { LATE.push(d); return J({ ok: false, status: 504, unknown: true,
+        body: 'technocore.chat did not answer in time — it may still have gone through' }); }
       return J({ ok: true });
     });
   }
@@ -55,6 +59,11 @@ const srv = http.createServer((req, res) => {
           seq: String(base + 1 + i), ts: new Date().toISOString(),
           from: 'did:key:z6MkngD8RZKCgJQCkJvHfGyYoCcNCG5rz9Tc7yRmWrMZExaz',
           nick: null, text: 'firehose line ' + (base + 1 + i), sig: null, nonce: null })) });
+    }
+    if (LATE.length) {
+      const mine = LATE.filter(x => x.room === room).map((x, i) => ({
+        seq: 'late' + i, ts: new Date().toISOString(), from: x.did, nick: null, text: x.text, sig: null, nonce: null }));
+      if (mine.length) return J({ room, first_seq: '1', last_seq: '9', count: mine.length, messages: mine });
     }
     // A room nobody has ever posted in: the case where opening one has to
     // spend a room slot, which is the case the capacity check exists for.
@@ -439,6 +448,9 @@ await pg.fill('#rn', 'brand-new-openroom');
 await pg.waitForFunction(() => /available/.test(document.getElementById('ownsay').textContent), null, { timeout: 9000 });
 await pg.click('#claim');
 await pg.waitForFunction(() => !document.getElementById('owndone').hidden, null, { timeout: 15000 });
+check('and it appears in "Your rooms" straight away, with no reload',
+  await pg.evaluate(() => !document.getElementById('mine').hidden &&
+    [...document.querySelectorAll('#mrooms .nm')].some(n => n.textContent === 'brand-new-openroom')));
 check('the room is opened by a signed first message, not by hope',
   POSTS.some(p => p.kind === 'message' && p.room === 'brand-new-openroom'),
   JSON.stringify(POSTS.map(p => p.kind + ':' + p.room)));
@@ -455,6 +467,38 @@ const capW = (await pg.locator('#ownCap').textContent()) || '';
 check('a refusal lands on the panel, not two screens later',
   /no room left for new rooms/.test(capW), capW.slice(0, 52));
 POSTFAIL = null;
+
+console.log('\n=== H4b. a slow write is not a failed write');
+/* REPORTED, with screenshots: the send timed out, the page said nothing was
+   written, the message was in the room, and the next read drew it as a
+   STRANGER'S. Three separate wrongs from one assumption. */
+await go();
+LANDS_LATE = true; LATE.length = 0;
+await pg.evaluate(() => { document.getElementById('say').value = ''; });
+await pg.fill('#say', 'LATE-BUT-LANDED');
+await pg.press('#say', 'Enter');
+await pg.waitForFunction(() => /Posted|cannot say/.test(document.getElementById('m').textContent), null, { timeout: 20000 });
+const lateLine = (await pg.locator('#m').textContent()) || '';
+check('it goes and looks instead of declaring failure', /Posted/.test(lateLine), lateLine.slice(0, 60));
+check('and the line is shown as YOURS, not a stranger\'s', await pg.evaluate(() =>
+  [...document.querySelectorAll('.msg')].filter(m => m.textContent.includes('LATE-BUT-LANDED'))
+    .every(m => m.classList.contains('mine'))));
+/* And a line that reports something finished should not sit there for ever. */
+await pg.waitForFunction(() => document.getElementById('m').textContent === '', null, { timeout: 9000 });
+check('"Posted." clears itself after a few seconds', (await pg.locator('#m').textContent()) === '');
+LANDS_LATE = false; LATE.length = 0;
+
+console.log('\n=== H4c. the refusal in words, with the real numbers');
+POSTFAIL = { ok: false, status: 400, error: '400 room limit reached (20480 is the cap, and this would be a new one). Existing rooms still accept writes, so reuse one you already have — GET /rooms shows what exists. Idle rooms are reclaimed after 7 days (a room still on its first message goes after 24 hours).' };
+await pg.fill('#say', 'this one is refused');
+await pg.press('#say', 'Enter');
+await pg.waitForFunction(() => /Technocore|holding/.test(document.getElementById('m').textContent), null, { timeout: 12000 });
+const plain = (await pg.locator('#m').textContent()) || '';
+console.log('   ', plain.slice(0, 130));
+check('the real reason, with the real number', /20,480 rooms/.test(plain), plain.slice(0, 60));
+check('and none of the developer half', !/GET \/rooms|cap,/.test(plain));
+POSTFAIL = null;
+await pg.fill('#say', '');
 
 console.log('\n=== H5. the rooms you already have');
 check('no panel at all for somebody with none', await pg.evaluate(() => {
