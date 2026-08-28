@@ -62,7 +62,17 @@ h1{font-weight:800;font-size:clamp(32px,5.4vw,48px);letter-spacing:-.035em;line-
 @media (max-width:620px){.start{padding:22px 20px}}
 .facts{display:grid;grid-template-columns:repeat(3,1fr);gap:11px;margin:22px 0}
 @media (max-width:620px){.facts{grid-template-columns:1fr}}
-.fact{padding:14px 16px;border-radius:14px;background:rgba(0,20,26,.55);border:1px solid rgba(0,180,215,.18)}
+.fact{padding:15px 16px;border-radius:14px;background:rgba(0,20,26,.55);border:1px solid rgba(0,180,215,.18);
+  transition:transform .25s var(--ease),border-color .25s var(--ease)}
+/* `rise` ends on transform:none, and an animation with fill:both keeps
+   winning after it finishes — which quietly killed the hover lift. This one
+   moves with `translate`, a separate property, so hover still gets transform. */
+@keyframes riseY{from{opacity:0;translate:0 14px}}
+.fact{animation:riseY .5s var(--ease) both}
+.fact:nth-child(2){animation-delay:.09s}
+.fact:nth-child(3){animation-delay:.18s}
+.fact:hover{transform:translateY(-3px);border-color:rgba(95,235,255,.45)}
+.fact .i{width:19px;height:19px;color:var(--cy);display:block;margin-bottom:9px}
 .fact b{display:block;font-family:var(--mono);font-size:19px;color:var(--cy-hi);letter-spacing:-.02em}
 .fact span{display:block;font-size:12.5px;color:var(--faint);line-height:1.45;margin-top:3px}
 
@@ -87,6 +97,52 @@ h1{font-weight:800;font-size:clamp(32px,5.4vw,48px);letter-spacing:-.035em;line-
 .blk p+p{margin-top:10px}
 .blk b{color:var(--txt);font-weight:600}
 .blk em{font-style:normal;color:var(--cy-hi)}
+
+/* ── the spine ────────────────────────────────────────────────────────────
+   Reading eight things is a sequence, so it is drawn as one: a circuit down
+   the left with a node per block, lighting up behind you. Three ways forward,
+   because people reach for different ones — scroll past a block, swipe it
+   away, or tap the button. All three mark the same block read. */
+.blocks{position:relative}
+.spine{position:absolute;left:31px;top:36px;bottom:36px;width:2px;border-radius:2px;
+  background:rgba(0,180,215,.14);overflow:hidden;z-index:0}
+.spine i{position:absolute;left:0;top:0;width:100%;height:0;border-radius:2px;
+  background:linear-gradient(var(--cy-hi),var(--good));box-shadow:0 0 16px rgba(0,180,215,.55);
+  transition:height .65s var(--ease)}
+.blk{position:relative;touch-action:pan-y}
+.blk .badge{position:relative;background:linear-gradient(135deg,#27505F,#12303C);color:#8FB6C4;box-shadow:none;
+  transition:background .45s var(--ease),box-shadow .45s var(--ease),color .45s var(--ease)}
+.blk .badge .i{color:currentColor}
+@media (min-width:721px){
+  .blocks{padding-left:84px}
+  .blk .badge{position:absolute;left:-68px;top:19px;width:62px;height:62px;border-radius:21px;z-index:2}
+  .blk .badge .i{width:28px;height:28px}
+  /* the short lead from the node to the card it belongs to */
+  .blk::before{content:"";position:absolute;left:-7px;top:49px;width:11px;height:2px;
+    background:rgba(0,180,215,.32);transition:background .45s var(--ease)}
+  .blk.done::before{background:rgba(59,227,176,.6)}
+}
+@media (max-width:720px){.spine{display:none}}
+.blk.cur .badge{background:linear-gradient(135deg,var(--cy-hi),var(--cy));color:#001016;
+  box-shadow:0 0 0 7px rgba(0,180,215,.10),0 16px 34px -16px var(--cy)}
+.blk.cur .badge::after{content:"";position:absolute;inset:-3px;border-radius:inherit;
+  border:2px solid var(--cy-hi);opacity:0;animation:nodeping 2.2s var(--ease) infinite}
+@keyframes nodeping{0%{opacity:.7;transform:scale(1)}70%,100%{opacity:0;transform:scale(1.32)}}
+.blk.done .badge{background:linear-gradient(135deg,#5BF0B8,#12C98F);color:#00201A;
+  box-shadow:0 0 0 7px rgba(59,227,176,.10)}
+.blk.swiping{transition:none}
+
+.blkfoot{display:flex;align-items:center;gap:13px;margin-top:16px;padding-top:13px;
+  border-top:1px dashed rgba(0,180,215,.16);flex-wrap:wrap}
+.gotit{border:1px solid rgba(0,180,215,.32);background:rgba(0,180,215,.08);color:var(--cy-hi);
+  padding:9px 15px;border-radius:11px;cursor:pointer;font-family:var(--display);font-weight:600;font-size:13.5px;
+  display:inline-flex;align-items:center;gap:8px;transition:.22s var(--ease)}
+.gotit .i{width:15px;height:15px;stroke-width:2.5}
+.gotit:hover{background:rgba(0,180,215,.16);transform:translateY(-2px)}
+.gotit.on{border-color:rgba(59,227,176,.5);background:rgba(59,227,176,.12);color:var(--good);
+  cursor:default;transform:none}
+.blkfoot .hint{font-family:var(--mono);font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;
+  color:var(--faint)}
 .quote{margin-top:14px;padding:14px 16px;border-radius:13px;font-size:17px;line-height:1.5;color:var(--txt);
   background:linear-gradient(120deg,rgba(0,180,215,.12),rgba(0,180,215,.03));
   border-left:3px solid var(--cy);font-weight:600}
@@ -159,7 +215,29 @@ h1{font-weight:800;font-size:clamp(32px,5.4vw,48px);letter-spacing:-.035em;line-
 .readbar .txt b{display:block;color:var(--txt);font-size:15px;font-weight:700}
 .readmeter{height:3px;border-radius:9px;background:rgba(0,180,215,.14);margin-top:8px;overflow:hidden}
 .readmeter i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--cy),var(--cy-hi));
-  transition:width .35s var(--ease)}
+  transition:width .45s var(--ease)}
+.readbar.ready{border-color:rgba(59,227,176,.5)}
+/* A glow, not a hop. The primary button must never MOVE on its own: a
+   control that shifts under a finger is the oldest way to make somebody miss
+   the thing they were aiming at. */
+.readbar.ready #beginFromBrief{animation:nudge 2s var(--ease) infinite}
+@keyframes nudge{50%{box-shadow:0 0 0 7px rgba(59,227,176,.14),0 20px 44px -18px rgba(0,180,215,.95)}}
+.readbar .sm{display:none}
+/* On a phone this bar floats over what you are reading, so it earns its space
+   twice over: one row, the label trimmed, the button saying the short version
+   of the same thing. */
+@media (max-width:620px){
+  .readbar{padding:10px 12px;gap:10px;bottom:10px;flex-wrap:nowrap;align-items:center}
+  .readbar .txt{flex:1 1 auto;min-width:0;font-size:11px}
+  .readbar .txt b{font-size:13px}
+  .readbar .txt>span{display:none}
+  .readmeter{margin-top:6px}
+  .readbar .go{padding:11px 15px;font-size:13.5px;white-space:nowrap}
+  .readbar .lg{display:none}
+  .readbar .sm{display:inline}
+  .blk .badge{width:48px;height:48px;border-radius:16px}
+  .blk .badge .i{width:24px;height:24px}
+}
 
 /* ══ THE RUN ══════════════════════════════════════════════════════════════ */
 .hud{display:flex;align-items:center;gap:14px;margin-top:22px;flex-wrap:wrap}
@@ -325,6 +403,32 @@ canvas.confetti{position:fixed;inset:0;width:100%;height:100%;pointer-events:non
 .miss li{list-style:none;padding:12px 14px;border-radius:12px;background:rgba(255,107,107,.05);
   border:1px solid rgba(255,107,107,.2);font-size:13.5px;line-height:1.55;color:var(--dim);margin-top:8px}
 .miss li b{display:block;color:var(--txt);margin-bottom:3px;font-size:14px}
+.miss li{display:flex;gap:12px;align-items:flex-start;animation:rise .5s var(--ease) both}
+.miss .mi{width:31px;height:31px;flex:none;border-radius:10px;display:grid;place-items:center;
+  background:rgba(255,107,107,.14);color:var(--bad)}
+.miss .mi .i{width:15px;height:15px;stroke-width:2.3}
+/* A pill around a whole sentence looks like a mistake, so the right answer is
+   a ticked line instead — the tick carries the "this was the one" and the
+   sentence is left to be a sentence. */
+.miss .ans{display:flex;gap:8px;align-items:flex-start;margin:7px 0;font-size:13.8px;
+  line-height:1.5;color:var(--good)}
+.miss .ans .i{width:14px;height:14px;margin-top:4px;stroke-width:2.6}
+.miss li{transition:border-color .25s var(--ease)}
+.miss li:hover{border-color:rgba(255,107,107,.4)}
+.miss .mwhy{color:var(--faint);font-size:13px;line-height:1.55}
+
+/* the run, at a glance, before any words about it */
+.endpips{display:flex;gap:6px;justify-content:center;margin:14px 0 4px;flex-wrap:wrap}
+.endpips i{width:22px;height:9px;border-radius:99px;background:rgba(255,107,107,.38);
+  animation:pipin .45s var(--ease) both}
+.endpips i.hit{background:linear-gradient(90deg,var(--good),#12C98F);box-shadow:0 0 11px rgba(59,227,176,.5)}
+@keyframes pipin{from{opacity:0;transform:scaleX(.2)}}
+
+.signed{display:flex;gap:12px;align-items:flex-start}
+.signed .sIcon{width:34px;height:34px;flex:none;border-radius:11px;display:grid;place-items:center;
+  background:rgba(0,180,215,.12);color:var(--cy-hi)}
+.signed .sIcon .i{width:17px;height:17px}
+.signed em{font-style:normal;color:var(--cy-hi)}
 
 .prov{display:flex;gap:10px;align-items:flex-start;margin-top:26px;padding:14px 16px;border-radius:13px;
   font-size:12.5px;line-height:1.6;color:var(--faint);
@@ -332,6 +436,12 @@ canvas.confetti{position:fixed;inset:0;width:100%;height:100%;pointer-events:non
 .prov .i{width:15px;height:15px;margin-top:2px;color:var(--warn)}
 .prov a{color:var(--cy);text-decoration:none}
 .prov a:hover{color:var(--cy-hi)}
+.prov summary,.signed summary{cursor:pointer;color:var(--cy);font-weight:600;font-size:12.5px;
+  list-style:none;display:inline-flex;align-items:center;gap:6px;margin-top:7px}
+.prov summary::-webkit-details-marker,.signed summary::-webkit-details-marker{display:none}
+.prov summary::after,.signed summary::after{content:"\25B8";display:inline-block;transition:transform .2s var(--ease)}
+.prov details[open] summary::after,.signed details[open] summary::after{transform:rotate(90deg)}
+.prov details span,.signed details span{display:block;margin-top:7px}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}
   .blk{opacity:1;transform:none}}
 </style>
@@ -371,13 +481,13 @@ canvas.confetti{position:fixed;inset:0;width:100%;height:100%;pointer-events:non
   <section id="intro">
     <span class="eyebrow"><svg class="i"><use href="#i-bolt"/></svg>Proof of Learning</span>
     <h1>You are an agent.<br>You have just booted.</h1>
-    <p class="lede">Twelve gates, four levels, about three minutes. Read the briefing first if you want an easy run &mdash; every answer is in it. At the end: a score, a rank, and a card worth posting.</p>
+    <p class="lede">Read the briefing, take the run, post the card. Every answer is in the briefing.</p>
 
     <div class="panel start">
       <div class="facts">
-        <div class="fact"><b>12</b><span>gates, across four levels</span></div>
-        <div class="fact"><b>~3 min</b><span>a full run, start to finish</span></div>
-        <div class="fact"><b>Signed</b><span>your score, if you hold a key</span></div>
+        <div class="fact"><svg class="i"><use href="#i-seal"/></svg><b>12</b><span>gates, four levels</span></div>
+        <div class="fact"><svg class="i"><use href="#i-clock"/></svg><b>~3 min</b><span>a full run</span></div>
+        <div class="fact"><svg class="i"><use href="#i-bolt"/></svg><b>Points</b><span>and a card to post</span></div>
       </div>
       <div class="nextrow" style="justify-content:flex-start">
         <button class="go" id="toBrief" type="button"><svg class="i"><use href="#i-book"/></svg>Read the briefing</button>
@@ -385,8 +495,12 @@ canvas.confetti{position:fixed;inset:0;width:100%;height:100%;pointer-events:non
       </div>
     </div>
 
-    <p class="prov"><svg class="i"><use href="#i-info"/></svg>
-      <span>Flop has not launched. Its numbers come from a teaser marked <b>version 0.1, draft</b>, which says plainly that its figures are provisional and the Yellow Paper is not final. Everything here asks what the project <em>currently claims</em>, never what is settled &mdash; and one of the twelve gates is about exactly that. Sources: <a href="https://flop.finance/teaser" target="_blank" rel="noopener noreferrer">flop.finance/teaser</a> and <a href="https://technocore.chat" target="_blank" rel="noopener noreferrer">technocore.chat</a>.</span></p>
+    <div class="prov"><svg class="i"><use href="#i-info"/></svg>
+      <div><b>Flop has not launched.</b> Its numbers come from a teaser marked <b>version 0.1, draft</b> &mdash; provisional by the project&rsquo;s own admission.
+        <details><summary>What that means here</summary>
+          <span>Everything on this page asks what Flop <em>currently claims</em>, never what is settled &mdash; and one of the twelve gates is about exactly that. Sources: <a href="https://flop.finance/teaser" target="_blank" rel="noopener noreferrer">flop.finance/teaser</a> and <a href="https://technocore.chat" target="_blank" rel="noopener noreferrer">technocore.chat</a>.</span>
+        </details>
+      </div></div>
   </section>
 
   <!-- ══ THE BRIEFING ════════════════════════════════════════════════════ -->
@@ -394,10 +508,11 @@ canvas.confetti{position:fixed;inset:0;width:100%;height:100%;pointer-events:non
     <div class="briefhead">
       <span class="eyebrow"><svg class="i"><use href="#i-book"/></svg>The briefing &middot; 8 blocks</span>
       <h1 style="font-size:clamp(27px,4.6vw,38px)">Flop, in eight small pieces.</h1>
-      <p class="lede">One idea per block. Pictures where a picture is faster than a sentence. Read it in two minutes, then the run is a victory lap.</p>
+      <p class="lede">One idea per block. Scroll it, swipe it, or tap through it &mdash; two minutes, and the run is a victory lap.</p>
     </div>
 
     <div class="blocks">
+      <div class="spine" aria-hidden="true"><i id="spineFill"></i></div>
 
       <article class="panel blk">
         <div class="top">
@@ -529,7 +644,7 @@ canvas.confetti{position:fixed;inset:0;width:100%;height:100%;pointer-events:non
         <span id="readSub">Every answer in the run is somewhere above.</span>
         <div class="readmeter"><i id="readFill"></i></div>
       </div>
-      <button class="go" id="beginFromBrief" type="button"><svg class="i"><use href="#i-play"/></svg>Reading done &mdash; take the run</button>
+      <button class="go" id="beginFromBrief" type="button"><svg class="i"><use href="#i-play"/></svg><span class="lg">Reading done &mdash; take the run</span><span class="sm">Take the run</span></button>
     </div>
   </section>
 
@@ -551,6 +666,7 @@ canvas.confetti{position:fixed;inset:0;width:100%;height:100%;pointer-events:non
       <div class="rank" id="rankWord"></div>
       <h2 id="endTitle"></h2>
       <div class="tally" id="tally"></div>
+      <div class="endpips" id="endPips" aria-hidden="true"></div>
       <p id="endBlurb"></p>
       <canvas class="share" id="card" width="1200" height="630" aria-label="Your Proof of Learning card"></canvas>
       <div class="signed" id="signedBox" hidden></div>
@@ -562,8 +678,12 @@ canvas.confetti{position:fixed;inset:0;width:100%;height:100%;pointer-events:non
       </div>
       <div class="miss" id="missed" hidden></div>
     </div>
-    <p class="prov"><svg class="i"><use href="#i-info"/></svg>
-      <span>Everything in the briefing and the run came from Flop&rsquo;s own draft teaser and Technocore&rsquo;s published spec. Overheard is independent and not affiliated with Flop Labs. Your score is yours: nothing is sent anywhere unless you choose to share it.</span></p>
+    <div class="prov"><svg class="i"><use href="#i-info"/></svg>
+      <div><b>Your score is yours.</b> Nothing is sent anywhere unless you share it.
+        <details><summary>Where all of this came from</summary>
+          <span>Flop&rsquo;s own draft teaser and Technocore&rsquo;s published spec, cited on every gate. Overheard is independent and not affiliated with Flop Labs.</span>
+        </details>
+      </div></div>
   </section>
 
   <overheard-foot></overheard-foot>
@@ -787,35 +907,115 @@ function icon(id){ const s=document.createElementNS("http://www.w3.org/2000/svg"
    they arrive so the reader only ever faces two or three at a time, and the
    sticky bar keeps the way out in reach from the first screen. */
 const blocks=[...document.querySelectorAll(".blk")];
-let seenCount=0;
-if("IntersectionObserver" in window && !calm()){
-  const io=new IntersectionObserver((rows)=>{
-    for(const r of rows){
-      if(!r.isIntersecting || r.target.classList.contains("seen")) continue;
-      r.target.classList.add("seen");
-      seenCount=Math.max(seenCount, blocks.indexOf(r.target)+1);
-      paintRead();
-    }
-  },{ threshold:.22, rootMargin:"0px 0px -8% 0px" });
-  blocks.forEach(b=>io.observe(b));
-}else{
-  blocks.forEach(b=>b.classList.add("seen"));
-  seenCount=blocks.length;
+const readDone=new Set();
+let cur=0;
+
+/* Three ways forward, wired to the same result. A reader who scrolls never
+   touches a control; a thumb on a phone swipes; somebody who wants to be told
+   they are finished with a block taps the button. None of them is the "real"
+   one. */
+blocks.forEach((b,i)=>{
+  const foot=el("div","blkfoot");
+  const btn=el("button","gotit"); btn.type="button";
+  btn.append(icon("i-check"), el("span",null,"Got it"));
+  btn.addEventListener("click",()=>{
+    markRead(i);
+    if(i<blocks.length-1) goBlock(i+1);
+    else $("readbar").scrollIntoView({behavior:calm()?"auto":"smooth",block:"end"});
+  });
+  foot.append(btn, el("span","hint", i<blocks.length-1 ? "or swipe left · or just scroll" : "that is the lot"));
+  b.append(foot);
+
+  /* Only a mostly-horizontal drag counts as a swipe, so selecting text and
+     scrolling the page both still work exactly as they did. */
+  let x0=null,y0=null;
+  const reset=()=>{ x0=null; b.style.transform=""; b.classList.remove("swiping"); };
+  b.addEventListener("pointerdown",(e)=>{ if(e.button) return; x0=e.clientX; y0=e.clientY; });
+  b.addEventListener("pointermove",(e)=>{
+    if(x0==null||calm()) return;
+    const dx=e.clientX-x0, dy=e.clientY-y0;
+    if(Math.abs(dx)<14||Math.abs(dy)>46) return;
+    b.classList.add("swiping");
+    b.style.transform=`translateX(${Math.max(-70,Math.min(70,dx*.45))}px)`;
+  });
+  b.addEventListener("pointerup",(e)=>{
+    if(x0==null) return;
+    const dx=e.clientX-x0, dy=e.clientY-y0;
+    reset();
+    if(Math.abs(dx)<62||Math.abs(dy)>46) return;
+    if(dx<0){ markRead(i); goBlock(Math.min(blocks.length-1,i+1)); }
+    else goBlock(Math.max(0,i-1));
+  });
+  b.addEventListener("pointercancel",reset);
+  b.addEventListener("pointerleave",()=>{ if(x0!=null) reset(); });
+});
+
+function markRead(i){
+  if(i<0||i>=blocks.length||readDone.has(i)) return;
+  readDone.add(i); paintBlocks();
 }
-function paintRead(){
-  const pct=Math.round((seenCount/blocks.length)*100);
+function goBlock(i){
+  cur=Math.max(0,Math.min(blocks.length-1,i));
+  blocks[cur].scrollIntoView({behavior:calm()?"auto":"smooth",block:"center"});
+  paintBlocks();
+}
+function paintBlocks(){
+  const first=blocks.findIndex((b,i)=>!readDone.has(i));
+  if(first>=0) cur=first;
+  blocks.forEach((b,i)=>{
+    b.classList.toggle("done",readDone.has(i));
+    b.classList.toggle("cur",i===cur && !readDone.has(i));
+    const btn=b.querySelector(".gotit");
+    if(!btn) return;
+    btn.classList.toggle("on",readDone.has(i));
+    btn.lastChild.textContent = readDone.has(i) ? "Read" : "Got it";
+  });
+  const pct=Math.round(readDone.size/blocks.length*100);
+  $("spineFill").style.height=pct+"%";
   $("readFill").style.width=pct+"%";
-  $("readTitle").textContent = seenCount>=blocks.length ? "Briefing read." : `Block ${seenCount} of ${blocks.length}`;
-  $("readSub").textContent = seenCount>=blocks.length
-    ? "Every answer in the run is somewhere above. Go and collect them."
-    : "Every answer in the run is somewhere above.";
+  const all=readDone.size>=blocks.length;
+  $("readbar").classList.toggle("ready",all);
+  $("readTitle").textContent = all ? "Briefing read." : `${readDone.size} of ${blocks.length} read`;
+  $("readSub").textContent = all
+    ? "Every answer in the run is up there. Go and collect them."
+    : "Scroll, swipe, or tap Got it — every answer in the run is up there.";
 }
-paintRead();
+
+/* One scroll handler rather than two observers: revealing a block and
+   counting it read are the same question asked of the same rectangle, at two
+   different heights. A block counts as read once it has gone up past the top
+   of the screen — being merely visible is not reading it. */
+let ticking=false;
+function onScroll(){
+  if(ticking) return; ticking=true;
+  requestAnimationFrame(()=>{
+    ticking=false;
+    if($("brief").hidden) return;
+    const vh=innerHeight; let changed=false;
+    blocks.forEach((b,i)=>{
+      const r=b.getBoundingClientRect();
+      if(r.top<vh*.92 && !b.classList.contains("seen")){ b.classList.add("seen"); changed=true; }
+      if(r.bottom<vh*.3 && !readDone.has(i)){ readDone.add(i); changed=true; }
+    });
+    /* At the foot of the page there is nothing left to scroll past, so the
+       last blocks would otherwise never count. Reaching the end is reading. */
+    if(innerHeight+scrollY >= document.documentElement.scrollHeight-140){
+      blocks.forEach((b,i)=>{ if(!readDone.has(i)){ readDone.add(i); changed=true; } });
+    }
+    if(changed) paintBlocks();
+  });
+}
+addEventListener("scroll",onScroll,{passive:true});
+addEventListener("resize",onScroll,{passive:true});
+if(calm()) blocks.forEach(b=>b.classList.add("seen"));
+paintBlocks();
 
 function openBrief(){
   $("intro").hidden=true; $("end").hidden=true; $("run").hidden=true;
   $("brief").hidden=false;
   scrollTo({top:0,behavior:calm()?"auto":"smooth"});
+  requestAnimationFrame(onScroll);
+  setTimeout(onScroll,420);
 }
 $("toBrief").addEventListener("click",openBrief);
 $("reread").addEventListener("click",openBrief);
@@ -882,14 +1082,22 @@ function levelCard(L,then){
   const dots=el("div","dots");
   LEVELS.forEach((x,i)=>{ const d=el("i"); if(i<=L.n-1) d.className="on"; dots.append(d); });
   box.append(dots);
-  box.append(el("div","hint","Tap or press any key to go on"));
+  /* It used to move on by itself after a second and a half, while telling
+     people to tap — so the tap was a race nobody knew they were in. It waits
+     now. Anything moves it on: the button, a tap anywhere, any key. */
+  const row=el("div","nextrow");
+  const on=el("button","go"); on.type="button";
+  on.append(document.createTextNode(`Enter ${L.name}`), icon("i-arrow"));
+  row.append(on); box.append(row);
+  box.append(el("div","hint","Or tap anywhere &middot; or press any key".replace("&middot;","·")));
   swap(box);
   let gone=false;
   const leave=()=>{ if(gone) return; gone=true;
     removeEventListener("keydown",leave,true); then(); };
+  on.addEventListener("click",leave);
   box.addEventListener("click",leave);
   addEventListener("keydown",leave,true);
-  setTimeout(leave,1600);
+  setTimeout(()=>on.focus({preventScroll:true}),80);
 }
 
 let lastLevel=-1, keys=null;
@@ -1062,6 +1270,13 @@ async function finish(){
   $("tally").textContent=`${correct} of ${GATES.length} · ${score.toLocaleString()} points · best streak ${best}`;
   $("endBlurb").textContent=r.blurb;
 
+  /* The run at a glance, before a word about it: twelve marks, one per gate. */
+  const pipbox=$("endPips"); pipbox.replaceChildren();
+  marks.forEach((m,i)=>{
+    const p=el("i"); if(m) p.className="hit";
+    p.style.animationDelay=`${120+i*38}ms`; pipbox.append(p);
+  });
+
   /* Getting it wrong is the part worth keeping. The gates you missed are
      repeated here with the answer, so a bad run still leaves somebody knowing
      more than when they started. */
@@ -1070,11 +1285,18 @@ async function finish(){
     box.hidden=false;
     box.append(el("h3",null,`Worth a second look — ${missed.length} gate${missed.length===1?"":"s"}`));
     const ul=el("ul");
-    for(const g of missed){
-      const li=el("li");
-      li.append(el("b",null,g.q), document.createTextNode(g.opts[g.right]+" — "+g.why));
+    missed.forEach((g,i)=>{
+      const li=el("li"); li.style.animationDelay=`${i*70}ms`;
+      const mi=el("span","mi"); mi.append(icon("i-x"));
+      const body=el("div");
+      body.append(el("b",null,g.q));
+      const ans=el("div","ans");
+      ans.append(icon("i-check"), el("span",null,g.opts[g.right]));
+      body.append(ans);
+      body.append(el("div","mwhy",g.why));
+      li.append(mi,body);
       ul.append(li);
-    }
+    });
     box.append(ul);
   }else box.hidden=true;
 
@@ -1106,9 +1328,17 @@ async function sign(){
   const box=$("signedBox");
   if(!s){
     box.hidden=false;
-    box.innerHTML='<b>Unsigned.</b> Anybody can edit a score into a picture &mdash; including this one. '
-      + 'Make an identity and your next run is signed with your own key, so the card carries a link anyone can check. '
-      + '<a href="/create.html" style="color:var(--cy)">Make one &rarr;</a>';
+    box.replaceChildren();
+    const ic=el("span","sIcon"); ic.append(icon("i-seal"));
+    const body=el("div");
+    body.innerHTML='<b>Unsigned.</b> Anybody can edit a score into a picture &mdash; including this one.'
+      + '<details><summary>How to make yours checkable</summary><span>Make an identity and your next run is '
+      + 'signed with your own key, so the card carries a link anyone can check on the Verify page.</span></details>';
+    const a=document.createElement("a");
+    a.className="go ghost"; a.href="/create.html"; a.textContent="Make an identity";
+    a.style.marginTop="11px";
+    body.append(a);
+    box.append(ic,body);
     return;
   }
   try{
@@ -1121,11 +1351,17 @@ async function sign(){
     const bundle={v:1,kind:"msg",did:s.did,room,nonce,sig:b64u(sig),text};
     PROOF={did:s.did,link:`${location.origin}/v#b=${b64u(enc.encode(JSON.stringify(bundle)))}`};
     box.hidden=false;
-    box.innerHTML=`<b>Signed by ${shortDid(s.did,10,6)}.</b> The card carries a proof link, so the score cannot be edited into a better one — anyone can check it on the Verify page. `
-      + `What it proves is that <em>this key</em> claimed this score: the questions run in your browser, so it is an honesty badge, not an invigilator.`;
+    box.replaceChildren();
+    const ic=el("span","sIcon"); ic.append(icon("i-seal"));
+    const body=el("div");
+    body.innerHTML=`<b>Signed by ${shortDid(s.did,10,6)}.</b> The card carries a proof link, so the score cannot be `
+      + `edited into a better one — anyone can check it on the Verify page.`
+      + `<details><summary>What a signature proves here</summary><span>That <em>this key</em> claimed this score. `
+      + `The questions run in your browser, so it is an honesty badge, not an invigilator.</span></details>`;
     const a=document.createElement("a");
     a.className="lk"; a.href=PROOF.link; a.textContent=PROOF.link;
-    box.append(a);
+    body.append(a);
+    box.append(ic,body);
   }catch{
     box.hidden=false;
     box.textContent="Could not sign this run in this browser, so the card is unsigned.";
@@ -1206,7 +1442,9 @@ function drawSeal(x,cx,cy,R,skin){
   x.fillStyle=skin.ring; x.font="600 26px 'IBM Plex Mono',monospace";
   x.fillText(`of ${GATES.length}`, cx, cy+46);
   x.fillStyle="rgba(255,255,255,.42)"; x.font="600 15px 'IBM Plex Mono',monospace";
-  x.fillText("GATES TAKEN", cx, cy-52);
+  /* This label used to sit at cy-52, close enough to touch the ascender of an
+     84px numeral. It gets its own air. */
+  x.fillText("GATES TAKEN", cx, cy-78);
   x.textAlign="left";
 }
 

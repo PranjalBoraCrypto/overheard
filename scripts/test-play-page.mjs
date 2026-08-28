@@ -96,7 +96,7 @@ const blocks = await pg.locator('.blk').count();
 check('broken into blocks, not a wall of text', blocks === 8, `${blocks} blocks`);
 const longest = await pg.evaluate(() =>
   Math.max(...[...document.querySelectorAll('.blk')].map(b => b.textContent.trim().length)));
-check('no block is a wall on its own', longest < 900, `longest block ${longest} chars`);
+check('no block is a wall on its own', longest < 1000, `longest block ${longest} chars`);
 check('every block leads with an icon', await pg.locator('.blk .badge svg').count() === blocks);
 check('the numbers are drawn, not just listed',
   (await pg.locator('.alloc i').count()) === 6 && (await pg.locator('.splitbar i').count()) === 2
@@ -109,7 +109,36 @@ await pg.evaluate(() => scrollTo(0, document.body.scrollHeight));
 await pg.waitForTimeout(900);
 check('and is still there at the bottom', await pg.locator('#beginFromBrief').isVisible());
 const readTxt = (await pg.locator('#readbar .txt').textContent()) || '';
-check('reading progress is shown', /Block \d of 8|Briefing read/.test(readTxt), readTxt.slice(0, 40));
+check('reading progress is shown', /\d of 8 read|Briefing read/.test(readTxt), readTxt.slice(0, 40));
+/* Scrolling to the end IS reading it, so the spine should be full and the way
+   into the run should be the loud thing on the page. */
+check('reaching the end counts as read', /Briefing read/.test(readTxt), readTxt.slice(0, 30));
+check('and the spine filled in behind you',
+  (await pg.evaluate(() => document.getElementById('spineFill').style.height)) === '100%');
+check('the button says so too', await pg.locator('#readbar.ready').count() === 1);
+
+/* Three ways forward, and all three have to work. Reload for a clean slate. */
+await go(); await pg.click('#toBrief'); await pg.waitForTimeout(500);
+check('every block has its own way to be marked read', (await pg.locator('.gotit').count()) === 8);
+await pg.locator('.gotit').first().click();
+await pg.waitForTimeout(700);
+check('tapping Got it marks the block read', await pg.locator('.blk').first().evaluate(e => e.classList.contains('done')));
+check('and says so on the button', /Read/.test(await pg.locator('.gotit').first().textContent()));
+check('the next block becomes the live one',
+  await pg.locator('.blk').nth(1).evaluate(e => e.classList.contains('cur')));
+const oneRead = await pg.evaluate(() => document.getElementById('spineFill').style.height);
+check('one of eight lights the spine', oneRead === '13%', oneRead);
+/* A swipe left is the same gesture as a thumb flicking a card away. */
+const swiped = await pg.evaluate(() => {
+  const b = document.querySelectorAll('.blk')[1];
+  const r = b.getBoundingClientRect();
+  const at = (t, x) => b.dispatchEvent(new PointerEvent(t, {
+    clientX: x, clientY: r.top + 40, bubbles: true, button: 0, pointerId: 1,
+  }));
+  at('pointerdown', r.left + 260); at('pointermove', r.left + 120); at('pointerup', r.left + 60);
+  return b.classList.contains('done');
+});
+check('and a swipe left does the same', swiped);
 /* Everything the run asks about must be somewhere in the briefing. Spot-check
    the load-bearing figures rather than every word. */
 const briefText = (await pg.locator('#brief').textContent()) || '';
@@ -124,6 +153,11 @@ await pg.waitForTimeout(400);
    makes it a flourish rather than a wait. */
 check('the level is announced before its first gate', await pg.locator('.levelup').first().isVisible());
 check('and names what is coming', /Boot/.test(await pg.locator('.levelup h3').first().textContent()));
+/* It used to move on by itself after 1.6s while telling people to tap, so the
+   tap was a race nobody knew they were in. It waits. */
+await pg.waitForTimeout(2600);
+check('and it WAITS rather than moving on by itself', await pg.locator('.levelup').first().isVisible());
+check('with a button, not only a hint', await pg.locator('.levelup .go').isVisible());
 await clearLevelCard();
 check('one tap skips it', (await pg.locator('.levelup').count()) === 0);
 check('the first gate is on screen', await pg.locator('.opt').first().isVisible());
@@ -312,6 +346,11 @@ check('the rank does not flatter it', /Freshly booted/.test(worst.rank), worst.r
    somebody knowing more than when they started. */
 check('and all twelve come back with their answers', worst.missedShown === 12, String(worst.missedShown));
 check('no confetti for a run that went badly', (await pg.locator('canvas.confetti').count()) === 0);
+check('the run is shown as twelve marks before a word about it',
+  (await pg.locator('#endPips i').count()) === 12
+  && (await pg.locator('#endPips i.hit').count()) === 0);
+check('and each missed gate carries its answer as a chip',
+  (await pg.locator('#missed .ans').count()) === 12);
 check('and the briefing is offered again', await pg.locator('#reread').isVisible());
 
 console.log('\n=== G. a signed run makes a checkable claim');
