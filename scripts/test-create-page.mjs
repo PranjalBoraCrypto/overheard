@@ -308,7 +308,12 @@ const capMsg = (await pg.locator('#roomCap').innerText()) || '';
 console.log('   ', capMsg.slice(0, 120) + '…');
 check('it does not pass the raw error through',
   !/Technocore said/.test(await pg.evaluate(() => document.body.innerText)));
-check('it names the limit', /50,960 ownership records/.test(capMsg));
+/* It used to quote 50,960 from memory. MEASURED 2026-08-28: Technocore
+   raised its ceilings — rooms 20,480 -> 40,960, notes 655,360 -> 1,310,720 —
+   and a number this page had memorised became a confident lie. What it must
+   do is explain the wall and what happens to it, not recite a figure. */
+check('it explains the wall without quoting a number from memory',
+  /released after 7 days/.test(capMsg) && !/50,960/.test(capMsg), capMsg.slice(0, 80));
 check('and says it is not this name', /not about your name/.test(capMsg));
 check('and says it is not just this site', /on any site/.test(capMsg));
 check('and says when it clears', /about a week/.test(capMsg) && /7 days/.test(capMsg));

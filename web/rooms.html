@@ -1250,14 +1250,19 @@ function render(m){
 function plainly(d){
   const t=String(d?.error||d?.body||"").trim();
   const n=(re)=>{ const m=t.match(re); return m ? Number(m[1]).toLocaleString() : null; };
+  const fmt=(v)=>(typeof v==="number" && v>0) ? v.toLocaleString() : null;
 
+  /* The number comes from the refusal itself, or from the counters read a
+     moment ago, and otherwise is left out. MEASURED today: Technocore raised
+     its ceilings — rooms 20,480 -> 40,960, notes 655,360 -> 1,310,720 — and a
+     figure this page had memorised would now be a confident lie. */
   if(/room limit reached/i.test(t)){
-    const cap=n(/\((\d+) is the cap/) || "20,480";
-    return `Technocore is holding all ${cap} rooms it has space for, so a new one cannot be started right now. Rooms that already exist carry on working. Space frees up as unused rooms are reclaimed — a week for an idle room, a day for one that never got past its first message.`;
+    const cap=n(/\((\d+) is the cap/) || fmt(capCache?.rooms?.capacity);
+    return `Technocore is holding ${cap?`all ${cap} rooms`:"every room"} it has space for, so a new one cannot be started right now. Rooms that already exist carry on working. Space frees up as unused rooms are reclaimed — a week for an idle room, a day for one that never got past its first message.`;
   }
   if(/note limit reached/i.test(t)){
-    const cap=n(/\((\d+) is the cap/) || "655,360";
-    return `Technocore keeps ${cap} permanent records and every one of them is taken, so it cannot store a new one right now. This is the whole network, not your key. Records are released after 7 days without a write.`;
+    const cap=n(/\((\d+) is the cap/) || fmt(capCache?.notes?.capacity);
+    return `Technocore's store of permanent records is full${cap?` — all ${cap} of them`:""}, so it cannot take a new one right now. This is the whole network, not your key. Records are released after 7 days without a write.`;
   }
   if(/rooms?[ _-]?per[ _-]?day|new_rooms/i.test(t))
     return "This site has opened all the new rooms Technocore allows it today. The allowance resets at midnight UTC.";
@@ -2076,11 +2081,14 @@ addEventListener("keydown",(e)=>{ if(e.key==="Escape" && !$("tellScrim").hidden)
 
    All three are readable in advance: /api/capacity carries the counters
    Technocore publishes beside its room list. */
-const showRoomsFull = (left) => capNotice(
-  "Technocore has no room left for new rooms.",
-  "The network holds up to 20,480 rooms at once and it is at that number, so a room that does not already exist cannot be started right now — by anybody, on any site. Rooms that already exist carry on as normal, and you can post in one of those.",
-  "Worth trying again in a few hours",
-  "Space comes back on its own: an idle room is reclaimed after 7 days, and a room still on its first message after 24 hours." + (left==null?"":` Right now: ${left} free.`));
+const showRoomsFull = (left) => {
+  const cap=capCache?.rooms?.capacity;
+  return capNotice(
+    "Technocore has no room left for new rooms.",
+    `The network holds ${cap?cap.toLocaleString()+" rooms":"only so many rooms"} at once and it is at that number, so a room that does not already exist cannot be started right now — by anybody, on any site. Rooms that already exist carry on as normal, and you can post in one of those.`,
+    "Worth trying again in a few hours",
+    "Space comes back on its own: an idle room is reclaimed after 7 days, and a room still on its first message after 24 hours." + (left==null?"":` Right now: ${left} free.`));
+};
 
 const showNotesFull = () => capNotice(
   "Technocore cannot take new room claims right now.",
