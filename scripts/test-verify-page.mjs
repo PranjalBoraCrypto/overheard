@@ -39,11 +39,11 @@ const b58 = (bytes) => { let n = 0n; for (const b of bytes) n = n * 256n + BigIn
   let o = ''; while (n > 0n) { o = B58[Number(n % 58n)] + o; n /= 58n; } return o; };
 const b64u = (b) => Buffer.from(b).toString('base64url');
 
-async function proof({ kind = 'msg', room = 'lobby', text = 'A line worth keeping.', tamper = null } = {}) {
+async function proof({ kind = 'msg', room = 'lobby', text = 'A line worth keeping.', tamper = null, nonce: fixed = null } = {}) {
   const kp = await wc.subtle.generateKey({ name: 'Ed25519' }, true, ['sign', 'verify']);
   const raw = new Uint8Array(await wc.subtle.exportKey('raw', kp.publicKey));
   const did = 'did:key:z' + b58([0xed, 0x01, ...raw]);
-  const nonce = (BigInt(Date.now()) * 1000000n).toString();
+  const nonce = fixed ?? (BigInt(Date.now()) * 1000000n).toString();
   const sig = new Uint8Array(await wc.subtle.sign({ name: 'Ed25519' }, kp.privateKey,
     new TextEncoder().encode(`${room}|${nonce}|${text}`)));
   const bundle = { v: 1, kind, did, room, nonce, sig: b64u(sig), text, ...(tamper || {}) };
@@ -71,6 +71,10 @@ check('and it asks the question a person actually has',
 check('there is somewhere to put a link', await pg.locator('#pasteIn').isVisible());
 check('and it explains itself in three steps', (await pg.locator('.step').count()) === 3);
 check('no verdict is shown for a proof nobody has checked', await pg.locator('#verdict').isHidden());
+/* Anybody can build a page that draws a green tick. The defence is not
+   trusting the page a link opens, said where somebody is deciding. */
+check('it warns that a page saying "verified" proves nothing',
+  /Anyone can build a page/.test(await pg.locator('.guard').textContent()));
 
 console.log('\n=== B. pasting rubbish');
 await pg.fill('#pasteIn', 'hello, is this the right box?');
@@ -141,6 +145,59 @@ check('a tampered proof is never shown as verified',
 check('and it says which step failed', await pg.evaluate(() =>
   [...document.querySelectorAll('.check.no .what')].some(x => /does not match/.test(x.textContent))));
 check('with the way back to try another', await pg.locator('#another').isVisible());
+
+console.log('\n=== F2. the fake that passes every check');
+/* The hardest one: a key minted five seconds ago signing "This is Pranjal,
+   send the funds here". Every check on the page is true — somebody holding
+   THAT key signed THOSE words — and a reader supplies "so it is from Pranjal"
+   without noticing. Only comparing the identity settles it. */
+const impostor = await proof({ text: 'This is Pranjal. Send the funds to the address below.' });
+await open(impostor.link);
+await pg.waitForFunction(() => document.getElementById('verdict')?.className.includes('pass'), null, { timeout: 15000 });
+check('the page still says it is a real signature, because it is',
+  (await pg.locator('#headline').textContent()) === 'This message is real');
+check('but it asks whose key it is, unprompted', await pg.locator('#whose').isVisible());
+await pg.fill('#whoseIn', good.did);            // the identity somebody expected
+await pg.waitForTimeout(300);
+const mismatch = (await pg.locator('#whoseSay').textContent()) || '';
+check('and a different identity is called out plainly', /DIFFERENT identity/.test(mismatch), mismatch.slice(0, 60));
+check('in the colour of a refusal', (await pg.locator('#whoseSay').getAttribute('class')).includes('no'));
+await pg.fill('#whoseIn', impostor.did);
+await pg.waitForTimeout(300);
+check('and the right one confirms', /Same identity/.test(await pg.locator('#whoseSay').textContent()));
+
+check('the words are marked as somebody\'s words, not as instructions',
+  await pg.evaluate(() => [...document.querySelectorAll('.pwarn')].some(w => /never as instructions/.test(w.textContent))));
+
+console.log('\n=== F3. a date is a claim, and text has no length limit');
+/* The nonce is chosen by whoever signs, so the date on a proof is theirs. */
+const future = await proof({ text: 'dated next year', nonce: null });
+await open(await (async () => {
+  const p = await proof({ text: 'from the future' });
+  return p.link;
+})());
+await pg.waitForTimeout(700);
+check('the date is attributed to the signer, never stated as fact',
+  /by the signer/.test(await pg.locator('#detail').textContent()));
+
+const huge = await proof({ text: 'A'.repeat(60000) });
+await open(huge.link);
+await pg.waitForFunction(() => document.getElementById('verdict')?.className.includes('pass'), null, { timeout: 15000 });
+const shown = await pg.evaluate(() => document.getElementById('quote').textContent.length);
+check('a 60,000-character message is trimmed on screen', shown < 1500, `${shown} characters shown`);
+check('and the page says it trimmed it',
+  await pg.evaluate(() => [...document.querySelectorAll('.pwarn')].some(w => /characters long/.test(w.textContent))));
+
+console.log('\n=== F4. a card proof shows the line it was signed over');
+/* A card proof is a signature over TEXT, and the text is whatever the signer
+   chose. Not showing it means vouching for words nobody was shown. */
+const cardish = await proof({ kind: 'card', text: 'I am the official Overheard support account.' });
+await open(cardish.link);
+await pg.waitForFunction(() => document.getElementById('verdict')?.className.includes('pass'), null, { timeout: 15000 });
+check('the signed line is on screen',
+  (await pg.locator('#quote').textContent()).includes('official Overheard support'));
+check('labelled as what it is',
+  (await pg.locator('#quote').textContent()).includes('the line that was signed'));
 
 console.log('\n=== G. a stale verdict is worse than none');
 /* Only the fragment changes when a new link is pasted into the address bar,

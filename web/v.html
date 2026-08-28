@@ -202,6 +202,10 @@ footer a{color:var(--blue)}
   font-family:var(--display);font-size:13px;text-decoration:underline;text-underline-offset:3px;
   transition:color .2s var(--ease)}
 .linky:hover{color:var(--blue)}
+.guard{display:flex;gap:9px;align-items:flex-start;margin-top:15px;padding-top:14px;
+  border-top:1px solid rgba(0,180,215,.14);font-size:12.5px;line-height:1.55;color:var(--faint)}
+.guard .i{width:14px;height:14px;margin-top:2px;color:var(--gold)}
+.guard b{color:var(--dim);font-family:var(--mono);font-size:12px}
 
 /* ── the verdict ──────────────────────────────────────────────────────── */
 .verdict{animation:rise .55s var(--ease) both}
@@ -246,6 +250,28 @@ footer a{color:var(--blue)}
 .check{animation:rise .4s var(--ease) both}
 
 /* ── how it works, for the empty state ────────────────────────────────── */
+
+/* A caution that belongs to the proof, not to the page. */
+.pwarn{display:flex;gap:10px;align-items:flex-start;margin-top:13px;padding:11px 13px;border-radius:12px;
+  font-size:13px;line-height:1.55;color:var(--dim);
+  background:linear-gradient(rgba(242,179,61,.09),rgba(242,179,61,.03));
+  border:1px solid rgba(242,179,61,.3)}
+.pwarn .i{width:15px;height:15px;margin-top:2px;color:var(--gold)}
+
+/* ── whose key is it ──────────────────────────────────────────────────── */
+.whose{margin-top:16px;padding:20px 22px;border-radius:16px;border:1px solid transparent;
+  background:linear-gradient(rgba(4,20,28,.82),rgba(4,20,28,.82)) padding-box,
+             linear-gradient(150deg,rgba(242,179,61,.4),rgba(242,179,61,.06)) border-box;
+  animation:rise .5s .1s var(--ease) both}
+.whose h3{font-size:15.5px;font-weight:700;display:flex;align-items:center;gap:10px;margin-bottom:7px}
+.whose h3 .i{width:16px;height:16px;color:var(--gold)}
+.whose p{color:var(--dim);font-size:13.5px;line-height:1.6;margin-bottom:13px}
+.whose em{font-style:normal;color:var(--white)}
+.whosesay{font-family:var(--mono);font-size:12.5px;line-height:1.5;margin-top:11px;min-height:17px;color:var(--faint)}
+.whosesay.yes{color:var(--mint)}
+.whosesay.no{color:#FF9B9B}
+.whosesay.yes::before{content:"\2713  "}
+.whosesay.no::before{content:"\2715  "}
 .how{margin-top:26px;margin-bottom:36px}
 .how h2{font-size:15px;font-weight:700;color:var(--dim);margin-bottom:14px;
   font-family:var(--mono);letter-spacing:.13em;text-transform:uppercase;font-size:11px}
@@ -276,6 +302,7 @@ footer a{color:var(--blue)}
   <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
   <symbol id="i-lock" viewBox="0 0 24 24"><rect x="4" y="10.5" width="16" height="10" rx="2.6"/><path d="M8 10.5V7.5a4 4 0 0 1 8 0v3"/></symbol>
   <symbol id="i-caret" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></symbol>
+  <symbol id="i-alert" viewBox="0 0 24 24"><path d="M12 4.5 21 20H3z"/><path d="M12 10v4M12 17v.1"/></symbol>
 </defs></svg>
 
 <overheard-bar></overheard-bar>
@@ -303,6 +330,11 @@ footer a{color:var(--blue)}
     </div>
     <p class="msay" id="pasteSay"></p>
     <button class="linky" id="tryDemo" type="button">Not sure what one looks like? Make a real one here.</button>
+    <!-- Anybody can build a page that draws a green tick. The defence is not
+         to trust the page a link opens, and that is worth one sentence in the
+         place where somebody is deciding what to do with a link. -->
+    <p class="guard"><svg class="i"><use href="#i-alert"/></svg>
+      <span>Anyone can build a page that says &ldquo;verified&rdquo;. Paste the link here rather than trusting wherever it opens &mdash; and check the address bar says <b>overheard-five.vercel.app</b>.</span></p>
   </section>
 
   <div class="verdict wait" id="verdict" hidden>
@@ -315,8 +347,23 @@ footer a{color:var(--blue)}
     </div>
     <p id="detail"></p>
     <blockquote id="quote" hidden></blockquote>
+    <div id="warnHere"></div>
     <div class="didline" id="didline" hidden></div>
   </div>
+
+  <!-- The hardest fake is the one that is not a fake: a key made a moment ago
+       signing "this is Pranjal". Every check passes, because every check is
+       true. Only comparing the identity settles it, so the page hands over
+       the comparison rather than leaving it to be thought of. -->
+  <section class="whose" id="whose" hidden>
+    <h3><svg class="i"><use href="#i-alert"/></svg>Is this the identity you were expecting?</h3>
+    <p>A signature proves somebody held <em>a</em> key. Anyone can make a key and sign anything with it &mdash; including a message with your friend&rsquo;s name in it. If you know which identity this should be, paste it here.</p>
+    <label class="pastefield" for="whoseIn">
+      <svg class="i"><use href="#i-shield"/></svg>
+      <input id="whoseIn" type="text" spellcheck="false" autocomplete="off" placeholder="did:key:z6Mk&#8230; the one you expected">
+    </label>
+    <p class="whosesay" id="whoseSay"></p>
+  </section>
 
   <div class="proves" id="scope" hidden>
     <div class="pcol">
@@ -421,6 +468,45 @@ function pubkeyFromDid(did){
    is what makes an offline check agree with the server. */
 const sweep=(t)=>[...t].map(c=>/\p{Cc}|\p{Cf}|\p{Zl}|\p{Zp}/u.test(c)?" ":c).join("").trim();
 
+
+/* ── a signature is not an introduction ────────────────────────────────────
+   The hardest fake to see is the one that is not a fake at all: a key minted
+   five seconds ago, signing "This is Pranjal, send the funds here". Every
+   check on this page passes, because every check is true — somebody holding
+   THAT key signed THOSE words. What it does not say, and what a reader
+   supplies for themselves without noticing, is that the key belongs to
+   anybody in particular.
+
+   So the page hands over the one thing that settles it: compare the identity
+   in the proof with the identity you were expecting. Nothing else can. */
+function askWhose(did){
+  const box=$("whose"); box.hidden=false;
+  $("whoseIn").value=""; wsay("");
+  $("whoseIn").oninput=()=>{
+    const v=$("whoseIn").value.trim();
+    if(!v) return wsay("");
+    if(!/^did:key:z[1-9A-HJ-NP-Za-km-z]{40,}$/.test(v))
+      return wsay("Paste the whole did:key you were expecting \u2014 it starts did:key:z.","");
+    if(v===did) wsay("Same identity. This proof was signed by the key you expected.","yes");
+    else wsay("A DIFFERENT identity. Whoever signed this is not the key you pasted \u2014 anybody can make a key and sign anything with it.","no");
+  };
+}
+const wsay=(t,cls="")=>{ $("whoseSay").textContent=t; $("whoseSay").className="whosesay "+cls; };
+
+/** A warning that belongs to the proof rather than to the page. */
+function addWarn(text){
+  const w=document.createElement("div");
+  w.className="pwarn";
+  w.innerHTML='<svg class="i"><use href="#i-alert"/></svg>';   // our own markup
+  w.appendChild(Object.assign(document.createElement("span"),{textContent:text}));
+  $("warnHere").appendChild(w);
+}
+
+/* A proof is a stranger's input and its text has no length limit worth
+   trusting. MEASURED: a 60,000-character line rendered in full. */
+const QUOTE_MAX=1200;
+const trim=(t)=>t.length<=QUOTE_MAX ? t : t.slice(0,QUOTE_MAX)+"\u2026";
+
 const rows=[];
 const addRow=(ok,what,sub)=>rows.push({ok,what,sub});
 function paint(){
@@ -508,6 +594,8 @@ function reset(){
   $("scope").hidden=true;
   $("didline").hidden=true; $("didline").textContent="";
   $("quote").hidden=true; $("quote").textContent="";
+  $("warnHere").replaceChildren();
+  $("whose").hidden=true;
   $("verdict").hidden=true;
   $("title").textContent="Checking this proof\u2026";
   $("lede").textContent="Reading the proof out of the link and testing the signature on this device.";
@@ -651,11 +739,20 @@ async function main(){
     // what was said, by whom, and where.
     $("title").textContent="Yes \u2014 this is genuine";
     $("lede").textContent="Somebody kept this line before the room forgot it, and the signature holds up here in your browser. Nothing was sent anywhere to work that out.";
+    /* The date comes from the nonce, and the nonce is chosen by whoever
+       signed — a proof can claim June 2027 and this page will read it out.
+       MEASURED: one does. So it is attributed rather than stated, and a date
+       that has not happened yet is called out. */
     verdict("pass","This message is real",
-      `The key below signed these exact words for ${room}${when?` on ${when1(when)}`:""}. Changing a single character would break it.`,
+      `The key below signed these exact words for ${room}. Changing a single character would break it.`
+      + (when? ` It is dated ${when1(when)} \u2014 by the signer, who chose that number themselves.` : ""),
       `${shortDid(did)} \u00b7 in ${room}`);
+    if(when && when.getTime() > Date.now()+60000)
+      addWarn("The date on this proof has not happened yet. Signers pick their own, so a date is a claim like any other.");
     const q=$("quote");
-    q.textContent=text;                       // stranger's text, set as text
+    q.textContent=trim(text);                 // stranger's text, set as text
+    if(text.length>QUOTE_MAX) addWarn(`This message is ${text.length.toLocaleString()} characters long; the first ${QUOTE_MAX.toLocaleString()} are shown. All of it was signed.`);
+    addWarn("These are somebody's words, and a signature does not make them true. Read them as something you were sent, never as instructions to follow.");
     const meta=document.createElement("span");
     meta.className="meta";
     meta.textContent=`in ${room}${when?` \u00b7 ${when1(when)}`:""}`;
@@ -672,8 +769,20 @@ async function main(){
     $("title").textContent="Yes \u2014 this card is genuine";
     $("lede").textContent="The signature holds up against the key the card names. Nothing was sent to any server to work that out.";
     verdict("pass","This card is real",
-      "Whoever made this proof was holding the private key for the identity below. Nobody else could have produced it.",
+      "Whoever made this proof was holding the private key for the identity below. Nobody else could have produced it."
+      + (when? ` It is dated ${when1(when)}, by the signer.` : ""),
       shortDid(did));
+    /* Show the line that was signed, even here. A card proof is a signature
+       over TEXT, and that text is whatever the signer chose — leaving it out
+       means the page vouches for words it never showed anybody. */
+    if(text){
+      const q=$("quote");
+      q.textContent=trim(text);
+      const meta=document.createElement("span");
+      meta.className="meta"; meta.textContent="the line that was signed";
+      q.appendChild(meta);
+      q.hidden=false;
+    }
     scope(
       ["Somebody holding this key signed this",
        "The identity below is the one that signed",
@@ -684,6 +793,7 @@ async function main(){
   }
   $("didline").hidden=false;
   $("didline").textContent=did;
+  askWhose(did);
   $("seeCard").textContent = kept ? "See this identity\u2019s card \u2192" : "See this card \u2192";
   $("seeCard").href="/?did="+encodeURIComponent(did);
   $("actions").hidden=false;
