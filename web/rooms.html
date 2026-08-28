@@ -706,7 +706,10 @@ footer a:hover{color:var(--cy-hi)}
       <p class="sub" id="tellBody"></p>
       <span class="when" id="tellWhen" hidden><svg class="i"><use href="#ic-clock"/></svg><span></span></span>
       <p class="fine" id="tellFine" hidden></p>
-      <div class="mrow"><button class="go" id="tellOk" type="button">Got it</button></div>
+      <div class="mrow">
+        <button class="go" id="tellAgain" type="button" hidden>Try again</button>
+        <button class="go" id="tellOk" type="button">Got it</button>
+      </div>
     </div>
   </div>
 
@@ -852,23 +855,35 @@ async function signFor(room,nonce,text){
 
    Every call goes through here and every failure comes back in the same
    shape the callers already handle. */
-async function post(body){
+async function post(body,attempt=0){
   let res;
   try{
     res=await fetch("/api/post",{method:"POST",headers:{"Content-Type":"application/json"},
       body:JSON.stringify(body)});
   }catch{
-    return {ok:false,offline:true,error:"No answer from the network. Check your connection and try again — nothing was sent."};
+    return {ok:false,offline:true,error:"No answer from the network. Check your connection — nothing was sent."};
   }
   const text=await res.text().catch(()=>"");
-  try{ return JSON.parse(text); }
+  let d;
+  try{ d=JSON.parse(text); }
   catch{
     /* Not JSON. Whatever it is, it is not something to put in front of
        somebody — say what it means for them instead. */
-    return {ok:false,error:res.status>=500
-      ? "The network hiccuped and nothing was written. Try again in a moment."
+    d={ok:false,error:res.status>=500
+      ? "The network hiccuped and nothing was written."
       : `The network answered in a way this page could not read (${res.status}).`};
   }
+  /* MEASURED: technocore.chat answers "Service Unavailable" for a few seconds
+     at a time and then carries on. Nobody should be shown a dialog for
+     something that fixes itself before they finish reading it — so a passing
+     fault gets one quiet second attempt, and only what survives that is
+     worth interrupting anybody for. A wall is never retried: it would still
+     be a wall a second later. */
+  if(!d.ok && attempt===0 && retryable(d)){
+    await new Promise(r=>setTimeout(r,1400));
+    return post(body,1);
+  }
+  return d;
 }
 
 /* A line that reports something finished has done its job in a few seconds;
@@ -1248,6 +1263,12 @@ function plainly(d){
     return "This site has opened all the new rooms Technocore allows it today. The allowance resets at midnight UTC.";
   if(/rate limit|429|too many requests/i.test(t))
     return "Technocore is rate-limiting right now. Wait a few seconds and try again.";
+  /* MEASURED while this was reported: technocore.chat was answering writes
+     but its room listing was down, and a bare "Service Unavailable" was being
+     shown to somebody who had just pressed a button — three words that read
+     like a fault in this site. It is not one, and it passes. */
+  if(/service unavailable|bad gateway|gateway time|^50[0-9]\b|\b50[234]\b/i.test(t))
+    return "Technocore is not answering right now. This is at their end, not yours, and it usually passes within a minute.";
   if(/signature does not verify/i.test(t))
     return "Technocore did not accept the signature. Sign out and unlock again — the key in this browser may not be the one this room expects.";
   if(/not allowed|forbidden|403/i.test(t) && /room/i.test(t))
@@ -1257,6 +1278,18 @@ function plainly(d){
   if(!t) return "Technocore refused it and did not say why.";
   return t.length>240 ? t.slice(0,240)+"…" : t;
 }
+
+/** A wall says no and means it. A hiccup says no and does not. Only the
+ *  second is worth offering a second press for — and worth taking one
+ *  automatically, once, before anybody is shown anything at all. */
+function retryable(d){
+  const t=String(d?.error||d?.body||"");
+  if(d?.offline) return true;
+  if(/limit reached|capacity|per[ _-]?day/i.test(t)) return false;   // a wall
+  return /service unavailable|bad gateway|gateway time|rate limit|429|\b50[234]\b/i.test(t)
+      || Number(d?.status)>=500;
+}
+
 
 /* ── did it land? ──────────────────────────────────────────────────────────
    A timeout is not a failed write. The request reached technocore.chat and
@@ -2006,8 +2039,9 @@ function capNotice(title,body,when,fine){
   tellModal(title,body,when,fine);
 }
 
-/** The same words, in front of the page. */
-function tellModal(title,body,when,fine){
+/** The same words, in front of the page. `again` adds the one button that a
+ *  passing fault actually deserves. */
+function tellModal(title,body,when,fine,again){
   $("tellTitle").textContent=title;
   $("tellBody").textContent=body;
   const w=$("tellWhen");
@@ -2016,8 +2050,13 @@ function tellModal(title,body,when,fine){
   const f=$("tellFine");
   f.hidden=!fine;
   if(fine) f.textContent=fine;
+  const go=$("tellAgain");
+  go.hidden=!again;
+  go.onclick = again ? ()=>{ closeTell(); again(); } : null;
+  $("tellOk").textContent = again ? "Not now" : "Got it";
+  $("tellOk").className = again ? "go ghost" : "go";
   $("tellScrim").hidden=false;
-  setTimeout(()=>$("tellOk").focus(),60);
+  setTimeout(()=>(again?go:$("tellOk")).focus(),60);
 }
 const closeTell=()=>{ $("tellScrim").hidden=true; };
 $("tellOk").addEventListener("click",closeTell);
@@ -2218,9 +2257,12 @@ $("claim").addEventListener("click",async()=>{
       }
       else if(!d.ok){
         /* Asked for: the answer belongs in front of the person who pressed
-           the button, not on a line under it. */
+           the button, not on a line under it. And when it is the kind of
+           refusal that passes, the dialog carries the retry rather than
+           making somebody find the button again. */
         tellModal("That room could not be opened.",
-          plainly(d), null, "Nothing was written. The name is still free.");
+          plainly(d), null, "Nothing was written. The name is still free.",
+          retryable(d) ? ()=>$("claim").click() : null);
         ownSay(""); $("claim").disabled=false; return;
       }
     }catch(err){
@@ -2248,7 +2290,8 @@ $("claim").addEventListener("click",async()=>{
     const d = await post({kind:"claim",did:ID.did,room:full,sig,nonce});
     if(!d.ok && refused(d)){ $("claim").disabled=false; return; }
     if(!d.ok){
-      tellModal("That claim was refused.", plainly(d), null, "Nothing was written. The name is still free.");
+      tellModal("That claim was refused.", plainly(d), null, "Nothing was written. The name is still free.",
+        retryable(d) ? ()=>$("claim").click() : null);
       ownSay(""); $("claim").disabled=false; return;
     }
     ownState = { name: full, claimNonce: nonce };

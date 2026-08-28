@@ -27,6 +27,8 @@ let OWNER = 'free';
 let OWNS = [];                       // rooms the archive says this key owns
 let POSTFAIL = null;                 // make the network refuse a message
 let LANDS_LATE = false;              // the write times out but DOES land
+let FLAKY = 0;                       // fail this many message writes, then work
+let TRIES = 0;
 const LATE = [];
 let CAP = { known: true, rooms: { total: 19116, capacity: 20480, left: 1364, full: false },
             notes: { total: 600000, capacity: 655360, left: 55360, full: false } };
@@ -42,6 +44,10 @@ const srv = http.createServer((req, res) => {
       const d = JSON.parse(body || '{}');
       POSTS.push(d);
       if (d.kind === 'claim') return J(CLAIM);
+      if (d.kind === 'message' && FLAKY > 0) {
+        TRIES++; FLAKY--;
+        return J({ ok: false, status: 503, body: 'Service Unavailable' });
+      }
       if (d.kind === 'message' && POSTFAIL) return J(POSTFAIL);
       if (d.kind === 'message' && LANDS_LATE) { LATE.push(d); return J({ ok: false, status: 504, unknown: true,
         body: 'technocore.chat did not answer in time — it may still have gone through' }); }
@@ -499,6 +505,40 @@ check('the real reason, with the real number', /20,480 rooms/.test(plain), plain
 check('and none of the developer half', !/GET \/rooms|cap,/.test(plain));
 POSTFAIL = null;
 await pg.fill('#say', '');
+
+console.log('\n=== H4d. a fault that passes is not a dialog');
+/* REPORTED, with a screenshot: "Service Unavailable" in a pop-up, three words
+   that read like a fault in this site. MEASURED at the time: technocore.chat
+   was answering writes but its room listing was down, and both came and went
+   within the minute. */
+await go();
+FLAKY = 1; TRIES = 0;
+await pg.click('#kOpen');
+await pg.fill('#rn', 'brand-new-flaky');
+await pg.waitForFunction(() => /available/.test(document.getElementById('ownsay').textContent), null, { timeout: 9000 });
+await pg.click('#claim');
+await pg.waitForFunction(() => !document.getElementById('owndone').hidden || !document.getElementById('tellScrim').hidden,
+  null, { timeout: 20000 });
+check('one passing fault is absorbed, not shown', await pg.locator('#tellScrim').isHidden(),
+  `${TRIES} upstream attempt(s) refused`);
+check('and the room is opened', await pg.locator('#owndone').isVisible());
+
+/* One that does NOT pass gets the dialog — in words, with the second press
+   on it rather than somewhere behind it. */
+FLAKY = 9; TRIES = 0;
+await pg.fill('#rn', 'brand-new-down');
+await pg.waitForFunction(() => /available/.test(document.getElementById('ownsay').textContent), null, { timeout: 9000 });
+await pg.click('#claim');
+await pg.waitForFunction(() => !document.getElementById('tellScrim').hidden, null, { timeout: 25000 });
+const down = (await pg.locator('#tellBody').textContent()) || '';
+console.log('   ', down.slice(0, 110));
+check('it says whose fault it is not', /at their end, not yours/.test(down), down.slice(0, 60));
+check('and never shows the raw three words', !/^Service Unavailable/.test(down.trim()));
+check('the dialog carries the retry', await pg.locator('#tellAgain').isVisible());
+check('and the other button steps back rather than agreeing',
+  (await pg.locator('#tellOk').textContent()) === 'Not now');
+FLAKY = 0;
+await pg.click('#tellOk'); await pg.waitForTimeout(300);
 
 console.log('\n=== H5. the rooms you already have');
 check('no panel at all for somebody with none', await pg.evaluate(() => {
