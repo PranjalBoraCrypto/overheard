@@ -251,6 +251,27 @@ const card = await pg.evaluate(() => {
   return { w: c.width, h: c.height, lit };
 });
 check('it is drawn, not blank', card.lit > 4000, JSON.stringify(card));
+check('and it deals itself in', await pg.locator('#cardwrap.reveal').count() === 1);
+
+/* THE TILT. On the credential card this silently stopped working twice — once
+   to a CSS transition that put the card most of a second behind the cursor,
+   once to an animation with fill:both whose last keyframe outranked the inline
+   style for good. Both were invisible by eye and obvious to a measurement, so
+   it gets measured: move over the card, read the matrix, leave, read it back. */
+await pg.waitForTimeout(1300);                    // let the deal finish
+const box = await pg.locator('#cardwrap').boundingBox();
+await pg.mouse.move(box.x + box.width * 0.9, box.y + box.height * 0.2);
+await pg.waitForTimeout(450);
+const tilted = await pg.evaluate(() => getComputedStyle(document.getElementById('cardwrap')).transform);
+check('the card tilts toward the cursor', tilted !== 'none' && tilted !== 'matrix(1, 0, 0, 1, 0, 0)', tilted.slice(0, 46));
+await pg.mouse.move(box.x + box.width * 0.1, box.y + box.height * 0.8);
+await pg.waitForTimeout(450);
+const other = await pg.evaluate(() => getComputedStyle(document.getElementById('cardwrap')).transform);
+check('and tilts the other way at the other corner', other !== tilted, other.slice(0, 46));
+await pg.mouse.move(10, 10);
+await pg.waitForTimeout(800);
+const flat = await pg.evaluate(() => document.getElementById('cardwrap').style.transform);
+check('and settles flat when the cursor leaves', flat === '', `"${flat}"`);
 check('at a size X will not crop badly', card.w === 1200 && card.h === 630);
 /* The one place a wrong word would travel furthest. */
 check('the card says POINTS, not $FLOP EARNED',
@@ -370,6 +391,21 @@ await play(true);
 await pg.waitForSelector('#end:not([hidden])', { timeout: 10000 });
 const link = await pg.evaluate(() => document.querySelector('#signedBox a')?.href || '');
 check('the card carries a proof link', /\/v#b=/.test(link), link.slice(0, 48) + '…');
+/* The proof link is one unbroken 700-character string. It broke out of its
+   panel and gave the whole page a sideways scrollbar, because a flex item is
+   as wide as its content unless it is told min-width:0. */
+const wide = await pg.evaluate(() => [document.documentElement.scrollWidth, document.documentElement.clientWidth]);
+check('and does not push the page sideways', wide[0] <= wide[1], wide.join('/'));
+check('it is kept to one line inside its box', await pg.evaluate(() => {
+  const a = document.querySelector('#signedBox a'), p = document.querySelector('.done');
+  return a.getBoundingClientRect().right <= p.getBoundingClientRect().right + 1;
+}));
+/* A gap, so the signature reads as a note about the card rather than part of it. */
+check('with air between it and the card', await pg.evaluate(() => {
+  const c = document.querySelector('.stagewrap').getBoundingClientRect();
+  const s = document.querySelector('#signedBox').getBoundingClientRect();
+  return Math.round(s.top - c.bottom);
+}) >= 18);
 
 /* The claim has to survive the page that checks claims. Anything less and the
    "signed" badge is decoration. */
@@ -398,12 +434,25 @@ check('and a signed run posts the proof, not a screenshot', /\/v#b=/.test(post))
 check('it fits in a post', post.replace(/https?:\/\/\S+/, 'x'.repeat(23)).length <= 280,
   `${post.replace(/https?:\/\/\S+/, 'x'.repeat(23)).length} chars`);
 
-console.log('\n=== I. nowhere on the page is a token handed out');
+console.log('\n=== I. the sources are named, not alluded to');
+const srcs = await pg.evaluate(() => [...document.querySelectorAll('.srccard')].map(a => ({
+  href: a.getAttribute('href'), text: a.textContent.replace(/\s+/g, ' ').trim(),
+})));
+console.log('   ', JSON.stringify(srcs.map(x => x.href)));
+check('both documents are linked, not buried in a sentence', srcs.length === 2);
+check('the teaser is one of them', srcs.some(x => /flop\.finance\/teaser/.test(x.href)));
+check('and technocore the other', srcs.some(x => /technocore\.chat/.test(x.href)));
+check('each says what it is', srcs.every(x => x.text.length > 60));
+check('the draft status travels with the link', /0\.1|draft/i.test(srcs.map(x => x.text).join(' ')));
+check('and the page still says the score goes nowhere',
+  /never leaves this browser/i.test(await pg.locator('.srcnote').textContent()));
+
+console.log('\n=== J. nowhere on the page is a token handed out');
 const pageText = await pg.evaluate(() => document.body.innerText);
 check('no "$FLOP earned" anywhere in the run or the end',
   !/\$?FLOP\s+earned/i.test(pageText) && !/earned.{0,12}\$FLOP/i.test(pageText));
 
-console.log('\n=== J. phone');
+console.log('\n=== K. phone');
 const ph = await ctx.newPage(); ph.on('pageerror', e => errs.push(e.message));
 await ph.setViewportSize({ width: 390, height: 844 });
 await ph.goto('http://localhost:8909/play'); await ph.waitForTimeout(700);

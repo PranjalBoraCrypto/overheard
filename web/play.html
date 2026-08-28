@@ -387,12 +387,46 @@ h1{font-weight:800;font-size:clamp(32px,5.4vw,48px);letter-spacing:-.035em;line-
 .done h2{font-size:clamp(26px,5vw,36px);font-weight:800;letter-spacing:-.03em;margin:8px 0 4px}
 .tally{font-family:var(--mono);font-size:15px;color:var(--cy-hi);margin-bottom:6px}
 .done p{color:var(--dim);font-size:15px;max-width:52ch;margin:10px auto 0}
-canvas.share{width:100%;max-width:560px;border-radius:16px;margin:22px auto 0;display:block;
-  border:1px solid rgba(0,180,215,.3);box-shadow:0 30px 70px -40px rgba(0,180,215,.8)}
+/* ── the card, on a stage ─────────────────────────────────────────────────
+   Ported from the credential card, including the two mistakes it already
+   paid for. NO CSS TRANSITION ON THIS TRANSFORM: with one, a handler that
+   sets a new transform every pointer move restarts the ease every move and
+   the card sits behind the cursor; without one, entering applies the full
+   tilt in a single frame, which at the edges is a visible bump. The ease is
+   integrated in JS instead — arriving ramps, following tracks, leaving
+   decays, all from the same three lines. */
+.stagewrap{perspective:1500px;margin:24px auto 4px;max-width:560px}
+.cardwrap{position:relative;border-radius:16px;overflow:hidden;will-change:transform}
+/* BACKWARDS, NOT BOTH. `both` keeps the deal's last keyframe applied for
+   good, and an animation's value beats an inline style — so the pointer tilt
+   would silently never work again once the card had been dealt in. */
+.cardwrap.reveal{animation:deal 1.05s var(--ease) backwards}
+@keyframes deal{0%{opacity:0;transform:rotateX(24deg) translateY(54px) scale(.93)}100%{opacity:1;transform:none}}
+canvas.share{width:100%;border-radius:16px;display:block;
+  border:1px solid rgba(0,180,215,.3);
+  box-shadow:0 40px 90px -40px rgba(0,0,0,.95),0 0 80px -34px rgba(0,180,215,.75)}
+/* A gradient of fixed shape on an oversized box that is TRANSLATED — one
+   raster, and the per-frame work is a composited transform rather than a
+   560px radial gradient repainted on every move. */
+.sheen{position:absolute;left:-50%;top:-50%;width:200%;height:200%;pointer-events:none;
+  mix-blend-mode:overlay;opacity:0;transition:opacity .4s;
+  background:radial-gradient(420px circle at 50% 50%,rgba(95,235,255,.5),rgba(0,180,215,.18) 40%,transparent 70%);
+  transform:translate3d(var(--sx,0px),var(--sy,0px),0);will-change:transform}
+.cardwrap:hover .sheen{opacity:1}
+.glare{position:absolute;inset:0;border-radius:16px;pointer-events:none;
+  background:linear-gradient(100deg,transparent 40%,rgba(255,255,255,.16) 48%,transparent 58%);
+  transform:translateX(-100%)}
+.cardwrap.reveal .glare{animation:sweep 1.5s var(--ease) .55s both}
+@keyframes sweep{to{transform:translateX(100%)}}
 canvas.confetti{position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:60}
 .endrow{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:20px}
-.signed{margin-top:16px;padding:13px 15px;border-radius:13px;font-size:13px;line-height:1.6;color:var(--faint);
+.signed{margin-top:26px;padding:15px 17px;border-radius:13px;font-size:13px;line-height:1.6;color:var(--faint);
   background:rgba(0,180,215,.05);border:1px solid rgba(0,180,215,.2);text-align:left}
+/* A flex item is as wide as its content unless told otherwise, so the proof
+   link — one unbroken 700-character string — pushed the panel out past the
+   page and gave the whole document a horizontal scrollbar. min-width:0 is the
+   whole fix; the ellipsis rule below could never fire without it. */
+.signed>div{flex:1 1 auto;min-width:0}
 .signed b{color:var(--cy-hi)}
 .signed .lk{display:block;margin-top:9px;font-family:var(--mono);font-size:11px;color:var(--cy);
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
@@ -413,8 +447,16 @@ canvas.confetti{position:fixed;inset:0;width:100%;height:100%;pointer-events:non
 .miss .ans{display:flex;gap:8px;align-items:flex-start;margin:7px 0;font-size:13.8px;
   line-height:1.5;color:var(--good)}
 .miss .ans .i{width:14px;height:14px;margin-top:4px;stroke-width:2.6}
-.miss li{transition:border-color .25s var(--ease)}
-.miss li:hover{border-color:rgba(255,107,107,.4)}
+.miss li{position:relative;overflow:hidden;
+  transition:border-color .28s var(--ease),transform .28s var(--ease),box-shadow .28s var(--ease)}
+.miss li::after{content:"";position:absolute;inset:0;opacity:0;transition:opacity .3s;pointer-events:none;
+  background:radial-gradient(220px circle at var(--bx,50%) var(--by,50%),rgba(255,107,107,.14),transparent 65%)}
+.miss li:hover{border-color:rgba(255,107,107,.45);transform:translateY(-3px);
+  box-shadow:0 20px 40px -26px rgba(255,107,107,.8)}
+.miss li:hover::after{opacity:1}
+.miss li:hover .mi{transform:rotate(-8deg) scale(1.08)}
+.miss .mi{transition:transform .28s var(--ease)}
+.miss li>div{position:relative;z-index:1}
 .miss .mwhy{color:var(--faint);font-size:13px;line-height:1.55}
 
 /* the run, at a glance, before any words about it */
@@ -442,6 +484,36 @@ canvas.confetti{position:fixed;inset:0;width:100%;height:100%;pointer-events:non
 .prov summary::after,.signed summary::after{content:"\25B8";display:inline-block;transition:transform .2s var(--ease)}
 .prov details[open] summary::after,.signed details[open] summary::after{transform:rotate(90deg)}
 .prov details span,.signed details span{display:block;margin-top:7px}
+
+/* ── where it all came from ───────────────────────────────────────────────
+   This was a grey sentence with the sources buried inside it. Two documents
+   hold up everything on this page; they get named, linked, and described,
+   because "sourced" is a claim and a link is the evidence for it. */
+.sources{margin-top:26px;padding:22px 24px;text-align:left}
+@media (max-width:620px){.sources{padding:19px 17px}}
+.shead{display:flex;gap:13px;align-items:flex-start}
+.shead .sic{width:38px;height:38px;flex:none;border-radius:13px;display:grid;place-items:center;
+  background:rgba(242,179,61,.12);color:var(--warn)}
+.shead .sic .i{width:19px;height:19px}
+.shead b{display:block;color:var(--txt);font-size:16px;font-weight:700;letter-spacing:-.015em}
+.shead p{color:var(--dim);font-size:14px;line-height:1.6;margin-top:4px}
+.srcgrid{display:grid;grid-template-columns:1fr 1fr;gap:11px;margin-top:16px}
+@media (max-width:620px){.srcgrid{grid-template-columns:1fr}}
+.srccard{display:block;padding:15px 16px;border-radius:14px;text-decoration:none;position:relative;overflow:hidden;
+  background:rgba(0,20,26,.55);border:1px solid rgba(0,180,215,.18);
+  transition:transform .26s var(--ease),border-color .26s var(--ease),box-shadow .26s var(--ease)}
+.srccard:hover{transform:translateY(-3px);border-color:rgba(95,235,255,.5);
+  box-shadow:0 20px 40px -26px rgba(0,180,215,.9)}
+.srccard .i{width:18px;height:18px;color:var(--cy-hi);display:block;margin-bottom:9px}
+.srccard .nm{display:flex;align-items:center;gap:7px;font-family:var(--mono);font-size:13.5px;
+  color:var(--cy-hi);font-weight:600;word-break:break-word}
+.srccard .nm svg{width:13px;height:13px;transition:transform .26s var(--ease)}
+.srccard:hover .nm svg{transform:translate(3px,-3px)}
+.srccard .what{display:block;margin-top:6px;font-size:13px;line-height:1.55;color:var(--faint)}
+.srcnote{display:flex;gap:10px;align-items:flex-start;margin-top:14px;padding-top:13px;
+  border-top:1px dashed rgba(0,180,215,.16);font-size:12.8px;line-height:1.6;color:var(--faint)}
+.srcnote .i{width:15px;height:15px;margin-top:2px;color:var(--good);flex:none}
+.srcnote b{color:var(--dim)}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}
   .blk{opacity:1;transform:none}}
 </style>
@@ -471,6 +543,7 @@ canvas.confetti{position:fixed;inset:0;width:100%;height:100%;pointer-events:non
   <symbol id="i-user" viewBox="0 0 24 24"><circle cx="12" cy="8.4" r="3.7"/><path d="M4.8 20a7.2 7.2 0 0 1 14.4 0"/></symbol>
   <symbol id="i-warn" viewBox="0 0 24 24"><path d="M12 4.2 21 19.5H3z"/><path d="M12 10v4M12 17v.1"/></symbol>
   <symbol id="i-play" viewBox="0 0 24 24"><path d="M7 4.5 19 12 7 19.5z"/></symbol>
+  <symbol id="i-out" viewBox="0 0 24 24"><path d="M14 4h6v6"/><path d="M20 4 11.5 12.5"/><path d="M18 14.5V19a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h4.5"/></symbol>
 </defs></svg>
 
 <overheard-bar></overheard-bar>
@@ -668,7 +741,13 @@ canvas.confetti{position:fixed;inset:0;width:100%;height:100%;pointer-events:non
       <div class="tally" id="tally"></div>
       <div class="endpips" id="endPips" aria-hidden="true"></div>
       <p id="endBlurb"></p>
-      <canvas class="share" id="card" width="1200" height="630" aria-label="Your Proof of Learning card"></canvas>
+      <div class="stagewrap">
+        <div class="cardwrap" id="cardwrap">
+          <canvas class="share" id="card" width="1200" height="630" aria-label="Your Proof of Learning card"></canvas>
+          <div class="sheen" aria-hidden="true"></div>
+          <div class="glare" aria-hidden="true"></div>
+        </div>
+      </div>
       <div class="signed" id="signedBox" hidden></div>
       <div class="endrow">
         <button class="go" id="post" type="button"><svg class="i"><use href="#i-share"/></svg>Post on X</button>
@@ -678,12 +757,29 @@ canvas.confetti{position:fixed;inset:0;width:100%;height:100%;pointer-events:non
       </div>
       <div class="miss" id="missed" hidden></div>
     </div>
-    <div class="prov"><svg class="i"><use href="#i-info"/></svg>
-      <div><b>Your score is yours.</b> Nothing is sent anywhere unless you share it.
-        <details><summary>Where all of this came from</summary>
-          <span>Flop&rsquo;s own draft teaser and Technocore&rsquo;s published spec, cited on every gate. Overheard is independent and not affiliated with Flop Labs.</span>
-        </details>
-      </div></div>
+    <div class="panel sources">
+      <div class="shead">
+        <span class="sic"><svg class="i"><use href="#i-info"/></svg></span>
+        <div>
+          <b>Everything here came from two public documents</b>
+          <p>Both are linked below and cited on every gate. Read them yourself &mdash; that is the point.</p>
+        </div>
+      </div>
+      <div class="srcgrid">
+        <a class="srccard" href="https://flop.finance/teaser" target="_blank" rel="noopener noreferrer">
+          <svg class="i"><use href="#i-book"/></svg>
+          <span class="nm">flop.finance/teaser<svg class="i"><use href="#i-out"/></svg></span>
+          <span class="what">Flop&rsquo;s own teaser. Marked <b>version 0.1, draft</b> &mdash; every figure in the run comes from here, and it says its figures are provisional.</span>
+        </a>
+        <a class="srccard" href="https://technocore.chat" target="_blank" rel="noopener noreferrer">
+          <svg class="i"><use href="#i-chip"/></svg>
+          <span class="nm">technocore.chat<svg class="i"><use href="#i-out"/></svg></span>
+          <span class="what">The open chat network Flop Labs publishes. It is what the signature on your card is made for.</span>
+        </a>
+      </div>
+      <div class="srcnote"><svg class="i"><use href="#i-seal"/></svg>
+        <span><b>Your score never leaves this browser.</b> It is not posted, counted or sent anywhere &mdash; it travels only if you share the card or the link yourself. Overheard is independent and not affiliated with Flop Labs.</span></div>
+    </div>
   </section>
 
   <overheard-foot></overheard-foot>
@@ -1310,6 +1406,13 @@ async function finish(){
   window.__setCorrect=(n)=>{ correct=Math.max(0,Math.min(GATES.length,n|0)); drawCard(); };
   await sign();
   drawCard();
+  /* Retrigger the deal on a re-run: removing the class, forcing a reflow and
+     putting it back is the only way to replay a CSS animation on an element
+     that never left the document. */
+  if(!calm()){
+    const w=$("cardwrap");
+    w.classList.remove("reveal"); void w.offsetWidth; w.classList.add("reveal");
+  }
   if(!calm() && correct>=8) celebrate();
   $("end").scrollIntoView({behavior:calm()?"auto":"smooth",block:"start"});
 }
@@ -1552,6 +1655,72 @@ $("post").addEventListener("click",()=>{
     PROOF ? PROOF.link : `${location.origin}/play`,
   ];
   open("https://x.com/intent/tweet?text="+encodeURIComponent(lines.join("\n")),"_blank","noopener");
+});
+
+/* ── the card in the hand ──────────────────────────────────────────────────
+   Lifted from the credential card, mistakes and all already paid for there.
+   The rect is read on ENTRY rather than per move — reading it in the handler
+   forces a layout on every pointer event for a number that only changes on
+   scroll or resize. TAU is the time constant: below ~50ms the ramp reads as
+   the snap it replaces, above ~120ms it reads as the lag it replaces. */
+const wrap=$("cardwrap");
+const TAU=0.08;
+let tYaw=0,tPit=0,cYaw=0,cPit=0,tSx=0,tSy=0,cSx=0,cSy=0;
+let tiltRaf=0,tiltLast=0,tiltOver=false,wrapRect=null;
+const dropRect=()=>{ wrapRect=null; };
+addEventListener("scroll",dropRect,{passive:true});
+addEventListener("resize",dropRect,{passive:true});
+
+/* The deal owns the transform while it runs, and an animation's value beats
+   an inline style — so a tilt built up underneath it would appear all at once
+   the instant the animation stopped. Hold flat until it is done. */
+const dealing=()=>{
+  try{ return wrap.getAnimations().some(a=>a.animationName==="deal"&&a.playState==="running"); }
+  catch{ return false; }
+};
+
+function tiltStep(now){
+  const dt=Math.min(0.05,(now-tiltLast)/1000||0.0166); tiltLast=now;
+  if(dealing()){ tiltRaf=requestAnimationFrame(tiltStep); return; }
+  const k=1-Math.exp(-dt/TAU);
+  cYaw+=(tYaw-cYaw)*k; cPit+=(tPit-cPit)*k;
+  cSx+=(tSx-cSx)*k;    cSy+=(tSy-cSy)*k;
+  wrap.style.transform=`rotateY(${cYaw.toFixed(3)}deg) rotateX(${cPit.toFixed(3)}deg)`;
+  wrap.style.setProperty("--sx",`${cSx.toFixed(1)}px`);
+  wrap.style.setProperty("--sy",`${cSy.toFixed(1)}px`);
+  /* A twentieth of a degree is not a tilt anybody can see, and holding a rAF
+     open to chase the last thousandth is a frame a minute for nothing. */
+  const settled=Math.abs(tYaw-cYaw)+Math.abs(tPit-cPit)<0.05
+             && Math.abs(tSx-cSx)+Math.abs(tSy-cSy)<0.5;
+  if(tiltOver||!settled) tiltRaf=requestAnimationFrame(tiltStep);
+  else { wrap.style.transform=""; tiltRaf=0; }
+}
+const tiltRun=()=>{ if(!tiltRaf){ tiltLast=performance.now(); tiltRaf=requestAnimationFrame(tiltStep); } };
+
+wrap.addEventListener("pointerenter",()=>{ if(!calm()){ tiltOver=true; tiltRun(); } });
+wrap.addEventListener("pointermove",(e)=>{
+  if(calm()) return;
+  const r=wrapRect||(wrapRect=wrap.getBoundingClientRect());
+  if(!r.width) return;
+  const px=(e.clientX-r.left)/r.width, py=(e.clientY-r.top)/r.height;
+  tiltOver=true;
+  tYaw=(px-.5)*11; tPit=(.5-py)*9;
+  tSx=(px-.5)*r.width; tSy=(py-.5)*r.height;
+  tiltRun();
+});
+wrap.addEventListener("pointerleave",()=>{
+  tiltOver=false; tYaw=0; tPit=0; tSx=0; tSy=0;
+  wrapRect=null; tiltRun();
+});
+
+/* The glow on a missed-gate card follows the cursor across it. Delegated,
+   because the cards are rebuilt after every run. */
+$("missed").addEventListener("pointermove",(e)=>{
+  if(calm()) return;
+  const li=e.target.closest?.("li"); if(!li) return;
+  const r=li.getBoundingClientRect();
+  li.style.setProperty("--bx",`${e.clientX-r.left}px`);
+  li.style.setProperty("--by",`${e.clientY-r.top}px`);
 });
 
 /* ── the party ─────────────────────────────────────────────────────────── */
