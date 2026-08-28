@@ -32,6 +32,7 @@ const TABS = [
   { href: "/rooms",       label: "Rooms",  match: (p) => p.startsWith("/rooms") },
   { href: "/create.html", label: "Create", match: (p) => p.startsWith("/create") },
   { href: "/v",           label: "Verify", match: (p) => p === "/v" || p.startsWith("/v.html") },
+  { href: "/play",        label: "Play",   match: (p) => p.startsWith("/play") },
 ];
 
 const CSS = `
