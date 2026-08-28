@@ -164,6 +164,23 @@ const skins = await pg.evaluate(() => {
 console.log('   ', JSON.stringify(skins));
 check('and every rank has its own colour', new Set(skins).size === skins.length, JSON.stringify(skins));
 
+/* The ladder has to climb the way people read colour. It ran the other way
+   once — green at 8/12, gold at 12 — so a good run looked like a warning and
+   a perfect one looked like a different category rather than the best one. */
+const ladder = await pg.evaluate(() => {
+  const c = document.getElementById('card'), x = c.getContext('2d');
+  const arc = () => { const d = x.getImageData(918, 137, 1, 1).data; return [d[0], d[1], d[2]]; };
+  const out = {};
+  for (const n of [12, 6]) { window.__setCorrect(n); out[n] = arc(); }
+  window.__setCorrect(12);
+  return out;
+});
+console.log('   ', JSON.stringify(ladder));
+check('a perfect run is the green one', ladder[12][1] > ladder[12][0] + 40 && ladder[12][1] > 150,
+  `12/12 rim rgb ${ladder[12]}`);
+check('and a middling run is not', ladder[6][1] < ladder[12][1] || ladder[6][0] > ladder[12][0],
+  `6/12 rim rgb ${ladder[6]}`);
+
 console.log('\n=== D. an unsigned run says so');
 const unsignedNote = (await pg.locator('#signedBox').textContent()) || '';
 check('it admits a picture proves nothing',
