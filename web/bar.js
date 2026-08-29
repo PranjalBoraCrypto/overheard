@@ -27,9 +27,13 @@ import { getSession, signOut, onSession, shortDid, hueOf } from "/session.js";
 const FONT_HREF =
   "https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap";
 
+/* `hot` marks a tab as worth noticing without pretending it is the page you
+   are on: a live dot and a hairline outline, never the active tab's fill.
+   The active state still wins when you are actually there. */
 const TABS = [
   { href: "/",            label: "Card",   match: (p) => p === "/" || p === "/index.html" },
   { href: "/rooms",       label: "Rooms",  match: (p) => p.startsWith("/rooms") },
+  { href: "/city",        label: "City",   match: (p) => p.startsWith("/city"), hot: true },
   { href: "/create.html", label: "Create", match: (p) => p.startsWith("/create") },
   { href: "/v",           label: "Verify", match: (p) => p === "/v" || p.startsWith("/v.html") },
   { href: "/play",        label: "Play",   match: (p) => p.startsWith("/play") },
@@ -85,10 +89,23 @@ const CSS = `
   white-space:nowrap;transition:color .25s cubic-bezier(.22,.68,.24,1),background .25s cubic-bezier(.22,.68,.24,1);
 }
 .tabs a:hover{color:#5FEBFF;background:rgba(0,180,215,.09)}
+/* The highlighted tab. An inset ring rather than a border, so it cannot
+   change the height of one tab and break the row's baseline. */
+.tabs a[data-hot]{
+  color:#5FEBFF;background:rgba(0,180,215,.10);
+  box-shadow:inset 0 0 0 1px rgba(0,180,215,.42);
+  display:inline-flex;align-items:center;gap:7px;
+}
+.tabs a[data-hot]::before{
+  content:"";width:5px;height:5px;border-radius:50%;flex:none;
+  background:#5FEBFF;box-shadow:0 0 7px #5FEBFF;animation:barbeat 2.4s cubic-bezier(.22,.68,.24,1) infinite;
+}
+@keyframes barbeat{50%{opacity:.3}}
 .tabs a[aria-current="page"]{
   color:#001016;background:linear-gradient(120deg,#5FEBFF,#00B4D7);
   box-shadow:0 10px 26px -14px rgba(0,180,215,1);
 }
+.tabs a[data-hot][aria-current="page"]::before{background:#001016;box-shadow:none;animation:none}
 .tabs a:focus-visible,.brand:focus-visible{outline:2px solid #5FEBFF;outline-offset:3px}
 
 /* ── who you are, on every page ────────────────────────────────────────────
@@ -283,6 +300,7 @@ class OverheardBar extends HTMLElement {
       a.textContent = t.label;
       const on = explicit ? explicit === t.label.toLowerCase() : t.match(path);
       if (on) a.setAttribute("aria-current", "page");
+      if (t.hot) a.setAttribute("data-hot", "");
       nav.appendChild(a);
     }
 
