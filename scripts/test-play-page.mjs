@@ -214,9 +214,46 @@ for (const w of [1600, 1440, 1280, 1100, 420]) {
       .map(b => Math.round(b.getBoundingClientRect().top)));
     check(`and side by side at ${w}px`, tops[0] === tops[1], tops.join(' vs '));
   }
+  /* EQUAL HALVES OF A BLOCK THAT LINES UP WITH THE FACTS ABOVE IT.
+     Sized to their labels these came out visibly different — the shorter
+     "Start the run" against the longer "Read the briefing first" — and the
+     pair ended past the right edge of the three fact cards directly above,
+     which read as a column nobody had aligned. Both edges are checked,
+     because fixing one and not the other still looks wrong. */
+  const box = await pg.evaluate(() => {
+    const gs = [...document.querySelectorAll('.hero .nextrow .go')].map(b => b.getBoundingClientRect());
+    const f = document.querySelector('.hero .facts').getBoundingClientRect();
+    return { w: gs.map(r => Math.round(r.width)),
+      left: Math.round(gs[0].left - f.left),
+      right: Math.round(gs[gs.length - 1].right - f.right) };
+  });
+  check(`the two buttons are the same width at ${w}px`,
+    box.w[0] === box.w[1], box.w.join(' vs '));
+  check(`and the pair squares up with the facts at ${w}px`,
+    Math.abs(box.left) <= 1 && Math.abs(box.right) <= 1,
+    `left off by ${box.left}, right off by ${box.right}`);
 }
 await pg.setViewportSize({ width: 1100, height: 1000 });
 await pg.waitForTimeout(200);
+
+/* A DIVIDER ONLY DIVIDES IF THERE IS AIR ON BOTH SIDES OF IT.
+   The rule between the first section and the runs bar sat 18px under the
+   toy's caption and 6px above the bar, which does not read as a boundary
+   between two sections — it reads as a hairline somebody left inside one. */
+{
+  await pg.waitForSelector('#histIntro:not([hidden])', { timeout: 10000 }).catch(() => {});
+  const air = await pg.evaluate(() => {
+    const hero = document.querySelector('.hero').getBoundingClientRect();
+    const hi = document.getElementById('histIntro');
+    const rule = hi.getBoundingClientRect().top;
+    const bar = hi.querySelector('.histpanel');
+    return { above: Math.round(rule - hero.bottom),
+             below: bar ? Math.round(bar.getBoundingClientRect().top - rule) : null };
+  });
+  check('the rule below the first section has room above it', air.above >= 44, `${air.above}px`);
+  check('and room under it before the runs bar',
+    air.below === null || air.below >= 40, `${air.below}px`);
+}
 
 console.log('\n=== B. the briefing');
 await pg.click('#toBrief');

@@ -56,7 +56,15 @@ body{background:var(--void);color:var(--txt);font-family:var(--display);font-siz
 /* The first section is the only one that wants the whole page — the toy needs
    room to be an object rather than an illustration, and the reading column
    below it stays 780px because that is what reading wants. */
-.wide{max-width:1180px;margin:0 auto;padding:0 22px}
+/* Deleted, and worth saying why so it does not come back.
+   There was a `.wide` page-container here — max-width 1180, margin 0 auto,
+   side padding — and NOTHING in the document used it. But one button carried
+   that same class name meaning "the roomy button", and picked the whole
+   container rule up by accident: `margin:0 auto` is what stopped it filling
+   its half of the button grid and centred it instead, at 255px inside a
+   366px track, while its partner stretched. A dead rule that silently
+   deformed a live element. The button modifier is `.go.roomy` now, so the
+   two meanings cannot collide again. */
 
 h1{font-weight:800;font-size:clamp(32px,5.4vw,48px);letter-spacing:-.035em;line-height:1.03;margin:16px 0 10px;text-wrap:balance}
 .lede{color:var(--dim);font-size:16.5px;line-height:1.65;max-width:56ch}
@@ -90,12 +98,40 @@ h1{font-weight:800;font-size:clamp(32px,5.4vw,48px);letter-spacing:-.035em;line-
   box-shadow:0 26px 56px -18px rgba(0,180,215,.95)}
 .go.big .i{width:24px;height:24px}
 .go.big:hover:not(:disabled){box-shadow:0 26px 52px -18px rgba(0,180,215,1)}
-.go.wide{padding:20px clamp(20px,2.2vw,34px);font-size:17px;border-radius:20px}
-/* Two buttons side by side are one row, so they are one height. Neither
-   vertical padding nor min-height delivers that on its own: the taller label
-   brings a taller line box with it, and min-height only sets a floor. An
-   explicit height with line-height:1 leaves nothing to vary. */
-.hero .nextrow .go{height:84px;line-height:1;padding-top:0;padding-bottom:0}
+.go.roomy{padding:20px clamp(20px,2.2vw,34px);font-size:17px;border-radius:20px}
+/* TWO HALVES OF ONE BLOCK, THE WIDTH OF THE FACTS ABOVE THEM.
+   ──────────────────────────────────────────────────────────────────────────
+   As a flex row these sized themselves to their labels, so "Start the run"
+   came out visibly narrower than "Read the briefing first" and the pair
+   ended wherever the longer sentence happened to end — past the right edge
+   of the three fact cards directly above, which made the left column look
+   like two things that had not been lined up.
+
+   A two-track grid at the facts' own width (520) and the facts' own gap (11)
+   fixes both at once: equal halves, and a left column whose edges agree all
+   the way down. Height is still explicit with line-height:1, because
+   neither padding nor min-height equalises two different label sizes — the
+   taller label brings a taller line box and min-height only sets a floor. */
+.hero .nextrow{
+  display:grid;grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:11px;max-width:520px;
+}
+.hero .nextrow .go{
+  height:84px;line-height:1;padding-top:0;padding-bottom:0;
+  /* The track decides the width now, so the horizontal padding only has to
+     keep the label off the edges — and it has to be small enough that the
+     longer of the two still fits its half on one line. */
+  padding-left:14px;padding-right:14px;
+  justify-content:center;white-space:nowrap;
+}
+.hero .nextrow .go.big{font-size:19px}
+.hero .nextrow .go.roomy{font-size:16px}
+/* Below the stacking width there is one column, so there is nothing to
+   equalise and a nowrap label in a narrow track would overflow. */
+@media (max-width:620px){
+  .hero .nextrow{grid-template-columns:1fr;max-width:none}
+  .hero .nextrow .go{white-space:normal}
+}
 
 /* ── the first section ───────────────────────────────────────────────────
    Text on the left with room to breathe, the toy on its own on the right.
@@ -666,8 +702,17 @@ canvas.confetti{position:fixed;inset:0;width:100%;height:100%;pointer-events:non
 .hist{display:block}
 #histIntro{margin-left:calc(-1 * var(--bleed,0px));margin-right:calc(-1 * var(--bleed,0px));
   /* A rule closes the first section off before the runs bar, so the bar reads
-     as its own thing rather than as more of the hero. */
-  margin-top:18px;padding-top:6px;border-top:1px solid rgba(16,57,74,.9)}
+     as its own thing rather than as more of the hero.
+
+     THE ROOM AROUND IT IS THE POINT. At 18px above and 6px below, the rule
+     sat almost against the toy's caption on one side and the runs bar on the
+     other, so instead of separating two sections it looked like a hairline
+     someone had left inside one. A divider only divides if there is air on
+     both sides of it — and more above than below, because what is ending
+     needs the bigger pause. */
+  margin-top:clamp(46px,4.8vw,78px);
+  padding-top:clamp(20px,2.2vw,34px);
+  border-top:1px solid rgba(16,57,74,.9)}
 @media (min-width:1250px){#histIntro{--bleed:230px}}
 @media (min-width:1380px){#histIntro{--bleed:270px}}
 .histpanel{margin-top:22px;padding:22px 24px;animation:riseY .5s var(--ease) both}
@@ -906,9 +951,11 @@ canvas.confetti{position:fixed;inset:0;width:100%;height:100%;pointer-events:non
           <div class="fact"><svg class="i"><use href="#i-clock"/></svg><b>~3 min</b><span>a full run</span></div>
           <div class="fact"><svg class="i"><use href="#i-bolt"/></svg><b>Points</b><span>and a card to post</span></div>
         </div>
-        <div class="nextrow" style="justify-content:flex-start">
+        <!-- no inline justify: the grid track sizing above decides the width,
+             and the pair starts where the facts start because both are 520 -->
+        <div class="nextrow">
           <button class="go big" id="begin" type="button"><svg class="i"><use href="#i-play"/></svg>Start the run</button>
-          <button class="go ghost wide" id="toBrief" type="button"><svg class="i"><use href="#i-book"/></svg>Read the briefing first</button>
+          <button class="go ghost roomy" id="toBrief" type="button"><svg class="i"><use href="#i-book"/></svg>Read the briefing first</button>
         </div>
       </div>
 
