@@ -28,28 +28,38 @@ export const LEVELS = ["performance", "balanced", "high"];
 
 /** What each level actually changes. Everything here is decoration: the city
  *  structure, the rooms, the agents, the messages and the analytics are the
- *  same at every level, and the 2D fallback has them too. */
+ *  same at every level, and the 2D fallback has them too.
+ *
+ *  THREE KEYS WERE REMOVED BECAUSE NOTHING EVER READ THEM. `shadows`,
+ *  `particles` and `windows` sat in all three rows looking like settings and
+ *  were never consulted anywhere in the codebase — so "High" advertised
+ *  real-time shadows and ninety particles and delivered neither, and anybody
+ *  tuning the tiers was editing numbers with no effect. Dead configuration is
+ *  worse than absent configuration: it is a false statement about what the
+ *  control does, sitting in the file where the next person goes to check.
+ *
+ *  `tier` is new, and life.js sizes its actor pools from it. That is now the
+ *  one place a level decides how much of the city MOVES — and the floor is
+ *  deliberately not zero. See the note in life.js: a Performance preset that
+ *  freezes the city is not a fast page, it is a broken one with an excuse. */
 export const PRESETS = {
   performance: {
-    label: "Performance",
-    dpr: 1,           shadows: false, ground: 24,  blocks: 6,
-    agents: 14,       particles: 0,   beams: 2,    fog: false,
-    windows: false,   detail: 0,      bubbles: 3,  antialias: false,
-    pulseLife: 900,   idleSpin: false,
+    label: "Performance", tier: "performance",
+    dpr: 1,           ground: 24,  blocks: 6,   beams: 2,
+    agents: 14,       fog: false,  detail: 0,   bubbles: 3,
+    antialias: false, pulseLife: 900,  idleSpin: false,
   },
   balanced: {
-    label: "Balanced",
-    dpr: 1.5,         shadows: false, ground: 40,  blocks: 10,
-    agents: 22,       particles: 40,  beams: 4,    fog: true,
-    windows: true,    detail: 1,      bubbles: 4,  antialias: true,
-    pulseLife: 1200,  idleSpin: true,
+    label: "Balanced", tier: "balanced",
+    dpr: 1.5,         ground: 40,  blocks: 10,  beams: 4,
+    agents: 22,       fog: true,   detail: 1,   bubbles: 4,
+    antialias: true,  pulseLife: 1200, idleSpin: true,
   },
   high: {
-    label: "High",
-    dpr: 2,           shadows: true,  ground: 56,  blocks: 14,
-    agents: 34,       particles: 90,  beams: 6,    fog: true,
-    windows: true,    detail: 2,      bubbles: 5,  antialias: true,
-    pulseLife: 1500,  idleSpin: true,
+    label: "High", tier: "high",
+    dpr: 2,           ground: 56,  blocks: 14,  beams: 6,
+    agents: 34,       fog: true,   detail: 2,   bubbles: 5,
+    antialias: true,  pulseLife: 1500, idleSpin: true,
   },
 };
 

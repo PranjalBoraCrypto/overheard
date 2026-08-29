@@ -53,6 +53,7 @@ const CY = 0x00b4d7, CY_HI = 0x5febff, GOOD = 0x3be3b0, WARN = 0xf2b33d;
    them into the flat map must land in the same city they were learning, not a
    rearranged one. */
 import { DISTRICTS, TAU, placeRoom, placeBlocks, placeAgent, heightOf } from "./place.js";
+import { makeLife } from "./life.js";
 export { DISTRICTS } from "./place.js";
 
 /** A tiny deterministic generator, seeded per room, so "random" detail is
@@ -462,6 +463,15 @@ export function buildWorld(THREE, { canvas, preset, reduced }) {
   let agents = [];              // [{ id, x, z, y }]
   let heat = new Map();         // room -> 0..1 activity, drives light not size
 
+  /* EVERYTHING IN THE CITY THAT MOVES ON ITS OWN.
+     A separate module rather than more of this one, because the two halves
+     answer to different rules. This file draws what Technocore IS — where
+     the rooms are, how much has passed through them — and it is allowed to
+     be still, because a skyline that rearranged itself would be unlearnable.
+     life.js draws what Technocore is DOING, and it is the only part of the
+     scene permitted to move without being asked. */
+  const life = makeLife(THREE, { scene, preset, level: preset.tier || "balanced", reduced });
+
   function setRooms(list, blockCount) {
     placed = []; byRoom.clear();
     const cap = Math.min(list.length, MAX_BUILD);
@@ -475,6 +485,12 @@ export function buildWorld(THREE, { canvas, preset, reduced }) {
       placed.push({ room: r.room, x, z, h, i, topic: r.topic, seq, idle: r.idle });
       byRoom.set(r.room, placed[placed.length - 1]);
     }
+    /* The life layer needs roofs to launch from, and it needs them for the
+       districts too — those are hand-placed and are not in `placed`. */
+    life.setSites([
+      ...placed.map((p) => ({ room: p.room, x: p.x, z: p.z, y: p.h })),
+      ...DISTRICTS.map((d) => ({ room: d.room, x: d.x, z: d.z, y: 16 })),
+    ]);
     // one write of the instance buffers, not one per frame
     for (let i = 0; i < placed.length; i++) {
       const p = placed[i];
@@ -522,7 +538,7 @@ export function buildWorld(THREE, { canvas, preset, reduced }) {
   /** Activity, per room, 0..1. Drives brightness and nothing structural: no
    *  building grows because a room got busy, because then the skyline would
    *  stop being a thing you can learn. */
-  function setHeat(map) { heat = map; paintRoofs(); paintPools(); }
+  function setHeat(map) { heat = map; paintRoofs(); paintPools(); life.setEnergy(map); }
 
   /** The six pools of light, coloured by how busy each district is. */
   function paintPools() {
@@ -694,6 +710,11 @@ export function buildWorld(THREE, { canvas, preset, reduced }) {
       if (a.lit > 0) { a.lit = Math.max(0, a.lit - dt * 0.7); dirty = true; }
     }
     if (dirty) writeAgents();
+
+    /* The half of the motion that is not the camera's. See life.js for the
+       line between the ambient layer, which loops, and the signals, which
+       only ever come from a message that genuinely arrived. */
+    life.update(dt);
   }
 
   function render() { renderer.render(scene, camera); }
@@ -786,13 +807,14 @@ export function buildWorld(THREE, { canvas, preset, reduced }) {
       if (Array.isArray(mat)) mat.forEach((x) => x.dispose?.());
       else mat?.dispose?.();
     });
+    life.dispose();
     glowTex.dispose();
     renderer.dispose();
     if (hard) renderer.forceContextLoss?.();
   }
 
   return {
-    scene, camera, renderer, root,
+    scene, camera, renderer, root, life,
     setRooms, setHeat, setAgents, enterRoom, leaveRoom,
     pulse, beam, lightAgent, agentAt,
     update, render, resize, pick, project, dispose,

@@ -117,6 +117,7 @@ export async function boot() {
     city = c;
     world.setRooms(cityRooms(), unnamedNow());
     refreshHeat();
+    signalActivity();          // what the network did since the last reading
     buildLabels();
     paintChips();
     $("boot").hidden = true;
@@ -157,6 +158,73 @@ export async function boot() {
      What replaces it is a chip in the corner naming which of four honest
      things is true. It never covers anything, and it never claims saved data
      is live. */
+
+  /* ── REAL ACTIVITY BECOMES VISIBLE ACTIVITY ──────────────────────────────
+     The city used to react to messages only in the room somebody was
+     standing in, which meant that for the overview — the screen nearly
+     everyone actually looks at — nothing Technocore did was visible at all.
+     The directory has been reporting it the whole time: every poll carries
+     each room's `last_seq`, and the difference between two polls is exactly
+     how many messages that room carried while we were away.
+
+     So that difference is now the event. Every twenty seconds the skyline
+     answers for what the network just did, whether or not anybody is inside
+     a room.
+
+     MAGNITUDE IS TIERED, AND THE TIERS ARE RELATIVE. Forty messages a minute
+     is a slow afternoon in the lobby and a riot in a room that normally says
+     three things an hour, so the weight is measured against the room's own
+     recent rate rather than against an absolute number. One message is one
+     small light; a burst is one big fast one, not forty small ones — forty
+     would cost forty matrix writes and read as static.
+
+     Nothing here is invented. A room with no change produces nothing, and a
+     directory that could not be read produces nothing, which is why the city
+     visibly settles when Technocore goes quiet instead of idling on a loop
+     that looks the same either way. */
+  const lastSeq = new Map();
+  function signalActivity() {
+    if (!city || !world.life) return;
+    /* Only a LIVE reading may move anything. A snapshot is a photograph of a
+       moment that has already passed; animating it would be the city's
+       version of replaying an archived message as if it had just been sent. */
+    if (D.state.status.source !== "live") {
+      for (const r of city.roster) if (r.last_seq != null) lastSeq.set(r.room, Number(r.last_seq));
+      return;
+    }
+    const events = [];
+    for (const r of city.roster) {
+      if (!r.live || r.last_seq == null) continue;
+      const seq = Number(r.last_seq);
+      const prev = lastSeq.get(r.room);
+      lastSeq.set(r.room, seq);
+      /* No previous reading is not "nothing happened" — it is "we have not
+         measured yet", and the two must not look alike. */
+      if (prev == null || seq <= prev) continue;
+      const delta = seq - prev;
+      const rate = D.rateOf(r.room) ?? 0;
+      /* Against the room's own normal: 1 is business as usual, 3 is a room
+         doing something it does not usually do. */
+      const weight = Math.max(1, Math.min(3, delta / Math.max(1, rate * 0.35)));
+      events.push({ room: r.room, delta, weight });
+    }
+    if (!events.length) return;
+
+    /* Loudest first, and capped. A directory poll that touched a hundred
+       rooms should light the ten that moved most, not spend the pool on the
+       hundredth-most-interesting thing on screen. */
+    events.sort((a, b) => b.delta - a.delta);
+    const cap = Math.min(events.length, Math.max(6, Math.round(preset.agents / 2)));
+    for (let i = 0; i < cap; i++) {
+      const e = events[i];
+      /* A destination only when the data supports one: the busiest room this
+         poll is where the network's attention is, so a second busy room
+         sends toward it. Rooms with no such relationship send straight up,
+         which claims nothing beyond "something was said here". */
+      const to = i > 0 && e.weight > 1.4 ? events[0].room : null;
+      world.life.signal(e.room, to, e.weight);
+    }
+  }
 
   function refreshHeat() {
     if (!city) return;
