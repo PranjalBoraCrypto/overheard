@@ -90,19 +90,6 @@ check('nothing is graded before it starts', await pg.locator('#run').isHidden())
 const offsiteButtons = await pg.evaluate(() =>
   [...document.querySelectorAll('#intro .go')].filter(a => /^https?:/.test(a.getAttribute('href') || '')).length);
 check('the way to read is our own page, not somebody else\'s site', offsiteButtons === 0);
-/* Two buttons side by side are one row, so they are one height — different
-   label sizes plus vertical padding will not deliver that on its own. */
-const heights = async () => pg.evaluate(() => [...document.querySelectorAll('.hero .nextrow .go')]
-  .map(b => Math.round(b.getBoundingClientRect().height)));
-for (const w of [1400, 1180, 900, 420]) {
-  await pg.setViewportSize({ width: w, height: 1000 });
-  await pg.waitForTimeout(220);
-  const hs = await heights();
-  check(`the two buttons are the same height at ${w}px`,
-    hs.length === 2 && hs[0] === hs[1], hs.join(' vs '));
-}
-await pg.setViewportSize({ width: 1100, height: 1000 });
-await pg.waitForTimeout(200);
 
 console.log('\n=== A2. the toy');
 /* A physics toy is the one thing on a page that cannot be checked by reading
@@ -202,6 +189,20 @@ check('a token dropped down the slot is eaten', fedAfter.fed === fedBefore + 1, 
 check('and the caption says so', /Fed|ate that/i.test(await pg.locator('#toyCap').textContent()));
 await pg.waitForTimeout(900);
 check('and another one arrives to replace it', (await toy()).n >= t0.n - 1);
+
+/* Two buttons side by side are one row, so they are one height — different
+   label sizes plus vertical padding will not deliver that on its own. */
+const heights = async () => pg.evaluate(() => [...document.querySelectorAll('.hero .nextrow .go')]
+  .map(b => Math.round(b.getBoundingClientRect().height)));
+for (const w of [1400, 1180, 900, 420]) {
+  await pg.setViewportSize({ width: w, height: 1000 });
+  await pg.waitForTimeout(220);
+  const hs = await heights();
+  check(`the two buttons are the same height at ${w}px`,
+    hs.length === 2 && hs[0] === hs[1], hs.join(' vs '));
+}
+await pg.setViewportSize({ width: 1100, height: 1000 });
+await pg.waitForTimeout(200);
 
 console.log('\n=== B. the briefing');
 await pg.click('#toBrief');
@@ -651,7 +652,6 @@ await pg.evaluate(() => {
     }],
   }));
 });
-await pg.evaluate(() => { try { localStorage.removeItem('overheard.pol.open'); } catch {} });
 await go();
 /* The bar is there for everybody — "sign in to keep your runs" is worth
    saying to somebody who has never seen it — but it must not leak the runs
@@ -668,7 +668,12 @@ check('the bar label is not one run-on line', await pg.evaluate(() => {
                   - g.querySelector('b').getBoundingClientRect().top) >= 14;
 }));
 check('with a way to do it', (await pg.locator('#histIntro .histempty .go').count()) === 1);
-check('and nothing at the foot of a result either', await pg.locator('#histEnd').isHidden());
+/* Signed out, the foot of a result is where the offer lands best — the run
+   just happened, and it is the only moment somebody can see what they are
+   about to lose. It used to show nothing here at all. */
+check('the offer is at the foot of a result too', await pg.locator('#histEnd .histempty').count() === 1);
+check('worded for the run that just happened',
+  /This run was not kept/.test(await pg.locator('#histEnd').textContent()));
 
 /* CLOSED by default. A table of past scores above the start button is a
    question nobody has asked yet — the complaint that produced this drawer. */
@@ -685,10 +690,22 @@ await pg.locator('#histIntro .histempty .go').click();
 await pg.waitForTimeout(400);
 check('which opens the same pop-up as everywhere else', await pg.locator('#scrim').isVisible());
 await pg.keyboard.press('Escape'); await pg.waitForTimeout(300);
-/* Opened once, it stays opened — somebody who wants to see their runs on
-   arrival should not have to say so on every visit. */
+/* The key on the Sign in button is dark on a bright button, not cyan on cyan:
+   the rule that tints the panel's leading mark used to hit this one too. */
+check('the key on the button is legible against it', await pg.evaluate(() => {
+  const b = document.querySelector('#histIntro .emptyrow .go');
+  return getComputedStyle(b.querySelector('.i')).color;
+}) === 'rgb(0, 16, 22)');
+/* And the button sits on its own row, not inline in the sentence. */
+check('the button is under the words, not beside them', await pg.evaluate(() => {
+  const e = document.querySelector('#histIntro .histempty');
+  const b = document.querySelector('#histIntro .emptyrow .go');
+  const t = e.querySelector('b');
+  return b.getBoundingClientRect().top > t.getBoundingClientRect().bottom + 20;
+}));
+/* CLOSED on every visit. A drawer that reopens itself is not a drawer. */
 await go();
-check('and it remembers being opened', (await drawerH()) > 40, `${await drawerH()}px`);
+check('and it is closed again after a reload', (await drawerH()) === 0, `${await drawerH()}px`);
 
 /* Sign back in, play twice, and the history should describe both runs — from
    the intro as well as from the result. */
@@ -764,6 +781,8 @@ await pg.evaluate((r) => localStorage.setItem('overheard.pol.runs', r), keptRuns
 await go();
 
 console.log('\n=== I2. opening a past run');
+// the drawer is closed on every load now, so it has to be opened first
+await pg.click('#histIntro .histtoggle'); await pg.waitForTimeout(700);
 await pg.locator('#histIntro .hrow').first().click();
 await pg.waitForTimeout(600);
 check('it opens', await pg.locator('#rscrim').isVisible());
@@ -801,11 +820,64 @@ const del = pg.locator('#rRow button.danger');
 await del.click(); await pg.waitForTimeout(250);
 check('delete asks once', /Really delete/.test(await del.textContent()));
 await del.click(); await pg.waitForTimeout(500);
+await pg.waitForTimeout(400);
 check('and then does it', await pg.locator('#rscrim').isHidden()
-  && (await pg.locator('#histIntro .hrow').count()) === 1);
+  && (await pg.locator('#histIntro .hrow').count()) === 1,
+  `${await pg.locator('#histIntro .hrow').count()} left`);
+// deleting repaints, and the drawer stays open through it
+check('and the drawer did not slam shut on the way',
+  (await pg.locator('#histIntro .histpanel.open').count()) === 1);
 await pg.evaluate(() => {
   localStorage.removeItem('overheard.pol.runs');
   localStorage.removeItem('overheard.identity');
+  localStorage.removeItem('overheard.session');
+});
+
+console.log('\n=== I3. paging');
+/* Forty runs is four screens of ten, not one long scroll inside a drawer. */
+await pg.evaluate(async () => {
+  /* Its own identity: the section before this one signs out on its way past,
+     and reading a DID off a session that is gone is how a test starts lying
+     about the thing it is meant to be checking. */
+  if (!localStorage.getItem('overheard.session')) {
+    const kp = await crypto.subtle.generateKey({ name: 'Ed25519' }, true, ['sign', 'verify']);
+    const jwk = await crypto.subtle.exportKey('jwk', kp.privateKey);
+    const raw = new Uint8Array(await crypto.subtle.exportKey('raw', kp.publicKey));
+    const B58 = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
+    let n = 0n; for (const x of [0xed, 0x01, ...raw]) n = n * 256n + BigInt(x);
+    let out = ''; while (n > 0n) { out = B58[Number(n % 58n)] + out; n /= 58n; }
+    localStorage.setItem('overheard.session', JSON.stringify({ did: 'did:key:z' + out, jwk }));
+  }
+  const did = JSON.parse(localStorage.getItem('overheard.session')).did;
+  const marks = Array(12).fill(true);
+  const rows = Array.from({ length: 23 }, (_, i) => ({
+    id: 'p' + i, at: new Date(Date.now() - i * 3600e3).toISOString(),
+    correct: 12 - (i % 12), total: 12, score: 2000 - i * 37, best: 3,
+    marks, rank: 'Validator', proof: null,
+  }));
+  localStorage.setItem('overheard.pol.runs', JSON.stringify({ [did]: rows }));
+});
+await go();
+await pg.click('#histIntro .histtoggle'); await pg.waitForTimeout(650);
+check('a page holds ten', (await pg.locator('#histIntro .hrow').count()) === 10);
+check('and it says which ten', /1–10 of 23/.test(await pg.locator('#histIntro .pgof').textContent()),
+  await pg.locator('#histIntro .pgof').textContent());
+check('with a numbered page each', (await pg.locator('#histIntro .pg.on').count()) === 1
+  && (await pg.locator('#histIntro .pages .pg').count()) === 5, 'prev + 3 pages + next');
+const firstOn = await pg.locator('#histIntro .hrow').first().textContent();
+await pg.locator('#histIntro .pages .pg').nth(3).click();     // page 2
+await pg.waitForTimeout(500);
+check('the next page is a different ten',
+  (await pg.locator('#histIntro .hrow').first().textContent()) !== firstOn);
+check('and the drawer stays open while paging', (await drawerH()) > 40, `${await drawerH()}px`);
+check('the tail page is short', await pg.evaluate(async () => {
+  const pgs = document.querySelectorAll('#histIntro .pages .pg');
+  pgs[pgs.length - 2].click();                                 // last numbered page
+  await new Promise(r => setTimeout(r, 400));
+  return document.querySelectorAll('#histIntro .hrow').length;
+}) === 3);
+await pg.evaluate(() => {
+  localStorage.removeItem('overheard.pol.runs');
   localStorage.removeItem('overheard.session');
 });
 

@@ -637,7 +637,8 @@ canvas.confetti{position:fixed;inset:0;width:100%;height:100%;pointer-events:non
    play should see one line about their runs and a way to open it — a table of
    past scores above the start button is a question nobody asked yet. */
 .histpanel.bar{padding:0;overflow:hidden}
-.histtoggle{display:flex;align-items:center;gap:13px;width:100%;padding:16px 22px;cursor:pointer;
+.histpanel.bar{background:linear-gradient(rgba(5,26,35,.9),rgba(4,20,28,.9)) padding-box,var(--bevel) border-box}
+.histtoggle{display:flex;align-items:center;gap:13px;width:100%;padding:17px 22px;cursor:pointer;
   background:none;border:0;color:var(--txt);font-family:var(--display);text-align:left;
   transition:background .22s var(--ease)}
 @media (max-width:620px){.histtoggle{padding:14px 17px}}
@@ -657,12 +658,19 @@ canvas.confetti{position:fixed;inset:0;width:100%;height:100%;pointer-events:non
 .histinner{padding:0 22px 20px}
 @media (max-width:620px){.histinner{padding:0 17px 18px}}
 .histinner>.hstats:first-child{margin-top:2px}
-.histempty{display:flex;gap:12px;align-items:flex-start;padding:14px 15px;border-radius:13px;margin-top:2px;
+.histempty{display:flex;gap:13px;align-items:flex-start;padding:17px 18px;border-radius:15px;margin-top:2px;
   font-size:13.5px;line-height:1.6;color:var(--faint);
-  background:rgba(0,20,26,.5);border:1px solid rgba(0,180,215,.16)}
-.histempty b{display:block;color:var(--txt);font-size:14.5px;margin-bottom:3px}
-.histempty .i{width:16px;height:16px;margin-top:2px;color:var(--cy);flex:none}
-.histempty .go{margin-top:11px;padding:10px 16px;font-size:13.5px}
+  background:linear-gradient(rgba(0,180,215,.05),rgba(0,20,26,.55));
+  border:1px solid rgba(0,180,215,.18)}
+.histempty b{display:block;color:var(--txt);font-size:15px;margin-bottom:4px;letter-spacing:-.01em}
+/* Scoped to the leading mark, NOT to every icon inside. Unscoped, this also
+   painted the key on the button cyan-on-cyan, which is why it vanished. */
+.histempty>.i{width:17px;height:17px;margin-top:2px;color:var(--cy);flex:none}
+/* Its own row, under the words. Inline-flex inside a paragraph put the
+   sentence's last word beside the button rather than above it. */
+.emptyrow{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:14px}
+.emptyrow .go{padding:12px 20px;font-size:14px}
+.emptyrow .go .i{color:#001016}
 .hhead{display:flex;gap:13px;align-items:center}
 .hic{width:38px;height:38px;flex:none;border-radius:13px;display:grid;place-items:center;
   background:rgba(0,180,215,.12);color:var(--cy-hi)}
@@ -683,24 +691,38 @@ canvas.confetti{position:fixed;inset:0;width:100%;height:100%;pointer-events:non
 /* every run so far, oldest on the left — the shape of getting better */
 
 .hlist{list-style:none;display:flex;flex-direction:column;gap:8px;margin-top:16px}
-.hrow{display:flex;align-items:center;gap:13px;padding:12px 14px;border-radius:14px;cursor:pointer;width:100%;
-  text-align:left;background:rgba(0,20,26,.5);border:1px solid rgba(0,180,215,.16);color:var(--txt);
+.hrow{display:flex;align-items:center;gap:14px;padding:12px 15px;border-radius:15px;cursor:pointer;width:100%;
+  text-align:left;background:linear-gradient(100deg,rgba(0,26,34,.6),rgba(0,18,24,.5));
+  border:1px solid rgba(0,180,215,.15);color:var(--txt);
   font-family:var(--display);position:relative;overflow:hidden;
-  transition:transform .24s var(--ease),border-color .24s var(--ease),box-shadow .24s var(--ease);
-  animation:riseY .45s var(--ease) both}
+  transition:transform .24s var(--ease),border-color .24s var(--ease),box-shadow .24s var(--ease),
+    background .24s var(--ease);
+  animation:riseY .5s var(--ease) both}
+/* a light that sweeps across on hover, once */
+.hrow::before{content:"";position:absolute;inset:0;pointer-events:none;opacity:0;
+  background:linear-gradient(100deg,transparent 30%,rgba(95,235,255,.09) 50%,transparent 70%);
+  transform:translateX(-60%);transition:opacity .2s}
+.hrow:hover::before{opacity:1;animation:rowsweep .7s var(--ease)}
+@keyframes rowsweep{to{transform:translateX(60%)}}
 .hrow:hover{transform:translateX(3px);border-color:rgba(95,235,255,.45);
-  box-shadow:0 16px 34px -24px rgba(0,180,215,.9)}
+  background:linear-gradient(100deg,rgba(0,42,54,.6),rgba(0,20,27,.5));
+  box-shadow:0 18px 36px -24px rgba(0,180,215,.9)}
 .hrow:focus-visible{outline:2px solid var(--cy-hi);outline-offset:2px}
-.hgrade{width:52px;height:52px;flex:none;border-radius:15px;display:grid;place-items:center;line-height:1;
-  font-family:var(--mono);font-size:19px;font-weight:600;color:#001016}
+.hgrade{width:54px;height:54px;flex:none;border-radius:16px;display:grid;place-items:center;line-height:1;
+  font-family:var(--mono);font-size:19.5px;font-weight:600;color:#001016;position:relative;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.45),0 8px 18px -10px rgba(0,0,0,.9);
+  transition:transform .24s var(--ease)}
+.hrow:hover .hgrade{transform:scale(1.05) rotate(-2deg)}
 .hgrade em{font-style:normal;font-size:10px;opacity:.72;display:block;margin-top:2px}
 .hmid{flex:1 1 auto;min-width:0}
 .hmid b{display:block;font-size:14.5px;font-weight:700;letter-spacing:-.01em}
 .hwhen{display:block;font-family:var(--mono);font-size:11px;color:var(--faint);margin-top:3px;
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .hpips{display:flex;gap:3px;margin-top:7px}
-.hpips i{width:13px;height:5px;border-radius:99px;background:rgba(255,107,107,.42)}
-.hpips i.hit{background:var(--good)}
+.hpips i{width:13px;height:5px;border-radius:99px;background:rgba(255,107,107,.4);
+  transition:transform .2s var(--ease)}
+.hpips i.hit{background:var(--good);box-shadow:0 0 7px rgba(59,227,176,.45)}
+.hrow:hover .hpips i.hit{transform:scaleY(1.5)}
 .hsign{flex:none;display:inline-flex;align-items:center;gap:5px;padding:4px 9px;border-radius:999px;
   font-family:var(--mono);font-size:10px;letter-spacing:.08em;text-transform:uppercase;
   color:var(--good);background:rgba(59,227,176,.1);border:1px solid rgba(59,227,176,.3)}
@@ -708,7 +730,20 @@ canvas.confetti{position:fixed;inset:0;width:100%;height:100%;pointer-events:non
 .hrow .chev{width:16px;height:16px;flex:none;color:var(--faint);transition:transform .24s var(--ease)}
 .hrow:hover .chev{transform:translateX(3px);color:var(--cy-hi)}
 @media (max-width:620px){.hsign{display:none}}
-.hmore{margin-top:12px;text-align:center}
+/* ── paging ──────────────────────────────────────────────────────────────
+   Forty runs is four screens of ten, not one long scroll inside a drawer. */
+.hmore{display:flex;align-items:center;gap:10px;margin-top:15px;padding-top:13px;
+  border-top:1px solid rgba(0,180,215,.12);flex-wrap:wrap}
+.pages{display:flex;align-items:center;gap:5px;margin-left:auto}
+.pg{width:32px;height:32px;border-radius:10px;display:grid;place-items:center;cursor:pointer;
+  background:rgba(0,20,26,.6);border:1px solid rgba(0,180,215,.18);color:var(--dim);
+  font-family:var(--mono);font-size:12.5px;transition:.2s var(--ease)}
+.pg:hover:not(:disabled){border-color:rgba(95,235,255,.5);color:var(--txt);transform:translateY(-1px)}
+.pg[disabled]{opacity:.3;cursor:not-allowed;transform:none}
+.pg.on{background:linear-gradient(120deg,var(--cy-hi),var(--cy));color:#001016;border-color:transparent;
+  font-weight:600}
+.pg .i{width:13px;height:13px;stroke-width:2.4}
+.pgof{font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--faint)}
 
 /* one run, opened */
 .rmodal{width:min(680px,100%)}
@@ -2380,7 +2415,8 @@ $("missed").addEventListener("pointermove",(e)=>{
    run carries an id from the moment it finishes and the row is written or
    rewritten under that id. */
 const HKEY="overheard.pol.runs", HMAX=40;
-let runId=null, showAll=false;
+let runId=null, page=0;
+const PER=10;
 
 const allRuns=()=>{ try{ const r=JSON.parse(localStorage.getItem(HKEY)||"{}");
   return (r && typeof r==="object" && !Array.isArray(r)) ? r : {}; }catch{ return {}; } };
@@ -2428,8 +2464,10 @@ function historyBody(list,s){
                stat(bestRun.rank,"best rank"));
   box.append(stats);
 
+  const pages=Math.max(1,Math.ceil(list.length/PER));
+  page=Math.min(page,pages-1);
   const ul=el("ul","hlist");
-  const shown = showAll ? list : list.slice(0,5);
+  const shown = list.slice(page*PER,(page+1)*PER);
   shown.forEach((r,i)=>{
     const li=document.createElement("li");
     const row=el("button","hrow"); row.type="button";
@@ -2454,30 +2492,44 @@ function historyBody(list,s){
   box.append(ul);
 
   const foot=el("div","hmore");
-  if(list.length>5){
-    const b=el("button","linkalt"); b.type="button";
-    b.textContent = showAll ? "Show fewer" : `Show all ${list.length} runs`;
-    b.addEventListener("click",()=>{ showAll=!showAll; paintHistory(); });
-    foot.append(b);
-  }
   /* Two taps to clear, and the second one is labelled. A confirm() blocks the
      page and a single tap on "Clear" throws away the only copy there is. */
   const clr=el("button","linkalt"); clr.type="button"; clr.textContent="Clear all runs";
-  clr.style.marginLeft=list.length>5?"14px":"0";
   let armed=false;
   clr.addEventListener("click",()=>{
     if(!armed){ armed=true; clr.textContent="Really clear all?"; clr.style.color="#FF9B9B";
       setTimeout(()=>{ if(armed){ armed=false; clr.textContent="Clear all runs"; clr.style.color=""; } },4000); return; }
-    putRuns(s.did,[]); paintHistory();
+    putRuns(s.did,[]); paintHistory(true);
   });
   foot.append(clr);
+
+  if(pages>1){
+    const pg=el("div","pages");
+    const arrow=(dir,to,dis)=>{
+      const b=el("button","pg"); b.type="button"; b.disabled=dis;
+      const ic=icon("i-chev"); if(dir<0) ic.style.transform="scaleX(-1)";
+      b.append(ic); b.setAttribute("aria-label",dir<0?"Newer runs":"Older runs");
+      b.addEventListener("click",()=>{ page=to; paintHistory(true); });
+      return b;
+    };
+    pg.append(el("span","pgof",`${page*PER+1}–${Math.min(list.length,(page+1)*PER)} of ${list.length}`));
+    pg.append(arrow(-1,Math.max(0,page-1),page===0));
+    for(let i=0;i<pages;i++){
+      const b=el("button","pg"+(i===page?" on":"")); b.type="button";
+      b.textContent=String(i+1);
+      b.addEventListener("click",()=>{ page=i; paintHistory(true); });
+      pg.append(b);
+    }
+    pg.append(arrow(1,Math.min(pages-1,page+1),page===pages-1));
+    foot.append(pg);
+  }
   box.append(foot);
   return box;
 }
 
 /** Nothing to show yet, said in the shape of the reason. Three different
  *  people read this panel and only one of them has runs. */
-function historyEmpty(s){
+function historyEmpty(s,where){
   const box=el("div","histinner");
   const e=el("div","histempty");
   e.append(icon(s?"i-hist":"i-key"));
@@ -2487,37 +2539,48 @@ function historyEmpty(s){
     body.append(document.createTextNode(
       "Play one and it is kept here, signed with your key — so the next one has something to beat."));
   }else{
-    body.append(el("b",null,"Sign in to see your runs."));
-    body.append(document.createTextNode(
-      "Runs are kept against the key that signed them, in this browser. Without one there is nothing to keep them under."));
+    body.append(el("b",null, where==="end" ? "This run was not kept." : "Sign in to see your runs."));
+    body.append(document.createTextNode(where==="end"
+      ? "Runs are kept against the key that signed them. Sign in and the next one stays here, so you have something to beat."
+      : "Runs are kept against the key that signed them, in this browser. Without one there is nothing to keep them under."));
+    /* Its own row. Appending the button into the paragraph left the sentence's
+       last word sitting beside it. */
+    const row=el("div","emptyrow");
     const go=el("button","go"); go.type="button";
     go.append(icon("i-key"), el("span",null,"Sign in"));
     go.addEventListener("click",()=>openModal());
-    body.append(go);
+    const mk=document.createElement("a");
+    mk.className="linkalt"; mk.href="/create.html"; mk.textContent="No identity yet? Make one →";
+    row.append(go,mk);
+    body.append(row);
   }
   e.append(body);
   box.append(e);
   return box;
 }
 
-const OPENKEY="overheard.pol.open";
-const isOpen=()=>{ try{ return localStorage.getItem(OPENKEY)==="1"; }catch{ return false; } };
-
+/* It does NOT remember being open. A drawer that reopens itself on every
+   visit is not a drawer — the whole reason it is closed is that somebody
+   arriving to play should be looking at the start button. */
 /** The same content in two shapes. At the foot of a result it is open — the
  *  run just happened and the comparison is the point. On the way in it is a
  *  closed drawer, because somebody who came to play should be looking at the
  *  start button, not at a table. */
 function buildHistory(list,s,drawer){
   const wrap=el("div","panel histpanel");
-  const body = list.length ? historyBody(list,s) : historyEmpty(s);
+  const body = list.length ? historyBody(list,s) : historyEmpty(s,drawer?"intro":"end");
 
   if(!drawer){
     const head=el("div","hhead"); head.style.padding="0 0 4px";
-    const hic=el("span","hic"); hic.append(icon("i-hist"));
+    const hic=el("span","hic"); hic.append(icon(s?"i-hist":"i-key"));
     const grow=el("div","grow");
-    grow.append(el("b",null,"Your runs"));
-    grow.append(el("span","hsub",
-      `${list.length} ${list.length===1?"run":"runs"} by ${shortDid(s.did,8,5)} · kept in this browser only`));
+    grow.append(el("b",null, s ? "Your runs" : "Keep your runs"));
+    /* `s` is null here for the signed-out prompt at the foot of a result, and
+       reading a DID off it threw during module evaluation — which took the
+       whole page's script down with it, toy included. */
+    grow.append(el("span","hsub", s
+      ? `${list.length} ${list.length===1?"run":"runs"} by ${shortDid(s.did,8,5)} · kept in this browser only`
+      : "Kept in this browser, against the key that signed them"));
     head.append(hic,grow);
     wrap.append(head);
     body.style.padding="0";
@@ -2526,9 +2589,8 @@ function buildHistory(list,s,drawer){
   }
 
   wrap.classList.add("bar");
-  if(isOpen()) wrap.classList.add("open");
   const t=el("button","histtoggle"); t.type="button";
-  t.setAttribute("aria-expanded",String(isOpen()));
+  t.setAttribute("aria-expanded","false");
   const hic=el("span","hic"); hic.append(icon("i-hist"));
   const grow=el("div","grow");
   grow.append(el("b",null,"Your runs"));
@@ -2543,7 +2605,8 @@ function buildHistory(list,s,drawer){
     const open=!wrap.classList.contains("open");
     wrap.classList.toggle("open",open);
     t.setAttribute("aria-expanded",String(open));
-    try{ localStorage.setItem(OPENKEY,open?"1":"0"); }catch{}
+    // the rows arrive as the drawer does, every time it is opened
+    if(open && !calm()) stagger(wrap);
   });
   wrap.append(t);
 
@@ -2555,21 +2618,41 @@ function buildHistory(list,s,drawer){
   return wrap;
 }
 
+/** Restart the row animation. A CSS animation that has already run does not
+ *  run again just because its element became visible. */
+function stagger(root){
+  [...root.querySelectorAll(".hrow")].forEach((r,i)=>{
+    r.style.animation="none"; void r.offsetWidth;
+    r.style.animation=""; r.style.animationDelay=`${40+i*40}ms`;
+  });
+}
+
 /** The same panel in two places — a drawer under the start card, and open at
  *  the foot of a result — because those are the two moments somebody wants
  *  it. Built twice rather than moved: one node cannot be in two sections. */
-function paintHistory(){
+function paintHistory(keepOpen){
   const s=getSession();
   const list=s?runsFor(s.did):[];
+  const wasOpen = keepOpen && !!$("histIntro").querySelector(".histpanel.open");
   /* On the way in the bar is always there, because "sign in to keep your
      runs" is worth saying to somebody who has never seen it. At the foot of a
      result it appears only when there is something in it — the panel above it
      already offers signing in, and saying it twice is nagging. */
   $("histIntro").replaceChildren(buildHistory(list,s,true));
   $("histIntro").hidden=false;
+  if(wasOpen){
+    const w=$("histIntro").querySelector(".histpanel");
+    w.classList.add("open");
+    w.querySelector(".histtoggle")?.setAttribute("aria-expanded","true");
+    if(!calm()) stagger(w);
+  }
   const end=$("histEnd");
   end.replaceChildren();
+  /* Signed OUT, the foot of a result is where the offer lands best: the run
+     just happened, and it is the only moment somebody can see what they are
+     about to lose by not having a key. It used to show nothing at all here. */
   if(s && list.length){ end.hidden=false; end.append(buildHistory(list,s,false)); }
+  else if(!s){ end.hidden=false; end.append(buildHistory([],null,false)); }
   else end.hidden=true;
 }
 
@@ -2625,7 +2708,8 @@ function openRun(r,s){
     if(!armed){ armed=true; del.lastChild.textContent="Really delete?";
       setTimeout(()=>{ if(armed){ armed=false; del.lastChild.textContent="Delete this run"; } },4000); return; }
     putRuns(s.did, runsFor(s.did).filter(x=>x.id!==r.id));
-    closeRun(); paintHistory();
+    // keepOpen: deleting a row must not shut the drawer you deleted it from
+    closeRun(); paintHistory(true);
   });
   row.append(del);
 
