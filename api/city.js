@@ -97,7 +97,20 @@ const ROOM_RE = /^[a-z0-9][a-z0-9_-]{0,63}$/;
    failing origin is served the last good body and this function's own
    fallback never has to run. Where it does not, the fallback does, and the
    visitor cannot tell the difference. */
-const json = (body, status = 200, ttl = 20) =>
+/* TWELVE, NOT TWENTY, AND THE REASON IS AN ALIASING BUG.
+   The client polled every 20 seconds against a 20-second edge cache. Two
+   equal periods beat against each other: some polls landed inside the same
+   cache generation and saw an unchanged directory (no activity at all), and
+   the next skipped a whole generation and saw two windows of traffic at once
+   (a burst). Reported exactly as it behaves — "the messages come in a burst,
+   then it goes silent for long" — while the rooms page, which polls a
+   no-store endpoint every 3.5 seconds, streams.
+   A shorter shelf life and a client that polls faster than it (see CITY_MS)
+   means every generation is seen once, promptly, and the deltas are smaller
+   and more frequent. stale-while-revalidate keeps the CDN serving instantly
+   while it refreshes behind, so the origin sees about five reads a minute
+   however many people are watching. */
+const json = (body, status = 200, ttl = 12) =>
   new Response(JSON.stringify(body), {
     status,
     headers: {
@@ -189,10 +202,17 @@ export default async function handler(request) {
   try {
     const r = await fetch(`${BASE}/rooms?format=json&limit=200`, {
       headers: { Accept: "application/json", "User-Agent": "overheard-city/1.0" },
-      /* Six, not nine. This is the time a visitor spends looking at a city
-         that has not updated yet; past a few seconds the snapshot is simply
-         the better answer, and the retry a moment later costs nothing. */
-      signal: AbortSignal.timeout(6000),
+      /* NINE, AND SIX WAS A MISTAKE WORTH RECORDING.
+         The argument for six was that nobody should wait longer than a few
+         seconds for a city that has not updated — true, and irrelevant,
+         because the page already has a city on screen the whole time and is
+         never waiting on this. What the shorter deadline actually bought was
+         a DEGRADE: a directory read that would have succeeded in seven
+         seconds became a snapshot, and a snapshot freezes the city and puts
+         "Reconnecting" on the chip. The directory is a sorted scan over
+         thirty-odd thousand rooms; it is allowed to be slow. Waiting is
+         invisible here and giving up is not. */
+      signal: AbortSignal.timeout(9000),
     });
     if (r.status === 429) return snapshotResponse(request, "rate limited upstream");
     if (!r.ok) return snapshotResponse(request, `technocore returned ${r.status}`);

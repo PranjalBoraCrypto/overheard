@@ -247,7 +247,11 @@ console.log("\n=== C. what is happening in there, read from out here");
     const ns = [...document.querySelectorAll(".tally")];
     return {
       n: ns.length,
-      labels: ns.map((e) => e.querySelector("b").textContent),
+      /* The count and its noun are separate nodes now — the noun is there so
+         a bare "+4" is not a number with no unit. Read the figure only. */
+      labels: ns.map((e) => e.querySelector("b").firstChild.textContent),
+      nouns: ns.map((e) => e.querySelector("b i")?.textContent ?? null),
+      titles: ns.map((e) => e.querySelector(".box")?.title ?? ""),
       rooms: ns.map((e) => e.querySelector("span").textContent),
       positioned: ns.every((e) => /translate/.test(e.style.transform)),
     };
@@ -258,6 +262,13 @@ console.log("\n=== C. what is happening in there, read from out here");
     t.rooms.every((r) => typeof r === "string" && r.length > 0), t.rooms.slice(0, 3).join(","));
   check("each is placed on the building, not parked at the origin", t.positioned);
   check("and they are capped rather than unbounded", t.n <= 8, `${t.n}`);
+  /* "+4" over a building is a number with no noun, and the question it
+     earned was exactly that: what? */
+  check("each one says what it is counting",
+    t.nouns.every((n) => n === "messages" || n === "message"), t.nouns.slice(0, 3).join(","));
+  check("and spells it out in full on hover, room and all",
+    t.titles.every((x) => /message/.test(x) && /since the last reading/.test(x)),
+    t.titles[0]?.slice(0, 54) || "");
 
   /* THE NUMBER MUST BE THE DELTA, NOT A DECORATION. The directory moved every
      room by 17 between the two readings above, so a count that says anything
@@ -608,7 +619,7 @@ console.log("\n=== E3. arriving from the archive is not a burst of activity");
   await pg.waitForTimeout(5000);
   check("the next reading does move the city", count > 0, `${count} signals`);
   const labels = await pg.evaluate(() =>
-    [...document.querySelectorAll(".tally b")].map((b) => b.textContent));
+    [...document.querySelectorAll(".tally b")].map((b) => b.firstChild.textContent));
   check("and its counts are the real delta, not the gap to the archive",
     labels.every((l) => Number(l.replace(/[+,]/g, "")) === 14), labels.join(" ") || "(none yet)");
 
@@ -624,21 +635,42 @@ console.log("\n=== F. the three that did not work");
 {
   const { pg, ctx, errs } = await open();
 
-  /* 1. THE FEED'S CLOSE BUTTON. It called closePanel(), which is a different
-        window — so the X reliably closed the panel behind the feed and left
-        the feed open. */
+  /* 1. THE FEED IS THE ROOM PANEL, NOT A SECOND WINDOW.
+        It used to be a full-height drawer pinned to the opposite side of the
+        screen, so pressing "Room feed" opened a large new panel across the
+        city while the one holding the button stayed put — two panels to read
+        at once. It takes over the same card now: same place, same width,
+        with a back arrow to the room. */
   await pg.evaluate(() => window.__city.enterRoom("lobby"));
   await pg.waitForFunction(() => document.body.classList.contains("inroom"), null, { timeout: 20000 });
   await pg.waitForTimeout(1200);
+  const boxOf = () => pg.evaluate(() => {
+    const r = document.getElementById("side").getBoundingClientRect();
+    return [Math.round(r.x), Math.round(r.width)].join("x");
+  });
+  const before = await boxOf();
   await pg.evaluate(() => document.querySelector("#side .prow .go").click());
-  await pg.waitForTimeout(600);
-  check("the room feed opens", !(await pg.evaluate(() => document.getElementById("feedpane").hidden)));
-  await pg.evaluate(() => document.querySelector("#feedpane .px").click());
-  await pg.waitForTimeout(400);
-  check("and its close button closes IT",
-    await pg.evaluate(() => document.getElementById("feedpane").hidden));
-  check("without taking the room panel with it",
-    !(await pg.evaluate(() => document.getElementById("side").hidden)));
+  await pg.waitForTimeout(700);
+  check("the room feed opens", await pg.evaluate(() => !!document.querySelector("#side #flist")));
+  check("in the same panel, same size and place", (await boxOf()) === before, `${before} → ${await boxOf()}`);
+  check("and there is no second window anywhere",
+    await pg.evaluate(() => !document.getElementById("feedpane")));
+  check("with a way BACK rather than a way to shut everything",
+    await pg.evaluate(() => !!document.querySelector("#side .pback")));
+
+  /* IT MUST SURVIVE THE NEXT POLL. The room repaints its own summary into
+     this element every few seconds; before the feed shared the element that
+     was fine, and after it, it wiped the feed a moment after it opened. */
+  await pg.waitForTimeout(5000);
+  check("and it is still there after the room polls again",
+    await pg.evaluate(() => !!document.querySelector("#side #flist")));
+
+  await pg.evaluate(() => document.querySelector("#side .pback").click());
+  await pg.waitForTimeout(500);
+  check("back returns to the room, not to nothing",
+    await pg.evaluate(() => !!document.querySelector("#side .rowlist")
+      && !document.querySelector("#side #flist")));
+  check("without shutting the panel", !(await pg.evaluate(() => document.getElementById("side").hidden)));
 
   /* 2. THE ACTIONS STAY ABOVE THE LIST. With forty identities the panel used
         to push "Room feed" and "Back to the city" below the fold — the more
@@ -666,10 +698,21 @@ console.log("\n=== F. the three that did not work");
   check("and the list is what scrolls", panel.listScrolls === "auto" || panel.listScrolls === "scroll",
     panel.listScrolls);
 
-  /* 3. THE AUTO-TOUR IS GONE, AND LEFT NOTHING BEHIND. */
+  /* 3. THE AUTO-TOUR IS GONE, AND LEFT NOTHING BEHIND — including the second
+        entry point on the legend card, which outlived the first removal and
+        sat there calling a handler that no longer existed. */
   check("no auto-play control", await pg.evaluate(() => !document.getElementById("tour")));
   check("and no dead state where it used to be",
     await pg.evaluate(() => window.__city.state.tour === undefined));
+  await pg.evaluate(() => document.getElementById("legend").click());
+  await pg.waitForTimeout(400);
+  check("and the legend does not offer it either",
+    !/take the tour/i.test(await pg.evaluate(() => document.getElementById("side").innerText)));
+
+  /* 4. THE TWO CONTROLS THAT DID NOTHING USEFUL. */
+  check("no speech-bubble toggle", await pg.evaluate(() => !document.getElementById("bubbles")));
+  check("no Hide button on the activity strip",
+    await pg.evaluate(() => !document.getElementById("hideStrip")));
 
   check("no page errors", errs.length === 0, errs[0] || "");
   await ctx.close();

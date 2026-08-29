@@ -101,8 +101,21 @@ stubFetch({ upstream: upstreamOK });
   const res = await callCity();
   const body = await res.json();
   check("a healthy upstream is labelled live", body.source === "live" && body.age_seconds === 0);
-  check("and only a live reading is cacheable",
-    /s-maxage=20/.test(res.headers.get("Cache-Control") || ""), res.headers.get("Cache-Control"));
+  /* THE SHELF LIFE MUST BE SHORTER THAN THE CLIENT'S POLL, and the number
+     matters rather than merely being present. It was 20 against a client
+     that polled every 20, and two equal periods beat: some polls landed in a
+     generation already seen and found nothing, the next skipped one and
+     found two windows of traffic at once. That is the reported "burst, then
+     silent for long". Anything at or above the poll interval reintroduces
+     it, so this asserts the relationship and not just the header. */
+  const CLIENT_POLL_S = 7;         // data.js CITY_MS
+  const cc = res.headers.get("Cache-Control") || "";
+  const ttl = Number(/s-maxage=(\d+)/.exec(cc)?.[1] ?? -1);
+  check("only a live reading is cacheable", ttl > 0, cc);
+  check("and its shelf life is longer than the client's poll, so most polls are cache hits",
+    ttl > CLIENT_POLL_S, `s-maxage=${ttl} vs ${CLIENT_POLL_S}s poll`);
+  check("but not a whole multiple of it, which is what made the city beat",
+    ttl % CLIENT_POLL_S !== 0, `s-maxage=${ttl}`);
   check("with stale-if-error, so the CDN can cover a blip before we have to",
     /stale-if-error/.test(res.headers.get("Cache-Control") || ""));
 }

@@ -139,10 +139,6 @@ body.inroom .roomonly{display:block}
    is the clearest possible way to tell somebody they have not really gone
    anywhere. The overlay keeps its bubbles — those are the room's. */
 body.inroom .lab{display:none!important}
-/* .roomonly is display:flex when in a room; a .ctl is a grid button, so it
-   needs its own rule or it comes back as a flex box and loses its centring. */
-.ctl.roomonly{display:none}
-body.inroom .ctl.roomonly{display:grid}
 /* Centred over the column rather than tucked into its corner. It is the one
    control somebody standing in a room reaches for without looking, and a
    thing you reach for without looking should not be in a corner. */
@@ -533,14 +529,26 @@ button.chip:hover{border-color:rgba(95,235,255,.5);color:var(--txt)}
 @keyframes tallybump{0%{transform:scale(1)}38%{transform:scale(1.32)}100%{transform:scale(1)}}
 .tally .box.out{animation:tallyout .3s var(--ease) forwards}
 @keyframes tallyout{to{opacity:0;transform:translateY(-14px) scale(.96)}}
-.tally b{display:block;font-family:var(--mono);font-size:14px;font-weight:600;line-height:1.1;
+.tally b{display:flex;align-items:baseline;justify-content:center;gap:5px;
+  font-family:var(--mono);font-size:14px;font-weight:600;line-height:1.1;
   font-variant-numeric:tabular-nums;color:var(--cy-hi);text-shadow:0 0 14px rgba(95,235,255,.5)}
+/* The noun, at a fraction of the number's weight. It is there so the count
+   is not a bare figure with no unit; it is not there to be read every time. */
+.tally b i{font-style:normal;font-size:8.5px;font-weight:500;letter-spacing:.08em;
+  text-transform:uppercase;color:var(--dim);text-shadow:none;opacity:.85}
 .tally span{display:block;font-family:var(--mono);font-size:8.5px;letter-spacing:.1em;
   text-transform:uppercase;color:var(--dim);margin-top:1px;
   max-width:13ch;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 /* A room going well past its own normal. The only place this page shouts. */
 .tally.hot .box{border-color:rgba(242,179,61,.55);background:rgba(28,19,4,.86)}
 .tally.hot b{color:var(--warn);text-shadow:0 0 16px rgba(242,179,61,.55)}
+.tally.hot b i{color:rgba(242,179,61,.8)}
+/* AMBER MEANS ONE THING, AND IT SAYS SO. A colour on its own is a code the
+   reader has to be taught; this is the caption that teaches it, on the two
+   or three counts a minute that earn it. */
+.tally.hot .box::after{content:"unusually busy";display:block;margin-top:3px;
+  font-family:var(--mono);font-size:7.5px;letter-spacing:.12em;text-transform:uppercase;
+  color:var(--warn);opacity:.85}
 /* THE LEADER, down to the roof this number came off. Brightest at the label
    and gone by the building, so it reads as a tether rather than as a line
    drawn on the city — and it ends in a small dot ON the roof, which is the
@@ -553,14 +561,6 @@ button.chip:hover{border-color:rgba(95,235,255,.5);color:var(--txt)}
   background:var(--cy-hi);opacity:.5;box-shadow:0 0 8px var(--cy-hi)}
 .tally.hot .lead{background:linear-gradient(rgba(242,179,61,.75),rgba(242,179,61,0))}
 .tally.hot .lead::after{background:var(--warn);box-shadow:0 0 8px var(--warn)}
-.tally b{display:block;font-family:var(--mono);font-size:14px;font-weight:600;line-height:1.1;
-  font-variant-numeric:tabular-nums;color:var(--cy-hi);text-shadow:0 0 14px rgba(95,235,255,.5)}
-.tally span{display:block;font-family:var(--mono);font-size:8.5px;letter-spacing:.1em;
-  text-transform:uppercase;color:var(--dim);margin-top:1px;
-  max-width:13ch;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-/* A room going well past its own normal. The only place this page shouts. */
-.tally.hot{border-color:rgba(242,179,61,.55);background:rgba(28,19,4,.82)}
-.tally.hot b{color:var(--warn);text-shadow:0 0 16px rgba(242,179,61,.55)}
 @media (prefers-reduced-motion:reduce){
   .tally .box,.tally .box.out,.tally .box.bump b{animation:none}
 }
@@ -574,10 +574,19 @@ button.chip:hover{border-color:rgba(95,235,255,.5);color:var(--txt)}
 #hover .q{display:block;margin-top:5px;color:var(--dim);
   display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 
-/* ── the room feed drawer ────────────────────────────────────────────── */
-#feedpane{position:absolute;z-index:8;left:22px;bottom:22px;top:22px;width:min(430px,calc(100vw - 44px));
-  display:flex;flex-direction:column}
-#feedpane .pane{flex:1 1 auto;display:flex;flex-direction:column;min-height:0}
+/* ── the room feed, inside the room panel ────────────────────────────── */
+/* The back arrow in the panel head. It sits where a person's eye already is
+   when they want out of something they opened, which is the left of the
+   title rather than the far right where a close box lives. */
+.pback{width:30px;height:30px;flex:none;border-radius:9px;display:grid;place-items:center;
+  background:rgba(0,180,215,.10);border:1px solid rgba(0,180,215,.22);
+  color:var(--cy-hi);cursor:pointer;transition:.18s var(--ease)}
+.pback:hover{background:rgba(0,180,215,.2);border-color:var(--cy-hi)}
+.pback .i{width:15px;height:15px}
+/* The feed's own list is the part that scrolls, so the search, the filters
+   and the footnote stay put while the messages move under them. */
+#side #flist{flex:1 1 auto;min-height:80px;overflow:auto;overscroll-behavior:contain;
+  margin-right:-6px;padding-right:6px}
 .fbar{display:flex;gap:6px;flex-wrap:wrap;margin:11px 0}
 .fbar input{flex:1 1 130px;min-width:0;background:rgba(0,7,10,.7);border:1px solid var(--edge);
   border-radius:10px;color:var(--txt);font-family:var(--mono);font-size:11.5px;padding:8px 10px;outline:none}
@@ -654,7 +663,6 @@ button.chip:hover{border-color:rgba(95,235,255,.5);color:var(--txt)}
   .tr{top:auto;bottom:104px;right:14px;left:14px;width:auto;max-height:48%}
   .bl{display:none}
   .br{bottom:14px;right:14px;top:auto}
-  #feedpane{left:14px;right:14px;top:auto;bottom:104px;height:62%;width:auto}
   .ctl{width:42px;height:42px}
   .seg button{padding:9px 12px}
 }
@@ -704,6 +712,7 @@ button.chip:hover{border-color:rgba(95,235,255,.5);color:var(--txt)}
   <symbol id="c-msg" viewBox="0 0 24 24"><path d="M20.4 15.2a2.2 2.2 0 0 1-2.2 2.2H7.4L3.6 21V5.8a2.2 2.2 0 0 1 2.2-2.2h12.4a2.2 2.2 0 0 1 2.2 2.2z"/></symbol>
   <!-- The rail's own mark: a rising trace. -->
   <symbol id="c-pulse" viewBox="0 0 24 24"><path d="M2.6 13.4h4L9 7.2l3.4 10.4 2.4-5.6h6.6"/></symbol>
+  <symbol id="c-back" viewBox="0 0 24 24"><path d="M20 12H4.4"/><path d="M10.6 5.4 4 12l6.6 6.6"/></symbol>
 </defs></svg>
 
 <div class="sky" aria-hidden="true"><i></i><i></i></div>
@@ -764,7 +773,11 @@ button.chip:hover{border-color:rgba(95,235,255,.5);color:var(--txt)}
     <div class="striptop">
       <span id="stripTitle">Room activity</span>
       <span class="live" id="stripLive">&bull; live</span>
-      <button class="fbtn" id="hideStrip" type="button">Hide</button>
+      <!-- The Hide button was here. It is gone: the strip only exists inside
+           a room, it is three lines tall, and a control whose whole purpose
+           is to make part of the interface disappear is one more thing to
+           understand in exchange for a sliver of space. Clean view already
+           hides everything, and leaving a room takes the strip with it. -->
     </div>
     <div class="ticks" id="ticks" aria-hidden="true"></div>
     <div class="stripfoot"><span id="stripLeft"></span><span id="stripRight"></span></div>
@@ -782,15 +795,13 @@ button.chip:hover{border-color:rgba(95,235,255,.5);color:var(--txt)}
      tells you where to look by lighting up rather than by dragging you
      there. The busiest-now rail does the same job while leaving the camera
      in the visitor's hands. -->
-      <!-- SPEECH BUBBLES, AND ONLY WHERE THERE ARE ANY.
-           This was an eye, shown everywhere, and the question it earned was
-           "what is that for?" — a fair question, because on the city page it
-           did nothing at all: bubbles are raised by messages arriving in the
-           room you are standing in, so out here there are none to hide. An
-           eye also says "visibility" in general rather than this one thing.
-           It is a speech balloon now, and it appears when you walk into a
-           room, which is the moment its purpose is self-evident. -->
-      <button class="ctl roomonly" id="bubbles" type="button" title="Hide what people are saying" aria-label="Hide speech bubbles"><svg class="i"><use href="#c-msg"/></svg></button>
+      <!-- The speech-bubble toggle was here, and it is gone.
+           It began as an eye shown on every page, where it did nothing at
+           all — bubbles are raised by messages arriving in the room you are
+           standing in. Scoping it to a room made it honest and left it
+           pointless: inside a room the bubbles ARE the room, and a control
+           for switching off the only thing happening is a control nobody
+           reaches for. Clean view still hides every overlay at once. -->
       <!-- Clean view got its own control when the fps figure stopped being a
            button. It was the only way in, and a measurement that hides your
            entire interface when you click it to read it is a trap, not a
@@ -802,7 +813,10 @@ button.chip:hover{border-color:rgba(95,235,255,.5);color:var(--txt)}
   </div>
 
   <!-- the room feed -->
-  <aside class="card pane" id="feedpane" hidden></aside>
+  <!-- The room feed used to be a second drawer here, full height, pinned to
+       the opposite side of the screen from the panel whose button opened it.
+       It lives inside that panel now — same card, same size, same place —
+       with a back arrow to the room. One panel, one place to look. -->
 
   <div id="hover" hidden></div>
 

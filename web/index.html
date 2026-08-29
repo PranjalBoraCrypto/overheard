@@ -1854,13 +1854,22 @@ function bootCard(pub, did, progress){
        person can actually read back: this is the ID they pasted, and seeing it
        land confirms the page is checking the right one. `did:key:` stays dim —
        it is the same on every identity and carries no information; the part
-       that differs is the part that lights up. */
+       that differs is the part that lights up.
+
+       THE DIM PART IS EIGHT CHARACTERS, NOT NINE. It was nine, which swept
+       the `z` in with the prefix — and `z` is the first character of the key
+       itself, so every identity on the site rendered with its opening
+       character greyed out while the rest lit up. Technically `z` is the
+       multibase tag and is the same on every did:key, but that is not what
+       the eye is doing here: a reader breaks the string at the colon, so a
+       highlight that starts one character after it reads as a bug rather
+       than as a distinction. The colon is the boundary. */
     ctx.font="500 16px 'IBM Plex Mono', monospace"; ctx.textAlign="left";
     const cw=ctx.measureText("M").width;
     const bx=W/2-(chars.length*cw)/2;
     chars.forEach((c,i)=>{
       const on=cl((t-260-i*14)/220);
-      const boiler=i<9;                       // "did:key:z"
+      const boiler=i<8;                       // exactly "did:key:"
       ctx.globalAlpha=.10+on*(boiler?.55:.90);
       ctx.fillStyle=on>=1?(boiler?"#4E7A8B":`hsl(${hue} 90% 68%)`):"#2A6B80";
       ctx.fillText(c,bx+i*cw,380);

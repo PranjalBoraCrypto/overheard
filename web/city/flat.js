@@ -72,7 +72,7 @@ export function mountFlat(container, els) {
      and the controls do not have to know which view they are talking to. */
   const st = {
     room: null, agentId: null, msgKey: null, following: null,
-    bubblesOn: true, clean: false, hoverKey: null,
+    clean: false, hoverKey: null,
   };
 
   let W = 0, H = 0, dpr = 1, bg = null;
@@ -119,6 +119,8 @@ export function mountFlat(container, els) {
     toggleFeed: () => toggleFeed(),
     follow: (id) => { st.following = st.following === id ? null : id; selectAgent(id); },
     locate: (id) => { if (id) selectAgent(id); },
+    /* The feed took the room panel over; this puts it back. */
+    showRoom: () => { if (st.room) showRoomPanel(); },
     flyToRoom: (room) => flyToRoom(room),
     toggleClean: () => setClean(!st.clean),
   });
@@ -505,7 +507,7 @@ export function mountFlat(container, els) {
   }
 
   function toggleFeed() {
-    if (!els.feed.hidden) { ui.closeFeed(); return; }
+    if (ui.feedShown()) { ui.closeFeed(); return; }
     ui.buildFeed(D.state.room, st.msgKey);
   }
 
@@ -513,7 +515,11 @@ export function mountFlat(container, els) {
   D.on("room", (r) => {
     if (!r) return;
     setAgents(r.agents);
-    if (!st.agentId && !st.msgKey) showRoomPanel();
+    /* NOT WHILE THE FEED HAS THE PANEL. They are the same element now, so
+       repainting the room summary on every poll wiped the feed a few seconds
+       after it was opened — it appeared, then vanished, which reads as a
+       button that half works. renderFeed keeps it current instead. */
+    if (!st.agentId && !st.msgKey && !ui.feedShown()) showRoomPanel();
     ui.renderFeed(r, st.msgKey);
     paintStrip(r);
     mark();
@@ -538,7 +544,7 @@ export function mountFlat(container, els) {
         if (to && agentById.get(to)) beam(from, to);
       }
       S.tick(m.seq, m.c.kind, r.name);
-      if (st.bubblesOn && !st.clean) addBubble(m, from);
+      if (!st.clean) addBubble(m, from);
     }
     if (st.following) {
       const mine = added.filter((m) => (m.did || `nick:${m.nick}`) === st.following);
@@ -993,19 +999,12 @@ export function mountFlat(container, els) {
      the other silently stops existing for anybody without WebGL — the
      failure this line prevents. */
   $("cleanview").onclick = () => setClean(!st.clean);
-  $("bubbles").onclick = () => {
-    st.bubblesOn = !st.bubblesOn;
-    if (!st.bubblesOn) clearBubbles();
-    $("bubbles").classList.toggle("on", !st.bubblesOn);
-    $("bubbles").title = st.bubblesOn ? "Hide what people are saying" : "Show what people are saying";
-  };
   $("mute").onclick = () => {
     const on = !S.enabled();
     S.setEnabled(on); Q.setMuted(!on); paintMute();
     if (on) S.pick();
     if (on && st.room) S.bedOn(true);
   };
-  $("hideStrip").onclick = () => ($("strip").hidden = true);
   $("legend").onclick = () => { st.agentId = null; st.msgKey = null; ui.legend(city); };
 
   function swapIcon(btn, id, title) {
@@ -1038,9 +1037,9 @@ export function mountFlat(container, els) {
 
   function setClean(v) {
     st.clean = v;
-    for (const n of [$("chips").parentElement, $("side"), $("strip"), els.feed, els.rail])
+    for (const n of [$("chips").parentElement, $("side"), $("strip"), els.rail])
       if (n) n.style.opacity = v ? "0" : "";
-    for (const n of [$("chips").parentElement, els.feed, els.rail])
+    for (const n of [$("chips").parentElement, els.rail])
       if (n) n.style.pointerEvents = v ? "none" : "";
     els.overlay.style.opacity = v ? "0" : "";
     if (v) ui.hover(0, 0, null);
@@ -1061,7 +1060,7 @@ export function mountFlat(container, els) {
          which is right when a close button is clicked and wrong here, and is
          why Escape used to loop instead of letting anybody out. */
       if (st.clean) setClean(false);
-      else if (!els.feed.hidden) ui.closeFeed();
+      else if (ui.feedShown()) ui.closeFeed();
       else if (st.agentId || st.msgKey) { st.agentId = null; st.msgKey = null; showRoomPanel(); }
       else if (st.room) leaveRoom();
       else if (!els.side.hidden) ui.closePanel();

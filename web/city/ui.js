@@ -264,12 +264,15 @@ export function makeUI(els, cb) {
         b = el("button", "railrow"); b.type = "button";
         b.append(el("span", "g"), el("span", "nm"), el("span", "rt"),
                  el("span", "sp"), el("span", "ln"));
-        b.addEventListener("click", () => cb.flyToRoom(r.room));
+        /* INTO the room, not toward it. Flying the camera closer answered a
+           question nobody asked: the rail already says what is happening in
+           there, so the only reason to click a row is to go and look. */
+        b.addEventListener("click", () => cb.enterRoom(r.room));
         railRows.set(r.room, b);
         b.classList.add("enter");
       }
       b.style.order = String(i);
-      b.title = `Fly to ${r.room}`;
+      b.title = `Go into ${r.room}`;
 
       const g = b.querySelector(".g");
       const kind = r.line?.c?.kind || "message";
@@ -334,6 +337,19 @@ export function makeUI(els, cb) {
 
   function closeRail() { if (els.rail) { els.rail.hidden = true; els.rail.replaceChildren(); } }
 
+  /* ── the feed lives IN the room panel ────────────────────────────────────
+     It used to be a second drawer, full height, pinned to the opposite side
+     of the screen — so pressing "Room feed" opened a large new window across
+     the city while the panel that had the button in it stayed where it was,
+     and you were suddenly reading two panels at once. It is one panel now:
+     the same card, the same size, the same place, showing the feed instead
+     of the room, with a way back to what was there before.
+
+     Every other painter in this file writes into the same element, so each
+     one releases the flag as it takes the panel over. */
+  let feedOn = false;
+  const feedShown = () => feedOn;
+
   /* ── the side panel ───────────────────────────────────────────────── */
 
   /**
@@ -361,6 +377,7 @@ export function makeUI(els, cb) {
   function roomSummary(info) {
     const p = els.side;
     p.replaceChildren();
+    feedOn = false;   // whatever this is, it is not the feed
     p.hidden = false;
     p.append(panelHead(info.landmark ? "c-pin" : "c-list", info.title || info.room,
       info.landmark ? info.sub || "district" : "public room"));
@@ -423,6 +440,7 @@ export function makeUI(els, cb) {
   function roomLive(room, agents, selectedId) {
     const p = els.side;
     p.replaceChildren();
+    feedOn = false;   // whatever this is, it is not the feed
     p.hidden = false;
     p.append(panelHead("c-bot", room.name, `${agents.length} active ${agents.length === 1 ? "identity" : "identities"}`));
 
@@ -487,6 +505,7 @@ export function makeUI(els, cb) {
   function agentPanel(a, room, following) {
     const p = els.side;
     p.replaceChildren();
+    feedOn = false;   // whatever this is, it is not the feed
     p.hidden = false;
     p.append(panelHead("c-bot", a.did ? shortDid(a.did, 12, 8) : a.nick || "unknown",
       a.signed ? "technocore-accepted signed" : "self-asserted nickname"));
@@ -546,6 +565,7 @@ export function makeUI(els, cb) {
   function messagePanel(m, addressedTo) {
     const p = els.side;
     p.replaceChildren();
+    feedOn = false;   // whatever this is, it is not the feed
     p.hidden = false;
     p.append(panelHead("c-list", kindLabel(m.c), `sequence ${m.seq}`));
 
@@ -588,7 +608,7 @@ export function makeUI(els, cb) {
     return p;
   }
 
-  function closePanel() { els.side.hidden = true; els.side.replaceChildren(); }
+  function closePanel() { feedOn = false; els.side.hidden = true; els.side.replaceChildren(); }
 
   /**
    * WHERE THIS IDENTITY HAS BEEN — the answer to a pasted did:key.
@@ -613,6 +633,7 @@ export function makeUI(els, cb) {
   function didPanel(q) {
     const p = els.side;
     p.replaceChildren();
+    feedOn = false;   // whatever this is, it is not the feed
     p.hidden = false;
     p.append(panelHead("c-bot", shortDid(q.did, 12, 8), "identity"));
 
@@ -692,6 +713,7 @@ export function makeUI(els, cb) {
   function legend(city) {
     const p = els.side;
     p.replaceChildren();
+    feedOn = false;   // whatever this is, it is not the feed
     p.hidden = false;
     p.append(panelHead("c-info", "How to read the city", "what the shapes mean"));
 
@@ -726,17 +748,16 @@ export function makeUI(els, cb) {
       document.createTextNode("Arrow keys work too; Escape steps back out."));
     p.append(n);
 
-    /* One button, not two. Two wrapped onto a second line and pushed the
-       first below the fold of the panel, which is a strange way to treat the
-       only thing on the card somebody is meant to press. The tour starts at
-       the busiest district anyway, so "enter the lobby" was a second door
-       into the same room. */
-    const r2 = el("div", "prow");
-    const tour = el("button", "go"); tour.type = "button";
-    tour.append(icon("c-play"), el("span", null, "Take the tour"));
-    tour.addEventListener("click", () => cb.tour());
-    r2.append(tour);
-    p.append(r2);
+    /* THE SECOND DOOR TO A ROOM THAT WAS DEMOLISHED.
+       "Take the tour" lived here as well as in the control cluster, and only
+       the cluster's copy was removed with the tour itself — so this one was
+       left calling a handler that no longer exists, wearing an icon whose
+       symbol had been deleted from the page. A dead button on the one card
+       that exists to explain the city.
+
+       Nothing replaces it. This panel's job is to say what the shapes mean,
+       and the sentence above already says how to move; the busiest-now rail
+       is what points at somewhere worth looking. */
     return p;
   }
 
@@ -744,9 +765,10 @@ export function makeUI(els, cb) {
   const feed = { paused: false, follow: true, q: "", kind: "all", who: null, open: null };
 
   function renderFeed(room, selectedKey) {
-    const p = els.feed;
+    const p = els.side;
     if (p.hidden) return;
     const list = p.querySelector("#flist");
+    if (!feedOn) return;
     if (!list) return buildFeed(room, selectedKey);
 
     const keep = list.scrollTop, atEnd = list.scrollHeight - list.scrollTop - list.clientHeight < 40;
@@ -794,11 +816,22 @@ export function makeUI(els, cb) {
   }
 
   function buildFeed(room, selectedKey) {
-    const p = els.feed;
+    const p = els.side;
     p.replaceChildren();
     p.hidden = false;
-    p.append(panelHead("c-list", room?.name || "room", "everything Technocore is serving",
-      () => closeFeed()));
+    feedOn = true;
+    /* A BACK ARROW, NOT A CLOSE BOX. The feed replaced something — the room's
+       own panel — so the way out of it is backwards, to that. A × here would
+       shut the whole panel and leave somebody who wanted the room summary
+       reopening it from the map. */
+    const head = panelHead("c-list", room?.name || "room", "everything Technocore is serving",
+      () => closeFeed());
+    const back = el("button", "pback"); back.type = "button";
+    back.setAttribute("aria-label", "Back to the room");
+    back.append(icon("c-back"));
+    back.addEventListener("click", () => closeFeed());
+    head.insertBefore(back, head.firstChild);
+    p.append(head);
 
     const bar = el("div", "fbar");
     const q = document.createElement("input");
@@ -836,7 +869,16 @@ export function makeUI(els, cb) {
     renderFeed(room, selectedKey);
   }
 
-  function closeFeed() { els.feed.hidden = true; els.feed.replaceChildren(); }
+  /* Back to whatever the panel was showing before the feed took it over.
+     The caller owns that — it knows whether there is a room to go back to —
+     so this reports the state change and lets it repaint. */
+  function closeFeed() {
+    if (!feedOn) return;
+    feedOn = false;
+    els.side.replaceChildren();
+    els.side.hidden = true;
+    cb.showRoom?.();
+  }
 
   /* ── hover ─────────────────────────────────────────────────────────── */
   function hover(x, y, node) {
@@ -912,7 +954,7 @@ export function makeUI(els, cb) {
   return {
     chips, status, roomSummary, roomLive, agentPanel, messagePanel, closePanel, legend, didPanel,
     rail, closeRail,
-    buildFeed, renderFeed, closeFeed, feedState: feed,
+    buildFeed, renderFeed, closeFeed, feedShown, feedState: feed,
     hover, hoverAgentCard, hoverRoomCard, hoverBlockCard, hits,
   };
 }

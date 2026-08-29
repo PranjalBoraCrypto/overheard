@@ -228,10 +228,10 @@ export function makeRoom(THREE, { renderer, preset, level = "balanced", reduced 
   /* ── the figures ───────────────────────────────────────────────────────
      Three instanced meshes and nothing per-agent in the scene graph, so the
      cost of a busy room is the same as the cost of a quiet one. */
-  const bodyMat = new THREE.MeshStandardMaterial({ color: 0x123c4c, roughness: 0.6, metalness: 0.15 });
+  const bodyMat = new THREE.MeshStandardMaterial({ color: 0x1a4f63, roughness: 0.52, metalness: 0.28 });
   const headMat = new THREE.MeshStandardMaterial({
-    color: 0x2b7f97, roughness: 0.35, metalness: 0.2,
-    emissive: 0x0b3a49, emissiveIntensity: 0.35,
+    color: 0x3597b3, roughness: 0.28, metalness: 0.34,
+    emissive: 0x0d4557, emissiveIntensity: 0.45,
   });
   const lampMat = new THREE.MeshBasicMaterial({
     color: 0x5fe4ff, transparent: true, opacity: 0.7,
@@ -250,15 +250,60 @@ export function makeRoom(THREE, { renderer, preset, level = "balanced", reduced 
     return m;
   };
 
+  /* ── WHAT AN AGENT LOOKS LIKE ────────────────────────────────────────────
+     A tapered cylinder with a sphere on it is a chess pawn, and fifty of them
+     is a chess set. These are meant to read as agents at a glance and as
+     DIFFERENT agents at a second glance, which took four pieces rather than
+     two:
+
+       CHASSIS  a six-sided tapered column. Hexagonal rather than round
+                because a flat face catches the key light and gives the
+                silhouette an edge to turn on; round read as moulded plastic.
+       DOME     a flattened head, wider than it is tall.
+       VISOR    a bright band across the front of the dome, turned with the
+                figure. This is the piece doing most of the work: a lit
+                horizontal slot is the single most legible "this is a machine
+                that is looking at something" cue there is, and because it
+                faces the way the figure faces, a room full of them turning
+                toward one speaker is instantly readable.
+       HALO     a thin ring above the dome, tilted and slowly turning at each
+                agent's own rate. It is what stops the room reading as a grid
+                of identical objects when nothing is happening.
+
+     Five instanced meshes for any number of figures. A room with three
+     hundred speakers costs the same as a room with three. */
+  /* NOT ADDITIVE. Additive over the lit dome saturated every visor to the
+     same white, which threw away the one per-agent signal that reads at a
+     glance. Plain blending keeps the hue; the glow comes from the colour
+     being bright rather than from the blend mode. */
+  const visorMat = new THREE.MeshBasicMaterial({ toneMapped: false });
+  const haloMat = new THREE.MeshBasicMaterial({
+    transparent: true, opacity: 0.5, blending: THREE.AdditiveBlending, depthWrite: false,
+  });
+
   const G = {
-    body: new THREE.CylinderGeometry(0.62, 1.05, 3.0, 7),
-    head: new THREE.SphereGeometry(0.72, 10, 8),
+    body: new THREE.CylinderGeometry(0.5, 0.98, 2.7, 6),
+    head: new THREE.SphereGeometry(0.66, 12, 9),
+    visor: new THREE.BoxGeometry(0.86, 0.22, 0.16),
+    halo: new THREE.TorusGeometry(0.7, 0.045, 5, 22),
     lamp: new THREE.RingGeometry(1.25, 1.95, 20),
   };
   const bodies = mkInst(G.body, bodyMat, cap);
   const heads = mkInst(G.head, headMat, cap);
+  const visors = mkInst(G.visor, visorMat, cap);
+  /* The lowest tier keeps the visor — it is information — and drops the
+     halo, which is character. */
+  const halos = level === "performance" ? null : mkInst(G.halo, haloMat, cap);
   const lamps = mkInst(G.lamp, lampMat, cap);
   lamps.instanceColor = null;
+
+  const visorCol = new THREE.InstancedBufferAttribute(new Float32Array(cap * 3), 3);
+  visors.instanceColor = visorCol;
+  let haloCol = null;
+  if (halos) {
+    haloCol = new THREE.InstancedBufferAttribute(new Float32Array(cap * 3), 3);
+    halos.instanceColor = haloCol;
+  }
 
   /* Per-instance colour is how one figure lights up without a material per
      agent. Allocated once at full capacity. */
@@ -342,6 +387,31 @@ export function makeRoom(THREE, { renderer, preset, level = "balanced", reduced 
           /* A quarter of them drift, and only around their own station. */
           walk: hash01(hashId(a.id), 13) < 0.25 ? 0.55 + hash01(hashId(a.id), 17) * 0.7 : 0,
           yaw: 0, face: null, lit: 0, born: clock,
+          /* ── WHAT MAKES THIS ONE THIS ONE ──────────────────────────────
+             Every figure was the same tapered cylinder with the same sphere
+             on top, so a plaza of fifty read as a set of chess pawns: you
+             could not tell one identity from another without clicking, and
+             nothing about them said "agent".
+
+             They vary now, and all of it is derived from the identity's own
+             hash — so a figure looks the same every time you come back, and
+             two visitors looking at the same room see the same room. It is
+             description, not decoration: the variation carries no claim
+             about the agent, and is stated nowhere as if it did.
+
+             Deliberately a FAMILY and not a costume box. One chassis, one
+             visor, one halo; what changes is proportion, the angle things
+             sit at, and hue within a narrow band. Slightly different from
+             each other, as asked — enough to tell apart at a glance, not so
+             much that the room stops reading as one kind of thing. */
+          tall: 0.86 + hash01(hashId(a.id), 23) * 0.34,
+          wide: 0.88 + hash01(hashId(a.id), 29) * 0.26,
+          dome: 0.86 + hash01(hashId(a.id), 31) * 0.3,
+          tilt: (hash01(hashId(a.id), 37) - 0.5) * 0.5,
+          spin: 0.35 + hash01(hashId(a.id), 41) * 0.9,
+          /* 168–202: teal to cyan-blue. Narrow on purpose — the room has one
+             palette and a figure is not allowed to leave it. */
+          hue: 168 + hash01(hashId(a.id), 43) * 34,
         };
         byId.set(a.id, f);
       }
@@ -352,7 +422,8 @@ export function makeRoom(THREE, { renderer, preset, level = "balanced", reduced 
     for (const id of [...byId.keys()]) if (!seen.has(id)) byId.delete(id);
     figures = next;
     overflow = Math.max(0, list.length - figures.length);
-    bodies.count = heads.count = lamps.count = figures.length;
+    bodies.count = heads.count = visors.count = lamps.count = figures.length;
+    if (halos) halos.count = figures.length;
     crowd.material.opacity = overflow > 0 ? Math.min(0.32, 0.06 + Math.log10(1 + overflow) * 0.12) : 0;
   }
 
@@ -426,20 +497,57 @@ export function makeRoom(THREE, { renderer, preset, level = "balanced", reduced 
 
       const bob = reduced ? 0 : Math.sin(clock * 1.1 + f.phase) * 0.13;
 
-      dummy.position.set(x, 1.5 + bob, z);
+      /* Proportions are the agent's own and never change; only the bob and
+         the lit state move. `tall` also decides where the head sits, or a
+         short agent wears its dome in its chest. */
+      const bodyH = 2.7 * f.tall;
+      const headY = bodyH + 0.86 * f.dome + bob;
+
+      dummy.position.set(x, bodyH / 2 + bob, z);
       dummy.rotation.set(0, f.yaw, 0);
-      dummy.scale.setScalar(1);
+      dummy.scale.set(f.wide, f.tall, f.wide);
       dummy.updateMatrix();
       bodies.setMatrixAt(i, dummy.matrix);
 
-      dummy.position.set(x, 3.55 + bob, z);
-      dummy.scale.setScalar(1 + f.lit * 0.08);
+      /* Wider than tall. A sphere reads as a ball on a stick; a squashed one
+         reads as a housing with something inside it. */
+      const hs = f.dome * (1 + f.lit * 0.07);
+      dummy.position.set(x, headY, z);
+      dummy.scale.set(hs, hs * 0.82, hs);
       dummy.updateMatrix();
       heads.setMatrixAt(i, dummy.matrix);
 
+      /* The visor rides on the front of the dome and turns with the figure,
+         so "who is this one looking at" is answerable across the room. */
+      /* ON the dome's surface, not inside it. At 0.52 the band sat within
+         the head's own radius of 0.66 and was depth-rejected by it — the
+         visor was being drawn every frame and had never once been visible.
+         0.63 puts it just proud of the shell. */
+      dummy.position.set(
+        x + Math.sin(f.yaw) * 0.63 * f.dome,
+        headY + 0.02,
+        z + Math.cos(f.yaw) * 0.63 * f.dome);
+      dummy.rotation.set(0, f.yaw, 0);
+      dummy.scale.set(f.dome, f.dome * (1 + f.lit * 0.5), f.dome);
+      dummy.updateMatrix();
+      visors.setMatrixAt(i, dummy.matrix);
+
+      if (halos) {
+        /* Tilted at its own angle and turning at its own rate. Nothing about
+           the spin is a reading — it is the one piece here that is purely
+           character, and it is the reason a still room does not look like a
+           screenshot. */
+        dummy.position.set(x, headY + 0.92 * f.dome, z);
+        dummy.rotation.set(Math.PI / 2 + f.tilt, reduced ? 0 : clock * f.spin, 0);
+        const hl = f.dome * (1 + f.lit * 0.18);
+        dummy.scale.set(hl, hl, hl);
+        dummy.updateMatrix();
+        halos.setMatrixAt(i, dummy.matrix);
+      }
+
       dummy.position.set(x, 0.09, z);
       dummy.rotation.set(-Math.PI / 2, 0, 0);
-      dummy.scale.setScalar(1 + f.lit * 0.25);
+      dummy.scale.setScalar((1 + f.lit * 0.25) * f.wide);
       dummy.updateMatrix();
       lamps.setMatrixAt(i, dummy.matrix);
 
@@ -450,12 +558,34 @@ export function makeRoom(THREE, { renderer, preset, level = "balanced", reduced 
       tmpCol.toArray(lampCol.array, i * 3);
       tmpCol.setRGB(0.06 + f.lit * 0.5, 0.16 + f.lit * 0.75, 0.22 + f.lit * 0.8);
       tmpCol.toArray(headCol.array, i * 3);
+
+      /* THE HUE IS THE AGENT'S OWN, and it is the thing that makes fifty
+         figures fifty figures rather than one figure fifty times. It stays
+         inside a 34-degree band, so the room still reads as one palette —
+         two agents are different the way two people in the same uniform are
+         different, not the way a fruit bowl is.
+
+         Lightness carries the state: an unlit visor is present but dim, a
+         lit one is the brightest thing on the plaza. That is the claim, and
+         hue is not part of it. */
+      /* Bright enough to be the thing you see first even unlit — it is the
+         piece that says "machine", and a visor you have to look for is a
+         visor that is not doing its job. */
+      tmpCol.setHSL(f.hue / 360, 0.95, 0.5 + f.lit * 0.36);
+      tmpCol.toArray(visorCol.array, i * 3);
+      if (haloCol) {
+        tmpCol.setHSL(f.hue / 360, 0.7, 0.2 + f.lit * 0.34);
+        tmpCol.toArray(haloCol.array, i * 3);
+      }
     }
     bodies.instanceMatrix.needsUpdate = true;
     heads.instanceMatrix.needsUpdate = true;
+    visors.instanceMatrix.needsUpdate = true;
     lamps.instanceMatrix.needsUpdate = true;
     lampCol.needsUpdate = true;
     headCol.needsUpdate = true;
+    visorCol.needsUpdate = true;
+    if (halos) { halos.instanceMatrix.needsUpdate = true; haloCol.needsUpdate = true; }
 
     for (let i = 0; i < sparkPool.length; i++) {
       const s = sparkPool[i];

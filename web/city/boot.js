@@ -29,7 +29,7 @@ const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
 export async function boot() {
   const stage = $("stage"), canvas = $("scene"), overlay = $("overlay");
   const els = {
-    stage, overlay, chips: $("chips"), side: $("side"), feed: $("feedpane"),
+    stage, overlay, chips: $("chips"), side: $("side"),
     hover: $("hover"), hits: $("hits"), status: $("status"), rail: $("rail"),
   };
 
@@ -111,7 +111,6 @@ export async function boot() {
     agentId: null,         // selected identity
     msgKey: null,          // selected message
     following: null,
-    bubblesOn: true,
     clean: false,
     hoverKey: null,
   };
@@ -153,6 +152,8 @@ export async function boot() {
     toggleFeed: () => toggleFeed(),
     follow: (id) => { st.following = st.following === id ? null : id; selectAgent(id); },
     locate: (id) => { if (id) selectAgent(id); },
+    /* The feed took the room panel over; this puts it back. */
+    showRoom: () => { if (st.room) showRoomPanel(); },
     flyToRoom: (room) => flyToRoom(room),
     toggleClean: () => setClean(!st.clean),
   });
@@ -254,27 +255,45 @@ export async function boot() {
      directory that could not be read produces nothing, which is why the city
      visibly settles when Technocore goes quiet instead of idling on a loop
      that looks the same either way. */
-  /* room -> { seq, live } — the number AND whether the reading it came from
-     was live. Both halves are load-bearing; see the note in signalActivity. */
+  /* MUST MATCH data.js's CITY_MS. It is the window the release spreading
+     has to fill and the unit the staleness rule counts in, so a page that
+     polls every seven seconds and believes it polls every twenty releases
+     its signals over three times too long a stretch and then sits idle. */
+  const CITY_POLL_MS = 7000;
+
+  /* room -> { seq, live, at } — the number, whether the reading it came from
+     was live, and when. All three are load-bearing; see signalActivity. */
   const lastSeq = new Map();
+  /* How old the last live observation may be and still be something this
+     page can claim to have watched. Six poll windows: long enough to ride
+     out a degraded directory or two, far short of the days a seeded
+     snapshot can be behind. */
+  const STALE_MS = 6 * CITY_POLL_MS;
   function signalActivity() {
     if (!city || !world.life) return;
     /* Only a LIVE reading may move anything. A snapshot is a photograph of a
        moment that has already passed; animating it would be the city's
        version of replaying an archived message as if it had just been sent. */
     if (D.state.status.source !== "live") {
-      for (const r of city.roster) {
-        if (r.last_seq != null) lastSeq.set(r.room, { seq: Number(r.last_seq), live: false });
-      }
+      /* A DEGRADED READING DOES NOT OVERWRITE THE LAST LIVE ONE.
+         It used to, and under a directory that degrades now and then that
+         was almost as bad as the flood it was written to prevent: one
+         snapshot in the middle of a run of good readings threw away the
+         baseline, so the next live reading had nothing to compare against
+         and produced nothing either. Two dropped polls in a minute and the
+         city sat still for a minute.
+         The snapshot's numbers are simply not recorded. What is remembered
+         is the last thing actually observed live, and how long ago. */
       return;
     }
+    const now = Date.now();
     const events = [];
     const moved = new Set();
     for (const r of city.roster) {
       if (!r.live || r.last_seq == null) continue;
       const seq = Number(r.last_seq);
       const prev = lastSeq.get(r.room);
-      lastSeq.set(r.room, { seq, live: true });
+      lastSeq.set(r.room, { seq, live: true, at: now });
       /* No previous reading is not "nothing happened" — it is "we have not
          measured yet", and the two must not look alike.
 
@@ -292,7 +311,15 @@ export async function boot() {
          nothing, exactly as a first reading always has. The city then comes
          up over the following polls, from things that genuinely happened
          while somebody was watching. */
-      if (prev == null || !prev.live || seq <= prev.seq) continue;
+      /* Diffed against the last LIVE observation, provided it is recent
+         enough to be one. "Recent enough" is the window this page can
+         honestly claim to have been watching: a handful of polls. Older than
+         that — a tab that was asleep, a long outage, or the archived
+         snapshot the page seeds itself from, whose numbers can be days old —
+         and the difference is not activity anybody observed. It re-baselines
+         instead, silently, exactly as a first reading does. */
+      const fresh = prev != null && prev.live && (now - (prev.at ?? 0)) <= STALE_MS;
+      if (!fresh || seq <= prev.seq) continue;
       const delta = seq - prev.seq;
       const rate = D.rateOf(r.room) ?? 0;
       /* Against the room's own normal: 1 is business as usual, 3 is a room
@@ -330,12 +357,11 @@ export async function boot() {
        nearer their real spacing. Nothing is invented and nothing is held
        back; the last one goes out before the next reading lands. */
     queueAt = 0;
-    queueGap = Math.max(220, (CITY_POLL_MS * 0.82) / Math.max(1, queued.length));
+    queueGap = Math.max(140, (CITY_POLL_MS * 0.82) / Math.max(1, queued.length));
     queueNext = performance.now() + 120;
   }
 
   /* The release valve for the above, stepped from the frame loop. */
-  const CITY_POLL_MS = 20000;
   let queued = [], queueAt = 0, queueNext = 0, queueGap = 500;
   function releaseSignals(now) {
     if (queueAt >= queued.length || now < queueNext || !world.life) return;
@@ -392,7 +418,9 @@ export async function boot() {
     const had = tallies.find((t) => t.room === room);
     if (had) {
       had.n += n; had.born = performance.now();
-      had.box.firstChild.textContent = `+${had.n.toLocaleString()}`;
+      const bEl = had.box.querySelector("b");
+      bEl.firstChild.textContent = `+${had.n.toLocaleString()}`;
+      bEl.querySelector("i").textContent = had.n === 1 ? "message" : "messages";
       /* Re-struck, so it kicks again rather than silently changing value. */
       had.box.classList.remove("bump");
       void had.box.offsetWidth;                  // restart the animation
@@ -412,10 +440,25 @@ export async function boot() {
        origin. */
     const box = document.createElement("div");
     box.className = "box";
+    /* IT SAYS WHAT IT IS. "+4" over a building is a number with no noun, and
+       the question it earned was exactly that: what? It is the count of
+       messages that arrived in that room since the last reading, so it says
+       "4 messages" and names the room underneath. Two words of overhead buys
+       the difference between decoration and a readout.
+
+       "message"/"messages" rather than a fixed plural, because a city where
+       every count says "1 messages" reads as machine output. */
     const b = document.createElement("b");
-    b.textContent = `+${n.toLocaleString()}`;
+    b.append(document.createTextNode(`+${n.toLocaleString()}`),
+      Object.assign(document.createElement("i"),
+        { textContent: n === 1 ? "message" : "messages" }));
     const s = document.createElement("span");
     s.textContent = room;
+    /* And the whole thing explains itself on hover, including what the amber
+       state means, which no glance at a colour can tell you. */
+    box.title = weight >= 2.4
+      ? `${n.toLocaleString()} message${n === 1 ? "" : "s"} arrived in ${room} since the last reading — far more than this room's own usual rate, which is why it is amber. Click to go in.`
+      : `${n.toLocaleString()} message${n === 1 ? "" : "s"} arrived in ${room} since the last reading. Click to go in.`;
     /* THE LEADER. The complaint was "I cannot tell which room it came from",
        and no amount of easing fixes that on its own — from a three-quarter
        view a label floating above a skyline is above four buildings at once.
@@ -863,7 +906,7 @@ export async function boot() {
   }
 
   function toggleFeed() {
-    if (!els.feed.hidden) { ui.closeFeed(); return; }
+    if (ui.feedShown()) { ui.closeFeed(); return; }
     ui.buildFeed(D.state.room, st.msgKey);
   }
 
@@ -872,7 +915,11 @@ export async function boot() {
   D.on("room", (r) => {
     if (!r) return;
     world.setAgents(r.agents);
-    if (!st.agentId && !st.msgKey) showRoomPanel();
+    /* NOT WHILE THE FEED HAS THE PANEL. They are the same element now, so
+       repainting the room summary on every poll wiped the feed a few seconds
+       after it was opened — it appeared, then vanished, which reads as a
+       button that half works. renderFeed keeps it current instead. */
+    if (!st.agentId && !st.msgKey && !ui.feedShown()) showRoomPanel();
     ui.renderFeed(r, st.msgKey);
     paintStrip(r);
   });
@@ -919,7 +966,7 @@ export async function boot() {
         if (to && world.agentAt(to)) world.beam(from, to, 1500);
       }
       S.tick(m.seq, m.c.kind, r.name);
-      if (st.bubblesOn && !st.clean) addBubble(m, from);
+      if (!st.clean) addBubble(m, from);
     }
     if (st.following) {
       const mine = added.filter((m) => (m.did || `nick:${m.nick}`) === st.following);
@@ -1221,12 +1268,6 @@ export async function boot() {
   $("zoomOut").onclick = () => cam.flyTo({ dist: cam.dist * 1.38 }, reduced ? 0 : 420);
   $("reset").onclick = () => { if (st.room) leaveRoom(); else cam.home(reduced ? 0 : 1000); };
   $("cleanview").onclick = () => setClean(!st.clean);
-  $("bubbles").onclick = () => {
-    st.bubblesOn = !st.bubblesOn;
-    if (!st.bubblesOn) clearBubbles();
-    $("bubbles").classList.toggle("on", !st.bubblesOn);
-    $("bubbles").title = st.bubblesOn ? "Hide what people are saying" : "Show what people are saying";
-  };
   $("mute").onclick = () => {
     const nowOn = !S.enabled();
     S.setEnabled(nowOn);
@@ -1240,7 +1281,6 @@ export async function boot() {
     if (nowOn) { S.pick(); if (!st.room) S.cityTone(cityRate()); }
     if (nowOn && st.room) S.bedOn(true);
   };
-  $("hideStrip").onclick = () => ($("strip").hidden = true);
   $("legend").onclick = () => { st.agentId = null; st.msgKey = null; ui.legend(city); };
 
   function paintMute() {
@@ -1323,9 +1363,9 @@ export async function boot() {
 
   function setClean(v) {
     st.clean = v;
-    for (const n of [$("chips").parentElement, $("side"), $("strip"), els.feed, els.rail])
+    for (const n of [$("chips").parentElement, $("side"), $("strip"), els.rail])
       if (n) n.style.opacity = v ? "0" : "";
-    for (const n of [$("chips").parentElement, els.feed, els.rail])
+    for (const n of [$("chips").parentElement, els.rail])
       if (n) n.style.pointerEvents = v ? "none" : "";
     overlay.style.opacity = v ? "0" : "";
     if (v) ui.hover(0, 0, null);
@@ -1348,7 +1388,7 @@ export async function boot() {
          which is right when a close button is clicked and wrong here, and is
          why Escape used to loop instead of letting anybody out. */
       if (st.clean) setClean(false);
-      else if (!els.feed.hidden) ui.closeFeed();
+      else if (ui.feedShown()) ui.closeFeed();
       else if (st.agentId || st.msgKey) { st.agentId = null; st.msgKey = null; showRoomPanel(); }
       else if (st.room) leaveRoom();
       else if (!els.side.hidden) ui.closePanel();
