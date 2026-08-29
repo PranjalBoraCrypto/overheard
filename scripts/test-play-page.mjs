@@ -78,10 +78,16 @@ await go();
 check('it opens as a run, not a lecture', /agent/i.test(await pg.locator('h1').first().textContent()));
 check('it says how long it takes', /3 min|three min/i.test(await pg.locator('.facts').textContent()));
 /* The project has not launched and its own document says so. A learning page
-   that repeats provisional numbers as settled is how a draft becomes a rumour. */
-const prov = (await pg.locator('.prov').first().textContent()) || '';
-check('it says up front that the numbers are provisional',
-  /provisional/i.test(prov) && /0\.1|draft/i.test(prov), prov.slice(0, 70));
+   that repeats provisional numbers as settled is how a draft becomes a rumour,
+   so the claim has to survive somewhere a reader will actually meet it. The
+   warning box on the start screen is gone; these two are where it lives now,
+   and they are checked so it cannot quietly leave the page altogether. */
+const briefLast = (await pg.locator('.blk').last().textContent()) || '';
+check('the briefing still says the numbers are provisional',
+  /provisional/i.test(briefLast) && /0\.1|draft/i.test(briefLast), briefLast.slice(-90));
+const srcPanel = (await pg.locator('.sources').textContent()) || '';
+check('and so does the sources panel at the end',
+  /0\.1|draft/i.test(srcPanel) && /provisional/i.test(srcPanel));
 check('and links the source it is drawn from',
   (await pg.locator('a[href*="flop.finance/teaser"]').count()) >= 1);
 check('nothing is graded before it starts', await pg.locator('#run').isHidden());
@@ -703,6 +709,49 @@ check('the button is under the words, not beside them', await pg.evaluate(() => 
   const t = e.querySelector('b');
   return b.getBoundingClientRect().top > t.getBoundingClientRect().bottom + 20;
 }));
+/* THE SAME FORK AS UNDER THE CARD. If the key is already in this browser the
+   ask is one passphrase field, not a pop-up — sending somebody who is one
+   field away from signed in through a dialog is a step nobody needed. */
+await pg.evaluate(async () => {
+  const enc = new TextEncoder();
+  const b64u = (b) => btoa(String.fromCharCode(...new Uint8Array(b))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  const kp = await crypto.subtle.generateKey({ name: 'Ed25519' }, true, ['sign', 'verify']);
+  const jwk = await crypto.subtle.exportKey('jwk', kp.privateKey);
+  const raw = new Uint8Array(await crypto.subtle.exportKey('raw', kp.publicKey));
+  const B58 = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
+  let n = 0n; for (const x of [0xed, 0x01, ...raw]) n = n * 256n + BigInt(x);
+  let out = ''; while (n > 0n) { out = B58[Number(n % 58n)] + out; n /= 58n; }
+  const did = 'did:key:z' + out;
+  const salt = crypto.getRandomValues(new Uint8Array(16)), iv = crypto.getRandomValues(new Uint8Array(12));
+  const base = await crypto.subtle.importKey('raw', enc.encode('open sesame'), 'PBKDF2', false, ['deriveKey']);
+  const aes = await crypto.subtle.deriveKey({ name: 'PBKDF2', salt, iterations: 310000, hash: 'SHA-256' },
+    base, { name: 'AES-GCM', length: 256 }, false, ['encrypt']);
+  const ct = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, aes, enc.encode(JSON.stringify(jwk)));
+  localStorage.setItem('overheard.identity', JSON.stringify(
+    { v: 1, did, salt: b64u(salt), iv: b64u(iv), data: b64u(ct) }));
+  localStorage.removeItem('overheard.session');
+});
+await go();
+await pg.click('#histIntro .histtoggle'); await pg.waitForTimeout(650);
+check('a browser that holds a key is asked for the passphrase, not the pop-up',
+  (await pg.locator('#histIntro .pwrow input').count()) === 1
+  && (await pg.locator('#histIntro .emptyrow').count()) === 0);
+check('and it names the key it is holding',
+  /This browser holds/.test(await pg.locator('#histIntro .histempty').textContent()));
+await pg.fill('#histIntro .pwrow input', 'wrong one');
+await pg.click('#histIntro .pwrow .go'); await pg.waitForTimeout(1100);
+check('a wrong passphrase says so', /Wrong passphrase/i.test(await pg.locator('#histIntro').textContent()));
+await pg.fill('#histIntro .pwrow input', 'open sesame');
+await pg.click('#histIntro .pwrow .go');
+await pg.waitForTimeout(1600);
+check('and the right one signs in without ever leaving the drawer',
+  /No runs yet/.test(await pg.locator('#histIntro').textContent()), 
+  (await pg.locator('#histIntro .histempty').textContent()).slice(0, 40));
+await pg.evaluate(() => {
+  localStorage.removeItem('overheard.identity');
+  localStorage.removeItem('overheard.session');
+});
+
 /* CLOSED on every visit. A drawer that reopens itself is not a drawer. */
 await go();
 check('and it is closed again after a reload', (await drawerH()) === 0, `${await drawerH()}px`);

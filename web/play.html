@@ -61,16 +61,16 @@ h1{font-weight:800;font-size:clamp(32px,5.4vw,48px);letter-spacing:-.035em;line-
 .go .i{width:17px;height:17px;stroke-width:2.1}
 /* The page is called Play. The thing it is for gets the size of the thing it
    is for, and the briefing sits beside it rather than in front of it. */
-.go.big{padding:24px 44px;font-size:20.5px;border-radius:19px;letter-spacing:-.015em;
-  box-shadow:0 24px 52px -18px rgba(0,180,215,.95)}
-.go.big .i{width:23px;height:23px}
+.go.big{padding:24px 54px;font-size:21.5px;border-radius:20px;letter-spacing:-.015em;
+  box-shadow:0 26px 56px -18px rgba(0,180,215,.95)}
+.go.big .i{width:24px;height:24px}
 .go.big:hover:not(:disabled){box-shadow:0 26px 52px -18px rgba(0,180,215,1)}
-.go.wide{padding:20px 30px;font-size:16.5px;border-radius:19px}
+.go.wide{padding:20px 34px;font-size:17px;border-radius:20px}
 /* Two buttons side by side are one row, so they are one height. Neither
    vertical padding nor min-height delivers that on its own: the taller label
    brings a taller line box with it, and min-height only sets a floor. An
    explicit height with line-height:1 leaves nothing to vary. */
-.hero .nextrow .go{height:76px;line-height:1;padding-top:0;padding-bottom:0}
+.hero .nextrow .go{height:84px;line-height:1;padding-top:0;padding-bottom:0}
 
 /* ── the first section ───────────────────────────────────────────────────
    Text on the left with room to breathe, the toy on its own on the right.
@@ -629,7 +629,14 @@ canvas.confetti{position:fixed;inset:0;width:100%;height:100%;pointer-events:non
    and in this browser only, which is the honest description of where it
    lives — there is no account behind this and pretending otherwise would be
    the one lie the page cannot afford. */
+/* The runs bar belongs to the first section, so it lines up with it rather
+   than with the 780px reading column underneath — same measured bleed as the
+   hero, for the same reason: 100vw includes the scrollbar and would hang the
+   whole page sideways. */
 .hist{display:block}
+#histIntro{margin-left:calc(-1 * var(--bleed,0px));margin-right:calc(-1 * var(--bleed,0px))}
+@media (min-width:1010px){#histIntro{--bleed:110px}}
+@media (min-width:1250px){#histIntro{--bleed:210px}}
 .histpanel{margin-top:22px;padding:22px 24px;animation:riseY .5s var(--ease) both}
 @media (max-width:620px){.histpanel{padding:19px 17px}}
 
@@ -655,9 +662,11 @@ canvas.confetti{position:fixed;inset:0;width:100%;height:100%;pointer-events:non
 .histwrap{display:grid;grid-template-rows:0fr;transition:grid-template-rows .42s var(--ease)}
 .histpanel.open .histwrap{grid-template-rows:1fr}
 .histwrap>div{overflow:hidden;min-height:0}
-.histinner{padding:0 22px 20px}
-@media (max-width:620px){.histinner{padding:0 17px 18px}}
-.histinner>.hstats:first-child{margin-top:2px}
+/* The body sat flush against the toggle, so opening the drawer looked like
+   the header had grown rather than that something had come out from under it. */
+.histinner{padding:16px 22px 20px}
+@media (max-width:620px){.histinner{padding:14px 17px 18px}}
+.histinner>.hstats:first-child{margin-top:0}
 .histempty{display:flex;gap:13px;align-items:flex-start;padding:17px 18px;border-radius:15px;margin-top:2px;
   font-size:13.5px;line-height:1.6;color:var(--faint);
   background:linear-gradient(rgba(0,180,215,.05),rgba(0,20,26,.55));
@@ -767,18 +776,12 @@ canvas.confetti{position:fixed;inset:0;width:100%;height:100%;pointer-events:non
   box-shadow:none;font-weight:600}
 .danger:hover:not(:disabled){background:rgba(255,107,107,.16);color:#FFC9C9;transform:translateY(-2px)}
 
-.prov{display:flex;gap:10px;align-items:flex-start;margin-top:26px;padding:14px 16px;border-radius:13px;
-  font-size:12.5px;line-height:1.6;color:var(--faint);
-  background:linear-gradient(rgba(242,179,61,.07),rgba(242,179,61,.02));border:1px solid rgba(242,179,61,.28)}
-.prov .i{width:15px;height:15px;margin-top:2px;color:var(--warn)}
-.prov a{color:var(--cy);text-decoration:none}
-.prov a:hover{color:var(--cy-hi)}
-.prov summary,.signed summary{cursor:pointer;color:var(--cy);font-weight:600;font-size:12.5px;
+.signed summary{cursor:pointer;color:var(--cy);font-weight:600;font-size:12.5px;
   list-style:none;display:inline-flex;align-items:center;gap:6px;margin-top:7px}
-.prov summary::-webkit-details-marker,.signed summary::-webkit-details-marker{display:none}
-.prov summary::after,.signed summary::after{content:"\25B8";display:inline-block;transition:transform .2s var(--ease)}
-.prov details[open] summary::after,.signed details[open] summary::after{transform:rotate(90deg)}
-.prov details span,.signed details span{display:block;margin-top:7px}
+.signed summary::-webkit-details-marker{display:none}
+.signed summary::after{content:"\25B8";display:inline-block;transition:transform .2s var(--ease)}
+.signed details[open] summary::after{transform:rotate(90deg)}
+.signed details span{display:block;margin-top:7px}
 
 /* ── where it all came from ───────────────────────────────────────────────
    This was a grey sentence with the sources buried inside it. Two documents
@@ -877,12 +880,6 @@ canvas.confetti{position:fixed;inset:0;width:100%;height:100%;pointer-events:non
 
     <section class="hist" id="histIntro" hidden></section>
 
-    <div class="prov"><svg class="i"><use href="#i-info"/></svg>
-      <div><b>Flop has not launched.</b> Its numbers come from a teaser marked <b>version 0.1, draft</b> &mdash; provisional by the project&rsquo;s own admission.
-        <details><summary>What that means here</summary>
-          <span>Everything on this page asks what Flop <em>currently claims</em>, never what is settled &mdash; and one of the twelve gates is about exactly that. Sources: <a href="https://flop.finance/teaser" target="_blank" rel="noopener noreferrer">flop.finance/teaser</a> and <a href="https://technocore.chat" target="_blank" rel="noopener noreferrer">technocore.chat</a>.</span>
-        </details>
-      </div></div>
   </section>
 
   <!-- ══ THE BRIEFING ════════════════════════════════════════════════════ -->
@@ -1839,6 +1836,65 @@ async function finish(){
    or this site. Nothing is posted anywhere; the signature is made and shown
    here, and it travels only if you share the link. Nobody is blocked from
    playing or sharing without a key. */
+/** THE WAY BACK IN, ONCE.
+ *
+ *  Three places on this page can ask somebody to sign in — under the card,
+ *  in the runs drawer, and at the foot of a result — and all three face the
+ *  same fork: this browser either already holds an encrypted key, in which
+ *  case the honest ask is one passphrase field, or it does not, in which case
+ *  the ask is the pop-up. Written three times it would drift three ways, so
+ *  it is written once and the wording is the only thing that varies.
+ *
+ *  Unlocking anywhere signs the run that just happened, redraws the card and
+ *  keeps the row — wherever the passphrase was typed. */
+async function afterUnlock(){
+  await sign();
+  drawCard();
+  recordRun();
+  paintHistory(true);
+}
+function unlockWidget(vault,{id,verb="Unlock"}={}){
+  const box=el("div");
+  const row=el("div","pwrow");
+  const pw=document.createElement("input");
+  pw.type="password"; pw.autocomplete="current-password";
+  if(id) pw.id=id;
+  pw.placeholder="passphrase for the identity in this browser";
+  const go=el("button","go"); go.type="button";
+  go.append(icon("i-key"), el("span",null,verb));
+  row.append(pw,go); box.append(row);
+  const said=el("div","saysm"); box.append(said);
+  const say=(t,cls="")=>{ said.textContent=t; said.className="saysm "+cls; };
+  const tryIt=async()=>{
+    if(!pw.value) return say("Enter your passphrase.","err");
+    go.disabled=true; say("Decrypting on this device…");
+    try{
+      const jwk=await openVault(vault,pw.value);
+      signIn(vault.did,jwk);
+      await afterUnlock();
+    }catch{ say("Wrong passphrase, or the stored identity is damaged.","err"); go.disabled=false; }
+  };
+  go.addEventListener("click",tryIt);
+  pw.addEventListener("keydown",(e)=>{ if(e.key==="Enter"){ e.preventDefault(); tryIt(); } });
+  const alt=el("div","signrow");
+  const other=el("button","linkalt"); other.type="button";
+  other.textContent="Different identity? Sign in with a backup file or seed";
+  other.addEventListener("click",()=>openModal());
+  alt.append(other); box.append(alt);
+  return box;
+}
+/** And the other half of the fork: no key here at all. */
+function signInRow(cls="signrow"){
+  const row=el("div",cls);
+  const go=el("button","go"); go.type="button";
+  go.append(icon("i-key"), el("span",null,"Sign in"));
+  go.addEventListener("click",()=>openModal());
+  const mk=document.createElement("a");
+  mk.className="linkalt"; mk.href="/create.html"; mk.textContent="No identity yet? Make one →";
+  row.append(go,mk);
+  return row;
+}
+
 async function sign(){
   PROOF=null;
   const s=getSession();
@@ -1850,52 +1906,18 @@ async function sign(){
   box.append(ic,body);
 
   if(!s){
-    /* Two different people are read this. Somebody whose browser already
-       holds a key wants a passphrase box, not a lecture; somebody with no key
-       wants to know that signing exists and how to get one. Same panel, two
-       shapes, decided by whether a vault is actually here. */
+    /* Two different people read this. Somebody whose browser already holds a
+       key wants a passphrase box, not a lecture; somebody with no key wants
+       to know that signing exists and how to get one. */
     const vault=getVault();
     body.innerHTML='<b>Unsigned.</b> Anybody can edit a score into a picture &mdash; including this one. '
       + 'Sign in with your identity, or make one, and your next run is signed with your own key, so the card '
       + 'carries a link anyone can check on the Verify page.';
     if(vault){
-      const who=el("div","saysm",`This browser holds ${shortDid(vault.did,10,6)}. Enter its passphrase.`);
-      body.append(who);
-      const row=el("div","pwrow");
-      const pw=document.createElement("input");
-      pw.type="password"; pw.id="quickPw"; pw.autocomplete="current-password";
-      pw.placeholder="passphrase for the identity in this browser";
-      const go=el("button","go"); go.type="button";
-      go.append(icon("i-key"), el("span",null,"Unlock and sign"));
-      row.append(pw,go); body.append(row);
-      const said=el("div","saysm"); body.append(said);
-      const say=(t,cls="")=>{ said.textContent=t; said.className="saysm "+cls; };
-      const tryIt=async()=>{
-        if(!pw.value) return say("Enter your passphrase.","err");
-        go.disabled=true; say("Decrypting on this device…");
-        try{
-          const jwk=await openVault(vault,pw.value);
-          signIn(vault.did,jwk);
-          await sign();                 // repaint this panel as the signed one
-          drawCard();                   // and put the signature on the card
-          recordRun(); paintHistory();  // and keep the run that was just played
-        }catch{ say("Wrong passphrase, or the stored identity is damaged.","err"); go.disabled=false; }
-      };
-      go.addEventListener("click",tryIt);
-      pw.addEventListener("keydown",(e)=>{ if(e.key==="Enter"){ e.preventDefault(); tryIt(); } });
-      const alt=el("div","signrow");
-      const other=el("button","linkalt"); other.type="button";
-      other.textContent="Different identity? Sign in with a backup file or seed";
-      other.addEventListener("click",()=>openModal());
-      alt.append(other); body.append(alt);
+      body.append(el("div","saysm",`This browser holds ${shortDid(vault.did,10,6)}. Enter its passphrase.`));
+      body.append(unlockWidget(vault,{id:"quickPw",verb:"Unlock and sign"}));
     }else{
-      const row=el("div","signrow");
-      const go=el("button","go"); go.type="button";
-      go.append(icon("i-key"), el("span",null,"Sign in"));
-      go.addEventListener("click",()=>openModal());
-      const mk=document.createElement("a");
-      mk.className="linkalt"; mk.href="/create.html"; mk.textContent="No identity yet? Make one →";
-      row.append(go,mk); body.append(row);
+      body.append(signInRow());
     }
     return;
   }
@@ -2070,10 +2092,7 @@ $("hSeed").addEventListener("input",()=>{
  *  making them play it again. */
 async function afterSignIn(){
   closeModal();
-  await sign();
-  drawCard();
-  recordRun();
-  paintHistory();
+  await afterUnlock();
 }
 
 async function bringSeed(){
@@ -2539,20 +2558,28 @@ function historyEmpty(s,where){
     body.append(document.createTextNode(
       "Play one and it is kept here, signed with your key — so the next one has something to beat."));
   }else{
-    body.append(el("b",null, where==="end" ? "This run was not kept." : "Sign in to see your runs."));
-    body.append(document.createTextNode(where==="end"
-      ? "Runs are kept against the key that signed them. Sign in and the next one stays here, so you have something to beat."
-      : "Runs are kept against the key that signed them, in this browser. Without one there is nothing to keep them under."));
-    /* Its own row. Appending the button into the paragraph left the sentence's
-       last word sitting beside it. */
-    const row=el("div","emptyrow");
-    const go=el("button","go"); go.type="button";
-    go.append(icon("i-key"), el("span",null,"Sign in"));
-    go.addEventListener("click",()=>openModal());
-    const mk=document.createElement("a");
-    mk.className="linkalt"; mk.href="/create.html"; mk.textContent="No identity yet? Make one →";
-    row.append(go,mk);
-    body.append(row);
+    /* The same fork as under the card: if the key is already here, the ask is
+       a passphrase, not a pop-up. Sending somebody who is one field away from
+       signed in through a dialog is a step nobody needed. */
+    const vault=getVault();
+    const end=where==="end";
+    if(vault){
+      body.append(el("b",null, end ? "This run was not kept — yet." : "Unlock to see your runs."));
+      body.append(document.createTextNode(end
+        ? `This browser holds ${shortDid(vault.did,10,6)}. Enter its passphrase and this run is signed and kept.`
+        : `This browser holds ${shortDid(vault.did,10,6)}. Enter its passphrase to see the runs kept under it.`));
+      const w=unlockWidget(vault,{verb: end ? "Unlock and keep it" : "Unlock"});
+      w.style.marginTop="4px";
+      body.append(w);
+    }else{
+      body.append(el("b",null, end ? "This run was not kept." : "Sign in to see your runs."));
+      body.append(document.createTextNode(end
+        ? "Runs are kept against the key that signed them. Sign in and the next one stays here, so you have something to beat."
+        : "Runs are kept against the key that signed them, in this browser. Without one there is nothing to keep them under."));
+      /* Its own row. Appending the button into the paragraph left the
+         sentence's last word sitting beside it. */
+      body.append(signInRow("emptyrow"));
+    }
   }
   e.append(body);
   box.append(e);
@@ -2595,7 +2622,7 @@ function buildHistory(list,s,drawer){
   const grow=el("div","grow");
   grow.append(el("b",null,"Your runs"));
   grow.append(el("span","hsub",
-    !s ? "Sign in to see runs you have kept"
+    !s ? (getVault() ? "Unlock to see runs you have kept" : "Sign in to see runs you have kept")
        : list.length ? `${list.length} ${list.length===1?"run":"runs"} · kept in this browser only`
                      : "Nothing here yet — your first run starts the list"));
   t.append(hic,grow);
