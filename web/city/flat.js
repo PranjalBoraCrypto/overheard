@@ -155,20 +155,15 @@ export function mountFlat(container, els) {
     mark();
   });
 
-  D.on("status", () => { paintChips(); if (!city) sayWhyEmpty(); });
+  D.on("status", () => { paintChips(); ui.status(D.state.status); });
 
-  /* An empty map with no explanation reads as "the network is dead" rather
-     than "we could not reach it". */
-  function sayWhyEmpty() {
-    const s = D.state.status;
-    if (s.city === "live" || s.city === "starting") return;
-    $("bootTitle").textContent = s.city === "offline"
-      ? "Technocore's directory is not answering"
-      : "Reaching Technocore's directory";
-    $("bootWhy").textContent = (s.why || "the directory did not answer") +
-      ". Nothing here is cached or invented, so the map stays empty until it does. Retrying.";
-    $("boot").hidden = false;
-  }
+  /* The flat map had its own copy of the full-screen error, with its own
+     wording, and it had to be deleted twice for the same reason. See the
+     long note in boot.js: the map is seeded from a genuine saved snapshot
+     before anything is requested, so "nothing to draw" is not a state either
+     view can reach, and the endpoint hands back that snapshot instead of an
+     error anyway. The corner chip says which of the four honest things is
+     true, here exactly as it does in 3D. */
 
   function refreshHeat() {
     if (!city) return;

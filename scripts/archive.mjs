@@ -89,6 +89,7 @@ import { readFile, writeFile, rename, mkdir, readdir } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { createHash } from "node:crypto";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 const BASE = process.env.TECHNOCORE_BASE ?? "https://technocore.chat";
 const OUT = path.resolve(process.env.OUT_DIR ?? "web/data");
@@ -1013,6 +1014,30 @@ async function main() {
     // Never silent. A run that could not keep up and said nothing looks
     // exactly like a run that saw everything.
     console.warn(`  BEHIND: ${rep.behind.map((b) => `${b.room} -${b.missed}`).join(", ")}`);
+  }
+
+  /* ── the cold-start snapshots ─────────────────────────────────────────────
+     Agent City draws itself from these BEFORE it asks Technocore anything,
+     which is the whole reason an upstream 503 no longer empties the page.
+     They are derived from the archive this run just wrote, so they are
+     rebuilt here rather than by hand: a snapshot that only refreshes when
+     somebody remembers to refresh it ages, quietly, into a false claim about
+     what the network looks like — and the page attaches its age to every
+     label, so a stale one is visible to visitors as well as wrong.
+
+     Best-effort, both of them. A failure here must never fail an archive
+     run. The archive is the record; the snapshots are a convenience derived
+     from it. Yesterday's snapshot beside today's archive is a normal state
+     that the page states honestly. A lost archive pass is not recoverable. */
+  const { execFileSync } = await import("node:child_process");
+  for (const s of ["make-city-snapshot.mjs", "make-room-snapshots.mjs"]) {
+    try {
+      const out = execFileSync(process.execPath, [fileURLToPath(new URL(s, import.meta.url))],
+        { encoding: "utf8", timeout: 180000 });
+      process.stdout.write("  " + out);
+    } catch (err) {
+      console.warn(`  snapshot ${s} did not rebuild (${String(err.message).split("\n")[0]}) — the previous one stands`);
+    }
   }
 }
 

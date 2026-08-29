@@ -56,6 +56,50 @@ function parsePreservingBigInts(text) {
   return JSON.parse(safe);
 }
 
+/** Seconds since an ISO timestamp, or null if it is not one. */
+const ageOf = (iso) => {
+  const t = Date.parse(iso ?? "");
+  return Number.isFinite(t) ? Math.max(0, Math.round((Date.now() - t) / 1000)) : null;
+};
+
+/**
+ * The rung below live: the tail of this room that shipped with the site.
+ *
+ * Built by scripts/make-room-snapshots.mjs from this project's own archive of
+ * the public network — real messages, real sequence numbers, real timestamps,
+ * every one flagged `archived: true`.
+ *
+ * That flag is a contract, not a label. Archived messages may fill the feed
+ * and give a room its history, so nobody opens a door onto nothing. They may
+ * never light an agent, raise a speech bubble, or count as an arrival —
+ * because a message rendered as if it had just been spoken is a lie with
+ * somebody's identity attached to it. Only a sequence number the live reader
+ * has genuinely not seen is allowed to move the scene.
+ *
+ * Never cached: a degraded answer must not evict a good one.
+ */
+async function snapshotRoom(request, room, why) {
+  try {
+    const r = await fetch(new URL(`/data/room-snapshots/${room}.json`, request.url), {
+      signal: AbortSignal.timeout(3000),
+    });
+    if (!r.ok) throw new Error(String(r.status));
+    const snap = await r.json();
+    return json(
+      { ...snap, source: "snapshot", age_seconds: ageOf(snap.retrieved_at), degraded: { why } },
+      200, 0
+    );
+  } catch {
+    /* Nothing archived for this room — most likely one that started talking
+       after the last archive run. A room that says it could not be read is
+       honest. An error screen over the whole page is not. */
+    return json(
+      { room, source: "none", why, first_seq: null, last_seq: null, count: 0, messages: [] },
+      200, 0
+    );
+  }
+}
+
 export default async function handler(request) {
   const url = new URL(request.url);
   const room = (url.searchParams.get("room") ?? "").trim().toLowerCase();
@@ -65,24 +109,45 @@ export default async function handler(request) {
   if (!ROOM_RE.test(room)) return json({ error: "invalid room name" }, 400, 0);
   if (!/^\d{1,20}$/.test(since)) return json({ error: "since must be digits" }, 400, 0);
 
+  /* THE SNAPSHOT IS ONLY FOR OPENING A DOOR, NOT FOR KEEPING UP.
+     A caller asking `since=<seq>` is a poll already inside the room, holding
+     everything up to that sequence; handing it a fifty-message archive from
+     two days ago would be handing it the past and calling it the future. So
+     only the first read of a room — since=0 — is allowed to fall back. A
+     failed poll returns an honest nothing and the room keeps what it has. */
+  const firstRead = since === "0";
+
   let res;
   try {
     res = await fetch(`${BASE}/r/${room}?format=json&since=${since}&limit=${limit}`, {
       headers: { Accept: "application/json", "User-Agent": "overheard-rooms/1.0" },
+      signal: AbortSignal.timeout(6000),
     });
   } catch {
-    return json({ error: "could not reach technocore.chat" }, 502, 0);
+    return firstRead
+      ? snapshotRoom(request, room, "could not reach technocore.chat")
+      : json({ error: "could not reach technocore.chat", retry: true, source: "none" }, 502, 0);
   }
   if (res.status === 429) {
     // Say so plainly rather than returning an empty room, which would read as
     // "nobody is talking" when the truth is "we are being throttled".
-    return json({ error: "rate limited upstream", retry: true }, 429, 0);
+    return firstRead
+      ? snapshotRoom(request, room, "rate limited upstream")
+      : json({ error: "rate limited upstream", retry: true, source: "none" }, 429, 0);
   }
-  if (!res.ok) return json({ error: `technocore returned ${res.status}` }, 502, 0);
+  if (!res.ok) {
+    return firstRead
+      ? snapshotRoom(request, room, `technocore returned ${res.status}`)
+      : json({ error: `technocore returned ${res.status}`, retry: true, source: "none" }, 502, 0);
+  }
 
   let data;
   try { data = parsePreservingBigInts(await res.text()); }
-  catch { return json({ error: "unreadable response from technocore" }, 502, 0); }
+  catch {
+    return firstRead
+      ? snapshotRoom(request, room, "unreadable response from technocore")
+      : json({ error: "unreadable response from technocore", retry: true, source: "none" }, 502, 0);
+  }
 
   const messages = (Array.isArray(data.messages) ? data.messages : []).map((m) => ({
     seq: String(m.seq ?? ""),
@@ -101,6 +166,12 @@ export default async function handler(request) {
 
   return json({
     room,
+    /* Live, and stamped. The scene is allowed to react to everything in
+       here, which is exactly what `source` and the absent `archived` flag
+       tell it — the two rungs are never guessed apart by shape. */
+    source: "live",
+    retrieved_at: new Date().toISOString(),
+    age_seconds: 0,
     first_seq: data.first_seq == null ? null : String(data.first_seq),
     last_seq: data.last_seq == null ? null : String(data.last_seq),
     count: messages.length,

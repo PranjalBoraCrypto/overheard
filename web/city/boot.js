@@ -30,7 +30,7 @@ export async function boot() {
   const stage = $("stage"), canvas = $("scene"), overlay = $("overlay");
   const els = {
     stage, overlay, chips: $("chips"), side: $("side"), feed: $("feedpane"),
-    hover: $("hover"), hits: $("hits"),
+    hover: $("hover"), hits: $("hits"), status: $("status"),
   };
 
   /* ── 1. what can this machine do ─────────────────────────────────────── */
@@ -135,21 +135,28 @@ export async function boot() {
     }
   });
 
-  D.on("status", () => { paintChips(); if (!city) sayWhyEmpty(); });
+  D.on("status", () => { paintChips(); ui.status(D.state.status); });
 
-  /* If the very first directory read fails there is nothing to draw, and an
-     empty plate with no explanation reads as "the network is dead" rather
-     than "we could not reach it". */
-  function sayWhyEmpty() {
-    const s = D.state.status;
-    if (s.city === "live" || s.city === "starting") return;
-    $("bootTitle").textContent = s.city === "offline"
-      ? "Technocore's directory is not answering"
-      : "Reaching Technocore's directory";
-    $("bootWhy").textContent = (s.why || "the directory did not answer") +
-      ". Nothing here is cached or invented, so the city stays empty until it does. Retrying.";
-    $("boot").hidden = false;
-  }
+  /* THE FULL-SCREEN ERROR IS GONE, AND IT IS NOT COMING BACK.
+     ────────────────────────────────────────────────────────────────────────
+     There used to be a sayWhyEmpty() here. It put "Technocore's directory is
+     not answering" and the upstream status code over the whole canvas, along
+     with the sentence "Nothing here is cached or invented, so the city stays
+     empty until it does" — and then, the part that made it a bug rather than
+     a message, it set `$("boot").hidden = false` on EVERY failing poll,
+     re-covering a canvas the four-second timer had already uncovered. A
+     visitor arriving during a forty-second upstream hiccup saw a technical
+     apology where a city should be, concluded the site was broken, and left.
+
+     Two changes underneath retire it. The city is now seeded from a genuine
+     saved snapshot before any request is made, so "there is nothing to draw"
+     is no longer a state this page can reach. And /api/city hands back that
+     same snapshot rather than an error, so a 503 upstream never arrives here
+     as one in the first place.
+
+     What replaces it is a chip in the corner naming which of four honest
+     things is true. It never covers anything, and it never claims saved data
+     is live. */
 
   function refreshHeat() {
     if (!city) return;

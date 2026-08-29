@@ -34,6 +34,34 @@
  * 20-second edge cache is what stops a busy hour on this page from becoming
  * a rate-limit on the archiver. The directory changes far more slowly than
  * a room does; /api/room stays at four seconds because a room does not.
+ *
+ * ── WHAT THIS RETURNS WHEN TECHNOCORE DOES NOT ─────────────────────────────
+ *
+ * It used to return `{known:false, why:"technocore returned 503"}`, and the
+ * page — having nothing to draw — put that sentence on the screen at full
+ * size. An upstream hiccup lasting forty seconds therefore read, to anybody
+ * who arrived during it, as a broken site. That is the wrong trade. A
+ * directory reading from four minutes ago is worth far more to a visitor
+ * than an accurate apology, and it costs them nothing so long as nobody
+ * claims it is current.
+ *
+ * So there is a ladder, and every response says which rung it came from:
+ *
+ *   source:"live"      a reading taken just now
+ *   source:"snapshot"  web/data/city-snapshot.json — genuinely retrieved
+ *                      public data carrying its ORIGINAL retrieval time,
+ *                      shipped with the site so even a first-time visitor
+ *                      with a cold cache gets a city
+ *   source:"none"      only if that file is unreachable too, which means the
+ *                      site is not serving its own static assets
+ *
+ * Every response carries `source`, `retrieved_at` and `age_seconds`, and the
+ * HUD is required to read them. Nothing is ever labelled live that is not.
+ *
+ * A DEGRADED ANSWER IS NEVER CACHED. The snapshot path sets no-store, so the
+ * CDN's copy of the last good reading is never overwritten by a failure —
+ * which is why the next visitor thirty seconds later gets a twenty-second-old
+ * directory rather than a two-day-old file.
  */
 
 export const config = { runtime: "edge" };
@@ -62,6 +90,13 @@ const NAMED_CAP = 320;
    one of the 200 names the directory currently returns passes this. */
 const ROOM_RE = /^[a-z0-9][a-z0-9_-]{0,63}$/;
 
+/* ttl 0 means "do not let anything keep this". That is not a performance
+   choice, it is the rule that stops a degraded answer from evicting a good
+   one: only a live reading is ever cacheable. `stale-if-error` is added on
+   the good path as a second line of defence — where the CDN honours it, a
+   failing origin is served the last good body and this function's own
+   fallback never has to run. Where it does not, the fallback does, and the
+   visitor cannot tell the difference. */
 const json = (body, status = 200, ttl = 20) =>
   new Response(JSON.stringify(body), {
     status,
@@ -69,10 +104,46 @@ const json = (body, status = 200, ttl = 20) =>
       "Content-Type": "application/json",
       "Access-Control-Allow-Origin": "*",
       "Cache-Control": ttl
-        ? `public, s-maxage=${ttl}, stale-while-revalidate=40`
+        ? `public, s-maxage=${ttl}, stale-while-revalidate=40, stale-if-error=86400`
         : "no-store",
     },
   });
+
+/** Seconds between an ISO timestamp and now, or null if it is not a date. */
+const ageOf = (iso) => {
+  const t = Date.parse(iso ?? "");
+  return Number.isFinite(t) ? Math.max(0, Math.round((Date.now() - t) / 1000)) : null;
+};
+
+/**
+ * The rung below live: the snapshot that ships with the site.
+ *
+ * Read over the site's own origin rather than the filesystem, because an
+ * edge function has no filesystem. It is a static asset on the same CDN, so
+ * this is a cache hit in the same region and costs a millisecond or two.
+ *
+ * `why` is threaded through so the client can show a diagnostic if somebody
+ * opens the panel, without the diagnostic ever becoming the page.
+ */
+async function snapshotResponse(request, why) {
+  try {
+    const r = await fetch(new URL("/data/city-snapshot.json", request.url), {
+      signal: AbortSignal.timeout(3000),
+    });
+    if (!r.ok) throw new Error(String(r.status));
+    const snap = await r.json();
+    return json(
+      { ...snap, source: "snapshot", age_seconds: ageOf(snap.retrieved_at), degraded: { why } },
+      200,
+      0
+    );
+  } catch {
+    /* Nothing left to offer. The client still has its own IndexedDB copy and
+       the same static file to try directly, so this is not the end of the
+       road for the visitor — it is only the end of it for this function. */
+    return json({ known: false, source: "none", why }, 200, 0);
+  }
+}
 
 const num = (v) => (typeof v === "number" && Number.isFinite(v) ? v : null);
 const int = (v) => (typeof v === "number" && Number.isFinite(v) ? Math.trunc(v) : null);
@@ -113,18 +184,21 @@ function hash32(s) {
   return h >>> 0;
 }
 
-export default async function handler() {
+export default async function handler(request) {
   let data;
   try {
     const r = await fetch(`${BASE}/rooms?format=json&limit=200`, {
       headers: { Accept: "application/json", "User-Agent": "overheard-city/1.0" },
-      signal: AbortSignal.timeout(9000),
+      /* Six, not nine. This is the time a visitor spends looking at a city
+         that has not updated yet; past a few seconds the snapshot is simply
+         the better answer, and the retry a moment later costs nothing. */
+      signal: AbortSignal.timeout(6000),
     });
-    if (r.status === 429) return json({ known: false, why: "rate limited upstream" }, 200, 0);
-    if (!r.ok) return json({ known: false, why: `technocore returned ${r.status}` }, 200, 0);
+    if (r.status === 429) return snapshotResponse(request, "rate limited upstream");
+    if (!r.ok) return snapshotResponse(request, `technocore returned ${r.status}`);
     data = await r.json();
   } catch {
-    return json({ known: false, why: "could not reach technocore.chat" }, 200, 0);
+    return snapshotResponse(request, "could not reach technocore.chat");
   }
 
   const raw = Array.isArray(data?.rooms) ? data.rooms : [];
@@ -188,9 +262,17 @@ export default async function handler() {
   let sortedByIdle = idles.length > 1;
   for (let i = 1; i < idles.length; i++) if (idles[i] < idles[i - 1]) { sortedByIdle = false; break; }
 
+  const now = new Date().toISOString();
   return json({
     known: true,
-    at: new Date().toISOString(),
+    /* The three fields the whole freshness story hangs off. `at` stays for
+       anything already reading it; `retrieved_at` is the one the snapshot
+       also carries, so both rungs of the ladder answer "when was this true?"
+       with the same key. */
+    source: "live",
+    retrieved_at: now,
+    age_seconds: 0,
+    at: now,
     landmarks,
     named,
     counts: {

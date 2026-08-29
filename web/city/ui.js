@@ -95,6 +95,50 @@ export function makeUI(els, cb) {
     box.append(fps);
   }
 
+  /* ── the freshness chip ────────────────────────────────────────────────
+     All of what used to be a full-screen error, reduced to the one thing a
+     visitor actually needs to know: is this true right now, and if not, how
+     old is it.
+
+     FOUR STATES, AND THE WORDING IS THE FEATURE. Saved data is never called
+     live. A working connection is never called offline. An age is always
+     attached to anything that is not current, because "saved snapshot" on
+     its own is a shrug while "saved snapshot · 2d ago" is a fact somebody
+     can act on. The dot carries the state before the words are read; the
+     words are there because a colour is not a claim. */
+  function status(s) {
+    const box = els.status;
+    if (!box) return;
+    const live = s.source === "live";
+    const age = s.retrievedAt ? ago(s.retrievedAt) : null;
+
+    let cls, text, title;
+    if (!s.retrievedAt && s.city === "starting") {
+      cls = "wait"; text = "Connecting";
+      title = "Asking Technocore for its public room directory.";
+    } else if (live && s.city !== "reconnecting") {
+      cls = "live"; text = "Live";
+      title = `Read from Technocore's public directory ${age}. Refreshing every 20 seconds.`;
+    } else if (s.city === "reconnecting") {
+      /* Two different sentences on purpose: reconnecting over a live reading
+         from a minute ago is a blip, and reconnecting over a file from two
+         days ago is a different thing to be told. */
+      cls = "warn";
+      text = live ? `Reconnecting · last live ${age}` : `Saved snapshot · ${age}`;
+      title = (s.why ? s.why + ". " : "") + (live
+        ? "The last live reading is still on screen. Retrying in the background."
+        : "Technocore is not answering, so this is genuine public data this site archived earlier — not a reading of the network right now. Retrying in the background.");
+    } else {
+      cls = "wait";
+      text = age ? `Updating · saved ${age}` : "Updating";
+      title = "Showing saved public data while a live reading is fetched. Nothing here is invented.";
+    }
+
+    box.className = "status " + cls;
+    box.title = title;
+    box.replaceChildren(el("i", "dot"), el("span", null, text));
+  }
+
   /* ── the side panel ───────────────────────────────────────────────── */
 
   function panelHead(markIcon, title, sub) {
@@ -565,7 +609,7 @@ export function makeUI(els, cb) {
   }
 
   return {
-    chips, roomSummary, roomLive, agentPanel, messagePanel, closePanel, legend,
+    chips, status, roomSummary, roomLive, agentPanel, messagePanel, closePanel, legend,
     buildFeed, renderFeed, closeFeed, feedState: feed,
     hover, hoverAgentCard, hoverRoomCard, hoverBlockCard, hits,
   };
