@@ -113,10 +113,16 @@ export function makeUI(els, cb) {
     const age = s.retrievedAt ? ago(s.retrievedAt) : null;
 
     let cls, text, title;
-    if (!s.retrievedAt && s.city === "starting") {
+    if (!s.retrievedAt) {
       cls = "wait"; text = "Connecting";
       title = "Asking Technocore for its public room directory.";
-    } else if (live && s.city !== "reconnecting") {
+    } else if (s.city === "live") {
+      /* BOTH have to be true to say "Live": the data came from a live read
+         AND the connection has confirmed it. A reading this browser cached
+         ten minutes ago is `source:"live"` and is genuinely a live reading —
+         but it is not what the network is doing NOW, and labelling it Live
+         while the first poll is still in flight is the overclaim this chip
+         exists to prevent. */
       cls = "live"; text = "Live";
       title = `Read from Technocore's public directory ${age}. Refreshing every 20 seconds.`;
     } else if (s.city === "reconnecting") {
@@ -129,9 +135,16 @@ export function makeUI(els, cb) {
         ? "The last live reading is still on screen. Retrying in the background."
         : "Technocore is not answering, so this is genuine public data this site archived earlier — not a reading of the network right now. Retrying in the background.");
     } else {
+      /* Starting or updating, with something already drawn. Which something
+         it is decides the words: a reading this browser took earlier is not
+         the same thing as the file that shipped with the site, and rounding
+         them both to "saved" is how the live site ended up saying "Saved
+         snapshot · 36s ago" over a genuine live reading. */
       cls = "wait";
-      text = age ? `Updating · saved ${age}` : "Updating";
-      title = "Showing saved public data while a live reading is fetched. Nothing here is invented.";
+      text = live ? `Updating · last live ${age}` : `Updating · saved ${age}`;
+      title = live
+        ? "The last live reading is on screen while a fresh one is fetched."
+        : "Showing saved public data while a live reading is fetched. Nothing here is invented.";
     }
 
     box.className = "status " + cls;
