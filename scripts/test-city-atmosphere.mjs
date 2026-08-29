@@ -1,26 +1,30 @@
-/* Agent City: the page, the soundtrack, and the pulse of the data.
+/* Agent City: the page, the readouts, and the sound of the data.
  *
- * Four things were asked for, and each one is easy to *appear* to have done:
+ * Each section is a claim that is easy to *appear* to have satisfied:
  *
- *   A. THE PAGE'S OWN BACKGROUND IS GONE. The city used to paint its own
- *      dark plate, which meant the site's sky stopped at the nav bar and
- *      resumed under it. Checking that a CSS rule was deleted proves
- *      nothing; what matters is that the sky layer is behind the canvas and
- *      the canvas is genuinely transparent, so this reads the computed
- *      background and the renderer's clear alpha.
- *   B. THE ROOM HEADER SITS LEFT, UNDER ITS OWN SPACE. Measured in real
- *      geometry: the way out is above the name, everything shares one left
- *      edge, and that edge is inset from the frame.
- *   C. MUSIC PLAYS OUT HERE AND NOT IN THERE. Five loops on the city, and
- *      silence inside a room — a room has its own bed and the tick of a
- *      message arriving, and a soundtrack over that drowns out the only
- *      part of the sound that is information.
- *   D. THE CITY PULSES WITH THE DATA, AND ONLY WITH THE DATA. A roof
- *      flaring is a claim that a message arrived in that room. It must be
- *      spendable only by real movement, it must fade, and — the part worth
- *      testing hardest — a poll's worth of activity must be spread across
- *      the window rather than fired in one lump, because twenty seconds of
- *      stillness broken by one simultaneous flash is what "dead" looks like.
+ *   A. THE PAGE HAS NO BACKGROUND OF ITS OWN. Checking that a CSS rule was
+ *      deleted proves nothing. What matters is that the canvas is genuinely
+ *      transparent, the renderer clears with no alpha, and the ground is the
+ *      SAME ground another page on this site is standing on.
+ *   B. THE ROOM HEADER SITS LEFT, UNDER ITS OWN SPACE, and the room is on
+ *      that same ground rather than under a plate of its own.
+ *   C. THE CITY IS READABLE FROM OUTSIDE. A count over a building and a rail
+ *      of the busiest rooms. The number must be the delta the directory
+ *      actually reported, the rail must rank on a measured rate, and the
+ *      lines in it must be real messages rendered as text.
+ *   D. THE CITY PULSES WITH THE DATA, AND ONLY WITH THE DATA. A flash is a
+ *      claim that a message arrived. It must be spendable only by real
+ *      movement, it must fade, and a poll's worth of activity must be spread
+ *      across the window rather than fired in one lump.
+ *   E. NOTHING PLAYS THAT IS NOT A READING. The music is gone. What is left
+ *      is caused by data — a tick per arrival, a tone that tracks the city's
+ *      rate and goes silent when the city is idle — and by your own actions.
+ *      The test that matters most here is the negative one: an idle city
+ *      makes no sound at all.
+ *   F. THE THINGS THAT WERE BROKEN. The feed's close button, the room
+ *      panel's actions being pushed below the fold by a long list, and a
+ *      pasted did:key that answered into a box its own click was about to
+ *      hide.
  *
  * Needs playwright and a chromium:  npx playwright install chromium
  */
@@ -48,13 +52,31 @@ const directory = () => {
     landmarks: SNAP.landmarks.map(step), named: SNAP.named.map(step) };
 };
 
-const room = (name) => ({
-  ok: true, room: name, source: "live", retrieved_at: new Date().toISOString(),
-  age_seconds: 0, messages: [], next: "0",
-});
+/* Two deliberately awkward messages, because the rail renders somebody
+   else's words and the only interesting question about that is whether it
+   can be made to render them as anything but text. */
+const HOSTILE = '<script>window.__pwned=1</script> and <b>bold</b>';
+/* HOSTILE goes LAST, because the rail shows a room's NEWEST line and a
+   dangerous string parked behind a harmless one is never actually rendered —
+   which is a test that passes without testing anything. */
+const LINES = ["ATTEST v1|j-8801|useful|rh:9fa31c", HOSTILE];
+
+const room = (name, since) => {
+  const from = Math.max(0, Number(since) || 0);
+  return {
+    ok: true, room: name, source: "live", retrieved_at: new Date().toISOString(),
+    age_seconds: 0,
+    messages: from > 0 ? LINES.map((text, i) => ({
+      seq: String(from + i + 1), ts: new Date().toISOString(),
+      from: "did:key:z6MkTest" + i, nick: null, text, sig: "sig", nonce: null,
+    })) : [],
+    first_seq: "1", last_seq: String(from + LINES.length), next: String(from + LINES.length),
+  };
+};
 
 const srv = http.createServer((req, res) => {
-  let p = new URL(req.url, "http://x").pathname;
+  const u = new URL(req.url, "http://x");
+  let p = u.pathname;
   if (p === "/city") p = "/city.html";
   if (p === "/api/city") {
     res.writeHead(200, { "content-type": "application/json" });
@@ -62,7 +84,8 @@ const srv = http.createServer((req, res) => {
   }
   if (p === "/api/room") {
     res.writeHead(200, { "content-type": "application/json" });
-    return res.end(JSON.stringify(room(new URL(req.url, "http://x").searchParams.get("room") || "lobby")));
+    return res.end(JSON.stringify(
+      room(u.searchParams.get("room") || "lobby", u.searchParams.get("since"))));
   }
   if (p.startsWith("/api/")) { res.writeHead(200, { "content-type": "application/json" }); return res.end("{}"); }
   const f = path.join(ROOT, p);
@@ -202,63 +225,93 @@ console.log("\n=== B. inside a room, the header reads left and has room above it
 }
 
 /* ════════════════════════════════════════════════════════════════════════
-   C. THE SOUNDTRACK
+   C. THE CITY IS READABLE FROM OUTSIDE
    ════════════════════════════════════════════════════════════════════ */
-console.log("\n=== C. music on the city, silence in a room");
+console.log("\n=== C. what is happening in there, read from out here");
 {
   const { pg, ctx, errs } = await open();
+  bump = 14;                                   // every room moved
+  await pg.evaluate(() => document.dispatchEvent(new Event("visibilitychange")));
+  await pg.waitForTimeout(2200);
+  bump = 31;
+  await pg.evaluate(() => document.dispatchEvent(new Event("visibilitychange")));
+  /* Long enough for the staggered release to put several counts up and for
+     the peek budget to fetch at least one line. */
+  await pg.waitForTimeout(9000);
 
-  /* Count oscillators for real. `musicPlaying()` is the page's own opinion;
-     an OscillatorNode actually being constructed is the fact. */
-  await pg.evaluate(() => {
-    window.__osc = 0;
-    const O = OscillatorNode;
-    const orig = AudioContext.prototype.createOscillator;
-    AudioContext.prototype.createOscillator = function () { window.__osc++; return orig.call(this); };
-    void O;
+  /* ── the counts over the buildings ── */
+  const t = await pg.evaluate(() => {
+    const ns = [...document.querySelectorAll(".tally")];
+    return {
+      n: ns.length,
+      labels: ns.map((e) => e.querySelector("b").textContent),
+      rooms: ns.map((e) => e.querySelector("span").textContent),
+      positioned: ns.every((e) => /translate/.test(e.style.transform)),
+    };
   });
+  check("counts appear over the buildings that moved", t.n > 0, `${t.n} on screen`);
+  check("every one of them is a real number", t.labels.every((l) => /^\+[\d,]+$/.test(l)), t.labels.join(" "));
+  check("and names the room it belongs to",
+    t.rooms.every((r) => typeof r === "string" && r.length > 0), t.rooms.slice(0, 3).join(","));
+  check("each is placed on the building, not parked at the origin", t.positioned);
+  check("and they are capped rather than unbounded", t.n <= 8, `${t.n}`);
 
-  await pg.click("#mute");                                   // a real gesture
-  await pg.waitForTimeout(1600);
+  /* THE NUMBER MUST BE THE DELTA, NOT A DECORATION. The directory moved every
+     room by 17 between the two readings above, so a count that says anything
+     else is inventing. */
+  const named = await pg.evaluate(() => window.__city.city.roster.map((r) => r.room));
+  void named;
+  check("the number is the delta the directory reported",
+    t.labels.every((l) => Number(l.replace(/[+,]/g, "")) === 17), t.labels.join(" "));
 
-  const city = await pg.evaluate(() => ({
-    playing: window.__city.sound.musicPlaying(),
-    track: window.__city.sound.musicTrack(),
-    osc: window.__osc,
-  }));
-  check("switching sound on starts a loop", city.playing);
-  check("and it is one of the named tracks", typeof city.track === "string" && city.track.length > 0, city.track);
-  check("notes are really being booked, not just a flag set", city.osc > 10, `${city.osc} oscillators`);
+  /* ── the busiest-now rail ── */
+  const rail = await pg.evaluate(() => {
+    const box = document.getElementById("rail");
+    const rows = [...box.querySelectorAll(".railrow")];
+    return {
+      hidden: box.hidden,
+      n: rows.length,
+      names: rows.map((r) => r.querySelector(".nm").textContent),
+      rates: rows.map((r) => r.querySelector(".rt").textContent),
+      bars: rows.map((r) => r.querySelector(".bar i").style.width),
+      lines: rows.map((r) => r.querySelector(".ln")?.textContent ?? null).filter(Boolean),
+      live: box.querySelector(".railtop .live").textContent,
+      note: box.querySelector(".railnote").textContent,
+      html: box.innerHTML,
+    };
+  });
+  check("the rail is up", !rail.hidden);
+  check("and holds a few rooms, not a directory", rail.n > 0 && rail.n <= 4, `${rail.n} rows`);
+  check("every row names a room the city actually has",
+    rail.names.every((n) => named.includes(n)), rail.names.join(","));
+  check("every row carries a rate in the unit it was measured in",
+    rail.rates.every((r) => /msg\/min$/.test(r)), rail.rates[0]);
+  check("and a bar drawn from that rate", rail.bars.every((w) => /%$/.test(w)), rail.bars.join(" "));
+  check("the rail says whether it is live", /live|saved/i.test(rail.live), rail.live);
+  check("and says where its numbers come from",
+    /measured here/i.test(rail.note), rail.note.slice(0, 40));
 
-  await pg.evaluate(() => window.__city.enterRoom("lobby"));
-  await pg.waitForFunction(() => document.body.classList.contains("inroom"), null, { timeout: 20000 });
-  /* Settle FIRST, then count. Arriving in a room legitimately makes sound —
-     the arrival chime and the room's bed are both oscillators, and counting
-     from the moment of entry measures those rather than the soundtrack.
-     What must be true a second later is that nothing is still being booked
-     on a schedule, which is the difference between stopping the music and
-     turning its volume down. */
-  await pg.waitForTimeout(1200);
-  await pg.evaluate(() => { window.__osc = 0; });
-  await pg.waitForTimeout(1600);
-  const inroom = await pg.evaluate(() => ({
-    playing: window.__city.sound.musicPlaying(), osc: window.__osc,
-  }));
-  check("entering a room stops the music", !inroom.playing);
-  check("and stops booking notes, rather than muting them", inroom.osc === 0, `${inroom.osc} oscillators`);
+  /* THE LINES ARE REAL MESSAGES AND ARE TEXT. The fixture serves a message
+     containing a script tag; if any of this were ever set as HTML rather than
+     as a text node, the tag would be in the DOM. */
+  check("at least one room's newest line was read", rail.lines.length > 0, `${rail.lines.length} lines`);
+  check("the hostile line is the one on screen, so this is really being tested",
+    rail.lines.some((l) => l.includes("<script>")), rail.lines[0]?.slice(0, 46) || "");
+  check("it is rendered as characters, not parsed as markup",
+    !/<script/i.test(rail.html) && !/<b>bold<\/b>/i.test(rail.html));
+  check("and nothing in it executed",
+    (await pg.evaluate(() => window.__pwned)) === undefined);
 
-  await pg.evaluate(() => window.__city.leaveRoom?.() ?? document.getElementById("backCity").click());
-  await pg.waitForFunction(() => !document.body.classList.contains("inroom"), null, { timeout: 20000 });
-  await pg.waitForTimeout(1200);
-  check("leaving brings it back",
-    await pg.evaluate(() => window.__city.sound.musicPlaying()));
+  /* Clicking a row goes to that room rather than doing nothing. */
+  const target = rail.names[0];
+  const camBefore = await pg.evaluate(() => Math.round(window.__city.cam.target.x * 10));
+  await pg.click("#rail .railrow");
+  await pg.waitForTimeout(1400);
+  const camAfter = await pg.evaluate(() => Math.round(window.__city.cam.target.x * 10));
+  check("clicking a row takes you there", camBefore !== camAfter, `${target}: ${camBefore} → ${camAfter}`);
 
-  /* Muting must silence the soundtrack too, not only the effects. */
-  await pg.click("#mute");
-  await pg.waitForTimeout(400);
-  check("and muting silences it",
-    !(await pg.evaluate(() => window.__city.sound.musicPlaying())));
   check("no page errors", errs.length === 0, errs[0] || "");
+  bump = 0;
   await ctx.close();
 }
 
@@ -322,6 +375,141 @@ console.log("\n=== D. the city pulses with the data it is reading");
     buckets >= 3, `${buckets} of 8 seconds had activity`);
   check("no single second carries most of the burst",
     total === 0 || biggest <= Math.ceil(total * 0.7), `biggest ${biggest} of ${total}`);
+  check("no page errors", errs.length === 0, errs[0] || "");
+  await ctx.close();
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   E. NOTHING PLAYS THAT IS NOT A READING
+   ════════════════════════════════════════════════════════════════════ */
+console.log("\n=== E. the sound is data, and an idle city is silent");
+{
+  const { pg, ctx, errs } = await open();
+
+  /* Count oscillators for real. What a module says about itself is an
+     opinion; an OscillatorNode being constructed is a fact. */
+  await pg.evaluate(() => {
+    window.__osc = 0;
+    const orig = AudioContext.prototype.createOscillator;
+    AudioContext.prototype.createOscillator = function () { window.__osc++; return orig.call(this); };
+  });
+
+  check("the music engine is gone, not merely switched off",
+    await pg.evaluate(() => window.__city.sound.musicOn === undefined
+      && window.__city.sound.musicPlaying === undefined));
+
+  await pg.click("#mute");                                   // a real gesture
+  await pg.waitForTimeout(400);
+  check("sound switches on", await pg.evaluate(() => window.__city.sound.enabled()));
+
+  /* THE NEGATIVE TEST, AND THE IMPORTANT ONE. Nothing has moved: bump is 0,
+     every room reads the same sequence number it did last time. A page with
+     a soundtrack would be playing. This one must not be making a sound at
+     all — not a quiet one, none. */
+  await pg.evaluate(() => { window.__osc = 0; });
+  await pg.waitForTimeout(3000);
+  const idle = await pg.evaluate(() => ({ osc: window.__osc, tone: window.__city.sound.toneRunning() }));
+  check("an idle city plays nothing at all", idle.osc === 0, `${idle.osc} oscillators`);
+  check("and runs no tone, rather than an inaudible one", !idle.tone);
+
+  /* Now the network moves, and the same silence must break — caused by the
+     data and by nothing else. */
+  bump = 26;
+  await pg.evaluate(() => { window.__osc = 0; });
+  await pg.evaluate(() => document.dispatchEvent(new Event("visibilitychange")));
+  await pg.waitForTimeout(6000);
+  const busy = await pg.evaluate(() => ({ osc: window.__osc, tone: window.__city.sound.toneRunning() }));
+  check("a city that moved does make a sound", busy.osc > 0, `${busy.osc} oscillators`);
+  check("and the tone comes up with it", busy.tone);
+
+  /* The cap. A burst must not become a machine gun. */
+  await pg.evaluate(() => { window.__osc = 0; });
+  await pg.evaluate(() => {
+    for (let i = 0; i < 300; i++) window.__city.sound.tick(i, "message", "lobby");
+  });
+  await pg.waitForTimeout(200);
+  const burst = await pg.evaluate(() => window.__osc);
+  check("three hundred messages in one instant do not make three hundred sounds",
+    burst <= 8, `${burst} oscillators`);
+
+  /* Entering a room stops the CITY's tone: it is a number about somewhere you
+     are not, and in here it would play over the ticks of the room you are
+     actually in. */
+  await pg.evaluate(() => window.__city.enterRoom("lobby"));
+  await pg.waitForFunction(() => document.body.classList.contains("inroom"), null, { timeout: 20000 });
+  await pg.waitForTimeout(900);
+  check("the city tone stops at the door",
+    !(await pg.evaluate(() => window.__city.sound.toneRunning())));
+
+  /* Muting must tear the tone down rather than turn it down — a tone left
+     running behind a zeroed master is battery spent on being inaudible. */
+  await pg.evaluate(() => window.__city.leaveRoom());
+  await pg.waitForFunction(() => !document.body.classList.contains("inroom"), null, { timeout: 20000 });
+  await pg.evaluate(() => document.dispatchEvent(new Event("visibilitychange")));
+  await pg.waitForTimeout(2500);
+  await pg.click("#mute");
+  await pg.waitForTimeout(500);
+  check("muting tears the tone down, it does not just turn it down",
+    !(await pg.evaluate(() => window.__city.sound.toneRunning())));
+  check("no page errors", errs.length === 0, errs[0] || "");
+  bump = 0;
+  await ctx.close();
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   F. THE THINGS THAT WERE BROKEN
+   ════════════════════════════════════════════════════════════════════ */
+console.log("\n=== F. the three that did not work");
+{
+  const { pg, ctx, errs } = await open();
+
+  /* 1. THE FEED'S CLOSE BUTTON. It called closePanel(), which is a different
+        window — so the X reliably closed the panel behind the feed and left
+        the feed open. */
+  await pg.evaluate(() => window.__city.enterRoom("lobby"));
+  await pg.waitForFunction(() => document.body.classList.contains("inroom"), null, { timeout: 20000 });
+  await pg.waitForTimeout(1200);
+  await pg.evaluate(() => document.querySelector("#side .prow .go").click());
+  await pg.waitForTimeout(600);
+  check("the room feed opens", !(await pg.evaluate(() => document.getElementById("feedpane").hidden)));
+  await pg.evaluate(() => document.querySelector("#feedpane .px").click());
+  await pg.waitForTimeout(400);
+  check("and its close button closes IT",
+    await pg.evaluate(() => document.getElementById("feedpane").hidden));
+  check("without taking the room panel with it",
+    !(await pg.evaluate(() => document.getElementById("side").hidden)));
+
+  /* 2. THE ACTIONS STAY ABOVE THE LIST. With forty identities the panel used
+        to push "Room feed" and "Back to the city" below the fold — the more
+        there was to look at, the harder it was to leave. */
+  const panel = await pg.evaluate(() => {
+    const side = document.getElementById("side").getBoundingClientRect();
+    const btns = [...document.querySelectorAll("#side .prow.pinned .go")].map((b) => b.getBoundingClientRect());
+    const list = document.querySelector("#side .rowlist");
+    const lr = list?.getBoundingClientRect();
+    return {
+      n: btns.length,
+      tops: btns.map((b) => Math.round(b.top)),
+      bottoms: btns.map((b) => Math.round(b.bottom)),
+      listTop: lr ? Math.round(lr.top) : null,
+      sideBottom: Math.round(side.bottom),
+      listScrolls: list ? getComputedStyle(list).overflowY : null,
+    };
+  });
+  check("both actions are present", panel.n === 2, `${panel.n}`);
+  check("they sit on one row, not stacked", panel.tops[0] === panel.tops[1], panel.tops.join(","));
+  check("above the identity list", Math.max(...panel.bottoms) <= panel.listTop + 1,
+    `${Math.max(...panel.bottoms)} vs ${panel.listTop}`);
+  check("inside the panel, not below its bottom edge",
+    Math.max(...panel.bottoms) < panel.sideBottom, `${Math.max(...panel.bottoms)} < ${panel.sideBottom}`);
+  check("and the list is what scrolls", panel.listScrolls === "auto" || panel.listScrolls === "scroll",
+    panel.listScrolls);
+
+  /* 3. THE AUTO-TOUR IS GONE, AND LEFT NOTHING BEHIND. */
+  check("no auto-play control", await pg.evaluate(() => !document.getElementById("tour")));
+  check("and no dead state where it used to be",
+    await pg.evaluate(() => window.__city.state.tour === undefined));
+
   check("no page errors", errs.length === 0, errs[0] || "");
   await ctx.close();
 }

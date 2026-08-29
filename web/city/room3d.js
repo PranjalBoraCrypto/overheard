@@ -99,7 +99,11 @@ export function makeRoom(THREE, { renderer, preset, level = "balanced", reduced 
   /* Fog that starts close. The dome is a real surface a few units past the
      furthest figure, and without fog the join between floor and wall reads
      as a seam in a model rather than as distance. */
-  if (preset.fog !== false) scene.fog = new THREE.Fog(0x00131b, 70, 210);
+  /* The site's own ground colour, not a colour of this scene's choosing. Now
+     that the dome lets the page's sky through, distance has to fade into the
+     same dark the rest of Overheard sits on, or the fade itself becomes the
+     seam the dome used to be. */
+  if (preset.fog !== false) scene.fog = new THREE.Fog(0x00070a, 70, 210);
 
   const camera = new THREE.PerspectiveCamera(38, 1, 0.5, 900);
 
@@ -136,13 +140,65 @@ export function makeRoom(THREE, { renderer, preset, level = "balanced", reduced 
   }
 
   /* ── the dome ──────────────────────────────────────────────────────────
-     Seen from inside, so BackSide. It is what makes this an interior: the
-     city's horizon is empty space, and a room's is a wall. */
+     Seen from inside, so BackSide.
+
+     IT IS A VEIL, NOT A WALL. This was a solid shell, and solid was wrong for
+     one concrete reason: it covered the whole viewport, so walking into a
+     room replaced the site's background with a plate of its own and the page
+     changed grounds at the doorway. The city had exactly that fault and lost
+     it; a room should not reintroduce it one click later.
+
+     So the dome now fades out with height. Dense at the horizon, where its
+     whole job is to close off the floor's edge and say "you are inside
+     something"; gone by the zenith, where the same sky that is behind every
+     other page on this site is behind this one too. You are indoors and still
+     in the same world, which is the truth of the thing being drawn. */
+  const domeMat = new THREE.ShaderMaterial({
+    side: THREE.BackSide, transparent: true, depthWrite: false, fog: false,
+    uniforms: { uLow: { value: new THREE.Color(0x04161f) },
+                uHigh: { value: new THREE.Color(0x0a3448) },
+                uAlpha: { value: 0.86 } },
+    vertexShader: `
+      varying float vH;
+      void main(){
+        vH = clamp(position.y / ${(R + 34).toFixed(1)}, 0.0, 1.0);
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+      }`,
+    /* pow(1-h, 1.7) rather than a straight ramp: linear leaves a visible grey
+       wash across the top half of the screen, and the point is for the upper
+       dome to be genuinely absent rather than faintly there. */
+    fragmentShader: `
+      uniform vec3 uLow; uniform vec3 uHigh; uniform float uAlpha;
+      varying float vH;
+      void main(){
+        float a = uAlpha * pow(1.0 - vH, 1.7);
+        gl_FragColor = vec4(mix(uLow, uHigh, vH), a);
+      }`,
+  });
   const dome = new THREE.Mesh(
-    new THREE.SphereGeometry(R + 34, 36, 18, 0, TAU, 0, Math.PI / 2),
-    new THREE.MeshBasicMaterial({ color: 0x03141d, side: THREE.BackSide, fog: false })
-  );
+    new THREE.SphereGeometry(R + 34, 36, 18, 0, TAU, 0, Math.PI / 2), domeMat);
+  /* Drawn before everything else and writing no depth, so a transparent shell
+     never sorts itself in front of the figures standing inside it. */
+  dome.renderOrder = -1;
   root.add(dome);
+
+  /* The horizon the dome used to provide by being opaque: a bright band where
+     the wall meets the floor. It is what stops the plaza from reading as a
+     disc floating in the sky now that you can see past the top of the room. */
+  const skirt = new THREE.Mesh(
+    new THREE.CylinderGeometry(R + 33.6, R + 33.6, 26, 48, 1, true),
+    new THREE.ShaderMaterial({
+      side: THREE.BackSide, transparent: true, depthWrite: false, fog: false,
+      uniforms: { uCol: { value: new THREE.Color(0x0e5b74) } },
+      vertexShader: `varying float vY; void main(){ vY = position.y / 13.0;
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+      fragmentShader: `uniform vec3 uCol; varying float vY;
+        void main(){ gl_FragColor = vec4(uCol, 0.42 * pow(clamp(1.0 - (vY + 1.0) * 0.5, 0.0, 1.0), 1.4)); }`,
+    })
+  );
+  skirt.position.y = 13;
+  skirt.renderOrder = -1;
+  root.add(skirt);
 
   /* ── the hub ───────────────────────────────────────────────────────────
      The room's own centre: a slow ring of light that everything is arranged

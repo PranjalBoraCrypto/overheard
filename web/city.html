@@ -205,6 +205,16 @@ button.chip:hover{border-color:rgba(95,235,255,.5);color:var(--txt)}
 .tr{top:22px;right:22px;width:min(354px,calc(100vw - 44px));max-height:calc(100% - 168px);
   display:flex;flex-direction:column}
 .pane{padding:16px 17px;overflow:auto;overscroll-behavior:contain}
+/* THE LIST SCROLLS, NOT THE PANEL. In a room with forty identities the whole
+   panel used to scroll as one block, which pushed "Room feed" and "Back to
+   the city" below the fold — the busier the room, the harder it was to get
+   out of. Everything except the list is fixed furniture; the list takes the
+   space that is left and scrolls inside it. Panels with no list are
+   unaffected: with no flexible child the pane's own overflow still applies. */
+#side{display:flex;flex-direction:column}
+#side > *{flex:0 0 auto}
+.rowlist.scroller{flex:1 1 auto;min-height:64px;overflow:auto;overscroll-behavior:contain;
+  margin-right:-6px;padding-right:6px}
 .phead{display:flex;align-items:center;gap:11px;margin-bottom:4px}
 .phead .mark{width:34px;height:34px;flex:none;border-radius:11px;display:grid;place-items:center;
   background:rgba(0,180,215,.12);color:var(--cy-hi)}
@@ -258,9 +268,72 @@ button.chip:hover{border-color:rgba(95,235,255,.5);color:var(--txt)}
 .go.ghost:hover{color:var(--txt);border-color:var(--edge-lit)}
 .prow{display:flex;gap:8px;margin-top:13px;flex-wrap:wrap}
 .prow .go{flex:1 1 auto;justify-content:center}
+/* The pinned actions stay on ONE row whatever the panel width. Wrapping them
+   costs a whole extra line of the panel's height, and the point of moving
+   them above the list was to give that height back to the list. */
+.prow.pinned{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.prow.pinned .go{min-width:0;padding-left:10px;padding-right:10px}
+.prow.pinned .go span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 
 /* ── bottom left: the activity strip ─────────────────────────────────── */
 .bl{bottom:22px;left:22px;right:auto;width:min(620px,calc(100vw - 44px))}
+
+/* ── the busiest-now rail ──────────────────────────────────────────────────
+   Aligned to the same 64px left inset as the headline above it, so the whole
+   left column reads as one column rather than as two cards that happen to be
+   on the same side.
+
+   INFORMATION DESIGN, NOT A LIST. Each row carries four things at four
+   different weights: the room (the identifier, so it reads first), the rate
+   (the number being ranked on, tabular so the digits line up down the
+   column), a bar (the same number as a shape, because a shape is what makes
+   a ranking legible without reading any of the numbers), and the newest line
+   (the only actual words, clamped to two lines and quietest of all). */
+/* BELOW THE HEADLINE COLUMN, DELIBERATELY. The rail and the search box share
+   the left edge, and on a short window the search results drop down into the
+   space the rail is standing in. Both are .hud, so at the same z-index the
+   later one in the document wins and the rail was swallowing clicks meant for
+   the search — caught by a probe that could not click its own search result.
+   The rail is ambient; the thing somebody is typing into is not. */
+.bl2{bottom:22px;left:64px;right:auto;width:min(412px,calc(100vw - 128px));z-index:3}
+.rail{padding:11px 13px 9px}
+.railtop{display:flex;align-items:center;gap:9px;font-family:var(--mono);font-size:10px;
+  letter-spacing:.14em;text-transform:uppercase;color:var(--faint);margin-bottom:9px}
+.railtop .live{color:var(--good)}
+.railtop .live.stale{color:var(--warn)}
+.railrow{display:grid;grid-template-columns:1fr auto;gap:1px 10px;width:100%;
+  padding:6px 8px 7px;border-radius:10px;border:1px solid transparent;background:none;
+  color:inherit;text-align:left;cursor:pointer;transition:background .16s var(--ease),border-color .16s var(--ease)}
+.railrow:hover,.railrow:focus-visible{background:rgba(0,180,215,.08);border-color:rgba(0,180,215,.26)}
+.railrow .nm{font-family:var(--mono);font-size:12px;color:var(--txt);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.railrow .rt{font-family:var(--mono);font-size:11px;color:var(--cy-hi);
+  font-variant-numeric:tabular-nums;white-space:nowrap}
+.railrow .bar{grid-column:1/-1;height:2px;border-radius:2px;background:rgba(0,180,215,.10);
+  overflow:hidden;margin-top:6px}
+.railrow .bar i{display:block;height:100%;border-radius:2px;
+  background:linear-gradient(90deg,var(--cy),var(--cy-hi));
+  transition:width .5s var(--ease)}
+/* ONE LINE. This is a peek, not a reader: it exists so somebody can tell at a
+   glance what kind of conversation a room is having before deciding to go in,
+   and the full message is two clicks away in that room's own feed. Two lines
+   made the rail tall enough to reach the search box above it. */
+.railrow .ln{grid-column:1/-1;font-size:11.5px;line-height:1.4;color:var(--dim);margin-top:3px;
+  display:-webkit-box;-webkit-line-clamp:1;-webkit-box-orient:vertical;overflow:hidden;
+  word-break:break-word}
+.railrow .ln .k{font-family:var(--mono);font-size:9px;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--cy);margin-right:6px}
+.railrow.fresh{animation:railpop .5s var(--ease)}
+@keyframes railpop{from{background:rgba(0,180,215,.20)}}
+.railnote{font-family:var(--mono);font-size:9.5px;letter-spacing:.05em;color:var(--faint);
+  margin-top:7px;padding:0 8px}
+@media (prefers-reduced-motion:reduce){
+  .railrow.fresh{animation:none}
+  .railrow .bar i{transition:none}
+}
+@media (max-width:900px){
+  .bl2{left:22px;width:calc(100vw - 44px)}
+}
 .strip{padding:12px 15px}
 .striptop{display:flex;align-items:center;gap:10px;font-family:var(--mono);font-size:10px;
   letter-spacing:.14em;text-transform:uppercase;color:var(--faint)}
@@ -324,6 +397,34 @@ button.chip:hover{border-color:rgba(95,235,255,.5);color:var(--txt)}
 .bub.witness{border-color:rgba(156,191,203,.4)}
 .bub.hello{border-color:rgba(0,180,215,.34)}
 .bub.sel{border-color:var(--cy-hi);box-shadow:0 0 0 3px rgba(0,180,215,.18),0 14px 30px -18px #000}
+
+/* ── the counts over the buildings ─────────────────────────────────────────
+   A number that rises off a roof and fades. It is deliberately NOT a bubble:
+   a bubble is somebody's words and this is a measurement, so it is mono,
+   tabular, and has no tail pointing at a speaker. The room name under it is
+   small and quiet — the number is the thing being read at a glance, and the
+   name is only there so you know which building it belongs to when two are
+   close together. */
+.tally{position:absolute;pointer-events:auto;cursor:pointer;text-align:center;
+  transform:translate(-50%,-100%);will-change:transform,opacity;
+  padding:5px 10px 4px;border-radius:11px;
+  background:rgba(3,20,28,.82);border:1px solid rgba(0,180,215,.34);
+  backdrop-filter:blur(6px);box-shadow:0 12px 26px -18px rgba(0,0,0,.95);
+  animation:tallyin .26s var(--ease) both}
+@keyframes tallyin{from{opacity:0;transform:translate(-50%,-88%) scale(.86)}}
+.tally.out{animation:tallyout .3s var(--ease) forwards}
+@keyframes tallyout{to{opacity:0;transform:translate(-50%,-118%) scale(.96)}}
+.tally b{display:block;font-family:var(--mono);font-size:14px;font-weight:600;line-height:1.1;
+  font-variant-numeric:tabular-nums;color:var(--cy-hi);text-shadow:0 0 14px rgba(95,235,255,.5)}
+.tally span{display:block;font-family:var(--mono);font-size:8.5px;letter-spacing:.1em;
+  text-transform:uppercase;color:var(--faint);margin-top:1px;
+  max-width:13ch;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* A room going well past its own normal. The only place this page shouts. */
+.tally.hot{border-color:rgba(242,179,61,.55);background:rgba(28,19,4,.82)}
+.tally.hot b{color:var(--warn);text-shadow:0 0 16px rgba(242,179,61,.55)}
+@media (prefers-reduced-motion:reduce){
+  .tally,.tally.out{animation:none}
+}
 
 /* hover card */
 #hover{position:absolute;z-index:7;pointer-events:none;padding:10px 12px;border-radius:12px;max-width:270px;
@@ -439,8 +540,6 @@ button.chip:hover{border-color:rgba(95,235,255,.5);color:var(--txt)}
   <symbol id="c-home" viewBox="0 0 24 24"><path d="M4 11.5 12 4l8 7.5"/><path d="M6.5 10v9.2h11V10"/></symbol>
   <symbol id="c-plus" viewBox="0 0 24 24"><path d="M12 5.5v13M5.5 12h13"/></symbol>
   <symbol id="c-minus" viewBox="0 0 24 24"><path d="M5.5 12h13"/></symbol>
-  <symbol id="c-play" viewBox="0 0 24 24"><path d="M7 4.5 19 12 7 19.5z"/></symbol>
-  <symbol id="c-pause" viewBox="0 0 24 24"><path d="M8.5 5v14M15.5 5v14"/></symbol>
   <symbol id="c-sound" viewBox="0 0 24 24"><path d="M4 9.5h3.5L12 5.5v13L7.5 14.5H4z"/><path d="M16 9.2a4 4 0 0 1 0 5.6"/><path d="M18.6 6.6a7.6 7.6 0 0 1 0 10.8"/></symbol>
   <symbol id="c-mute" viewBox="0 0 24 24"><path d="M4 9.5h3.5L12 5.5v13L7.5 14.5H4z"/><path d="M16.5 9.5l5 5M21.5 9.5l-5 5"/></symbol>
   <symbol id="c-clean" viewBox="0 0 24 24"><path d="M4 9V5.5A1.5 1.5 0 0 1 5.5 4H9"/><path d="M15 4h3.5A1.5 1.5 0 0 1 20 5.5V9"/><path d="M20 15v3.5a1.5 1.5 0 0 1-1.5 1.5H15"/><path d="M9 20H5.5A1.5 1.5 0 0 1 4 18.5V15"/></symbol>
@@ -497,6 +596,14 @@ button.chip:hover{border-color:rgba(95,235,255,.5);color:var(--txt)}
   <!-- the live panel -->
   <aside class="hud tr card pane" id="side" hidden></aside>
 
+  <!-- ── busiest right now ─────────────────────────────────────────────────
+       The city page's answer to "what is actually happening in there".
+       Buildings light up and count, and this says which rooms those are, how
+       fast they are moving, and the newest thing one of them said. Filled by
+       ui.rail(); every row is sourced and clickable. Hidden in a room, where
+       you are already inside one of these. -->
+  <aside class="hud bl2 card rail cityonly" id="rail" hidden aria-label="Busiest rooms right now"></aside>
+
   <!-- the activity strip -->
   <div class="hud bl card strip" id="strip" hidden>
     <div class="striptop">
@@ -515,7 +622,11 @@ button.chip:hover{border-color:rgba(95,235,255,.5);color:var(--txt)}
       <button class="ctl" id="zoomOut" type="button" title="Zoom out" aria-label="Zoom out"><svg class="i"><use href="#c-minus"/></svg></button>
       <button class="ctl" id="zoomIn" type="button" title="Zoom in" aria-label="Zoom in"><svg class="i"><use href="#c-plus"/></svg></button>
       <button class="ctl" id="reset" type="button" title="Reset view" aria-label="Reset view"><svg class="i"><use href="#c-home"/></svg></button>
-      <button class="ctl" id="tour" type="button" title="Auto-tour" aria-label="Auto-tour"><svg class="i"><use href="#c-play"/></svg></button>
+<!-- The auto-tour was here. It is gone: a camera that flies itself around a
+     city that is already moving is two motions competing, and the city now
+     tells you where to look by lighting up rather than by dragging you
+     there. The busiest-now rail does the same job while leaving the camera
+     in the visitor's hands. -->
       <button class="ctl" id="bubbles" type="button" title="Hide speech bubbles" aria-label="Hide speech bubbles"><svg class="i"><use href="#c-eye"/></svg></button>
       <!-- Clean view got its own control when the fps figure stopped being a
            button. It was the only way in, and a measurement that hides your

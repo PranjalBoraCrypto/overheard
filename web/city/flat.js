@@ -72,7 +72,7 @@ export function mountFlat(container, els) {
      and the controls do not have to know which view they are talking to. */
   const st = {
     room: null, agentId: null, msgKey: null, following: null,
-    bubblesOn: true, clean: false, tour: false, tourAt: 0, hoverKey: null,
+    bubblesOn: true, clean: false, hoverKey: null,
   };
 
   let W = 0, H = 0, dpr = 1, bg = null;
@@ -119,8 +119,8 @@ export function mountFlat(container, els) {
     toggleFeed: () => toggleFeed(),
     follow: (id) => { st.following = st.following === id ? null : id; selectAgent(id); },
     locate: (id) => { if (id) selectAgent(id); },
+    flyToRoom: (room) => flyToRoom(room),
     toggleClean: () => setClean(!st.clean),
-    tour: () => { if (!st.tour) $("tour").click(); },
   });
 
   /* ── the directory arrives ───────────────────────────────────────────── */
@@ -150,12 +150,52 @@ export function mountFlat(container, els) {
     refreshHeat();
     buildLabels();
     paintChips();
+    refreshRail();
     $("boot").hidden = true;
     if (first && firstVisit && !st.room) { firstVisit = false; ui.legend(city); }
     mark();
   });
 
   D.on("status", () => { paintChips(); ui.status(D.state.status); });
+  D.on("peek", () => refreshRail());
+
+  /* ── busiest right now ─────────────────────────────────────────────────
+     The same rail as the 3D page, from the same data through the same
+     component. The flat map loses the third dimension, not the information —
+     see the note at the top of this file. */
+  const RAIL_N = 4, RAIL_STICK = 1.25;
+  let railRooms = [], railPeek = 0;
+
+  function refreshRail() {
+    if (!city || st.room) { ui.closeRail(); return; }
+    const ranked = city.roster
+      .filter((r) => r.live && !r.landmark)
+      .map((r) => ({ room: r.room, rate: D.rateOf(r.room) }))
+      .filter((r) => r.rate != null && r.rate > 0)
+      .sort((a, b) => b.rate - a.rate);
+    if (!ranked.length) { ui.closeRail(); return; }
+    const byName = new Map(ranked.map((r) => [r.room, r]));
+    const kept = railRooms.map((n) => byName.get(n)).filter(Boolean);
+    const out = [];
+    for (const c of ranked) {
+      if (out.length >= RAIL_N) break;
+      if (out.some((x) => x.room === c.room)) continue;
+      const held = kept.find((k) => !out.some((x) => x.room === k.room) && k.rate * RAIL_STICK >= c.rate);
+      out.push(held || c);
+    }
+    railRooms = out.map((r) => r.room);
+    ui.rail(out.map((r) => ({ room: r.room, rate: r.rate, line: D.peekOf(r.room) })),
+      { live: D.state.status.source === "live" && D.state.status.city === "live" });
+  }
+
+  const peekTimer = setInterval(() => {
+    if (document.hidden || st.room || !railRooms.length) return;
+    for (let i = 0; i < railRooms.length; i++) {
+      const room = railRooms[(railPeek + i) % railRooms.length];
+      const r = city?.roster.find((x) => x.room === room);
+      if (r && D.peek(room, r.last_seq)) { railPeek = (railPeek + i + 1) % railRooms.length; return; }
+    }
+  }, 3000);
 
   /* The flat map had its own copy of the full-screen error, with its own
      wording, and it had to be deleted twice for the same reason. See the
@@ -199,7 +239,7 @@ export function mountFlat(container, els) {
   /* ── the view ─────────────────────────────────────────────────────────
      Same promise the 3D camera makes: any input from the visitor cancels
      whatever the map was doing on its own, on the same frame. */
-  function seize() { if (flight) { flight = null; if (st.tour) stopTour(); } }
+  function seize() { if (flight) flight = null; }
 
   function normalise() {
     want.s = clamp(want.s, fit * 0.8, fit * 11);
@@ -396,7 +436,8 @@ export function mountFlat(container, els) {
     const p = positionOf(name) || { x: 0, z: 0 };
     focus(p.x, p.z, fit * 3.9, reduced ? 0 : 1000);
     D.enterRoom(name);
-    S.arrive(); S.bedOn(true);
+    S.arrive(); S.cityToneOff(); S.bedOn(true);
+    ui.closeRail();
     $("strip").hidden = st.clean;
     paintChips();
     ui.roomLive({ name, messages: [], agents: [], gaps: [] }, []);
@@ -413,6 +454,7 @@ export function mountFlat(container, els) {
     home(reduced ? 0 : 900);
     $("strip").hidden = true;
     paintChips();
+    refreshRail();
     mark();
   }
 
@@ -480,7 +522,7 @@ export function mountFlat(container, els) {
         const to = D.addressee(m, r.agents);
         if (to && agentById.get(to)) beam(from, to);
       }
-      S.tick(m.seq, m.c.kind);
+      S.tick(m.seq, m.c.kind, r.name);
       if (st.bubblesOn && !st.clean) addBubble(m, from);
     }
     if (st.following) {
@@ -930,7 +972,7 @@ export function mountFlat(container, els) {
   const zoomBy = (k) => { seize(); want.s = view.s * k; normalise(); flight = null; mark(); };
   $("zoomIn").onclick = () => zoomBy(1.4);
   $("zoomOut").onclick = () => zoomBy(0.72);
-  $("reset").onclick = () => { stopTour(); if (st.room) leaveRoom(); else home(reduced ? 0 : 800); };
+  $("reset").onclick = () => { if (st.room) leaveRoom(); else home(reduced ? 0 : 800); };
   /* The same control as the 3D city, wired here too. flat.js is a copy of
      boot.js's wiring, which is exactly why a control added to one and not
      the other silently stops existing for anybody without WebGL — the
@@ -945,6 +987,7 @@ export function mountFlat(container, els) {
   $("mute").onclick = () => {
     const on = !S.enabled();
     S.setEnabled(on); Q.setMuted(!on); paintMute();
+    if (on) S.pick();
     if (on && st.room) S.bedOn(true);
   };
   $("hideStrip").onclick = () => ($("strip").hidden = true);
@@ -959,16 +1002,12 @@ export function mountFlat(container, els) {
     s.appendChild(u); btn.appendChild(s);
     btn.title = title;
   }
-  const paintTour = () => {
-    $("tour").classList.toggle("on", st.tour);
-    swapIcon($("tour"), st.tour ? "c-pause" : "c-play", st.tour ? "Stop the tour" : "Auto-tour");
-  };
   const paintMute = () => {
     const on = S.enabled();
     $("mute").classList.toggle("on", on);
     swapIcon($("mute"), on ? "c-sound" : "c-mute", on ? "Sound on" : "Sound off");
   };
-  paintTour(); paintMute();
+  paintMute();
 
   /* The quality selector has nothing to choose between here, so it says what
      it is instead of offering settings that would do nothing. */
@@ -984,36 +1023,14 @@ export function mountFlat(container, els) {
 
   function setClean(v) {
     st.clean = v;
-    for (const n of [$("chips").parentElement, $("side"), $("strip"), els.feed])
+    for (const n of [$("chips").parentElement, $("side"), $("strip"), els.feed, els.rail])
       if (n) n.style.opacity = v ? "0" : "";
-    for (const n of [$("chips").parentElement, els.feed]) if (n) n.style.pointerEvents = v ? "none" : "";
+    for (const n of [$("chips").parentElement, els.feed, els.rail])
+      if (n) n.style.pointerEvents = v ? "none" : "";
     els.overlay.style.opacity = v ? "0" : "";
     if (v) ui.hover(0, 0, null);
     mark();
   }
-
-  /* ── auto-tour ───────────────────────────────────────────────────────── */
-  let tourTimer = 0;
-  function stopTour() { if (!st.tour) return; st.tour = false; clearTimeout(tourTimer); paintTour(); }
-  function tourStep() {
-    if (!st.tour) return;
-    const live = DISTRICTS
-      .map((d) => ({ d, h: (city && D.rateOf(d.room)) ?? 0 }))
-      .sort((a, b) => b.h - a.h);
-    const d = live[st.tourAt % live.length].d;
-    st.tourAt++;
-    /* flyToDistrict seizes nothing — only a real input does — so the tour can
-       keep moving while it runs, and dies the moment a finger lands. */
-    const p = positionOf(d.room);
-    if (p) { focus(p.x, p.z, fit * 3.2, reduced ? 0 : 900); showSummary(d.room); S.pick(); }
-    tourTimer = setTimeout(tourStep, reduced ? 3600 : 6200);
-  }
-  $("tour").onclick = () => {
-    st.tour = !st.tour; st.tourAt = 0; paintTour();
-    clearTimeout(tourTimer);
-    if (st.tour) tourStep();
-  };
-
 
   /* ── the keyboard ─────────────────────────────────────────────────────
      Escape is the ladder out of wherever you are, and the arrows move the
@@ -1044,7 +1061,7 @@ export function mountFlat(container, els) {
     else if (e.key === "ArrowDown") { seize(); want.z += step; }
     else if (e.key === "+" || e.key === "=") zoomBy(1.35);
     else if (e.key === "-" || e.key === "_") zoomBy(0.74);
-    else if (e.key === "Home") { stopTour(); home(reduced ? 0 : 800); }
+    else if (e.key === "Home") home(reduced ? 0 : 800);
     else return;
     if (e.key.startsWith("Arrow")) { normalise(); e.preventDefault(); }
     mark();
@@ -1072,16 +1089,40 @@ export function mountFlat(container, els) {
     });
   };
   q.addEventListener("input", onSearch);
-  q.addEventListener("blur", () => setTimeout(() => ui.hits(null), 160));
+  /* See the same note in boot.js: the blur must not outlive the click that
+     caused it, or the answer is drawn and then hidden 160ms later. */
+  let inHits = false;
+  els.hits.addEventListener("pointerdown", () => { inHits = true; });
+  addEventListener("pointerup", () => { inHits = false; }, true);
+  q.addEventListener("blur", () => setTimeout(() => { if (!inHits) ui.hits(null); }, 160));
 
-  function findDid(did) {
+  /** The same three questions as boot.js, answered the same way. */
+  let didFlight = 0;
+  async function findDid(did) {
     const full = did.startsWith("did:key:") ? did : `did:key:${did}`;
     const here = D.state.room?.agents.find((a) => a.did === full);
     if (here) return selectAgent(here.id);
-    /* See the same note in boot.js: offer the identity card, do not open a
-       tab nobody asked for. */
-    ui.hits([{ kind: "did", label: "Not in a room you are standing in — open the identity card", did: full }],
-      (h) => { ui.hits(null); window.open(`/?did=${encodeURIComponent(h.did)}`, "_blank", "noopener"); });
+
+    const token = ++didFlight;
+    ui.didPanel({ did: full, state: "looking", rooms: [] });
+    let body = null;
+    try {
+      const res = await fetch(`/api/profile?did=${encodeURIComponent(full)}`,
+        { headers: { Accept: "application/json" }, signal: AbortSignal.timeout(8000) });
+      body = res.ok ? await res.json() : null;
+    } catch { body = null; }
+    if (token !== didFlight) return;
+
+    if (!body) return ui.didPanel({ did: full, state: "failed", rooms: [] });
+    const prof = body.profile;
+    if (!prof) return ui.didPanel({ did: full, state: "unknown", rooms: [] });
+    const named = new Set(city ? [...city.landmarks, ...city.roster].map((r) => r.room) : []);
+    const rooms = (Array.isArray(prof.rooms) ? prof.rooms : [])
+      .filter((r) => typeof r === "string")
+      .map((room) => ({ room, onMap: named.has(room) }));
+    ui.didPanel({ did: full, state: "found", rooms,
+      count: typeof prof.count === "number" ? prof.count : null,
+      last: prof.last ?? null });
   }
 
   /* ── the frame ───────────────────────────────────────────────────────── */
@@ -1127,8 +1168,7 @@ export function mountFlat(container, els) {
 
   function dispose() {
     cancelAnimationFrame(raf); raf = 0;
-    clearInterval(stripTimer);
-    clearTimeout(tourTimer);
+    clearInterval(stripTimer); clearInterval(peekTimer);
     removeEventListener("resize", onResize);
     clearBubbles();
     for (const [, l] of labels) l.node.remove();

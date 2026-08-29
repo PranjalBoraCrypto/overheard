@@ -853,9 +853,12 @@ export function buildWorld(THREE, { canvas, preset, reduced }) {
     update, render, resize, pick, project, dispose,
     positionOf: (room) => {
       const d = DISTRICTS.find((x) => x.room === room);
-      if (d) return { x: d.x, z: d.z, r: d.r };
+      if (d) return { x: d.x, z: d.z, r: d.r, h: 16 };
       const p = byRoom.get(room);
-      return p ? { x: p.x, z: p.z, r: 8 } : null;
+      /* `h` is the roof height, which is what anything drawn ABOVE a room
+         needs. Without it a tally floats at street level and reads as
+         standing in front of the building rather than over it. */
+      return p ? { x: p.x, z: p.z, r: 8, h: p.h } : null;
     },
     get rooms() { return placed; },
     /* The rooms currently flaring, and how brightly. Read by the test that

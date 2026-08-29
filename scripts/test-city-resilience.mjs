@@ -235,6 +235,18 @@ const camOf = () => pg.evaluate(() => {
 });
 const before = await camOf();
 MODE = "live";
+/* WHY THIS IS NUDGED RATHER THAN WAITED OUT. Section C left the poller in
+   backoff, and the backoff is exponential and jittered — by design, so that
+   every tab open when Technocore went down does not return at the same
+   instant and knock it over again. That means the next unprompted attempt is
+   anywhere up to about two and a half minutes away, and a test that waits
+   forty seconds for it is a coin flip: it passed most runs and failed some,
+   which is worse than either.
+   A visitor coming back to the tab is the real recovery path and the page
+   already implements it — the same visibilitychange handler a browser fires.
+   So the test takes that path, and what it asserts is unchanged: the merge
+   must not move the camera, empty the city or fly anybody anywhere. */
+await pg.evaluate(() => document.dispatchEvent(new Event("visibilitychange")));
 await pg.waitForFunction(() => /^Live$/i.test(document.getElementById("status").innerText.trim()),
   null, { timeout: 40000 }).catch(() => {});
 await pg.waitForTimeout(600);

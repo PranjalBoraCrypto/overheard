@@ -30,7 +30,7 @@ export async function boot() {
   const stage = $("stage"), canvas = $("scene"), overlay = $("overlay");
   const els = {
     stage, overlay, chips: $("chips"), side: $("side"), feed: $("feedpane"),
-    hover: $("hover"), hits: $("hits"), status: $("status"),
+    hover: $("hover"), hits: $("hits"), status: $("status"), rail: $("rail"),
   };
 
   /* ── 1. what can this machine do ─────────────────────────────────────── */
@@ -113,8 +113,6 @@ export async function boot() {
     following: null,
     bubblesOn: true,
     clean: false,
-    tour: false,
-    tourAt: 0,
     hoverKey: null,
   };
   let firstVisit = false;
@@ -155,8 +153,8 @@ export async function boot() {
     toggleFeed: () => toggleFeed(),
     follow: (id) => { st.following = st.following === id ? null : id; selectAgent(id); },
     locate: (id) => { if (id) selectAgent(id); },
+    flyToRoom: (room) => flyToRoom(room),
     toggleClean: () => setClean(!st.clean),
-    tour: () => { if (!st.tour) $("tour").click(); },
   });
 
   /* ── 4. the city, as data arrives ────────────────────────────────────── */
@@ -178,6 +176,11 @@ export async function boot() {
     signalActivity();          // what the network did since the last reading
     buildLabels();
     paintChips();
+    refreshRail();
+    /* The tone follows the reading, not the clock. Standing in a room it is
+       off and stays off; an idle city turns it off by itself, which is the
+       point of it being a dial rather than a drone. */
+    if (!st.room) S.cityTone(cityRate());
     $("boot").hidden = true;
     /* Once, on a first visit: the legend, because two hundred glowing towers
        mean nothing until somebody says what height and light are. After that
@@ -195,6 +198,9 @@ export async function boot() {
   });
 
   D.on("status", () => { paintChips(); ui.status(D.state.status); });
+  /* A line arriving is a reason to redraw the rail and nothing else on the
+     page — it changes four rows of text and no geometry. */
+  D.on("peek", () => refreshRail());
 
   /* Entering a room shows its saved history immediately — see the snapshot
      ladder in api/room.js. Those agents are real identities that really
@@ -259,6 +265,7 @@ export async function boot() {
       return;
     }
     const events = [];
+    const moved = new Set();
     for (const r of city.roster) {
       if (!r.live || r.last_seq == null) continue;
       const seq = Number(r.last_seq);
@@ -272,8 +279,10 @@ export async function boot() {
       /* Against the room's own normal: 1 is business as usual, 3 is a room
          doing something it does not usually do. */
       const weight = Math.max(1, Math.min(3, delta / Math.max(1, rate * 0.35)));
-      events.push({ room: r.room, delta, weight });
+      events.push({ room: r.room, delta, weight, seq });
+      moved.add(r.room);
     }
+    freshRooms = moved;
     if (!events.length) return;
 
     /* Loudest first, and capped. A directory poll that touched a hundred
@@ -314,11 +323,88 @@ export async function boot() {
     const e = queued[queueAt++];
     queueNext = now + queueGap;
     world.life.signal(e.room, e.to, e.weight);
+    /* Audible, and pitched by the room, so a district you are watching has a
+       note you learn. The tick's own cap does the throttling — this is
+       allowed to ask on every release and be refused most of the time. */
+    S.tick(e.seq ?? 0, "message", e.room);
+    /* A weight of 3 is the ceiling, reached only when a room's own delta is
+       far past its own normal. That is the one worth interrupting for. */
+    if (e.weight >= 2.4) S.surge(e.room, (e.weight - 2.4) / 0.6);
     /* AND THE BUILDING ITSELF ANSWERS. A light leaving a roof says something
        left; a roof that flares says it came from HERE. That is the read a
        visitor makes without being told anything — the building that just
        spoke is the bright one. */
     world.flash(e.room, Math.min(1, 0.45 + e.weight * 0.25));
+    /* AND IT SAYS HOW MANY. A flash says "something happened here"; the
+       number says what happened, and it is the difference between a city
+       that is decorative and a city you can read from the outside. */
+    tally(e.room, e.delta, e.weight);
+  }
+
+  /* ── the counts over the buildings ─────────────────────────────────────────
+     A "+12" that rises off a roof and fades.
+
+     THE NUMBER IS THE DELTA THE DIRECTORY REPORTED, unaltered — the
+     difference between two readings of that room's own sequence counter.
+     Nothing is estimated, rounded up, or invented for effect. A room whose
+     counter moved by one says +1, however dull that looks.
+
+     Pooled and capped. Eight of these on screen is already a lot to read, and
+     a burst of ninety would be a wall of numbers over a city nobody can see.
+     A room that is already showing one adds to it rather than stacking a
+     second, which is also the truthful thing to do: two readings a second
+     apart are one event as far as a person watching is concerned. */
+  const TALLY_MAX = 8, TALLY_LIFE = 2600;
+  const tallies = [];
+
+  function tally(room, delta, weight = 1) {
+    if (st.clean || mode !== "city") return;
+    const n = Math.max(1, Math.round(Number(delta) || 0));
+    const at = world.positionOf(room);
+    if (!at) return;
+
+    const had = tallies.find((t) => t.room === room);
+    if (had) {
+      had.n += n; had.born = performance.now();
+      had.node.firstChild.textContent = `+${had.n.toLocaleString()}`;
+      return;
+    }
+    const node = document.createElement("div");
+    node.className = "tally" + (weight >= 2.4 ? " hot" : "");
+    const b = document.createElement("b");
+    b.textContent = `+${n.toLocaleString()}`;
+    const s = document.createElement("span");
+    s.textContent = room;
+    node.append(b, s);
+    /* Clicking a number goes to the thing the number is about. */
+    node.addEventListener("click", (ev) => { ev.stopPropagation(); flyToRoom(room); });
+    overlay.append(node);
+    tallies.push({ room, n, node, born: performance.now(), at });
+    while (tallies.length > TALLY_MAX) dropTally(tallies[0]);
+  }
+
+  function dropTally(t) {
+    const i = tallies.indexOf(t);
+    if (i >= 0) tallies.splice(i, 1);
+    t.node.classList.add("out");
+    setTimeout(() => t.node.remove(), 320);
+  }
+  function clearTallies() { while (tallies.length) dropTally(tallies[0]); }
+
+  function positionTallies(now, rect) {
+    for (const t of [...tallies]) {
+      const age = now - t.born;
+      if (age > TALLY_LIFE) { dropTally(t); continue; }
+      const s = world.project(t.at.x, t.at.h + 10, t.at.z, rect);
+      if (s.behind) { t.node.style.opacity = "0"; continue; }
+      const k = age / TALLY_LIFE;
+      /* Rises as it fades. The motion is what makes a number read as an event
+         rather than as a label that has always been there. */
+      const lift = 6 + k * 34;
+      t.node.style.opacity = String(k < 0.12 ? k / 0.12 : Math.max(0, 1 - (k - 0.12) / 0.88));
+      t.node.style.transform =
+        `translate(${Math.round(s.x)}px,${Math.round(s.y - lift)}px) translate(-50%,-100%)`;
+    }
   }
 
   function refreshHeat() {
@@ -340,6 +426,82 @@ export async function boot() {
       heat.set(r.room, h);
     }
     world.setHeat(heat);
+  }
+
+  /* ── busiest right now ─────────────────────────────────────────────────
+     Which rooms to show, and which one to peek into next.
+
+     RANKED ON A MEASURED RATE, so a room only appears once this browser has
+     read the directory twice and can say something about it. A room with one
+     reading is not ranked zero and is not ranked at all — "not measured yet"
+     is not a speed.
+
+     STICKY ON PURPOSE. Re-sorting four rows every twenty seconds makes a
+     panel that cannot be read: the line somebody is halfway through moves.
+     A room already in the rail keeps its place unless another beats it by a
+     clear margin, so the list changes when the network does and not when two
+     rooms swap by a tenth of a message a minute. */
+  const RAIL_N = 4, RAIL_STICK = 1.25;
+  let railRooms = [], railPeek = 0;
+  /* Rooms whose counter moved in the reading just drawn — used only to give
+     their row a one-off highlight, so a glance catches which line changed. */
+  let freshRooms = new Set();
+
+  function refreshRail() {
+    if (!city || st.room || mode !== "city") { ui.closeRail(); return; }
+    const ranked = city.roster
+      .filter((r) => r.live && !r.landmark)
+      .map((r) => ({ room: r.room, rate: D.rateOf(r.room), seq: r.last_seq }))
+      .filter((r) => r.rate != null && r.rate > 0)
+      .sort((a, b) => b.rate - a.rate);
+    if (!ranked.length) { ui.closeRail(); return; }
+
+    const byRoom = new Map(ranked.map((r) => [r.room, r]));
+    const kept = railRooms.map((n) => byRoom.get(n)).filter(Boolean);
+    const out = [];
+    for (const c of ranked) {
+      if (out.length >= RAIL_N) break;
+      if (out.some((x) => x.room === c.room)) continue;
+      /* An incumbent holds its slot unless the challenger is clearly faster.
+         Without this the rail reshuffles on noise. */
+      const held = kept.find((k) => !out.some((x) => x.room === k.room)
+        && k.rate * RAIL_STICK >= c.rate);
+      out.push(held || c);
+    }
+    railRooms = out.map((r) => r.room);
+
+    ui.rail(out.map((r) => ({
+      room: r.room,
+      rate: r.rate,
+      line: D.peekOf(r.room),
+      fresh: freshRooms.has(r.room),
+    })), { live: D.state.status.source === "live" && D.state.status.city === "live" });
+  }
+
+  /** One peek per turn, round-robin over exactly the rooms on show. Nothing
+   *  is fetched for a room nobody can see. */
+  function peekTurn() {
+    if (!railRooms.length || st.room || mode !== "city") return;
+    for (let i = 0; i < railRooms.length; i++) {
+      const room = railRooms[(railPeek + i) % railRooms.length];
+      const r = city?.roster.find((x) => x.room === room);
+      if (r && D.peek(room, r.last_seq)) { railPeek = (railPeek + i + 1) % railRooms.length; return; }
+    }
+  }
+
+  /** The city's total measured rate, messages per minute. Null readings are
+   *  dropped rather than counted as zero: a room nobody has measured twice
+   *  yet is unknown, and averaging unknowns in as zeroes would make a busy
+   *  city sound quiet for its first twenty seconds. */
+  function cityRate() {
+    if (!city) return 0;
+    let sum = 0;
+    for (const r of city.roster) {
+      if (!r.live) continue;
+      const v = D.rateOf(r.room);
+      if (v != null) sum += v;
+    }
+    return sum;
   }
 
   function paintChips() {
@@ -511,6 +673,12 @@ export async function boot() {
     if (st.room === name && mode === "room") return;
     st.room = name; st.agentId = null; st.msgKey = null; st.following = null;
     clearBubbles();
+    /* The counts belong to the city. Left up, they would hang in the room
+       scene anchored to buildings that are no longer being drawn. */
+    clearTallies();
+    /* And the rail is a list of rooms to go to, read from outside. Inside
+       one, it is a distraction pointing away from where you just arrived. */
+    ui.closeRail();
 
     /* Saved BEFORE the approach flight, so "back" returns to the view the
        visitor arranged, not to wherever the transition left the camera. */
@@ -545,10 +713,11 @@ export async function boot() {
     });
 
     S.arrive();
-    /* A room has its own sound — the bed, and the tick of each message
-       arriving, which is information. Music over the top competes with the
-       thing somebody walked in there to hear. */
-    S.musicOn(false); S.bedOn(true);
+    /* The city's tone is a reading OF THE CITY. Standing in one room, it
+       would be a number about somewhere you are not, playing over the ticks
+       of the place you are actually in. So it stops at the door and the
+       room's own bed takes over. */
+    S.cityToneOff(); S.bedOn(true);
     $("strip").hidden = st.clean;
     paintChips();
     ui.roomLive(D.state.room || { name, messages: [], agents: [], gaps: [] }, []);
@@ -567,11 +736,17 @@ export async function boot() {
       if (camSaved) cam.restore(camSaved);
       camSaved = null;
       document.body.classList.remove("inroom");
+      /* Inside the veil, not after it: `mode` is still "room" for the 280ms
+         the door is closing, and refreshRail refuses to draw in room mode. */
+      refreshRail();
     });
     world.leaveRoom();
     D.leaveRoom();
     ui.closeFeed();
-    S.bedOn(false); S.musicOn(true);
+    S.bedOn(false);
+    /* The tone comes back on the next reading rather than instantly, because
+       the rate it would play right now is the one measured before you went
+       in. It is a few seconds of silence that means something. */
     $("strip").hidden = true;
     ui.closePanel();
     paintChips();
@@ -665,7 +840,7 @@ export async function boot() {
         const to = D.addressee(m, r.agents);
         if (to && world.agentAt(to)) world.beam(from, to, 1500);
       }
-      S.tick(m.seq, m.c.kind);
+      S.tick(m.seq, m.c.kind, r.name);
       if (st.bubblesOn && !st.clean) addBubble(m, from);
     }
     if (st.following) {
@@ -779,6 +954,15 @@ export async function boot() {
     });
   }, 1500);
 
+  /* One peek attempt every few seconds. The data layer refuses most of them —
+     it has its own budget, its own freshness window and its own single-flight
+     lock — so this is a nudge, not a schedule. A hidden tab is not a visitor
+     and gets nothing. */
+  const peekTimer = setInterval(() => {
+    if (document.hidden) return;
+    peekTurn();
+  }, 3000);
+
   /* ── picking ─────────────────────────────────────────────────────────── */
   let hoverAt = { x: 0, y: 0 }, hoverStale = true, pointerIn = false, lastHoverRun = 0;
   canvas.addEventListener("wheel", () => { hoverStale = true; }, { passive: true });
@@ -883,8 +1067,7 @@ export async function boot() {
   /* ── controls ────────────────────────────────────────────────────────── */
   $("zoomIn").onclick = () => cam.flyTo({ dist: cam.dist * 0.72 }, reduced ? 0 : 420);
   $("zoomOut").onclick = () => cam.flyTo({ dist: cam.dist * 1.38 }, reduced ? 0 : 420);
-  $("reset").onclick = () => { st.tour = false; paintTour(); if (st.room) leaveRoom(); else cam.home(reduced ? 0 : 1000); };
-  $("tour").onclick = () => { st.tour = !st.tour; st.tourAt = 0; paintTour(); };
+  $("reset").onclick = () => { if (st.room) leaveRoom(); else cam.home(reduced ? 0 : 1000); };
   $("cleanview").onclick = () => setClean(!st.clean);
   $("bubbles").onclick = () => {
     st.bubblesOn = !st.bubblesOn;
@@ -902,24 +1085,12 @@ export async function boot() {
        switching on a broken feature — and this soundtrack is deliberately
        sparse, so the next sound might be a minute away. One short
        confirmation is the difference between "it works" and "it does not". */
-    if (nowOn) { S.pick(); if (!st.room) S.musicOn(true); }
-    else S.musicOn(false);
+    if (nowOn) { S.pick(); if (!st.room) S.cityTone(cityRate()); }
     if (nowOn && st.room) S.bedOn(true);
   };
   $("hideStrip").onclick = () => ($("strip").hidden = true);
   $("legend").onclick = () => { st.agentId = null; st.msgKey = null; ui.legend(city); };
 
-  function paintTour() {
-    const b = $("tour");
-    b.classList.toggle("on", st.tour);
-    b.replaceChildren();
-    const s = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-    s.setAttribute("class", "i");
-    const u = document.createElementNS("http://www.w3.org/2000/svg", "use");
-    u.setAttribute("href", st.tour ? "#c-pause" : "#c-play");
-    s.appendChild(u); b.appendChild(s);
-    b.title = st.tour ? "Stop the tour" : "Auto-tour";
-  }
   function paintMute() {
     const b = $("mute"), on = S.enabled();
     b.classList.toggle("on", on);
@@ -931,7 +1102,7 @@ export async function boot() {
     s.appendChild(u); b.appendChild(s);
     b.title = on ? "Sound on" : "Sound off";
   }
-  paintTour(); paintMute();
+  paintMute();
 
   /* quality selector */
   function paintQuality() {
@@ -1000,9 +1171,10 @@ export async function boot() {
 
   function setClean(v) {
     st.clean = v;
-    for (const n of [$("chips").parentElement, $("side"), $("strip"), els.feed])
+    for (const n of [$("chips").parentElement, $("side"), $("strip"), els.feed, els.rail])
       if (n) n.style.opacity = v ? "0" : "";
-    for (const n of [$("chips").parentElement, els.feed]) if (n) n.style.pointerEvents = v ? "none" : "";
+    for (const n of [$("chips").parentElement, els.feed, els.rail])
+      if (n) n.style.pointerEvents = v ? "none" : "";
     overlay.style.opacity = v ? "0" : "";
     if (v) ui.hover(0, 0, null);
   }
@@ -1038,7 +1210,7 @@ export async function boot() {
     else if (k === "ArrowDown") { cam.flyTo({ dist: cam.dist * (1 + 0.12 * step) }, 0); e.preventDefault(); }
     else if (k === "+" || k === "=") cam.flyTo({ dist: cam.dist * 0.8 }, reduced ? 0 : 300);
     else if (k === "-" || k === "_") cam.flyTo({ dist: cam.dist * 1.25 }, reduced ? 0 : 300);
-    else if (k === "Home") { st.tour = false; paintTour(); cam.home(reduced ? 0 : 900); }
+    else if (k === "Home") cam.home(reduced ? 0 : 900);
   });
 
   /* ── search ──────────────────────────────────────────────────────────── */
@@ -1068,48 +1240,73 @@ export async function boot() {
       else findDid(h.did);
     });
   });
-  q.addEventListener("blur", () => setTimeout(() => ui.hits(null), 160));
+  /* BLUR MUST NOT OUTLIVE THE CLICK IT CAUSED.
+     Reported as "I paste a did:key, it shows it, and clicking does nothing".
+     Nothing was broken in the handler: pressing the mouse on a hit blurs the
+     input, the blur schedules "hide the hits", the click then runs and draws
+     its answer INTO that box, and a moment later the timer hides the answer.
+     The work happened and was thrown away 160ms later.
 
-  /** A DID is not on the map until it says something in a room we are in, so
-   *  "locate" is honest about what it can and cannot do. */
-  function findDid(did) {
+     A timer that races a click is the wrong shape whatever the delay, so the
+     pointer says outright that the next blur belongs to a click in here. */
+  let inHits = false;
+  els.hits.addEventListener("pointerdown", () => { inHits = true; });
+  addEventListener("pointerup", () => { inHits = false; }, true);
+  q.addEventListener("blur", () => setTimeout(() => { if (!inHits) ui.hits(null); }, 160));
+
+  /**
+   * A pasted did:key, resolved as far as the data honestly allows.
+   *
+   * Three different questions, answered in order and never blended:
+   *
+   *   1. IS IT STANDING IN FRONT OF ME? If we are in a room and this key is
+   *      one of the identities in it, that is a live fact and it wins — the
+   *      figure is selected and the camera goes to it.
+   *   2. WHERE HAS IT BEEN? /api/profile reads the committed archive, which
+   *      knows every room the key has been collected speaking in. Minutes
+   *      old, labelled as archived, and the only thing on this page that can
+   *      point a bare key at a building.
+   *   3. NOTHING? Then say nothing, in those words. "Not found in the
+   *      archive" is not "does not exist", and the panel says which it means.
+   */
+  let didFlight = 0;
+  async function findDid(did) {
     const full = did.startsWith("did:key:") ? did : `did:key:${did}`;
     const here = D.state.room?.agents.find((a) => a.did === full);
     if (here) return selectAgent(here.id);
-    /* Not in the room we are standing in — which is the only place a DID can
-       be on this map. Say so, and OFFER the identity card rather than opening
-       a tab somebody did not ask for. */
-    ui.hits([{ kind: "did", label: "Not in a room you are standing in — open the identity card", did: full }],
-      (h) => { ui.hits(null); window.open(`/?did=${encodeURIComponent(h.did)}`, "_blank", "noopener"); });
-  }
 
-  /* ── auto-tour ───────────────────────────────────────────────────────── */
-  let tourTimer = 0;
-  function tourStep() {
-    if (!st.tour) return;
-    const live = DISTRICTS
-      .map((d) => ({ d, h: (city && D.rateOf(d.room)) ?? 0 }))
-      .sort((a, b) => b.h - a.h);
-    const pickd = live[st.tourAt % live.length].d;
-    st.tourAt++;
-    /* The flight is not the tour — the tour is being TOLD about each place
-       it stops at. flyToDistrict opens the summary, but a stop that lands
-       while an agent or message panel is open used to leave that panel up
-       and the summary never appeared, so the camera moved and nothing was
-       said. The tour clears the selection first, every stop. */
     st.agentId = null; st.msgKey = null;
-    flyToDistrict(pickd.room);
-    tourTimer = setTimeout(tourStep, reduced ? 3600 : 6200);
+    const token = ++didFlight;
+    ui.didPanel({ did: full, state: "looking", rooms: [] });
+
+    let body = null;
+    try {
+      const res = await fetch(`/api/profile?did=${encodeURIComponent(full)}`,
+        { headers: { Accept: "application/json" }, signal: AbortSignal.timeout(8000) });
+      body = res.ok ? await res.json() : null;
+    } catch { body = null; }
+    if (token !== didFlight) return;              // a newer search overtook this one
+
+    if (!body) return ui.didPanel({ did: full, state: "failed", rooms: [] });
+    const prof = body.profile;
+    if (!prof) return ui.didPanel({ did: full, state: "unknown", rooms: [] });
+
+    /* "On the map" is a live question and gets a live answer: a room is a
+       building only if the directory named it in the reading currently on
+       screen. An archived room that has since dropped out is still listed —
+       it is a true statement about the identity — but it is not offered as
+       somewhere to fly to, because there is nothing there to fly to. */
+    const named = new Set(city ? [...city.landmarks, ...city.roster].map((r) => r.room) : []);
+    const rooms = (Array.isArray(prof.rooms) ? prof.rooms : [])
+      .filter((r) => typeof r === "string")
+      .map((room) => ({ room, onMap: named.has(room) }));
+
+    ui.didPanel({ did: full, state: "found", rooms,
+      count: typeof prof.count === "number" ? prof.count : null,
+      last: prof.last ?? null });
+    /* And show it on the city itself, not only in the panel. */
+    for (const r of rooms) if (r.onMap) world.flash(r.room, 1.0);
   }
-  const origSeize = cam.onChange;
-  cam.onChange((what) => {
-    /* Any grab stops the tour. This is the promise the whole camera makes. */
-    if (what === "seized" && st.tour) { st.tour = false; clearTimeout(tourTimer); paintTour(); }
-  });
-  $("tour").addEventListener("click", () => {
-    clearTimeout(tourTimer);
-    if (st.tour) tourStep();
-  });
 
   /* ── the frame ───────────────────────────────────────────────────────── */
   let last = performance.now(), raf = 0, overlayTick = 0;
@@ -1165,6 +1362,7 @@ export async function boot() {
       }
       syncRoomLabels(rect);
       layoutBubbles(rect, now);
+      if (mode === "city") positionTallies(now, rect);
       updateHover(rect);
     }
   }
@@ -1192,7 +1390,7 @@ export async function boot() {
 
   addEventListener("pagehide", () => {
     cancelAnimationFrame(raf); raf = 0;
-    clearInterval(stripTimer); clearTimeout(tourTimer);
+    clearInterval(stripTimer); clearInterval(peekTimer);
     D.stop(); S.dispose(); cam.dispose(); world.dispose(true);
   });
 
@@ -1219,7 +1417,7 @@ export async function boot() {
       removeEventListener("keydown", wake);
       S.setEnabled(true);
       paintMute();
-      if (st.room) S.bedOn(true); else S.musicOn(true);
+      if (st.room) S.bedOn(true); else S.cityTone(cityRate());
     };
     addEventListener("pointerdown", wake, { once: true });
     addEventListener("keydown", wake, { once: true });

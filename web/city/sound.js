@@ -1,21 +1,39 @@
 /**
- * city/sound.js — the city, quietly.
+ * city/sound.js — the city, quietly. NOTHING HERE IS MUSIC.
+ *
+ * There WAS music: five chiptune loops on a scheduler. It is gone, on
+ * purpose, and the reason is worth keeping written down because it is the
+ * same reason the rest of this page is built the way it is.
+ *
+ * A loop plays the same notes whatever the network is doing. It is decoration
+ * over a page whose whole claim is that what you see is what is happening —
+ * and worse, it competes with the sounds that ARE readings. Every sound this
+ * module now makes is caused by something in the data:
+ *
+ *   TICK        a message genuinely arrived. Pitched by which room it landed
+ *               in, so a busy district has a recognisable voice.
+ *   SURGE       a room's rate jumped well past its own normal. The audio half
+ *               of the flash on its roof.
+ *   TONE        one low note under everything, whose pitch and loudness track
+ *               how busy the whole city is. Not a drone: a dial you can hear.
+ *               Silent when the city is idle, because that is a reading too.
+ *   ARRIVE/PICK movement. The camera landing, walking into a room, choosing
+ *               something. Feedback for your own actions, not claims about
+ *               the network — and the only sounds here that are not data.
  *
  * MUTED UNTIL ASKED. Sound that starts on its own is a page somebody closes,
  * and a browser will refuse to start an audio context before a gesture
  * anyway. Nothing here runs until the visitor unmutes.
  *
- * SYNTHESISED, NOT LOADED. Every sound is two oscillators and an envelope, so
- * the whole soundtrack costs no bytes, no decode, no cache entry and no
- * request. It also means the palette is small on purpose: a soft wooden tick
- * when a message lands, a fifth when a district opens, a short rising pair on
- * a selection, and a low sine bed that only exists inside a room.
+ * SYNTHESISED, NOT LOADED. Every sound is one or two oscillators and an
+ * envelope: no bytes, no decode, no cache entry, no request.
  *
- * It is also rate-limited, hard. A busy room can deliver forty messages in a
- * second and forty ticks in a second is a fault condition, not a soundtrack —
- * so ticks are capped, detuned slightly by sequence so a burst reads as
- * texture rather than a machine gun, and skipped entirely while the tab is
- * hidden.
+ * RATE-LIMITED, HARD. A busy room can deliver forty messages a second, and
+ * forty ticks a second is a fault condition rather than a soundtrack. Ticks
+ * are capped, spaced, detuned by sequence so a burst reads as rain rather
+ * than a machine gun, and skipped entirely while the tab is hidden. Above the
+ * cap the city tone carries the load instead, which is the honest way to say
+ * "more than you can count" without saying it forty times.
  */
 
 let ctx = null, master = null, bed = null, bedGain = null;
@@ -39,6 +57,11 @@ export function setEnabled(v) {
   on = !!v;
   if (!on) {
     if (master) master.gain.setTargetAtTime(0, ctx.currentTime, 0.08);
+    /* Torn down, not just turned down. A tone left running behind a zeroed
+       master is two oscillators burning battery to be inaudible, and it is
+       also the bug where unmuting later brings back a reading taken minutes
+       ago as if it were current. */
+    toneOff();
     return;
   }
   if (!ensure()) return;
@@ -69,9 +92,29 @@ function blip(freq, { type = "sine", peak = 0.09, attack = 0.006, decay = 0.16, 
   o.start(t0); o.stop(t0 + attack + decay + 0.02);
 }
 
-/** A message landed. The pitch drifts a little with the sequence number so a
- *  burst sounds like rain rather than one note repeated. */
-export function tick(seq = 0, kind = "message") {
+/** Cheap string hash, so a room always sounds like itself. */
+function hash(s) {
+  let h = 2166136261;
+  for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); }
+  return (h >>> 0) / 4294967296;
+}
+
+/* A pentatonic ladder. Ticks land on scale degrees rather than on arbitrary
+   frequencies for one practical reason: a dozen rooms ticking at once on
+   arbitrary pitches is noise, and the same dozen on five notes of one scale
+   is a texture you can listen to for an hour. It is not a tune — nothing
+   chooses the order but the network. */
+const LADDER = [392.00, 440.00, 523.25, 587.33, 659.25, 783.99, 880.00];
+
+/**
+ * A message landed.
+ *
+ * `room` picks the note, so the district you are looking at has a pitch you
+ * come to recognise and a message from somewhere else is audibly from
+ * somewhere else. `kind` picks the timbre. `seq` detunes by a few cents so
+ * two messages in the same room are not the identical sample twice.
+ */
+export function tick(seq = 0, kind = "message", room = "") {
   if (!on || !ctx) return;
   const now = performance.now();
   if (now - secondStart > 1000) { secondStart = now; ticksThisSecond = 0; }
@@ -80,12 +123,37 @@ export function tick(seq = 0, kind = "message") {
   ticksThisSecond++; lastTick = now;
 
   const n = Number(String(seq).slice(-3)) || 0;
-  const base =
-    kind === "job" ? 520 :
-    kind === "claim" ? 620 :
-    kind === "deliver" ? 700 :
-    kind === "attest" ? 780 : 460;
-  blip(base, { type: "triangle", peak: 0.13, decay: 0.15, detune: (n % 24) * 5 - 60 });
+  const note = LADDER[Math.floor(hash(room || "·") * LADDER.length)];
+  /* Signed, structured work sounds brighter and shorter than chatter. That is
+     a real distinction in this network, not a decorative one. */
+  const bright = kind === "job" || kind === "claim" || kind === "deliver" || kind === "attest";
+  blip(note * (bright ? 1 : 0.5), {
+    type: bright ? "triangle" : "sine",
+    peak: bright ? 0.115 : 0.085,
+    decay: bright ? 0.13 : 0.22,
+    detune: (n % 24) * 3 - 36,
+  });
+}
+
+/**
+ * A room went hot: its rate jumped well above its own normal. Two notes a
+ * fourth apart, rising, quiet enough to sit under a tick — the ear reads
+ * "something changed there" without being interrupted.
+ *
+ * Deliberately harder to trigger than the roof flash. A flash is cheap and
+ * you can look away from it; a sound you cannot, so this fires at most once
+ * every few seconds however many rooms surge at once.
+ */
+let lastSurge = 0;
+export function surge(room = "", strength = 1) {
+  if (!on || !ctx) return;
+  const now = performance.now();
+  if (now - lastSurge < 2600) return;
+  lastSurge = now;
+  const note = LADDER[Math.floor(hash(room || "·") * LADDER.length)];
+  const peak = 0.10 + Math.min(0.7, strength) * 0.08;
+  blip(note, { type: "sine", peak, attack: 0.012, decay: 0.34 });
+  setTimeout(() => blip(note * 4 / 3, { type: "sine", peak: peak * 0.8, attack: 0.012, decay: 0.5 }), 95);
 }
 
 /** Entering a district or a room: a fifth, warm, once. */
@@ -122,177 +190,60 @@ export function bedOn(v) {
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
-   THE CITY'S MUSIC
+   THE CITY TONE — a dial, not a drone
    ══════════════════════════════════════════════════════════════════════════
 
-   Five short chiptune loops for the overview, and silence inside a room.
+   One low note under the whole overview, whose pitch and loudness follow the
+   city's total measured rate. It is the closest thing here to ambience and it
+   is still a reading: an idle city is SILENT, and a busy one is audibly
+   higher and fuller than a slow one. If Technocore stops, this stops, which
+   is the property a loop could never have.
 
-   WHY IT IS SYNTHESISED AND NOT FIVE MP3 FILES. Five loops of any listenable
-   length is megabytes, on a page that already loads a 3D engine, and a
-   visitor who never turns sound on pays for all of it. This is four
-   oscillators and a scheduler: no bytes, no decode, no cache entries, no
-   requests, and it starts the instant it is asked rather than after a
-   download. The 8-bit palette is not a compromise made to fit that — square
-   and triangle waves with hard envelopes are exactly what the format IS, and
-   the constraint that makes chiptune sound like chiptune is the same one
-   that makes it free.
+   Two oscillators a hair apart rather than one. A single sine at this pitch
+   is a test tone and sounds like a fault; the beating between two of them is
+   what makes it read as a room full of machines instead. */
+let tone = null;
+export function cityTone(perMin) {
+  if (!on || !ensure()) { if (!on) toneOff(); return; }
+  /* Compressed hard. The difference between an idle city and a slow one
+     matters and the difference between busy and very busy does not, so this
+     is a log curve, not a linear one. */
+  const r = Math.max(0, Number(perMin) || 0);
+  const load = Math.min(1, Math.log10(1 + r) / 2.6);
 
-   WHY LOOK-AHEAD SCHEDULING. setTimeout is accurate to tens of milliseconds
-   on a good day and to whole frames when a 3D scene is drawing, which is
-   audible as a stumbling beat. So a timer wakes four times a second and
-   books every note due in the next quarter second onto the audio clock,
-   which is sample-accurate and does not care what the renderer is doing.
-   The music stays in time through a frame drop that would ruin it.
-
-   WHY IT STOPS IN A ROOM. A room has its own sound — the low bed, the ticks
-   of messages arriving — and those are information. Music over the top would
-   be competing with the thing a visitor went in there to hear.
-
-   NOTHING HERE IS A CLAIM ABOUT THE NETWORK. This is atmosphere and it says
-   so by never changing with the data: the same five loops in the same order
-   whatever Technocore is doing. The city's honesty is in what it DRAWS. */
-
-/* Semitone offsets from the root, as scale degrees. Minor pentatonic and
-   dorian: the two scales that sound "thoughtful machine" rather than
-   "video game victory", which is the wrong register for a page about a
-   network of strangers talking. */
-const SCALES = {
-  minPent: [0, 3, 5, 7, 10],
-  dorian:  [0, 2, 3, 5, 7, 9, 10],
-};
-
-/** The five loops. Each is a bass figure, a lead phrase and a rest pattern —
- *  deliberately sparse, because this plays for as long as somebody keeps the
- *  page open and a busy loop becomes unbearable in about ninety seconds. */
-const TRACKS = [
-  { name: "drift",    root: 55.00, bpm: 76,  scale: "minPent",
-    lead: [0, 2, 4, 2, 3, 2, 0, -1], bass: [0, 0, 3, 0], gap: 2, wave: "square", duty: 0.5 },
-  { name: "ledger",   root: 61.74, bpm: 84,  scale: "dorian",
-    lead: [0, 3, 5, 4, 2, 4, 3, 1], bass: [0, 5, 3, 5], gap: 3, wave: "square", duty: 0.25 },
-  { name: "quorum",   root: 49.00, bpm: 68,  scale: "minPent",
-    lead: [4, 3, 2, 0, 2, 3, 4, 6], bass: [0, 0, 2, 4], gap: 2, wave: "triangle", duty: 0.5 },
-  { name: "relay",    root: 58.27, bpm: 92,  scale: "minPent",
-    lead: [0, 4, 3, 4, 0, -2, 0, 2], bass: [0, 3, 0, 5], gap: 4, wave: "square", duty: 0.125 },
-  { name: "longwave", root: 46.25, bpm: 60,  scale: "dorian",
-    lead: [0, 2, 3, 2, 0, -3, 0, 1], bass: [0, 0, 4, 2], gap: 3, wave: "triangle", duty: 0.5 },
-];
-
-let music = null;      // { gain, timer, step, at, track, order, plays }
-
-/** Degree → frequency, wrapping octaves so a phrase can walk off either end
- *  of the scale without leaving the key. */
-function noteHz(root, scaleName, degree) {
-  const sc = SCALES[scaleName];
-  const oct = Math.floor(degree / sc.length);
-  const semi = sc[((degree % sc.length) + sc.length) % sc.length] + oct * 12;
-  return root * Math.pow(2, semi / 12);
-}
-
-/** One 8-bit voice: an oscillator with a hard attack and a short tail. The
- *  square's "duty" is faked by detuning a second oscillator against it,
- *  which is what gives 12.5% its thin, reedy character without needing a
- *  custom PeriodicWave. */
-function voice(hz, t0, dur, { wave = "square", duty = 0.5, peak = 0.06 } = {}) {
-  const g = ctx.createGain();
-  g.gain.setValueAtTime(0.0001, t0);
-  g.gain.exponentialRampToValueAtTime(peak, t0 + 0.008);
-  g.gain.setValueAtTime(peak, t0 + dur * 0.55);
-  g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
-  g.connect(music.gain);
-
-  const o = ctx.createOscillator();
-  o.type = wave; o.frequency.value = hz;
-  o.connect(g); o.start(t0); o.stop(t0 + dur + 0.02);
-
-  if (wave === "square" && duty !== 0.5) {
-    const o2 = ctx.createOscillator();
-    o2.type = "square"; o2.frequency.value = hz;
-    o2.detune.value = duty < 0.2 ? 32 : 14;
-    const g2 = ctx.createGain();
-    g2.gain.value = 0.55;
-    o2.connect(g2); g2.connect(g);
-    o2.start(t0); o2.stop(t0 + dur + 0.02);
+  if (load < 0.02) return toneOff();
+  if (!tone) {
+    const g = ctx.createGain(); g.gain.value = 0.0001; g.connect(master);
+    const a = ctx.createOscillator(), b = ctx.createOscillator();
+    a.type = b.type = "sine";
+    a.connect(g); b.connect(g); a.start(); b.start();
+    tone = { g, a, b };
   }
+  /* 87Hz to 146Hz: low enough to sit under everything, high enough that a
+     laptop speaker actually reproduces it — the same lesson the room bed
+     taught at 58Hz, where the sound existed and nobody could hear it. */
+  const hz = 87 + load * 59;
+  const t = ctx.currentTime;
+  tone.a.frequency.setTargetAtTime(hz, t, 1.8);
+  tone.b.frequency.setTargetAtTime(hz * 1.008, t, 1.8);
+  tone.g.gain.setTargetAtTime(0.018 + load * 0.05, t, 2.2);
 }
 
-/* Look-ahead: book everything due in the next quarter second. */
-const LOOK = 0.25, TICK_MS = 90;
-
-function schedule() {
-  if (!music || !ctx) return;
-  const t = TRACKS[music.order[music.track]];
-  const beat = 60 / t.bpm / 2;                  // eighth notes
-  while (music.at < ctx.currentTime + LOOK) {
-    const i = music.step;
-    const bar = Math.floor(i / 8);
-
-    /* The lead rests every `gap` bars. Space is what stops a loop from
-       becoming a nag — the pattern you remember is the one that stops. */
-    if (bar % t.gap !== t.gap - 1) {
-      const d = t.lead[i % t.lead.length];
-      voice(noteHz(t.root * 4, t.scale, d), music.at, beat * 0.9,
-        { wave: t.wave, duty: t.duty, peak: 0.038 });
-    }
-    /* Bass on every other eighth, an octave and a half below. */
-    if (i % 2 === 0) {
-      const b = t.bass[Math.floor(i / 2) % t.bass.length];
-      voice(noteHz(t.root, t.scale, b), music.at, beat * 1.6,
-        { wave: "triangle", peak: 0.075 });
-    }
-    music.at += beat;
-    music.step++;
-
-    /* Four bars each, then the next track. Five tracks and a shuffled order
-       means the page does not open with the same eight notes every time. */
-    if (music.step >= 32) {
-      music.step = 0;
-      music.track = (music.track + 1) % music.order.length;
-      if (music.track === 0) shuffle(music.order);
-    }
-  }
-  music.timer = setTimeout(schedule, TICK_MS);
+function toneOff() {
+  if (!tone) return;
+  const t = tone; tone = null;
+  try { t.g.gain.setTargetAtTime(0.0001, ctx.currentTime, 0.6); } catch {}
+  setTimeout(() => { try { t.a.stop(); t.b.stop(); t.g.disconnect(); } catch {} }, 2400);
 }
-
-function shuffle(a) {
-  for (let i = a.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [a[i], a[j]] = [a[j], a[i]];
-  }
-  return a;
-}
-
-/**
- * Music on or off. Called with false on entering a room and true on leaving
- * it, and it is a no-op whenever sound as a whole is muted.
- */
-export function musicOn(v) {
-  if (v) {
-    if (!on || !ensure() || music) return;
-    const gain = ctx.createGain();
-    /* Well under the effects. It is the floor of the room, not the thing in
-       it — a soundtrack that competes with the tick of a message arriving is
-       drowning out the only part of this that is information. */
-    gain.gain.value = 0.0001;
-    gain.connect(master);
-    gain.gain.setTargetAtTime(0.34, ctx.currentTime, 1.4);
-    music = { gain, timer: 0, step: 0, at: ctx.currentTime + 0.12, track: 0,
-              order: shuffle(TRACKS.map((_, i) => i)) };
-    schedule();
-  } else if (music) {
-    const m = music;
-    music = null;
-    clearTimeout(m.timer);
-    m.gain.gain.setTargetAtTime(0.0001, ctx.currentTime, 0.5);
-    setTimeout(() => { try { m.gain.disconnect(); } catch {} }, 2200);
-  }
-}
-export const musicPlaying = () => !!music;
-/** Which loop is playing, for the tests and for anybody curious. */
-export const musicTrack = () => (music ? TRACKS[music.order[music.track]].name : null);
+export const toneRunning = () => !!tone;
+/** Stop the tone without arguing about the rate — used on entering a room,
+ *  where the city is no longer what you are listening to. */
+export function cityToneOff() { toneOff(); }
 
 export function dispose() {
-  musicOn(false);
+  toneOff();
   bedOn(false);
   try { ctx?.close(); } catch {}
-  ctx = null; master = null; on = false;
+  ctx = null; master = null; on = false; tone = null; bed = null; bedGain = null;
 }
+

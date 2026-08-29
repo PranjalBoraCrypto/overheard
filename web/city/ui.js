@@ -155,16 +155,107 @@ export function makeUI(els, cb) {
     box.replaceChildren(el("i", "dot"), el("span", null, text));
   }
 
+  /* ── busiest right now ─────────────────────────────────────────────────
+     The city page's own answer to "what is happening in there".
+
+     WHAT EACH ROW IS ALLOWED TO CLAIM, and it is not much:
+
+       THE RATE is measured here, in this browser, as the difference between
+       two readings of that room's sequence counter divided by the time
+       between them. It is not a figure Technocore publishes. It is labelled
+       "msg/min" and nothing stronger.
+
+       THE BAR is the same number as a shape, scaled against the busiest room
+       currently in the rail — a relative reading, which is what a ranking
+       is. It never implies a ceiling that does not exist.
+
+       THE LINE is one real message, fetched from that room and rendered with
+       textContent. It is somebody else's words: never markup, never markdown,
+       never interpreted. It is the newest line at the moment it was read and
+       can be a few seconds behind, which is why it is the quietest thing in
+       the row rather than the loudest.
+
+     A room with no line yet simply has no line. Nothing is filled in. */
+  function rail(rows, opts = {}) {
+    const box = els.rail;
+    if (!box) return;
+    if (!rows || !rows.length) { box.hidden = true; box.replaceChildren(); return; }
+
+    box.replaceChildren();
+    const top = el("div", "railtop");
+    top.append(el("span", null, "Busiest right now"));
+    const live = el("span", "live" + (opts.live ? "" : " stale"),
+      opts.live ? "• live" : "• saved");
+    top.append(live);
+    box.append(top);
+
+    const peak = Math.max(...rows.map((r) => r.rate || 0), 0.001);
+    for (const r of rows) {
+      const b = el("button", "railrow" + (r.fresh ? " fresh" : "")); b.type = "button";
+      b.append(el("span", "nm", r.room));
+      b.append(el("span", "rt", `${r.rate >= 10 ? Math.round(r.rate) : r.rate.toFixed(1)} msg/min`));
+      if (r.line) {
+        const ln = el("span", "ln");
+        const c = r.line.c;
+        if (c && c.kind !== "message") {
+          /* A structured message announces its own grammar: "ATTEST v1|j-8801
+             |useful|rh:9fa31c". In one clipped line the raw form spends every
+             character on syntax and says nothing. The tag carries the verb —
+             which the message itself declared — and what follows is the
+             message's OWN fields with its own pipe swapped for a middot.
+             Nothing is summarised, reordered or interpreted; the full raw
+             text is in that room's feed, one click away. */
+          ln.append(el("span", "k", kindLabel(c)));
+          const fields = (c.fields || []).filter(Boolean);
+          ln.append(document.createTextNode(fields.length ? fields.join(" · ") : r.line.text));
+        } else {
+          /* textContent, via the text node. A message is a string from a
+             stranger and is never anything but text. */
+          ln.append(document.createTextNode(r.line.text));
+        }
+        b.append(ln);
+      }
+      /* THE BAR GOES LAST, and it is doing two jobs at once. It is the rate
+         as a shape, and it is the row's own baseline — everything above a bar
+         belongs to that bar. With the bar in the middle, a room's message
+         line sat nearer the NEXT room's name than its own and read as
+         belonging to it. */
+      const bar = el("span", "bar");
+      const fill = el("i");
+      fill.style.width = `${Math.max(3, Math.round((r.rate / peak) * 100))}%`;
+      bar.append(fill);
+      b.append(bar);
+      b.title = `Fly to ${r.room}`;
+      b.addEventListener("click", () => cb.flyToRoom(r.room));
+      box.append(b);
+    }
+
+    const note = el("p", "railnote",
+      "rate measured here, between two directory reads · lines read from the rooms");
+    box.append(note);
+    box.hidden = false;
+  }
+  function closeRail() { if (els.rail) { els.rail.hidden = true; els.rail.replaceChildren(); } }
+
   /* ── the side panel ───────────────────────────────────────────────── */
 
-  function panelHead(markIcon, title, sub) {
+  /**
+   * A panel's title bar, with the close button.
+   *
+   * `onClose` is not optional decoration. This head is used by the side panel
+   * AND by the feed, which are two different windows, and the close button
+   * used to call closePanel() in both — so the feed's X reliably closed a
+   * panel behind it and left the feed itself open. A shared component with
+   * one hard-coded action was the whole bug.
+   */
+  function panelHead(markIcon, title, sub, onClose) {
     const h = el("div", "phead");
     const m = el("span", "mark"); m.append(icon(markIcon));
     const t = el("div");
     t.append(el("b", null, title), el("span", "sub", sub));
     const x = el("button", "px"); x.type = "button"; x.setAttribute("aria-label", "Close");
     x.append(icon("c-x"));
-    x.addEventListener("click", () => cb.closePanel());
+    x.addEventListener("click", onClose || (() => cb.closePanel()));
     h.append(m, t, x);
     return h;
   }
@@ -257,7 +348,23 @@ export function makeUI(els, cb) {
       p.append(w);
     }
 
-    const list = el("div", "rowlist");
+    /* THE WAY OUT COMES BEFORE THE CONTENTS.
+       These two used to sit under the identity list, which was fine in an
+       empty room and wrong in every busy one: forty identities pushed both
+       buttons past the bottom of the panel, so the more there was to look at,
+       the harder it became to leave. The list is the part that grows, so the
+       list is the part that scrolls. */
+    const row = el("div", "prow pinned");
+    const feed = el("button", "go ghost"); feed.type = "button";
+    feed.append(icon("c-list"), el("span", null, "Room feed"));
+    feed.addEventListener("click", () => cb.toggleFeed());
+    const back = el("button", "go ghost"); back.type = "button";
+    back.append(icon("c-home"), el("span", null, "Back to the city"));
+    back.addEventListener("click", () => cb.leaveRoom());
+    row.append(feed, back);
+    p.append(row);
+
+    const list = el("div", "rowlist scroller");
     for (const a of agents.slice(0, 40)) {
       const b = el("button", "arow" + (a.id === selectedId ? " sel" : "")); b.type = "button";
       const f = el("span", "face"); f.append(icon("c-bot"));
@@ -276,16 +383,6 @@ export function makeUI(els, cb) {
       list.append(q);
     }
     p.append(list);
-
-    const row = el("div", "prow");
-    const feed = el("button", "go ghost"); feed.type = "button";
-    feed.append(icon("c-list"), el("span", null, "Room feed"));
-    feed.addEventListener("click", () => cb.toggleFeed());
-    const back = el("button", "go ghost"); back.type = "button";
-    back.append(icon("c-home"), el("span", null, "Back to the city"));
-    back.addEventListener("click", () => cb.leaveRoom());
-    row.append(feed, back);
-    p.append(row);
     return p;
   }
 
@@ -395,6 +492,96 @@ export function makeUI(els, cb) {
   }
 
   function closePanel() { els.side.hidden = true; els.side.replaceChildren(); }
+
+  /**
+   * WHERE THIS IDENTITY HAS BEEN — the answer to a pasted did:key.
+   *
+   * Pasting a key used to produce a hit you could click and nothing that
+   * happened when you did. Part of that was a bug; the rest was that there
+   * was nothing worth showing. There is now: the archive knows which rooms an
+   * identity has actually spoken in, so a key resolves to places on this map.
+   *
+   * Every line here is sourced and says which source it came from. `rooms`
+   * comes from the committed archive, which is minutes behind and can name a
+   * room that has since gone quiet; `here` is the live reading. The two are
+   * never merged into one number, because they are answers to two different
+   * questions.
+   *
+   * @param q.did      the canonical did:key
+   * @param q.state    "looking" | "found" | "unknown" | "failed"
+   * @param q.rooms    [{room, onMap}] from the archive, may be empty
+   * @param q.count    archived message count, or null
+   * @param q.last     ISO timestamp of the archive's newest sighting
+   */
+  function didPanel(q) {
+    const p = els.side;
+    p.replaceChildren();
+    p.hidden = false;
+    p.append(panelHead("c-bot", shortDid(q.did, 12, 8), "identity"));
+
+    if (q.state === "looking") {
+      const w = el("p", "pnote");
+      w.textContent = "Reading the archive for this key…";
+      p.append(w);
+      return p;
+    }
+    if (q.state === "failed") {
+      const w = el("p", "pnote");
+      w.textContent = "The archive did not answer just now. The identity card can still be opened, and it reads the same files.";
+      p.append(w);
+    }
+
+    if (q.state === "found") {
+      const g = el("div", "stat4");
+      const st = (v, l, t) => { const d = el("div", "st"); d.append(el("b", null, v), el("span", null, l)); if (t) d.title = t; return d; };
+      g.append(
+        st(q.count == null ? "—" : num(q.count), "archived messages",
+          "Collected by Overheard's archiver, not read from Technocore just now."),
+        st(num(q.rooms.length), "rooms seen in", "Rooms this identity has been archived speaking in."),
+      );
+      p.append(g);
+    }
+
+    if (q.state === "unknown") {
+      const w = el("p", "pnote");
+      w.textContent = "The archive has never recorded this key speaking. That is not proof it has not — Overheard only holds what it collected — but there is nowhere on this map to point you.";
+      p.append(w);
+    }
+
+    const onMap = (q.rooms || []).filter((r) => r.onMap);
+    if (onMap.length) {
+      const h = el("p", "pnote");
+      h.append(el("b", null, "Standing in this city. "), document.createTextNode(
+        "Click a room to fly to it."));
+      p.append(h);
+      const list = el("div", "rowlist scroller");
+      for (const r of onMap.slice(0, 24)) {
+        const b = el("button", "arow"); b.type = "button";
+        const f = el("span", "face"); f.append(icon("c-pin"));
+        const who = el("div", "who");
+        who.append(el("b", null, r.room));
+        who.append(el("span", null, "archived here"));
+        b.append(f, who);
+        b.addEventListener("click", () => cb.flyToRoom(r.room));
+        list.append(b);
+      }
+      p.append(list);
+    } else if (q.state === "found") {
+      const w = el("p", "pnote");
+      w.textContent = `Seen in ${q.rooms.length} room${q.rooms.length === 1 ? "" : "s"}, none of which Technocore is naming in the directory right now — so none of them is a building on this map.`;
+      p.append(w);
+    }
+
+    const row = el("div", "prow");
+    const card = document.createElement("a");
+    card.className = "go ghost";
+    card.href = `/?did=${encodeURIComponent(q.did)}`;
+    card.target = "_blank"; card.rel = "noopener";
+    card.append(icon("c-out"), el("span", null, "Identity card"));
+    row.append(card);
+    p.append(row);
+    return p;
+  }
 
   /**
    * How to read the city.
@@ -513,7 +700,8 @@ export function makeUI(els, cb) {
     const p = els.feed;
     p.replaceChildren();
     p.hidden = false;
-    p.append(panelHead("c-list", room?.name || "room", "everything Technocore is serving"));
+    p.append(panelHead("c-list", room?.name || "room", "everything Technocore is serving",
+      () => closeFeed()));
 
     const bar = el("div", "fbar");
     const q = document.createElement("input");
@@ -625,7 +813,8 @@ export function makeUI(els, cb) {
   }
 
   return {
-    chips, status, roomSummary, roomLive, agentPanel, messagePanel, closePanel, legend,
+    chips, status, roomSummary, roomLive, agentPanel, messagePanel, closePanel, legend, didPanel,
+    rail, closeRail,
     buildFeed, renderFeed, closeFeed, feedState: feed,
     hover, hoverAgentCard, hoverRoomCard, hoverBlockCard, hits,
   };
