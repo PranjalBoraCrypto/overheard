@@ -1068,8 +1068,10 @@ export function mountFlat(container, els) {
     const full = did.startsWith("did:key:") ? did : `did:key:${did}`;
     const here = D.state.room?.agents.find((a) => a.did === full);
     if (here) return selectAgent(here.id);
-    ui.hits([{ kind: "did", label: "Not in this room's live window", did: full }], () => {});
-    window.open(`/?did=${encodeURIComponent(full)}`, "_blank", "noopener");
+    /* See the same note in boot.js: offer the identity card, do not open a
+       tab nobody asked for. */
+    ui.hits([{ kind: "did", label: "Not in a room you are standing in — open the identity card", did: full }],
+      (h) => { ui.hits(null); window.open(`/?did=${encodeURIComponent(h.did)}`, "_blank", "noopener"); });
   }
 
   /* ── the frame ───────────────────────────────────────────────────────── */

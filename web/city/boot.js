@@ -752,14 +752,14 @@ export async function boot() {
   /** A DID is not on the map until it says something in a room we are in, so
    *  "locate" is honest about what it can and cannot do. */
   function findDid(did) {
-    const clean = did.startsWith("did:key:") ? did : `did:key:${did}`;
-    const r = D.state.room;
-    const here = r?.agents.find((a) => a.did === clean);
+    const full = did.startsWith("did:key:") ? did : `did:key:${did}`;
+    const here = D.state.room?.agents.find((a) => a.did === full);
     if (here) return selectAgent(here.id);
-    const node = document.createElement("div");
-    node.className = "pnote";
-    ui.hits([{ kind: "did", label: "Not in this room's live window", did: clean }], () => {});
-    window.open(`/?did=${encodeURIComponent(clean)}`, "_blank", "noopener");
+    /* Not in the room we are standing in — which is the only place a DID can
+       be on this map. Say so, and OFFER the identity card rather than opening
+       a tab somebody did not ask for. */
+    ui.hits([{ kind: "did", label: "Not in a room you are standing in — open the identity card", did: full }],
+      (h) => { ui.hits(null); window.open(`/?did=${encodeURIComponent(h.did)}`, "_blank", "noopener"); });
   }
 
   /* ── auto-tour ───────────────────────────────────────────────────────── */
