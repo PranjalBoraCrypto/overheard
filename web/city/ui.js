@@ -86,12 +86,15 @@ export function makeUI(els, cb) {
     if (city.engagement?.windowed_messages != null)
       add(" in live windows", num(city.engagement.windowed_messages),
         "Technocore's own figure for the messages currently held across the rooms in its live window. Forwarded as it arrives; nothing here recomputes it.");
-    const fps = el("button", "chip");
-    fps.type = "button";
+    /* A READING, NOT A CONTROL. This was a button that hid every overlay,
+       which is a drastic thing to happen to somebody who clicked a number to
+       see what the number meant. The frame rate is information and sits with
+       the other measurements; the clean view has its own control in the row
+       at the bottom right, where the other controls are. */
+    const fps = el("span", "chip");
     fps.id = "fpsChip";
     fps.append(el("b", null, String(opts.fps ?? "—")), document.createTextNode(" fps"));
-    fps.title = "Hide the overlays for a clean view of the city. Esc brings them back.";
-    fps.addEventListener("click", () => cb.toggleClean());
+    fps.title = "Frames per second, measured in this tab. Not a control — use the eye in the corner for a clean view.";
     box.append(fps);
   }
 

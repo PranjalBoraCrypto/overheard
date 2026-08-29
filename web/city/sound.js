@@ -43,7 +43,11 @@ export function setEnabled(v) {
   }
   if (!ensure()) return;
   ctx.resume?.();
-  master.gain.setTargetAtTime(0.5, ctx.currentTime, 0.15);
+  /* 0.5 was too quiet to be heard at all on laptop speakers once the
+     per-sound peaks (0.055 for a tick) were multiplied through it — the
+     whole soundtrack was technically present and practically inaudible,
+     which is indistinguishable from broken. */
+  master.gain.setTargetAtTime(0.85, ctx.currentTime, 0.15);
 }
 export const enabled = () => on;
 
@@ -81,20 +85,20 @@ export function tick(seq = 0, kind = "message") {
     kind === "claim" ? 620 :
     kind === "deliver" ? 700 :
     kind === "attest" ? 780 : 460;
-  blip(base, { type: "triangle", peak: 0.055, decay: 0.13, detune: (n % 24) * 5 - 60 });
+  blip(base, { type: "triangle", peak: 0.13, decay: 0.15, detune: (n % 24) * 5 - 60 });
 }
 
 /** Entering a district or a room: a fifth, warm, once. */
 export function arrive() {
   if (!on || !ctx) return;
-  blip(196, { type: "sine", peak: 0.10, attack: 0.01, decay: 0.5 });
-  setTimeout(() => blip(294, { type: "sine", peak: 0.07, attack: 0.01, decay: 0.6 }), 70);
+  blip(294, { type: "sine", peak: 0.24, attack: 0.01, decay: 0.5 });
+  setTimeout(() => blip(441, { type: "sine", peak: 0.17, attack: 0.01, decay: 0.6 }), 70);
 }
 
 /** A selection: short, rising, unmistakably a confirmation. */
 export function pick() {
-  blip(660, { type: "sine", peak: 0.06, decay: 0.09 });
-  setTimeout(() => blip(880, { type: "sine", peak: 0.045, decay: 0.11 }), 55);
+  blip(660, { type: "sine", peak: 0.15, decay: 0.10 });
+  setTimeout(() => blip(880, { type: "sine", peak: 0.11, decay: 0.12 }), 55);
 }
 
 /** The room bed. A single low sine, barely there, so leaving a room is
@@ -102,10 +106,14 @@ export function pick() {
 export function bedOn(v) {
   if (!on || !ensure()) return;
   if (v && !bed) {
-    bed = ctx.createOscillator(); bed.type = "sine"; bed.frequency.value = 58;
+    /* 58Hz was below what a laptop speaker can physically reproduce, so the
+       "change of space" on entering a room was silent on exactly the
+       hardware most people are using. 116Hz is the same note an octave up:
+       still a low bed, and one that actually comes out of the box. */
+    bed = ctx.createOscillator(); bed.type = "sine"; bed.frequency.value = 116;
     bedGain = ctx.createGain(); bedGain.gain.value = 0.0001;
     bed.connect(bedGain); bedGain.connect(master); bed.start();
-    bedGain.gain.setTargetAtTime(0.035, ctx.currentTime, 1.2);
+    bedGain.gain.setTargetAtTime(0.055, ctx.currentTime, 1.2);
   } else if (!v && bed) {
     const b = bed, g = bedGain; bed = null; bedGain = null;
     g.gain.setTargetAtTime(0.0001, ctx.currentTime, 0.4);

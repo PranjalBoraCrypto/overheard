@@ -133,7 +133,20 @@ export async function boot() {
   $("backCity").addEventListener("click", () => leaveRoom());
 
   const ui = makeUI(els, {
-    closePanel: () => { ui.closePanel(); st.agentId = null; st.msgKey = null; if (st.room) showRoomPanel(); },
+    /* THE CLOSE BUTTON CLOSES.
+       It used to close the panel and then, if you were in a room, put the
+       room panel straight back — so pressing × inside a room looked like a
+       button that did nothing. Now it closes: from an agent or a message it
+       steps back to the room panel, which IS what × means there, and from
+       the room panel it shuts. Escape still walks the same ladder. */
+    closePanel: () => {
+      if (st.agentId || st.msgKey) {
+        st.agentId = null; st.msgKey = null;
+        if (st.room) { showRoomPanel(); return; }
+      }
+      st.agentId = null; st.msgKey = null;
+      ui.closePanel();
+    },
     enterRoom: (name) => enterRoom(name),
     leaveRoom: () => leaveRoom(),
     pickAgent: (id) => selectAgent(id),
@@ -777,6 +790,28 @@ export async function boot() {
   function updateHover(rect) {
     if (st.clean) { ui.hover(0, 0, null); return; }
     if (!pointerIn && !st.hoverKey) { ui.hover(0, 0, null); return; }
+
+    /* INSIDE A ROOM, A FIGURE IS SOMEBODY. A plaza full of identical shapes
+       with no way to ask "who is that" is a diagram of a conversation rather
+       than a conversation — and the identity is the only thing here that is
+       genuinely the agent's own. So the same card the city shows for an
+       agent is shown for whichever figure the pointer is over: the key,
+       shortened, whether Technocore accepted it as signed, and what it last
+       said. It costs one raycast against two instanced meshes, throttled by
+       the same rule as the city's hover. */
+    if (mode === "room" && room3d) {
+      const now0 = performance.now();
+      if (!hoverStale && !roomCam.busy && now0 - lastHoverRun < 400) return;
+      lastHoverRun = now0; hoverStale = false;
+      const nx = ((hoverAt.x - rect.left) / rect.width) * 2 - 1;
+      const ny = -((hoverAt.y - rect.top) / rect.height) * 2 + 1;
+      const id = pointerIn ? room3d.pick(nx, ny) : null;
+      const a = id ? (D.state.room?.agents || []).find((x) => x.id === id) : null;
+      canvas.classList.toggle("pointing", !!a);
+      ui.hover(a ? hoverAt.x - rect.left : 0, a ? hoverAt.y - rect.top : 0,
+        a ? ui.hoverAgentCard(a) : null);
+      return;
+    }
     /* Still pointer, still city: re-ask about twice a second so a live card
        keeps updating, instead of thirty times a second for the same answer. */
     const now = performance.now();
@@ -817,6 +852,7 @@ export async function boot() {
   $("zoomOut").onclick = () => cam.flyTo({ dist: cam.dist * 1.38 }, reduced ? 0 : 420);
   $("reset").onclick = () => { st.tour = false; paintTour(); if (st.room) leaveRoom(); else cam.home(reduced ? 0 : 1000); };
   $("tour").onclick = () => { st.tour = !st.tour; st.tourAt = 0; paintTour(); };
+  $("cleanview").onclick = () => setClean(!st.clean);
   $("bubbles").onclick = () => {
     st.bubblesOn = !st.bubblesOn;
     if (!st.bubblesOn) clearBubbles();
@@ -828,6 +864,12 @@ export async function boot() {
     S.setEnabled(nowOn);
     Q.setMuted(!nowOn);
     paintMute();
+    /* SAY SOMETHING THE MOMENT IT IS TURNED ON.
+       Switching sound on and hearing nothing is indistinguishable from
+       switching on a broken feature — and this soundtrack is deliberately
+       sparse, so the next sound might be a minute away. One short
+       confirmation is the difference between "it works" and "it does not". */
+    if (nowOn) S.pick();
     if (nowOn && st.room) S.bedOn(true);
   };
   $("hideStrip").onclick = () => ($("strip").hidden = true);
@@ -1016,6 +1058,12 @@ export async function boot() {
       .sort((a, b) => b.h - a.h);
     const pickd = live[st.tourAt % live.length].d;
     st.tourAt++;
+    /* The flight is not the tour — the tour is being TOLD about each place
+       it stops at. flyToDistrict opens the summary, but a stop that lands
+       while an agent or message panel is open used to leave that panel up
+       and the summary never appeared, so the camera moved and nothing was
+       said. The tour clears the selection first, every stop. */
+    st.agentId = null; st.msgKey = null;
     flyToDistrict(pickd.room);
     tourTimer = setTimeout(tourStep, reduced ? 3600 : 6200);
   }

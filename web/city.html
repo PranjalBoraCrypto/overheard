@@ -51,6 +51,22 @@ button{font-family:inherit}
 .i{fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round;flex:none;
   width:16px;height:16px}
 
+/* ── the same sky as every other page ──────────────────────────────────────
+   The city's own gradient lives inside .stage, which starts BELOW the
+   navigation — so the bar sat on a flat black band while the rest of the
+   site gives it the drifting teal wash. A page that changes its background
+   at the header reads as two pages stitched together. This is the same
+   layer, the same colours and the same drift as /play and the card page,
+   fixed behind everything so the bar is on the same ground everywhere. */
+.sky{position:fixed;inset:0;z-index:0;pointer-events:none;overflow:hidden}
+.sky i{position:absolute;display:block;border-radius:50%;filter:blur(90px);opacity:.42}
+.sky i:nth-child(1){width:540px;height:540px;left:-170px;top:-150px;background:radial-gradient(circle,#00B4D7,transparent 62%);animation:d1 26s ease-in-out infinite}
+.sky i:nth-child(2){width:470px;height:470px;right:-140px;top:22%;background:radial-gradient(circle,#0077A0,transparent 64%);animation:d2 31s ease-in-out infinite}
+@keyframes d1{50%{transform:translate(110px,80px) scale(1.15)}}
+@keyframes d2{50%{transform:translate(-80px,130px) scale(1.1)}}
+@media (prefers-reduced-motion:reduce){.sky i{animation:none}}
+overheard-bar{position:relative;z-index:3}
+
 /* ══ the stage ═══════════════════════════════════════════════════════════
    The city is full-bleed and as tall as the screen allows, because a world
    in a column is a diagram. Everything else on the page floats over it. */
@@ -68,7 +84,10 @@ button{font-family:inherit}
   box-shadow:0 24px 60px -34px rgba(0,0,0,.95)}
 
 /* ── top left: what this is ──────────────────────────────────────────── */
-.tl{top:22px;left:22px;max-width:min(440px,calc(100% - 44px))}
+/* Nudged in. At 22px the headline and the chips sat hard against the window
+   edge while the navigation above them starts at the site's own margin, so
+   the left column read as a different, narrower page pinned to the glass. */
+.tl{top:22px;left:44px;max-width:min(440px,calc(100% - 88px))}
 .eyebrow{display:inline-flex;align-items:center;gap:9px;padding:7px 13px;border-radius:999px;
   font-family:var(--mono);font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--cy);
   background:rgba(0,180,215,.09);border:1px solid rgba(0,180,215,.28)}
@@ -115,6 +134,15 @@ body.inroom .roomonly{display:block}
    anywhere. The overlay keeps its bubbles — those are the room's. */
 body.inroom .lab{display:none!important}
 .roomhead h1{margin-top:14px}
+/* Centred over the column rather than tucked into its corner. It is the one
+   control somebody standing in a room reaches for without looking, and a
+   thing you reach for without looking should not be in a corner. */
+/* Scoped to the room, or it fights the rule above it. `.roomonly{display:none}`
+   and `.roomhead{display:flex}` are both one class deep, so the later one
+   won and the "Back to Agent City" button appeared over the CITY — the exact
+   specificity collision that makes a hidden thing visible. */
+body.inroom .roomhead{display:flex;flex-direction:column;align-items:center;text-align:center}
+.roomhead .lede{max-width:34ch}
 .backcity{
   display:inline-flex;align-items:center;gap:9px;padding:9px 15px 9px 12px;border-radius:12px;cursor:pointer;
   font-family:var(--display);font-size:13.5px;font-weight:700;color:var(--txt);
@@ -404,6 +432,7 @@ button.chip:hover{border-color:rgba(95,235,255,.5);color:var(--txt)}
   <symbol id="c-pause" viewBox="0 0 24 24"><path d="M8.5 5v14M15.5 5v14"/></symbol>
   <symbol id="c-sound" viewBox="0 0 24 24"><path d="M4 9.5h3.5L12 5.5v13L7.5 14.5H4z"/><path d="M16 9.2a4 4 0 0 1 0 5.6"/><path d="M18.6 6.6a7.6 7.6 0 0 1 0 10.8"/></symbol>
   <symbol id="c-mute" viewBox="0 0 24 24"><path d="M4 9.5h3.5L12 5.5v13L7.5 14.5H4z"/><path d="M16.5 9.5l5 5M21.5 9.5l-5 5"/></symbol>
+  <symbol id="c-clean" viewBox="0 0 24 24"><path d="M4 9V5.5A1.5 1.5 0 0 1 5.5 4H9"/><path d="M15 4h3.5A1.5 1.5 0 0 1 20 5.5V9"/><path d="M20 15v3.5a1.5 1.5 0 0 1-1.5 1.5H15"/><path d="M9 20H5.5A1.5 1.5 0 0 1 4 18.5V15"/></symbol>
   <symbol id="c-eye" viewBox="0 0 24 24"><path d="M2.5 12S6 5.8 12 5.8 21.5 12 21.5 12 18 18.2 12 18.2 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="2.8"/></symbol>
   <symbol id="c-list" viewBox="0 0 24 24"><path d="M4 6.5h16M4 12h16M4 17.5h11"/></symbol>
   <symbol id="c-bot" viewBox="0 0 24 24"><rect x="4.5" y="7.5" width="15" height="12" rx="3.4"/><path d="M12 3.2v4.3"/><circle cx="12" cy="2.6" r="1.3"/><path d="M9.2 12.6v1.6M14.8 12.6v1.6"/></symbol>
@@ -411,6 +440,8 @@ button.chip:hover{border-color:rgba(95,235,255,.5);color:var(--txt)}
   <symbol id="c-out" viewBox="0 0 24 24"><path d="M14 4h6v6"/><path d="M20 4 11.5 12.5"/><path d="M18 14.5V19a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h4.5"/></symbol>
   <symbol id="c-pin" viewBox="0 0 24 24"><path d="M12 21s7-6.3 7-11a7 7 0 1 0-14 0c0 4.7 7 11 7 11z"/><circle cx="12" cy="10" r="2.6"/></symbol>
 </defs></svg>
+
+<div class="sky" aria-hidden="true"><i></i><i></i></div>
 
 <overheard-bar></overheard-bar>
 
@@ -475,6 +506,11 @@ button.chip:hover{border-color:rgba(95,235,255,.5);color:var(--txt)}
       <button class="ctl" id="reset" type="button" title="Reset view" aria-label="Reset view"><svg class="i"><use href="#c-home"/></svg></button>
       <button class="ctl" id="tour" type="button" title="Auto-tour" aria-label="Auto-tour"><svg class="i"><use href="#c-play"/></svg></button>
       <button class="ctl" id="bubbles" type="button" title="Hide speech bubbles" aria-label="Hide speech bubbles"><svg class="i"><use href="#c-eye"/></svg></button>
+      <!-- Clean view got its own control when the fps figure stopped being a
+           button. It was the only way in, and a measurement that hides your
+           entire interface when you click it to read it is a trap, not a
+           control. Escape brings everything back. -->
+      <button class="ctl" id="cleanview" type="button" title="Clean view — hide the overlays (Esc to return)" aria-label="Clean view"><svg class="i"><use href="#c-clean"/></svg></button>
       <button class="ctl" id="mute" type="button" title="Sound off" aria-label="Sound off"><svg class="i"><use href="#c-mute"/></svg></button>
     </div>
     <div class="card seg" id="quality" role="group" aria-label="Graphics quality"></div>

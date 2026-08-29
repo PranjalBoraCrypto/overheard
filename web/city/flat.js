@@ -931,6 +931,11 @@ export function mountFlat(container, els) {
   $("zoomIn").onclick = () => zoomBy(1.4);
   $("zoomOut").onclick = () => zoomBy(0.72);
   $("reset").onclick = () => { stopTour(); if (st.room) leaveRoom(); else home(reduced ? 0 : 800); };
+  /* The same control as the 3D city, wired here too. flat.js is a copy of
+     boot.js's wiring, which is exactly why a control added to one and not
+     the other silently stops existing for anybody without WebGL — the
+     failure this line prevents. */
+  $("cleanview").onclick = () => setClean(!st.clean);
   $("bubbles").onclick = () => {
     st.bubblesOn = !st.bubblesOn;
     if (!st.bubblesOn) clearBubbles();
