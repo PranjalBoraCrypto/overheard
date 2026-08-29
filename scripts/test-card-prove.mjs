@@ -62,6 +62,13 @@ const vaultInto = async (page, did, jwkStr, pass) => page.evaluate(async ({ did,
   const aes = await crypto.subtle.deriveKey({ name: 'PBKDF2', salt, iterations: 310000, hash: 'SHA-256' }, base, { name: 'AES-GCM', length: 256 }, false, ['encrypt']);
   const ct = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, aes, enc.encode(jwkStr));
   localStorage.setItem('overheard.identity', JSON.stringify({ v: 1, did, salt: b64u(salt), iv: b64u(iv), data: b64u(ct) }));
+  /* A LOCKED vault is the state being set up here, so the open key has to go
+     with it. Proving earlier in this run signs the browser in, these pages
+     share one context, and the prove bar now signs straight off a key it is
+     already holding — so leaving the session behind meant every "this
+     browser has a vault to unlock" case was really "this browser is already
+     unlocked", and the passphrase route below was never being reached. */
+  localStorage.removeItem('overheard.session');
 }, { did, jwkStr, pass });
 
 const look = async (page, did) => {
@@ -205,7 +212,16 @@ check('none of it is a CSS transition', parseFloat(feel.transition) === 0, feel.
 console.log('\n=== E. a DIFFERENT browser, no identity — the seed route, and a file back');
 const pg2 = await ctx.newPage(); await killWebGL(pg2); pg2.on('pageerror', e => errs.push(e.message));
 await pg2.goto('http://localhost:8990/');
-await pg2.evaluate(() => localStorage.removeItem('overheard.identity'));
+/* BOTH keys, not just the vault. These pages share one browser context, and
+   proving on the earlier one signs this browser in — that is the point of it
+   — so clearing only the vault left "a different browser with no identity"
+   actually holding an OPEN key for this very DID. The prove bar now notices
+   that and signs without asking, which is correct and which would have made
+   this section test something else entirely. */
+await pg2.evaluate(() => {
+  localStorage.removeItem('overheard.identity');
+  localStorage.removeItem('overheard.session');
+});
 await look(pg2, ID.did);
 await pg2.click('#provebar'); await pg2.waitForTimeout(500);
 check('opens on the passphrase tab', await pg2.locator('#tabPass').getAttribute('aria-selected') === 'true');
@@ -258,7 +274,12 @@ check('vertically centred', Math.abs(geo.top - geo.bottom) <= 2);
 console.log('\n=== E3. the backup-file route: the case that was locked out');
 const pg4 = await ctx.newPage(); await killWebGL(pg4); pg4.on('pageerror', e => errs.push(e.message));
 await pg4.goto('http://localhost:8990/');
-await pg4.evaluate(() => localStorage.removeItem('overheard.identity'));
+/* Empty means empty — the session too, or this browser is not the stranger
+   with only a backup file that the section is about. */
+await pg4.evaluate(() => {
+  localStorage.removeItem('overheard.identity');
+  localStorage.removeItem('overheard.session');
+});
 await look(pg4, ID.did);
 await pg4.click('#provebar'); await pg4.waitForTimeout(400);
 // the file the seed route handed out earlier in this run
@@ -270,6 +291,38 @@ check('wrong passphrase refused', /Wrong passphrase/.test(await pg4.locator('#pm
 await pg4.fill('#ppw', 'longenough'); await pg4.click('#proveGo'); await pg4.waitForTimeout(3000);
 check('proven from the backup file', (await pg4.locator('#provebar').getAttribute('class')).includes('done'));
 await pg4.locator('#pmodal').screenshot({ path: '/tmp/prove-file.png' }).catch(()=>{});
+
+/* ── E3b. SIGNED IN IS ALREADY UNLOCKED ───────────────────────────────────
+   The bar used to open the passphrase dialog no matter what — including for
+   somebody signed in as the very identity on the card, whose key is sitting
+   decrypted in the session because they typed a passphrase minutes ago.
+   Asking twice is not extra care, it is the page not looking. So: a real
+   key in the session, and one press has to be the whole interaction. */
+console.log('\n=== E3b. a key already open is not asked for its passphrase');
+const pg5 = await ctx.newPage(); await killWebGL(pg5); pg5.on('pageerror', e => errs.push(e.message));
+await pg5.goto('http://localhost:8990/');
+await pg5.evaluate(({ did, jwkStr }) => {
+  localStorage.removeItem('overheard.identity');        // no vault: the session alone
+  localStorage.setItem('overheard.session',
+    JSON.stringify({ did, jwk: JSON.parse(jwkStr), at: new Date().toISOString() }));
+}, { did: ID.did, jwkStr: ID.jwk });
+await look(pg5, ID.did);
+check('the bar says it will not ask',
+  /signed in as this identity/i.test(await pg5.locator('#pbSub').textContent()),
+  (await pg5.locator('#pbSub').textContent()).slice(0, 52));
+await pg5.click('#provebar');
+await pg5.waitForFunction(() => document.getElementById('provebar').classList.contains('done'),
+  null, { timeout: 8000 }).catch(() => {});
+check('one press proves it', (await pg5.locator('#provebar').getAttribute('class')).includes('done'));
+check('and no dialog was ever opened', !(await pg5.evaluate(() => document.getElementById('pmodal').open)));
+check('the proof link is offered', await pg5.locator('#proofBtn').isVisible());
+/* Not a cosmetic class: the page verifies its OWN signature with the public
+   key out of the DID before it marks anything proven, and bails if that
+   fails. So `done` here means the maths ran and passed, and the line under
+   the bar is the page saying which key did it. */
+check('and the bar now says what happened',
+  /Signed with your key/.test(await pg5.locator('#pbSub').textContent()),
+  (await pg5.locator('#pbSub').textContent()).slice(0, 46));
 
 console.log('\n=== E4. nothing on the proven card overlaps anything else');
 // Measured off the canvas itself: sample the pixels each element occupies and

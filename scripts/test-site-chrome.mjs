@@ -257,11 +257,42 @@ console.log("\n=== 6. a finished card is left alone");
     title: document.getElementById("finishTitle").textContent,
     sub: document.getElementById("finishSub").textContent,
   }));
-  /* Note published and messages on the record is VERIFIED — the only thing
-     left is the optional proof, so the row points at it rather than calling
-     a correctly set-up identity half done. */
-  check("a set-up card is not told it is half set up", !/half set up/i.test(f.title), f.title);
-  check("it offers the one optional step instead", !f.shown || /proven/i.test(f.title), f.title);
+  /* A note on the record and messages in the rooms is the whole of setup.
+     The proof is an optional extra with its own control directly above, so
+     this row has nothing left to say and does not appear — not even "one
+     step from proven", which nagged a finished card and, on somebody else's,
+     offered a step only the key holder can take. */
+  check("a set-up card gets no row at all", !f.shown, f.shown ? f.title : "hidden");
+  check("and is never called half set up", !/half set up/i.test(f.title), f.title);
+}
+
+/* ── 6b. a key already open is not asked for its passphrase again ───────── */
+console.log("\n=== 6b. signed in as this identity, proving asks for nothing");
+{
+  REGISTERED = true; MESSAGES = 12;
+  /* Section 5 emptied this browser to look at the card as a stranger, so the
+     session has to be put back before "signed in" means anything here. */
+  await pg.evaluate((did) => {
+    localStorage.setItem("overheard.session", JSON.stringify({
+      did, jwk: { kty: "OKP", crv: "Ed25519", x: "aaa", d: "bbb" }, at: new Date().toISOString() }));
+  }, DID);
+  await pg.goto("http://localhost:8971/?did=" + encodeURIComponent(DID));
+  await pg.waitForTimeout(3500);
+  const line = await pg.evaluate(() => document.getElementById("pbSub").textContent);
+  check("the bar says out loud that it will not ask",
+    /signed in as this identity/i.test(line), line.slice(0, 58));
+  /* The stub session carries a made-up jwk, so no signature can verify. What
+     is under test is the ROUTE: it must not open a dialog on a key it has,
+     and it must fall back honestly rather than claim anything. */
+  await pg.click("#provebar");
+  await pg.waitForTimeout(1500);
+  const after = await pg.evaluate(() => ({
+    sub: document.getElementById("pbSub").textContent,
+    done: document.getElementById("provebar").classList.contains("done"),
+  }));
+  check("a key that cannot sign is not treated as proof", !after.done);
+  check("and the bar does not sit stuck on “Signing…”",
+    !/^Signing/.test(after.sub), after.sub.slice(0, 46));
 }
 
 /* ── 7. the explainer ───────────────────────────────────────────────────── */

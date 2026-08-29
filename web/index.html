@@ -536,15 +536,6 @@ h1 em{
 .fi-go svg{width:19px;height:19px}
 .finish.open .fi-go{transform:rotate(180deg)}
 @media (prefers-reduced-motion:reduce){.fi-arc{animation:none}}
-/* Pointing at the control that is already there, rather than growing a
-   second copy of it further down the page. */
-.provebar.nudge{animation:nudge 1.2s var(--ease)}
-@keyframes nudge{
-  0%,100%{box-shadow:0 0 0 0 rgba(0,180,215,0)}
-  30%{box-shadow:0 0 0 5px rgba(0,180,215,.28)}
-  60%{box-shadow:0 0 0 3px rgba(0,180,215,.16)}
-}
-@media (prefers-reduced-motion:reduce){.provebar.nudge{animation:none;box-shadow:0 0 0 4px rgba(0,180,215,.3)}}
 .provebar[disabled]{opacity:1}
 .pb-ok{flex:0 0 auto;color:var(--cy-hi);display:none}
 .pb-ok svg{width:24px;height:24px;display:block;filter:drop-shadow(0 0 8px rgba(95,235,255,.55))}
@@ -2963,14 +2954,30 @@ function finishPanel(parsed, stats, note){
   const sess=getSession();
   const mine=sess?.did===parsed.did || savedIdentity?.did===parsed.did;
 
-  /* Done is done. A card with a note, messages and a proof has nothing left
-     to offer, and neither has this. */
-  if(reg && posted && proven){ bar.hidden=true; $("diag").hidden=true; return; }
+  /* SET UP IS SET UP, AND THE PROOF IS NOT PART OF IT.
+     ────────────────────────────────────────────────────────────────────────
+     A note on the record and a signed message in the rooms is the whole of
+     setup. The proof is an optional extra with its own control sitting
+     directly above this row, so a card that has the first two has nothing
+     for this panel to say.
 
-  /* The one case that is not "half set up": everything is done except the
-     proof, which is optional and already has its own control right above
-     this one. Pointing at that rather than repeating it. */
-  const onlyProof = reg && posted && !proven;
+     It used to say something anyway — "One step from proven", under a card
+     that was finished — and that was wrong twice over. It nagged the owner
+     of a complete card about an optional flourish, and on somebody ELSE's
+     card it read as an instruction to a person who cannot act on it: only
+     the key holder can sign, and the reader almost never is. The offer to
+     prove belongs on the prove bar, which asks "is this yours?" honestly
+     and can answer it. */
+  if(reg && posted){
+    bar.hidden=true; $("diag").hidden=true;
+    /* Wiped, not just hidden. The last card's sentence stayed in the element
+       — "This card is half set up", sitting invisibly under a finished one —
+       and the first bug that ever un-hides this row would show it. Nothing
+       false is left lying around to be revealed by accident. */
+    $("finishTitle").textContent="";
+    $("finishSub").textContent="";
+    return;
+  }
 
   bar.hidden=false;
   bar.classList.remove("open");
@@ -2983,14 +2990,10 @@ function finishPanel(parsed, stats, note){
      this screen" under a card that was missing exactly one, which is the
      kind of sentence that makes a reader stop trusting the rest. */
   const one = missing.length === 1;
-  $("finishTitle").textContent = onlyProof
-    ? "One step from proven"
-    : mine ? "Your card is half set up" : "This card is half set up";
-  $("finishSub").textContent = onlyProof
-    ? "The setup is correct. Signing one line here would make it say PROVEN."
-    : `Missing ${missing.join(" and ")}. ${
-        mine ? (one ? "It can be done on this screen." : "Both can be done on this screen.")
-             : "Here is what that means, and how it gets finished."}`;
+  $("finishTitle").textContent = mine ? "Your card is half set up" : "This card is half set up";
+  $("finishSub").textContent = `Missing ${missing.join(" and ")}. ${
+    mine ? (one ? "It can be done on this screen." : "Both can be done on this screen.")
+         : "Here is what that means, and how it gets finished."}`;
 
   /* The ring is the card's own seal, and it shows the real fraction: a
      third of the way round for a note on its own, two thirds once there is
@@ -3003,7 +3006,7 @@ function finishPanel(parsed, stats, note){
      this identity — when it is, the panel below opens straight onto the work
      and a second button asking "is this yours?" would be asking a question it
      has already answered. */
-  own.hidden = onlyProof || mine;
+  own.hidden = mine;
 
   const openPanel=(scrollTo)=>{
     bar.classList.add("open");
@@ -3019,16 +3022,6 @@ function finishPanel(parsed, stats, note){
       bar.classList.remove("open");
       main.setAttribute("aria-expanded","false");
       $("diag").hidden=true;
-      return;
-    }
-    if(onlyProof){
-      /* Nothing to build — the prove bar above IS the step. Send them to it
-         rather than growing a second copy of the same button. */
-      const pb=$("provebar");
-      pb.hidden=false;
-      pb.scrollIntoView({behavior:calm?"auto":"smooth",block:"center"});
-      pb.classList.add("nudge");
-      setTimeout(()=>pb.classList.remove("nudge"),1400);
       return;
     }
     openPanel(null);
@@ -4208,19 +4201,47 @@ const pmsg = (t, cls="") => { $("pmsg").textContent = t; $("pmsg").className = "
 /* The finished state is set in ONE place, because it is four things —
    the class, the disabled attribute, the sub-line and the proof-link button —
    and the two callers had been keeping three of them in step by hand. */
-function markProven(done){
+/* `did` is optional: without it the line falls back to the general wording,
+   which is right for every caller that is not looking at a specific card. */
+function markProven(done, did){
   const bar=$("provebar");
   bar.classList.toggle("done", done);
   bar.disabled = done;
+  /* THE LINE SAYS WHAT PRESSING IT WILL COST YOU.
+     Three different things happen behind this button depending on what the
+     browser is holding — nothing, a locked backup, or an open key — and a
+     person deciding whether to press it wants to know which before they do,
+     not after a dialog has appeared. */
+  const held = did ? !!heldKeyFor(did) : false;
+  const locked = !held && did && savedIdentity?.did===did;
   $("pbSub").textContent = done
     ? "Signed with your key, on this device. Use “Copy proof link” to let anyone re-check it."
+    : held
+    ? "One tap. You are signed in as this identity, so there is nothing more to ask."
+    : locked
+    ? "One passphrase. The key is already in this browser — it never leaves it."
     : "Optional. Sign one line with your key — nothing leaves this device.";
   $("proofBtn").hidden = !done;
 }
 
+/**
+ * A key this browser is already holding OPEN for this DID, or null.
+ *
+ * Two places hold one: the session, which is what signing in means, and
+ * `openKey`, which is a vault unlocked earlier in this page's life. Either
+ * way the passphrase has already been given, and asking for it again is the
+ * page failing to remember something it plainly knows.
+ */
+function heldKeyFor(did){
+  const s=getSession();
+  if(s?.did===did && s.jwk) return s.jwk;
+  if(openKey && savedIdentity?.did===did) return openKey;
+  return null;
+}
+
 function setupProve(did){
   $("provebar").hidden=false;
-  markProven(!!lastStats?.proof);
+  markProven(!!lastStats?.proof, did);
 }
 
 const smsg=(t,cls="")=>{ const el=$("smsg"); el.textContent=t; el.className="pmsg "+cls; };
@@ -4264,9 +4285,34 @@ $("tabPass").addEventListener("click",()=>proveTab("pass"));
 $("tabSeed").addEventListener("click",()=>proveTab("seed"));
 $("pclose").addEventListener("click",()=>$("pmodal").close());
 
-$("provebar").addEventListener("click",()=>{
+$("provebar").addEventListener("click",async ()=>{
   const did=current?.did; if(!did) return;
   if(lastStats?.proof) return;          // already signed; nothing to ask for
+
+  /* SIGNED IN IS ALREADY UNLOCKED.
+     ────────────────────────────────────────────────────────────────────────
+     This used to open the passphrase dialog no matter what, including for
+     somebody signed in as the very identity on the card — whose key is
+     sitting decrypted in the session, put there by a passphrase they typed
+     minutes ago. Asking a second time is not extra safety; it is the page
+     admitting it did not look. So when a key for this DID is already open,
+     the button just signs.
+
+     If the signature does not verify the key is not really this identity's,
+     and the dialog opens as it would have — the honest routes are still
+     there, and nothing has been claimed. */
+  const held = heldKeyFor(did);
+  if(held){
+    const bar=$("provebar");
+    bar.disabled=true;
+    $("pbSub").textContent="Signing on this device…";
+    try{
+      if(await proveWith(held)){ toast("Proven — the card says so now", bar); return; }
+    }catch{}
+    bar.disabled=false;
+    markProven(false, did);
+  }
+
   const mine = savedIdentity?.did === did;
 
   $("ppw").value=""; $("pseed").value=""; $("pnp1").value=""; $("pnp2").value="";
