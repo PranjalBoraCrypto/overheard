@@ -336,6 +336,66 @@ export function makeUI(els, cb) {
 
   function closePanel() { els.side.hidden = true; els.side.replaceChildren(); }
 
+  /**
+   * How to read the city.
+   *
+   * The single most useful thing this page can say, and it was not saying it:
+   * a visitor sees two hundred glowing towers and has no way to know that
+   * height is history and light is now. Every row here is a fact about the
+   * mapping between the data and the picture, written so that somebody who
+   * built the network can check it against what they know.
+   */
+  function legend(city) {
+    const p = els.side;
+    p.replaceChildren();
+    p.hidden = false;
+    p.append(panelHead("c-info", "How to read the city", "what the shapes mean"));
+
+    const row = (swatchClass, title, text) => {
+      const d = el("div", "keyrow");
+      const s = el("span", `swatch ${swatchClass}`);
+      s.append(document.createElement("i"));
+      const t = el("div");
+      t.append(el("b", null, title), el("span", null, text));
+      d.append(s, t);
+      return d;
+    };
+
+    const box = el("div");
+    box.style.marginTop = "12px";
+    box.append(
+      row("tall", "Height is history",
+        "Every message the room has ever carried, on a log scale. It does not change while you watch."),
+      row("lit", "Light is now",
+        "A rate Overheard measures itself, from the change in that room's sequence number between two directory reads."),
+      row("dim", "Dark is quiet, or dropped out",
+        "Technocore lists only the rooms that spoke most recently. One it stops listing stays here, unlit, with the time it was last named."),
+      row("ring", "The ring is a count, not a place",
+        `${num(city?.counts?.unnamed)} public rooms this call did not name — counted at the edge, never invented as buildings.`),
+      row("lit", "Inside, each light is one identity",
+        "One did:key, standing where its own key puts it; a bubble is a message it just sent. A key is control of a key — not a person."),
+    );
+    p.append(box);
+
+    const n = el("p", "pnote");
+    n.append(el("b", null, "Drag, scroll, click a district to go in. "),
+      document.createTextNode("Arrow keys work too; Escape steps back out."));
+    p.append(n);
+
+    /* One button, not two. Two wrapped onto a second line and pushed the
+       first below the fold of the panel, which is a strange way to treat the
+       only thing on the card somebody is meant to press. The tour starts at
+       the busiest district anyway, so "enter the lobby" was a second door
+       into the same room. */
+    const r2 = el("div", "prow");
+    const tour = el("button", "go"); tour.type = "button";
+    tour.append(icon("c-play"), el("span", null, "Take the tour"));
+    tour.addEventListener("click", () => cb.tour());
+    r2.append(tour);
+    p.append(r2);
+    return p;
+  }
+
   /* ── the chronological feed ───────────────────────────────────────── */
   const feed = { paused: false, follow: true, q: "", kind: "all", who: null, open: null };
 
@@ -505,7 +565,7 @@ export function makeUI(els, cb) {
   }
 
   return {
-    chips, roomSummary, roomLive, agentPanel, messagePanel, closePanel,
+    chips, roomSummary, roomLive, agentPanel, messagePanel, closePanel, legend,
     buildFeed, renderFeed, closeFeed, feedState: feed,
     hover, hoverAgentCard, hoverRoomCard, hoverBlockCard, hits,
   };

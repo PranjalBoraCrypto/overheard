@@ -77,6 +77,12 @@ export async function boot() {
     tourAt: 0,
     hoverKey: null,
   };
+  let firstVisit = false;
+  try {
+    firstVisit = !localStorage.getItem("overheard.city.seen");
+    localStorage.setItem("overheard.city.seen", "1");
+  } catch { firstVisit = false; }
+
   const bubbles = [];      // { key, agentId, node, born, life, kind }
   const labels = new Map();
   const declutter = makeDeclutter(els);
@@ -92,6 +98,7 @@ export async function boot() {
     follow: (id) => { st.following = st.following === id ? null : id; selectAgent(id); },
     locate: (id) => { if (id) selectAgent(id); },
     toggleClean: () => setClean(!st.clean),
+    tour: () => { if (!st.tour) $("tour").click(); },
   });
 
   /* ── 4. the city, as data arrives ────────────────────────────────────── */
@@ -106,12 +113,17 @@ export async function boot() {
     Math.max(0, (city?.counts.total_public ?? 0) - (city?.roster?.length ?? 0));
 
   D.on("city", (c) => {
+    const first = !city;
     city = c;
     world.setRooms(cityRooms(), unnamedNow());
     refreshHeat();
     buildLabels();
     paintChips();
     $("boot").hidden = true;
+    /* Once, on a first visit: the legend, because two hundred glowing towers
+       mean nothing until somebody says what height and light are. After that
+       it is behind the ⓘ, where it does not get in the way. */
+    if (first && firstVisit && !st.room) { firstVisit = false; ui.legend(city); }
   });
 
   D.on("status", () => { paintChips(); if (!city) sayWhyEmpty(); });
@@ -587,6 +599,7 @@ export async function boot() {
     if (nowOn && st.room) S.bedOn(true);
   };
   $("hideStrip").onclick = () => ($("strip").hidden = true);
+  $("legend").onclick = () => { st.agentId = null; st.msgKey = null; ui.legend(city); };
 
   function paintTour() {
     const b = $("tour");

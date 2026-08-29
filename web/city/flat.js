@@ -87,6 +87,12 @@ export function mountFlat(container, els) {
   const heat = new Map();
   let agents = [];                      // [{ id, x, z, lit }]
   const agentById = new Map();
+  let firstVisit = false;
+  try {
+    firstVisit = !localStorage.getItem("overheard.city.seen");
+    localStorage.setItem("overheard.city.seen", "1");
+  } catch { firstVisit = false; }
+
   const pulses = [], beams = [], bubbles = [];
   const labels = new Map();
   const declutter = makeDeclutter(els);
@@ -114,6 +120,7 @@ export function mountFlat(container, els) {
     follow: (id) => { st.following = st.following === id ? null : id; selectAgent(id); },
     locate: (id) => { if (id) selectAgent(id); },
     toggleClean: () => setClean(!st.clean),
+    tour: () => { if (!st.tour) $("tour").click(); },
   });
 
   /* ── the directory arrives ───────────────────────────────────────────── */
@@ -124,6 +131,7 @@ export function mountFlat(container, els) {
     Math.max(0, (city?.counts.total_public ?? 0) - (city?.roster?.length ?? 0));
 
   D.on("city", (c) => {
+    const first = !city;
     city = c;
     rooms = []; byRoom.clear();
     for (const r of c.roster) {
@@ -143,6 +151,7 @@ export function mountFlat(container, els) {
     buildLabels();
     paintChips();
     $("boot").hidden = true;
+    if (first && firstVisit && !st.room) { firstVisit = false; ui.legend(city); }
     mark();
   });
 
@@ -939,6 +948,7 @@ export function mountFlat(container, els) {
     if (on && st.room) S.bedOn(true);
   };
   $("hideStrip").onclick = () => ($("strip").hidden = true);
+  $("legend").onclick = () => { st.agentId = null; st.msgKey = null; ui.legend(city); };
 
   function swapIcon(btn, id, title) {
     btn.replaceChildren();

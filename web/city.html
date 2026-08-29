@@ -87,7 +87,9 @@ button.chip:hover{border-color:rgba(95,235,255,.5);color:var(--txt)}
 #hits .none{padding:11px;color:var(--faint);font-size:12.5px}
 
 /* ── right: the live panel ───────────────────────────────────────────── */
-.tr{top:22px;right:22px;width:min(354px,calc(100vw - 44px));max-height:calc(100% - 44px);
+/* Stops above the controls, always. A panel that runs under the zoom buttons
+   puts its own footer — the one with the buttons on it — behind them. */
+.tr{top:22px;right:22px;width:min(354px,calc(100vw - 44px));max-height:calc(100% - 168px);
   display:flex;flex-direction:column}
 .pane{padding:16px 17px;overflow:auto;overscroll-behavior:contain}
 .phead{display:flex;align-items:center;gap:11px;margin-bottom:4px}
@@ -120,6 +122,20 @@ button.chip:hover{border-color:rgba(95,235,255,.5);color:var(--txt)}
 .tag.sig{color:var(--good);background:rgba(59,227,176,.1);border:1px solid rgba(59,227,176,.28)}
 .tag.self{color:var(--warn);background:rgba(242,179,61,.09);border:1px solid rgba(242,179,61,.28)}
 .pnote{margin-top:12px;font-size:11.5px;line-height:1.55;color:var(--faint)}
+/* the legend: one row per thing you can see on the map */
+.keyrow{display:flex;gap:11px;align-items:flex-start;padding:9px 0;border-top:1px solid rgba(0,180,215,.12)}
+.keyrow:first-of-type{border-top:0}
+.keyrow .swatch{width:30px;height:30px;flex:none;border-radius:9px;display:grid;place-items:center;
+  background:rgba(0,20,26,.7);border:1px solid rgba(0,180,215,.2)}
+.keyrow .swatch i{display:block;background:linear-gradient(180deg,var(--cy-hi),var(--cy));border-radius:2px}
+.keyrow .swatch.tall i{width:5px;height:19px}
+.keyrow .swatch.short i{width:5px;height:8px}
+.keyrow .swatch.lit i{width:11px;height:11px;border-radius:50%;box-shadow:0 0 9px var(--cy-hi)}
+.keyrow .swatch.dim i{width:11px;height:11px;border-radius:50%;background:#123c4e;box-shadow:none}
+.keyrow .swatch.ring{border-style:dashed;color:var(--faint)}
+.keyrow .swatch.ring i{width:14px;height:14px;background:none;border:1px dashed rgba(156,191,203,.7);border-radius:3px}
+.keyrow div b{display:block;font-size:12.5px;color:var(--txt);margin-bottom:1px}
+.keyrow div span{display:block;font-size:11.5px;line-height:1.5;color:var(--faint)}
 .pnote b{color:var(--dim)}
 .go{border:0;cursor:pointer;padding:11px 16px;border-radius:12px;font-weight:700;font-size:13.5px;
   background:linear-gradient(120deg,var(--cy-hi),var(--cy) 55%,#0093BC);color:#001016;
@@ -282,10 +298,10 @@ button.chip:hover{border-color:rgba(95,235,255,.5);color:var(--txt)}
   .chips{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;padding-bottom:2px}
   .chips::-webkit-scrollbar{display:none}
   .chip{flex:none}
-  .tr{top:auto;bottom:14px;right:14px;left:14px;width:auto;max-height:52%}
+  .tr{top:auto;bottom:104px;right:14px;left:14px;width:auto;max-height:48%}
   .bl{display:none}
   .br{bottom:14px;right:14px;top:auto}
-  #feedpane{left:14px;right:14px;top:auto;bottom:14px;height:70%;width:auto}
+  #feedpane{left:14px;right:14px;top:auto;bottom:104px;height:62%;width:auto}
   .ctl{width:42px;height:42px}
   .seg button{padding:9px 12px}
 }
@@ -360,6 +376,7 @@ button.chip:hover{border-color:rgba(95,235,255,.5);color:var(--txt)}
   <!-- controls -->
   <div class="hud br">
     <div class="card ctlrow">
+      <button class="ctl" id="legend" type="button" title="How to read the city" aria-label="How to read the city"><svg class="i"><use href="#c-info"/></svg></button>
       <button class="ctl" id="zoomOut" type="button" title="Zoom out" aria-label="Zoom out"><svg class="i"><use href="#c-minus"/></svg></button>
       <button class="ctl" id="zoomIn" type="button" title="Zoom in" aria-label="Zoom in"><svg class="i"><use href="#c-plus"/></svg></button>
       <button class="ctl" id="reset" type="button" title="Reset view" aria-label="Reset view"><svg class="i"><use href="#c-home"/></svg></button>
