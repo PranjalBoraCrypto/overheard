@@ -334,7 +334,7 @@ export function mountFlat(container, els) {
     const x = clientX - r.left, y = clientY - r.top;
     if (st.room) {
       for (const a of agents) {
-        if (Math.hypot(SX(a.x) - x, SY(a.z) - y) < 13) return { type: "agent", id: a.id };
+        if (Math.hypot(SX(a.x) - x, SY(a.z) - y) < 16) return { type: "agent", id: a.id };
       }
     }
     for (const d of DISTRICTS) {
@@ -390,7 +390,7 @@ export function mountFlat(container, els) {
     st.room = name; st.agentId = null; st.msgKey = null; st.following = null;
     clearBubbles();
     const p = positionOf(name) || { x: 0, z: 0 };
-    focus(p.x, p.z, fit * 6.2, reduced ? 0 : 1000);
+    focus(p.x, p.z, fit * 3.9, reduced ? 0 : 1000);
     D.enterRoom(name);
     S.arrive(); S.bedOn(true);
     $("strip").hidden = st.clean;
@@ -423,7 +423,7 @@ export function mountFlat(container, els) {
     const a = r?.agents.find((x) => x.id === id);
     if (!a) return;
     const pos = agentById.get(id);
-    if (pos) focus(pos.x, pos.z, Math.max(view.s, fit * 6.2), reduced ? 0 : 600);
+    if (pos) focus(pos.x, pos.z, Math.max(view.s, fit * 5.2), reduced ? 0 : 600);
     lightAgent(id);
     S.pick();
     ui.agentPanel(a, r, st.following === id);
@@ -776,7 +776,9 @@ export function mountFlat(container, els) {
       const x = SX(p.x), y = SY(p.z);
       if (x < -12 || x > W + 12 || y < -12 || y > H + 12) continue;
       const h = heat.get(p.room) ?? 0;
-      const rr = Math.max(1.4, p.rad * s);
+      /* Capped in pixels, not just in world units: zoomed right in, a room
+         with eight million messages became a sixty-pixel blob. */
+      const rr = Math.min(15, Math.max(1.4, p.rad * s));
       ctx.beginPath(); ctx.arc(x, y, rr, 0, TAU);
       ctx.fillStyle = h > 0.5 ? CYH(0.9 * dim) : h > 0.15 ? CY(0.75 * dim) : rgba(20, 60, 78, 0.95 * dim);
       ctx.fill();
@@ -800,15 +802,23 @@ export function mountFlat(container, els) {
       ctx.lineWidth = here ? 2 : 1.2;
       ctx.strokeStyle = here ? C.cyHi : CY(0.35 + h * 0.4);
       ctx.stroke();
-      glyph(d.kind, x, y, r * 0.52, here ? C.cyHi : CY(0.55 + h * 0.35));
+      glyph(d.kind, x, y, r * 0.52, here ? CY(0.30) : CY(0.55 + h * 0.35));
     }
 
     /* the room you are standing in */
     if (st.room) {
       const p = positionOf(st.room) || { x: 0, z: 0 };
       const x = SX(p.x), y = SY(p.z);
-      ctx.beginPath(); ctx.arc(x, y, 26 * s, 0, TAU);
-      ctx.strokeStyle = CY(0.35); ctx.lineWidth = 1; ctx.stroke();
+      /* The floor everybody in the room is standing on. Wide enough to hold
+         the ring the identities stand in — drawn tighter than they stand,
+         it read as if they were all outside the room. */
+      const floor = 32 * s;
+      const fg = ctx.createRadialGradient(x, y, floor * 0.2, x, y, floor);
+      fg.addColorStop(0, CY(0.07));
+      fg.addColorStop(1, CY(0));
+      ctx.beginPath(); ctx.arc(x, y, floor, 0, TAU);
+      ctx.fillStyle = fg; ctx.fill();
+      ctx.strokeStyle = CY(0.4); ctx.lineWidth = 1.2; ctx.stroke();
 
       for (const b of beams) {
         const k = b.t / b.life;
@@ -828,16 +838,23 @@ export function mountFlat(container, els) {
         ctx.strokeStyle = CYH(0.55 * (1 - k)); ctx.lineWidth = 1.5; ctx.stroke();
       }
 
+      /* The identities. Drawn last and drawn large: they are the reason
+         somebody walked in here, and at four pixels they were furniture. */
       for (const a of agents) {
         const ax = SX(a.x), ay = SY(a.z);
         const sel = st.agentId === a.id;
-        ctx.beginPath(); ctx.arc(ax, ay, 5 + a.lit * 2.5, 0, TAU);
+        const g = ctx.createRadialGradient(ax, ay, 1, ax, ay, 22 + a.lit * 10);
+        g.addColorStop(0, CYH(0.30 + a.lit * 0.4));
+        g.addColorStop(1, CY(0));
+        ctx.beginPath(); ctx.arc(ax, ay, 22 + a.lit * 10, 0, TAU);
+        ctx.fillStyle = g; ctx.fill();
+        ctx.beginPath(); ctx.arc(ax, ay, 7 + a.lit * 3, 0, TAU);
         ctx.fillStyle = a.lit > 0.35 ? C.cyHi : a.signed ? C.cy : C.faint;
         ctx.fill();
         if (sel || a.lit > 0.05) {
-          ctx.beginPath(); ctx.arc(ax, ay, 9 + a.lit * 4, 0, TAU);
-          ctx.strokeStyle = sel ? C.cyHi : CYH(0.35 * a.lit);
-          ctx.lineWidth = sel ? 2 : 1;
+          ctx.beginPath(); ctx.arc(ax, ay, 13 + a.lit * 5, 0, TAU);
+          ctx.strokeStyle = sel ? C.cyHi : CYH(0.4 * a.lit);
+          ctx.lineWidth = sel ? 2.4 : 1.2;
           ctx.stroke();
         }
       }

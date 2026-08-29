@@ -157,7 +157,9 @@ export function makeUI(els, cb) {
     row.append(enter);
     const out = document.createElement("a");
     out.className = "go ghost";
-    out.href = `/rooms.html#${encodeURIComponent(info.room)}`;
+    /* The Rooms page selects with ?room=, not a hash — a link that lands on
+       the page and then shows a different room is worse than no link. */
+    out.href = `/rooms.html?room=${encodeURIComponent(info.room)}`;
     out.append(icon("c-out"), el("span", null, "Open in Rooms"));
     row.append(out);
     p.append(row);
