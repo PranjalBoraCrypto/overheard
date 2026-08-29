@@ -139,6 +139,10 @@ body.inroom .roomonly{display:block}
    is the clearest possible way to tell somebody they have not really gone
    anywhere. The overlay keeps its bubbles — those are the room's. */
 body.inroom .lab{display:none!important}
+/* .roomonly is display:flex when in a room; a .ctl is a grid button, so it
+   needs its own rule or it comes back as a flex box and loses its centring. */
+.ctl.roomonly{display:none}
+body.inroom .ctl.roomonly{display:grid}
 /* Centred over the column rather than tucked into its corner. It is the one
    control somebody standing in a room reaches for without looking, and a
    thing you reach for without looking should not be in a corner. */
@@ -283,12 +287,13 @@ button.chip:hover{border-color:rgba(95,235,255,.5);color:var(--txt)}
    left column reads as one column rather than as two cards that happen to be
    on the same side.
 
-   INFORMATION DESIGN, NOT A LIST. Each row carries four things at four
-   different weights: the room (the identifier, so it reads first), the rate
-   (the number being ranked on, tabular so the digits line up down the
-   column), a bar (the same number as a shape, because a shape is what makes
-   a ranking legible without reading any of the numbers), and the newest line
-   (the only actual words, clamped to two lines and quietest of all). */
+   INFORMATION DESIGN, NOT A LIST, AND AS FEW WORDS AS THE FACTS ALLOW.
+   Each row carries four things at four different weights: a glyph for what
+   the room is doing, the room's name, the measured rate (tabular, and its
+   own cell is the bar), and the newest line. The unit is written once in the
+   column head rather than four times down the column, and the provenance
+   note that used to sit under the rail is now the head's tooltip — it says
+   the same thing and costs no height. */
 /* BELOW THE HEADLINE COLUMN, DELIBERATELY. The rail and the search box share
    the left edge, and on a short window the search results drop down into the
    space the rail is standing in. Both are .hud, so at the same z-index the
@@ -296,40 +301,85 @@ button.chip:hover{border-color:rgba(95,235,255,.5);color:var(--txt)}
    the search — caught by a probe that could not click its own search result.
    The rail is ambient; the thing somebody is typing into is not. */
 .bl2{bottom:22px;left:64px;right:auto;width:min(412px,calc(100vw - 128px));z-index:3}
-.rail{padding:11px 13px 9px}
-.railtop{display:flex;align-items:center;gap:9px;font-family:var(--mono);font-size:10px;
-  letter-spacing:.14em;text-transform:uppercase;color:var(--faint);margin-bottom:9px}
-.railtop .live{color:var(--good)}
+.rail{padding:10px 11px 10px;display:flex;flex-direction:column}
+.railtop{display:flex;align-items:center;gap:8px;font-family:var(--mono);font-size:9.5px;
+  letter-spacing:.15em;text-transform:uppercase;color:var(--faint);
+  padding:0 6px 8px;margin-bottom:2px;border-bottom:1px solid rgba(0,180,215,.10)}
+.railtop .i{width:13px;height:13px;color:var(--cy);opacity:.85}
+.railtop .t{color:var(--dim)}
+/* Sits over the rate column, which is where the digits it describes are. */
+.railtop .u{margin-left:auto;letter-spacing:.1em;color:var(--faint);opacity:.75}
+/* The state, as a dot and one word rather than a sentence. It pulses only
+   while it is live, so a glance at the corner of the eye answers "is this
+   moving?" without reading anything. */
+.railtop .live{display:inline-flex;align-items:center;gap:6px;color:var(--good)}
+.railtop .live::before{content:"";width:5px;height:5px;border-radius:50%;background:currentColor;
+  box-shadow:0 0 7px currentColor;animation:beat 2.4s var(--ease) infinite}
 .railtop .live.stale{color:var(--warn)}
-.railrow{display:grid;grid-template-columns:1fr auto;gap:1px 10px;width:100%;
-  padding:6px 8px 7px;border-radius:10px;border:1px solid transparent;background:none;
-  color:inherit;text-align:left;cursor:pointer;transition:background .16s var(--ease),border-color .16s var(--ease)}
-.railrow:hover,.railrow:focus-visible{background:rgba(0,180,215,.08);border-color:rgba(0,180,215,.26)}
-.railrow .nm{font-family:var(--mono);font-size:12px;color:var(--txt);
+.railtop .live.stale::before{animation:none}
+
+/* THE ROW. Four columns of information at four weights, on two lines:
+     glyph │ room ……… number
+     glyph │ newest line ……… sparkline
+   The number's own cell carries the rate as a background fill, so the
+   ranking is legible as a shape without spending a row on a separate bar. */
+.railrow{display:grid;grid-template-columns:22px 1fr auto;grid-template-rows:auto auto;
+  align-items:center;gap:1px 9px;width:100%;
+  padding:6px 6px 7px;border-radius:10px;border:1px solid transparent;background:none;
+  color:inherit;text-align:left;cursor:pointer;
+  transition:background .16s var(--ease),border-color .16s var(--ease)}
+.railrow:hover,.railrow:focus-visible{background:rgba(0,180,215,.07);border-color:rgba(0,180,215,.22)}
+.railrow + .railrow{margin-top:1px}
+/* Arriving in the rail for the first time. */
+.railrow.enter{animation:railin .42s cubic-bezier(.16,1.2,.3,1) both}
+@keyframes railin{from{opacity:0;transform:translateX(-10px)}}
+
+/* The glyph: what this room is doing, in its own colour. */
+.railrow .g{grid-row:1/3;width:22px;height:22px;border-radius:7px;display:grid;place-items:center;
+  color:var(--cy);background:rgba(0,180,215,.10);
+  transition:color .25s var(--ease),background .25s var(--ease)}
+.railrow .g .i{width:13px;height:13px}
+.railrow .g.k-job{color:#00B4D7;background:rgba(0,180,215,.12)}
+.railrow .g.k-claim{color:#5FEBFF;background:rgba(95,235,255,.12)}
+.railrow .g.k-result{color:#3BE3B0;background:rgba(59,227,176,.12)}
+.railrow .g.k-attest{color:#F2B33D;background:rgba(242,179,61,.12)}
+.railrow .g.k-witness{color:#9CBFCB;background:rgba(156,191,203,.12)}
+.railrow .g.k-hello{color:#7FD4E8;background:rgba(127,212,232,.12)}
+.railrow .g.k-message{color:var(--faint);background:rgba(95,133,147,.10)}
+
+.railrow .nm{grid-column:2;grid-row:1;font-family:var(--mono);font-size:12px;color:var(--txt);
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.railrow .rt{font-family:var(--mono);font-size:11px;color:var(--cy-hi);
-  font-variant-numeric:tabular-nums;white-space:nowrap}
-.railrow .bar{grid-column:1/-1;height:2px;border-radius:2px;background:rgba(0,180,215,.10);
-  overflow:hidden;margin-top:6px}
-.railrow .bar i{display:block;height:100%;border-radius:2px;
-  background:linear-gradient(90deg,var(--cy),var(--cy-hi));
-  transition:width .5s var(--ease)}
+/* THE NUMBER IS ALSO THE BAR. --fill is the rate against the busiest room in
+   the rail, painted behind the digits — so the ranking has a shape without
+   the row spending a whole line on one. */
+.railrow .rt{grid-column:3;grid-row:1;position:relative;
+  font-family:var(--mono);font-size:12px;color:var(--cy-hi);font-weight:500;
+  font-variant-numeric:tabular-nums;white-space:nowrap;
+  padding:2px 7px;border-radius:6px;overflow:hidden;
+  background:linear-gradient(90deg,rgba(0,180,215,.22) var(--fill,0%),rgba(0,180,215,.05) var(--fill,0%));
+  transition:background .6s var(--ease)}
+.railrow .rt.tick{animation:railtick .45s var(--ease)}
+@keyframes railtick{0%{transform:translateY(-3px);opacity:.35}100%{transform:none;opacity:1}}
+
 /* ONE LINE. This is a peek, not a reader: it exists so somebody can tell at a
    glance what kind of conversation a room is having before deciding to go in,
-   and the full message is two clicks away in that room's own feed. Two lines
-   made the rail tall enough to reach the search box above it. */
-.railrow .ln{grid-column:1/-1;font-size:11.5px;line-height:1.4;color:var(--dim);margin-top:3px;
-  display:-webkit-box;-webkit-line-clamp:1;-webkit-box-orient:vertical;overflow:hidden;
-  word-break:break-word}
-.railrow .ln .k{font-family:var(--mono);font-size:9px;letter-spacing:.1em;text-transform:uppercase;
-  color:var(--cy);margin-right:6px}
-.railrow.fresh{animation:railpop .5s var(--ease)}
-@keyframes railpop{from{background:rgba(0,180,215,.20)}}
-.railnote{font-family:var(--mono);font-size:9.5px;letter-spacing:.05em;color:var(--faint);
-  margin-top:7px;padding:0 8px}
+   and the full message is one click away in that room's own feed. */
+.railrow .ln{grid-column:2;grid-row:2;font-size:11px;line-height:1.35;color:var(--faint);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.railrow:hover .ln{color:var(--dim)}
+.railrow .sp{grid-column:3;grid-row:2;width:52px;height:15px;display:block;overflow:hidden;margin-top:3px}
+.railrow .sp .spark{width:52px;height:15px;display:block}
+.railrow .sp .sl{fill:none;stroke:var(--cy);stroke-width:1.3;stroke-linejoin:round;stroke-linecap:round;
+  opacity:.85;vector-effect:non-scaling-stroke}
+.railrow .sp .sa{fill:rgba(0,180,215,.13);stroke:none}
+.railrow .sp .sd{fill:var(--cy-hi)}
+/* A room whose counter moved in the reading just drawn. */
+.railrow.hit{animation:railhit .7s var(--ease)}
+@keyframes railhit{0%{background:rgba(95,235,255,.16)}100%{background:transparent}}
 @media (prefers-reduced-motion:reduce){
-  .railrow.fresh{animation:none}
-  .railrow .bar i{transition:none}
+  .railrow.hit,.railrow.enter,.railrow .rt.tick{animation:none}
+  .railrow .rt{transition:none}
+  .railtop .live::before{animation:none}
 }
 @media (max-width:900px){
   .bl2{left:22px;width:calc(100vw - 44px)}
@@ -379,24 +429,75 @@ button.chip:hover{border-color:rgba(95,235,255,.5);color:var(--txt)}
 /* speech bubbles: HTML, not 3D text. A bubble is a rounded rectangle with
    two lines in it, and doing that as geometry costs a texture upload per
    message for a worse result. */
-.bub{position:absolute;transform:translate(-50%,-100%);max-width:230px;pointer-events:auto;
-  padding:8px 11px;border-radius:13px 13px 13px 4px;font-size:12.5px;line-height:1.42;
-  color:var(--txt);background:rgba(3,20,28,.92);border:1px solid rgba(0,180,215,.34);
-  backdrop-filter:blur(7px);cursor:pointer;
-  box-shadow:0 14px 30px -18px rgba(0,0,0,.95);
-  animation:bubin .3s var(--ease) both}
-@keyframes bubin{from{opacity:0;transform:translate(-50%,-90%) scale(.94)}}
-.bub.out{animation:bubout .35s var(--ease) forwards}
-@keyframes bubout{to{opacity:0;transform:translate(-50%,-112%) scale(.97)}}
-.bub .w{display:block;font-family:var(--mono);font-size:9.5px;letter-spacing:.08em;color:var(--cy-hi);
-  margin-bottom:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.bub .t{display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
-.bub.job{border-color:rgba(0,180,215,.5)}
-.bub.result{border-color:rgba(59,227,176,.45)}
-.bub.attest{border-color:rgba(242,179,61,.45)}
-.bub.witness{border-color:rgba(156,191,203,.4)}
-.bub.hello{border-color:rgba(0,180,215,.34)}
-.bub.sel{border-color:var(--cy-hi);box-shadow:0 0 0 3px rgba(0,180,215,.18),0 14px 30px -18px #000}
+/* ── speech bubbles ────────────────────────────────────────────────────────
+   THEY POINT AT SOMEBODY. Six of these floating over a plaza of identical
+   figures, each a plain rectangle, is a wall of text with no author — you
+   cannot tell who said what without clicking. Every bubble now has a tail
+   running down to the figure that spoke, and a colour band down its leading
+   edge carrying the kind, so a plaza reads as a conversation rather than as
+   a pile of notes.
+
+   The tail is a hairline plus a dot rather than the usual CSS triangle: a
+   triangle only works when the bubble sits directly above its speaker, and
+   these are placed by a declutter pass that moves them wherever there is
+   room. A line that stretches to reach still points at the right figure. */
+/* Position outside, motion inside — same split, same reason as .tally. */
+.bub{--k:var(--cy);position:absolute;transform:translate(-50%,-100%);
+  max-width:250px;pointer-events:auto;cursor:pointer;will-change:transform,opacity}
+.bub .box{position:relative;
+  padding:8px 12px 9px 13px;border-radius:14px;font-size:12.5px;line-height:1.45;
+  color:var(--txt);background:linear-gradient(rgba(4,22,30,.94),rgba(3,16,22,.95));
+  border:1px solid color-mix(in srgb,var(--k) 42%,transparent);
+  backdrop-filter:blur(8px);
+  box-shadow:0 16px 34px -20px rgba(0,0,0,.95),0 0 0 1px rgba(0,0,0,.25);
+  transform-origin:22px 100%;
+  animation:bubin .42s cubic-bezier(.16,1.24,.3,1) both}
+/* The leading edge, in the kind's colour. One band does the work six border
+   colours were failing to do, because a 1px border at 40% opacity is not a
+   signal anybody reads across a moving scene. */
+.bub .box::before{content:"";position:absolute;left:0;top:9px;bottom:9px;width:3px;border-radius:3px;
+  background:var(--k);box-shadow:0 0 10px color-mix(in srgb,var(--k) 60%,transparent)}
+/* The tail down to the speaker. Height is set per frame from the projection,
+   because the declutter pass moves a bubble wherever there is room and a
+   fixed CSS triangle would end up pointing at whoever is underneath. */
+.bub .tail{position:absolute;left:50%;top:100%;width:1px;height:0;pointer-events:none;
+  transform-origin:0 0;
+  background:linear-gradient(color-mix(in srgb,var(--k) 70%,transparent),transparent)}
+.bub .tail::after{content:"";position:absolute;left:-2px;bottom:-2px;width:5px;height:5px;
+  border-radius:50%;background:var(--k);opacity:.75;
+  box-shadow:0 0 9px color-mix(in srgb,var(--k) 75%,transparent)}
+@keyframes bubin{
+  0%{opacity:0;transform:translateY(14px) scale(.88)}
+  70%{opacity:1;transform:translateY(-2px) scale(1.02)}
+  100%{opacity:1;transform:none}
+}
+.bub .box.out{animation:bubout .35s var(--ease) forwards}
+@keyframes bubout{to{opacity:0;transform:translateY(-12px) scale(.97)}}
+.bub .w{display:flex;align-items:center;gap:7px;margin-bottom:4px;
+  font-family:var(--mono);font-size:9.5px;letter-spacing:.06em;
+  white-space:nowrap;overflow:hidden}
+.bub .w b{font-weight:500;color:var(--cy-hi);overflow:hidden;text-overflow:ellipsis}
+.bub .w .k{font-style:normal;text-transform:uppercase;letter-spacing:.11em;font-size:8.5px;
+  color:var(--k);padding:2px 6px;border-radius:5px;flex:none;
+  background:color-mix(in srgb,var(--k) 15%,transparent)}
+/* Pushed to the far end and deliberately understated. It is a fact about the
+   write, not a badge — and Overheard has not checked the signature itself. */
+.bub .w .sg{font-style:normal;margin-left:auto;font-size:8.5px;letter-spacing:.1em;
+  text-transform:uppercase;color:var(--faint);flex:none}
+.bub .t{display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;
+  word-break:break-word}
+.bub.job{--k:#00B4D7}
+.bub.claim{--k:#5FEBFF}
+.bub.result{--k:#3BE3B0}
+.bub.attest{--k:#F2B33D}
+.bub.witness{--k:#9CBFCB}
+.bub.hello{--k:#7FD4E8}
+.bub.message{--k:#3E7E95}
+.bub.sel .box{box-shadow:0 0 0 3px color-mix(in srgb,var(--k) 22%,transparent),0 16px 34px -20px #000}
+.bub.sel .t{-webkit-line-clamp:8}
+@media (prefers-reduced-motion:reduce){
+  .bub .box,.bub .box.out{animation:none}
+}
 
 /* ── the counts over the buildings ─────────────────────────────────────────
    A number that rises off a roof and fades. It is deliberately NOT a bubble:
@@ -405,25 +506,63 @@ button.chip:hover{border-color:rgba(95,235,255,.5);color:var(--txt)}
    small and quiet — the number is the thing being read at a glance, and the
    name is only there so you know which building it belongs to when two are
    close together. */
-.tally{position:absolute;pointer-events:auto;cursor:pointer;text-align:center;
-  transform:translate(-50%,-100%);will-change:transform,opacity;
-  padding:5px 10px 4px;border-radius:11px;
-  background:rgba(3,20,28,.82);border:1px solid rgba(0,180,215,.34);
+/* THE OUTER ELEMENT IS POSITION, THE INNER ONE IS MOTION, and they must stay
+   separate. A CSS animation's transform overrides an inline one while it
+   runs, and a keyframe list with a 100% stop keeps overriding it after it
+   ends — so a count placed over its building snapped to the page's top-left
+   corner the instant its pop finished. Position is written from JS on
+   .tally; every animation lives on .tally .box and only ever touches scale
+   and a few pixels of its own. */
+.tally{position:absolute;pointer-events:auto;cursor:pointer;
+  transform:translate(-50%,-100%);will-change:transform,opacity}
+.tally .box{text-align:center;padding:5px 10px 4px;border-radius:11px;
+  background:rgba(2,15,21,.93);border:1px solid rgba(95,235,255,.42);
   backdrop-filter:blur(6px);box-shadow:0 12px 26px -18px rgba(0,0,0,.95);
-  animation:tallyin .26s var(--ease) both}
-@keyframes tallyin{from{opacity:0;transform:translate(-50%,-88%) scale(.86)}}
-.tally.out{animation:tallyout .3s var(--ease) forwards}
-@keyframes tallyout{to{opacity:0;transform:translate(-50%,-118%) scale(.96)}}
+  transform-origin:50% 100%;
+  animation:tallyin .38s cubic-bezier(.16,1.3,.3,1) both}
+/* Overshoot on the way in. A count that scales smoothly to 1 reads as a
+   tooltip appearing; one that goes slightly past and settles reads as
+   something that was thrown and stopped, which is the whole point. */
+@keyframes tallyin{
+  0%{opacity:0;transform:translateY(16px) scale(.5)}
+  60%{opacity:1;transform:translateY(-3px) scale(1.08)}
+  100%{opacity:1;transform:none}
+}
+/* Struck again while it is still up: a kick, not a silent relabel. */
+.tally .box.bump b{animation:tallybump .32s cubic-bezier(.16,1.4,.3,1)}
+@keyframes tallybump{0%{transform:scale(1)}38%{transform:scale(1.32)}100%{transform:scale(1)}}
+.tally .box.out{animation:tallyout .3s var(--ease) forwards}
+@keyframes tallyout{to{opacity:0;transform:translateY(-14px) scale(.96)}}
 .tally b{display:block;font-family:var(--mono);font-size:14px;font-weight:600;line-height:1.1;
   font-variant-numeric:tabular-nums;color:var(--cy-hi);text-shadow:0 0 14px rgba(95,235,255,.5)}
 .tally span{display:block;font-family:var(--mono);font-size:8.5px;letter-spacing:.1em;
-  text-transform:uppercase;color:var(--faint);margin-top:1px;
+  text-transform:uppercase;color:var(--dim);margin-top:1px;
+  max-width:13ch;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* A room going well past its own normal. The only place this page shouts. */
+.tally.hot .box{border-color:rgba(242,179,61,.55);background:rgba(28,19,4,.86)}
+.tally.hot b{color:var(--warn);text-shadow:0 0 16px rgba(242,179,61,.55)}
+/* THE LEADER, down to the roof this number came off. Brightest at the label
+   and gone by the building, so it reads as a tether rather than as a line
+   drawn on the city — and it ends in a small dot ON the roof, which is the
+   pixel that actually answers "which one?". */
+.tally .lead{position:absolute;left:50%;top:100%;width:1px;height:0;
+  transform:translateX(-50%);pointer-events:none;
+  background:linear-gradient(rgba(95,235,255,.75),rgba(95,235,255,0))}
+.tally .lead::after{content:"";position:absolute;left:50%;bottom:-2px;
+  width:5px;height:5px;margin-left:-2.5px;border-radius:50%;
+  background:var(--cy-hi);opacity:.5;box-shadow:0 0 8px var(--cy-hi)}
+.tally.hot .lead{background:linear-gradient(rgba(242,179,61,.75),rgba(242,179,61,0))}
+.tally.hot .lead::after{background:var(--warn);box-shadow:0 0 8px var(--warn)}
+.tally b{display:block;font-family:var(--mono);font-size:14px;font-weight:600;line-height:1.1;
+  font-variant-numeric:tabular-nums;color:var(--cy-hi);text-shadow:0 0 14px rgba(95,235,255,.5)}
+.tally span{display:block;font-family:var(--mono);font-size:8.5px;letter-spacing:.1em;
+  text-transform:uppercase;color:var(--dim);margin-top:1px;
   max-width:13ch;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 /* A room going well past its own normal. The only place this page shouts. */
 .tally.hot{border-color:rgba(242,179,61,.55);background:rgba(28,19,4,.82)}
 .tally.hot b{color:var(--warn);text-shadow:0 0 16px rgba(242,179,61,.55)}
 @media (prefers-reduced-motion:reduce){
-  .tally,.tally.out{animation:none}
+  .tally .box,.tally .box.out,.tally .box.bump b{animation:none}
 }
 
 /* hover card */
@@ -549,6 +688,22 @@ button.chip:hover{border-color:rgba(95,235,255,.5);color:var(--txt)}
   <symbol id="c-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.6"/><path d="M12 11v5.2M12 7.9v.1"/></symbol>
   <symbol id="c-out" viewBox="0 0 24 24"><path d="M14 4h6v6"/><path d="M20 4 11.5 12.5"/><path d="M18 14.5V19a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h4.5"/></symbol>
   <symbol id="c-pin" viewBox="0 0 24 24"><path d="M12 21s7-6.3 7-11a7 7 0 1 0-14 0c0 4.7 7 11 7 11z"/><circle cx="12" cy="10" r="2.6"/></symbol>
+  <!-- ── what a room is DOING, as a glyph ──────────────────────────────────
+       One per kibble verb, so the rail can say "this room is posting work"
+       or "this room is attesting" in the space a word would have taken. They
+       are drawn from the same 24-grid and the same 1.9 stroke as the rest of
+       the set, so a row of them reads as one family rather than as clip art.
+       Nothing here is a category Overheard invented: every one of these is a
+       verb the published kibble spec defines. -->
+  <symbol id="c-job" viewBox="0 0 24 24"><rect x="3.2" y="7.2" width="17.6" height="12.6" rx="2.2"/><path d="M8.6 7.2V5.6a1.6 1.6 0 0 1 1.6-1.6h3.6a1.6 1.6 0 0 1 1.6 1.6v1.6"/><path d="M3.2 12.4h17.6"/></symbol>
+  <symbol id="c-claim" viewBox="0 0 24 24"><path d="M12 3.4 6.6 8.8a4.6 4.6 0 0 0 0 6.5l2.2 2.2a4.6 4.6 0 0 0 6.5 0l1.4-1.4"/><path d="m9.4 12.6 5.2-5.2a2.9 2.9 0 1 1 4.1 4.1L16 14.2"/></symbol>
+  <symbol id="c-result" viewBox="0 0 24 24"><path d="M20.4 6.6 10 17 4.4 11.4"/></symbol>
+  <symbol id="c-attest" viewBox="0 0 24 24"><path d="M12 3.2 4.6 6.2v5.5c0 4.4 3.1 7.9 7.4 9.1 4.3-1.2 7.4-4.7 7.4-9.1V6.2z"/><path d="m9.2 11.9 2 2 3.6-3.9"/></symbol>
+  <symbol id="c-witness" viewBox="0 0 24 24"><path d="M2.6 12S6.4 5.6 12 5.6 21.4 12 21.4 12 17.6 18.4 12 18.4 2.6 12 2.6 12z"/><circle cx="12" cy="12" r="2.7"/></symbol>
+  <symbol id="c-hello" viewBox="0 0 24 24"><path d="M20.4 13.6a7 7 0 0 1-7 7H4.2l2-2.6a7 7 0 0 1 .6-9.9 7 7 0 0 1 13.6 5.5z"/></symbol>
+  <symbol id="c-msg" viewBox="0 0 24 24"><path d="M20.4 15.2a2.2 2.2 0 0 1-2.2 2.2H7.4L3.6 21V5.8a2.2 2.2 0 0 1 2.2-2.2h12.4a2.2 2.2 0 0 1 2.2 2.2z"/></symbol>
+  <!-- The rail's own mark: a rising trace. -->
+  <symbol id="c-pulse" viewBox="0 0 24 24"><path d="M2.6 13.4h4L9 7.2l3.4 10.4 2.4-5.6h6.6"/></symbol>
 </defs></svg>
 
 <div class="sky" aria-hidden="true"><i></i><i></i></div>
@@ -627,7 +782,15 @@ button.chip:hover{border-color:rgba(95,235,255,.5);color:var(--txt)}
      tells you where to look by lighting up rather than by dragging you
      there. The busiest-now rail does the same job while leaving the camera
      in the visitor's hands. -->
-      <button class="ctl" id="bubbles" type="button" title="Hide speech bubbles" aria-label="Hide speech bubbles"><svg class="i"><use href="#c-eye"/></svg></button>
+      <!-- SPEECH BUBBLES, AND ONLY WHERE THERE ARE ANY.
+           This was an eye, shown everywhere, and the question it earned was
+           "what is that for?" — a fair question, because on the city page it
+           did nothing at all: bubbles are raised by messages arriving in the
+           room you are standing in, so out here there are none to hide. An
+           eye also says "visibility" in general rather than this one thing.
+           It is a speech balloon now, and it appears when you walk into a
+           room, which is the moment its purpose is self-evident. -->
+      <button class="ctl roomonly" id="bubbles" type="button" title="Hide what people are saying" aria-label="Hide speech bubbles"><svg class="i"><use href="#c-msg"/></svg></button>
       <!-- Clean view got its own control when the fps figure stopped being a
            button. It was the only way in, and a measurement that hides your
            entire interface when you click it to read it is a trap, not a

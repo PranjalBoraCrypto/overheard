@@ -108,6 +108,17 @@ export function makeLife(THREE, opts) {
 
   const dummy = new THREE.Object3D();
   const HIDDEN = new THREE.Matrix4().makeScale(0, 0, 0);
+  /* Allocated once. These are touched every frame for every live signal, and
+     three vectors per spark per frame is how a scene starts stuttering on the
+     garbage collector rather than on the GPU. */
+  const UP = new THREE.Vector3(0, 1, 0);
+  const V = new THREE.Vector3();
+  /* Not 9.81. The plate is a couple of hundred units across and a building is
+     twenty tall, so "realistic" gravity in these units drops a light back on
+     the roof before the eye has found it. This is tuned so a launch hangs for
+     roughly a second, which is the interval a person can actually follow from
+     origin to apex. Physics is the shape; the constant is a choice. */
+  const GRAVITY = 46;
 
   /* ── the shared look ───────────────────────────────────────────────────
      Two materials for the whole layer. Ambient is dim and cool; signals are
@@ -267,18 +278,54 @@ export function makeLife(THREE, opts) {
     s.born = clock;
     s.size = 0.7 + Math.min(2.2, weight) * 0.55;
     s.x0 = a.x; s.z0 = a.z; s.y0 = a.y + 1.5;
+    s.g = GRAVITY;
 
+    /* ── LAUNCHED, NOT TWEENED ──────────────────────────────────────────
+       This used to be an eased interpolation along a sine arc, and the
+       complaint it earned was exactly right: it looked basic, and you could
+       not tell which building a light had come from. Both faults are the
+       same fault. An eased tween has no launch — it is fastest in the
+       middle and slowest at both ends, so a light appears to fade IN near
+       its origin instead of being thrown out of it, and the one frame that
+       would tell you where it started is the one frame it is dimmest and
+       slowest.
+
+       A ballistic launch has the opposite shape and it is the shape the eye
+       reads as a source: maximum speed at the muzzle, decelerating under
+       gravity, hanging at the apex. The first thing you see is the fastest
+       thing, and it is standing on a roof.
+
+       Nothing about the physics is a claim about the data. The magnitude
+       still comes from the delta and the destination still only exists when
+       two rooms are genuinely related — gravity only decides the path
+       between the two facts. */
     if (b && travel) {
-      s.x1 = b.x; s.z1 = b.z; s.y1 = b.y + 1.5;
-      const d = Math.hypot(b.x - a.x, b.z - a.z);
-      s.arc = 12 + d * 0.22;
-      s.life = Math.max(0.55, Math.min(2.2, d / 90)) / Math.min(2, weight);
+      /* SOLVED, so it lands on the other roof rather than near it. Given a
+         flight time T, horizontal velocity is just distance over time, and
+         the vertical launch velocity that puts it exactly on target is
+         (dy + ½gT²)/T. This is the standard artillery solution and it is
+         four lines. */
+      const dx = b.x - a.x, dz = b.z - a.z, dy = (b.y + 1.5) - s.y0;
+      const d = Math.hypot(dx, dz);
+      /* Longer shots take longer, but not proportionally — a flight across
+         the whole plate should read as fast and flat, not as a lob. */
+      const T = Math.max(0.75, Math.min(2.4, 0.55 + d / 150)) / Math.min(1.6, weight);
+      s.life = T;
+      s.vx = dx / T; s.vz = dz / T;
+      s.vy = (dy + 0.5 * s.g * T * T) / T;
     } else {
-      /* Straight up and out. Short, so a busy room reads as a shower of
-         sparks rather than a column of light. */
-      s.x1 = a.x; s.z1 = a.z; s.y1 = a.y + 16 + weight * 5;
-      s.arc = 0;
-      s.life = travel ? 1.1 : 0.7;
+      /* STRAIGHT UP, AND IT COMES BACK DOWN. A light that rises and fades is
+         a fade; a light that rises, slows, hangs and drops is an object, and
+         an object has somewhere it came from. A little lateral drift so a
+         busy room throws a spray rather than a column. */
+      const v0 = 26 + weight * 7;
+      const ang = Math.random() * TAU, spread = 2.5 + weight * 1.5;
+      s.vx = Math.cos(ang) * spread;
+      s.vz = Math.sin(ang) * spread;
+      s.vy = v0;
+      /* Cut just before it would land, so nothing is ever seen hitting the
+         ground — it is a signal, not a shell. */
+      s.life = (travel ? 1.9 : 1.1) * (2 * v0 / s.g) * 0.42;
     }
     return true;
   }
@@ -332,18 +379,33 @@ export function makeLife(THREE, opts) {
     for (let i = 0; i < pool.length; i++) {
       const s = pool[i];
       if (!s.live) { sparks.setMatrixAt(i, HIDDEN); continue; }
-      const u = (clock - s.born) / s.life;
+      const age = clock - s.born;
+      const u = age / s.life;
       if (u >= 1) { s.live = false; sparks.setMatrixAt(i, HIDDEN); continue; }
-      /* Ease out, so a light leaves fast and arrives gently — the shape of
-         something being sent rather than something being dragged. */
-      const e = 1 - (1 - u) * (1 - u);
-      dummy.position.set(
-        s.x0 + (s.x1 - s.x0) * e,
-        s.y0 + (s.y1 - s.y0) * e + Math.sin(u * Math.PI) * s.arc,
-        s.z0 + (s.z1 - s.z0) * e
-      );
-      dummy.rotation.set(0, 0, 0);
-      dummy.scale.setScalar(s.size * (1 - u * 0.55));
+
+      /* Integrated, not interpolated. Position and velocity both come out of
+         the same two lines of ballistics, which is what lets the shape below
+         be derived from the motion rather than guessed at. */
+      const px = s.x0 + s.vx * age;
+      const py = s.y0 + s.vy * age - 0.5 * s.g * age * age;
+      const pz = s.z0 + s.vz * age;
+      dummy.position.set(px, py, pz);
+
+      /* MOTION STRETCH. A point light moving fast reads as a dot that
+         teleports; the same light stretched along its own velocity reads as
+         something travelling, and the stretch shortens by itself as gravity
+         takes the speed away. It costs one quaternion — the trail is the
+         object's own shape, so there are no trail objects to pool, budget or
+         draw. */
+      const vy = s.vy - s.g * age;
+      const sp = Math.hypot(s.vx, vy, s.vz);
+      V.set(s.vx / (sp || 1), vy / (sp || 1), s.vz / (sp || 1));
+      dummy.quaternion.setFromUnitVectors(UP, V);
+      const stretch = 1 + Math.min(3.4, sp / 13);
+      /* Fades late rather than throughout: it must be at full brightness for
+         the first third, which is the part that says where it came from. */
+      const shrink = u < 0.34 ? 1 : 1 - ((u - 0.34) / 0.66) * 0.75;
+      dummy.scale.set(s.size * shrink, s.size * shrink * stretch, s.size * shrink);
       dummy.updateMatrix();
       sparks.setMatrixAt(i, dummy.matrix);
     }

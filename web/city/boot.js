@@ -254,6 +254,8 @@ export async function boot() {
      directory that could not be read produces nothing, which is why the city
      visibly settles when Technocore goes quiet instead of idling on a loop
      that looks the same either way. */
+  /* room -> { seq, live } — the number AND whether the reading it came from
+     was live. Both halves are load-bearing; see the note in signalActivity. */
   const lastSeq = new Map();
   function signalActivity() {
     if (!city || !world.life) return;
@@ -261,7 +263,9 @@ export async function boot() {
        moment that has already passed; animating it would be the city's
        version of replaying an archived message as if it had just been sent. */
     if (D.state.status.source !== "live") {
-      for (const r of city.roster) if (r.last_seq != null) lastSeq.set(r.room, Number(r.last_seq));
+      for (const r of city.roster) {
+        if (r.last_seq != null) lastSeq.set(r.room, { seq: Number(r.last_seq), live: false });
+      }
       return;
     }
     const events = [];
@@ -270,11 +274,26 @@ export async function boot() {
       if (!r.live || r.last_seq == null) continue;
       const seq = Number(r.last_seq);
       const prev = lastSeq.get(r.room);
-      lastSeq.set(r.room, seq);
+      lastSeq.set(r.room, { seq, live: true });
       /* No previous reading is not "nothing happened" — it is "we have not
-         measured yet", and the two must not look alike. */
-      if (prev == null || seq <= prev) continue;
-      const delta = seq - prev;
+         measured yet", and the two must not look alike.
+
+         AND NEITHER IS A PREVIOUS READING THAT WAS NOT LIVE. This is the bug
+         behind "it starts silent and then becomes unbearable". The page seeds
+         itself from an archived snapshot so there is a city on screen
+         instantly — and that snapshot's sequence numbers can be two days old.
+         Diffing the first live reading against them made the delta the whole
+         weekend's traffic: every room at once, tallies reading +40,000, the
+         signal pool saturated and the sound cap pinned. It was not a burst of
+         activity, it was the gap between an archive and now.
+
+         We did not watch those messages arrive, so they are not arrivals. The
+         first live reading of a room establishes the baseline and produces
+         nothing, exactly as a first reading always has. The city then comes
+         up over the following polls, from things that genuinely happened
+         while somebody was watching. */
+      if (prev == null || !prev.live || seq <= prev.seq) continue;
+      const delta = seq - prev.seq;
       const rate = D.rateOf(r.room) ?? 0;
       /* Against the room's own normal: 1 is business as usual, 3 is a room
          doing something it does not usually do. */
@@ -323,6 +342,13 @@ export async function boot() {
     const e = queued[queueAt++];
     queueNext = now + queueGap;
     world.life.signal(e.room, e.to, e.weight);
+    /* A muzzle ring at roof height was tried here and removed. Three markers
+       now say "it came from this building" — the roof flashes, the spark
+       leaves it at speed with its own motion stretch, and the count keeps a
+       tether down to it — and the fourth read as a white disc floating
+       beside the tower rather than as a flash on it: the ring is drawn
+       horizontally, so from a three-quarter camera it is an ellipse hanging
+       in the air. The three that work are enough. */
     /* Audible, and pitched by the room, so a district you are watching has a
        note you learn. The tick's own cap does the throttling — this is
        allowed to ask on every release and be refused most of the time. */
@@ -366,44 +392,95 @@ export async function boot() {
     const had = tallies.find((t) => t.room === room);
     if (had) {
       had.n += n; had.born = performance.now();
-      had.node.firstChild.textContent = `+${had.n.toLocaleString()}`;
+      had.box.firstChild.textContent = `+${had.n.toLocaleString()}`;
+      /* Re-struck, so it kicks again rather than silently changing value. */
+      had.box.classList.remove("bump");
+      void had.box.offsetWidth;                  // restart the animation
+      had.box.classList.add("bump");
       return;
     }
     const node = document.createElement("div");
     node.className = "tally" + (weight >= 2.4 ? " hot" : "");
+    /* TWO ELEMENTS, AND THE SPLIT IS NOT COSMETIC.
+       The outer one is POSITION and is written from JS every frame; the inner
+       one is MOTION and is a CSS animation. They cannot be the same element:
+       a running animation's transform beats an inline style, and a keyframe
+       set with a 100% stop keeps beating it after the animation ends — so a
+       count that had been placed correctly over its building snapped to the
+       top-left corner of the page the moment its pop finished, and stayed
+       there. Found by a probe screenshot with five tallies stacked at the
+       origin. */
+    const box = document.createElement("div");
+    box.className = "box";
     const b = document.createElement("b");
     b.textContent = `+${n.toLocaleString()}`;
     const s = document.createElement("span");
     s.textContent = room;
-    node.append(b, s);
+    /* THE LEADER. The complaint was "I cannot tell which room it came from",
+       and no amount of easing fixes that on its own — from a three-quarter
+       view a label floating above a skyline is above four buildings at once.
+       A hairline drawn from the number down to the roof it belongs to is the
+       only thing that actually answers the question, and it is one element
+       whose height is set from the same projection that places the label. */
+    const lead = document.createElement("i");
+    lead.className = "lead";
+    box.append(b, s);
+    node.append(box, lead);
     /* Clicking a number goes to the thing the number is about. */
     node.addEventListener("click", (ev) => { ev.stopPropagation(); flyToRoom(room); });
     overlay.append(node);
-    tallies.push({ room, n, node, born: performance.now(), at });
+    tallies.push({ room, n, node, box, lead, born: performance.now(), at });
     while (tallies.length > TALLY_MAX) dropTally(tallies[0]);
   }
 
   function dropTally(t) {
     const i = tallies.indexOf(t);
     if (i >= 0) tallies.splice(i, 1);
-    t.node.classList.add("out");
+    t.box.classList.add("out");
     setTimeout(() => t.node.remove(), 320);
   }
   function clearTallies() { while (tallies.length) dropTally(tallies[0]); }
 
+  /* THE COUNT IS THROWN, LIKE EVERYTHING ELSE THE CITY EMITS.
+     It used to travel at a constant speed and fade the whole way, which is
+     the motion of a tooltip appearing rather than of something leaving a
+     building. It is now the same launch the sparks get: fast off the roof,
+     decelerating, settling at an apex it holds while you read it, and it
+     keeps a hairline back down to the roof for the whole flight so there is
+     never a question about whose number it is.
+
+     Integrated in screen space rather than in the world, deliberately. The
+     label must be legible — upright, unrotated, a constant size — and a DOM
+     node parented to a 3D point is none of those things. The ANCHOR is a
+     world point, projected every frame, so the number stays glued to its
+     roof as the camera moves; the throw happens in pixels above it. */
+  const TALLY_RISE = 620;              // ms of flight before it settles
   function positionTallies(now, rect) {
     for (const t of [...tallies]) {
       const age = now - t.born;
       if (age > TALLY_LIFE) { dropTally(t); continue; }
-      const s = world.project(t.at.x, t.at.h + 10, t.at.z, rect);
+      const s = world.project(t.at.x, t.at.h + 2, t.at.z, rect);
       if (s.behind) { t.node.style.opacity = "0"; continue; }
       const k = age / TALLY_LIFE;
-      /* Rises as it fades. The motion is what makes a number read as an event
-         rather than as a label that has always been there. */
-      const lift = 6 + k * 34;
-      t.node.style.opacity = String(k < 0.12 ? k / 0.12 : Math.max(0, 1 - (k - 0.12) / 0.88));
+
+      /* Deceleration curve: 1-(1-u)³ leaves the roof fast and arrives at the
+         apex with almost no speed, which is what a thrown object does and
+         what a tween never does. */
+      const u = Math.min(1, age / TALLY_RISE);
+      const lift = 14 + (1 - Math.pow(1 - u, 3)) * 46;
+
+      /* Full brightness for the whole climb — the climb is the part that
+         says where it came from — then a long fade from the apex. */
+      const fadeFrom = TALLY_RISE / TALLY_LIFE;
+      t.node.style.opacity = String(
+        k < 0.06 ? k / 0.06
+        : k < fadeFrom ? 1
+        : Math.max(0, 1 - (k - fadeFrom) / (1 - fadeFrom)));
       t.node.style.transform =
         `translate(${Math.round(s.x)}px,${Math.round(s.y - lift)}px) translate(-50%,-100%)`;
+      /* The leader spans exactly the gap it flew, so it grows with the throw
+         and always lands on the roof rather than near it. */
+      t.lead.style.height = `${Math.round(lift)}px`;
     }
   }
 
@@ -474,6 +551,7 @@ export async function boot() {
       room: r.room,
       rate: r.rate,
       line: D.peekOf(r.room),
+      hist: D.histOf(r.room),
       fresh: freshRooms.has(r.room),
     })), { live: D.state.status.source === "live" && D.state.status.city === "live" });
   }
@@ -861,24 +939,70 @@ export async function boot() {
 
     const node = document.createElement("div");
     node.className = `bub ${m.c.kind}`;
-    const w = document.createElement("span");
-    w.className = "w";
-    w.textContent = (m.did ? m.did.replace(/^did:key:/, "").slice(0, 8) + "…" : m.nick || "—");
+    /* Position outside, motion inside — see the note in tally() for the bug
+       this shape exists to prevent. */
+    const box = document.createElement("div");
+    box.className = "box";
+
+    /* THE HEADER LINE: who, what kind, and whether it was signed.
+       Three facts, at three weights, on one line. The old bubble had only
+       the truncated key, so a plaza of them was a wall of z6Mk… with no way
+       to tell an attestation from a hello without reading the pipes. */
+    const head = document.createElement("span");
+    head.className = "w";
+    const who = document.createElement("b");
+    who.textContent = (m.did ? m.did.replace(/^did:key:/, "").slice(0, 8) + "…" : m.nick || "—");
+    head.append(who);
+    if (m.c.kind !== "message") {
+      const k = document.createElement("i");
+      k.className = "k";
+      k.textContent = D.kindLabel(m.c);
+      head.append(k);
+    }
+    if (m.did) {
+      const sg = document.createElement("i");
+      sg.className = "sg";
+      sg.textContent = "signed";
+      head.append(sg);
+    }
+
     const t = document.createElement("span");
     t.className = "t";
-    t.textContent = m.text;                       // text, never markup
-    node.append(w, t);
+    /* A STRUCTURED MESSAGE SHOWS ITS OWN FIELDS, NOT ITS PUNCTUATION.
+       "ATTEST v1|k1a04ee1306|not|The result restates the task…" spends its
+       first thirty characters on syntax the header already carries, in a
+       bubble that only has room for about eighty. The verb is in the tag
+       above; what goes here is the message's own remaining fields, its own
+       pipe swapped for a middot. Nothing is summarised or reordered, and the
+       raw text is one click away in the feed. */
+    if (m.c.kind !== "message" && (m.c.fields || []).length) {
+      const fields = m.c.fields.filter(Boolean);
+      /* The verdict and the id are facts about the message; the prose field
+         is the message. Showing the prose last and largest is the reading
+         order somebody actually wants. */
+      t.textContent = fields.join(" · ");
+    } else {
+      t.textContent = m.text;                     // text, never markup
+    }
+    /* The tail. Its length is set every frame from the gap between where the
+       bubble was placed and where its speaker actually is — the declutter
+       pass moves bubbles wherever there is room, so a fixed CSS triangle
+       would point at whoever happens to be underneath. */
+    const tail = document.createElement("i");
+    tail.className = "tail";
+    box.append(head, t);
+    node.append(box, tail);
     node.addEventListener("click", (e) => { e.stopPropagation(); selectMessage(m.key); });
     overlay.append(node);
 
-    bubbles.push({ key: m.key, agentId, node, born: performance.now(), life: 6500 });
+    bubbles.push({ key: m.key, agentId, node, box, tail, born: performance.now(), life: 6500 });
     while (bubbles.length > preset.bubbles) retire(bubbles[0]);
   }
 
   function retire(b) {
     const i = bubbles.indexOf(b);
     if (i >= 0) bubbles.splice(i, 1);
-    b.node.classList.add("out");
+    (b.box || b.node).classList.add("out");
     setTimeout(() => b.node.remove(), 360);
   }
   function clearBubbles() { while (bubbles.length) retire(bubbles[0]); }
@@ -907,8 +1031,14 @@ export async function boot() {
          kind of thing, and a speech bubble under the side panel is a message
          the visitor cannot read. Six tries going up, then it waits its turn;
          they expire in a few seconds anyway. */
+      /* THE FIRST CANDIDATE IS NOT ZERO ANY MORE. Placed exactly on the
+         figure, a bubble's bottom edge sits on its speaker's head — which
+         covers the one thing it is pointing at and leaves no room for a tail
+         to be drawn in. Every candidate now clears the figure by at least a
+         couple of dozen pixels, so there is always somewhere for the tether
+         to run and the speaker stays visible underneath it. */
       const at = declutter.placeAny(b, s.x, s.y,
-        [[0, 0], [0, -70], [0, -140], [-120, -36], [120, -36], [0, 64]]);
+        [[0, -30], [0, -98], [0, -166], [-126, -62], [126, -62], [0, 60]]);
       if (!at) { b.node.style.opacity = "0"; continue; }
       const y = at.y;
       placed.push({ x: at.x, y });
@@ -916,6 +1046,28 @@ export async function boot() {
       b.node.style.opacity = String(Math.max(0, Math.min(1, k)));
       b.node.style.transform = `translate(${Math.round(at.x)}px,${Math.round(y)}px) translate(-50%,-100%)`;
       b.node.classList.toggle("sel", st.msgKey === b.key || st.agentId === b.agentId);
+      /* THE TAIL REACHES THE SPEAKER, wherever the declutter pass put the
+         bubble. `s` is where the figure is; `at` is where the bubble ended
+         up. The difference is the tail, and drawing it is the difference
+         between six labels over a crowd and six people talking. It is
+         skipped when the bubble was pushed sideways far enough that a
+         near-horizontal line would read as a stray rule across the plaza. */
+      if (b.tail) {
+        /* A REAL LINE, AT WHATEVER ANGLE IT TAKES. The first version hung a
+           vertical hairline from a fixed 22px inset, which pointed at a spot
+           on the floor beside the speaker rather than at the speaker — and
+           went badly wrong the moment the declutter pass pushed a bubble
+           sideways. This measures the actual gap and rotates to cover it.
+
+           The element grows downward from the bubble's bottom centre, so a
+           point at (0,h) rotated clockwise by A lands at (-h·sinA, h·cosA);
+           setting that equal to (dx,dy) gives A = atan2(-dx, dy). */
+        const dx = s.x - at.x, dy = s.y - y;
+        const len = Math.hypot(dx, dy);
+        const show = dy > 4 && len < 520;
+        b.tail.style.height = show ? `${Math.round(len)}px` : "0px";
+        if (show) b.tail.style.transform = `rotate(${Math.atan2(-dx, dy)}rad)`;
+      }
     }
   }
 
@@ -1073,7 +1225,7 @@ export async function boot() {
     st.bubblesOn = !st.bubblesOn;
     if (!st.bubblesOn) clearBubbles();
     $("bubbles").classList.toggle("on", !st.bubblesOn);
-    $("bubbles").title = st.bubblesOn ? "Hide speech bubbles" : "Show speech bubbles";
+    $("bubbles").title = st.bubblesOn ? "Hide what people are saying" : "Show what people are saying";
   };
   $("mute").onclick = () => {
     const nowOn = !S.enabled();

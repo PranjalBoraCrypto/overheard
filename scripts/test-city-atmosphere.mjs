@@ -44,11 +44,14 @@ const check = (n, ok, d = "") => {
 
 /* The directory under the test's control: `bump` walks every sequence
    number forward, so one poll looks like a burst of real activity. */
-let bump = 0;
+let bump = 0, MODE = "live";
 const directory = () => {
   const now = new Date().toISOString();
   const step = (r) => ({ ...r, last_seq: r.last_seq == null ? null : String(Number(r.last_seq) + bump) });
-  return { ...SNAP, source: "live", retrieved_at: now, at: now, age_seconds: 0,
+  const live = MODE === "live";
+  return { ...SNAP, source: MODE,
+    retrieved_at: live ? now : SNAP.retrieved_at, at: live ? now : SNAP.retrieved_at,
+    age_seconds: live ? 0 : 172800,
     landmarks: SNAP.landmarks.map(step), named: SNAP.named.map(step) };
 };
 
@@ -273,10 +276,14 @@ console.log("\n=== C. what is happening in there, read from out here");
       n: rows.length,
       names: rows.map((r) => r.querySelector(".nm").textContent),
       rates: rows.map((r) => r.querySelector(".rt").textContent),
-      bars: rows.map((r) => r.querySelector(".bar i").style.width),
-      lines: rows.map((r) => r.querySelector(".ln")?.textContent ?? null).filter(Boolean),
+      fills: rows.map((r) => r.querySelector(".rt").style.getPropertyValue("--fill")),
+      glyphs: rows.map((r) => r.querySelector(".g")?.dataset.kind ?? null),
+      sparks: rows.filter((r) => r.querySelector(".sp .spark")).length,
+      lines: rows.map((r) => r.querySelector(".ln")?.textContent || null).filter(Boolean),
       live: box.querySelector(".railtop .live").textContent,
-      note: box.querySelector(".railnote").textContent,
+      unit: box.querySelector(".railtop .u")?.textContent ?? "",
+      unitsInRows: rows.filter((r) => /msg|min/i.test(r.textContent)).length,
+      note: box.querySelector(".railtop").title,
       html: box.innerHTML,
     };
   });
@@ -284,12 +291,28 @@ console.log("\n=== C. what is happening in there, read from out here");
   check("and holds a few rooms, not a directory", rail.n > 0 && rail.n <= 4, `${rail.n} rows`);
   check("every row names a room the city actually has",
     rail.names.every((n) => named.includes(n)), rail.names.join(","));
-  check("every row carries a rate in the unit it was measured in",
-    rail.rates.every((r) => /msg\/min$/.test(r)), rail.rates[0]);
-  check("and a bar drawn from that rate", rail.bars.every((w) => /%$/.test(w)), rail.bars.join(" "));
+  /* THE RATE IS A BARE NUMBER, and the unit is written once above the column
+     rather than four times down it. Four rows each carrying "msg/min" is the
+     same fact four times, in the place with the least room for it. */
+  check("every row carries a rate as a bare number",
+    rail.rates.every((r) => /^[\d.,]+$/.test(r.trim())), rail.rates.join(" "));
+  check("the unit is stated once, over the column", /msg\/min/i.test(rail.unit), rail.unit);
+  check("and not repeated in any row", rail.unitsInRows === 0, `${rail.unitsInRows} rows repeat it`);
+  check("the rate is drawn as a shape as well as a number",
+    rail.fills.every((f) => /%$/.test(f)), rail.fills.join(" "));
+  /* WHAT THE ROOM IS DOING, AS A GLYPH. Every one must be a verb the kibble
+     spec actually defines, or plain message — never a category invented here. */
+  const VERBS = ["job", "claim", "result", "attest", "witness", "hello", "message"];
+  check("each row carries a glyph for what the room is doing",
+    rail.glyphs.every((g) => VERBS.includes(g)), rail.glyphs.join(","));
+  check("and a sparkline once there is history to draw",
+    rail.sparks > 0, `${rail.sparks} of ${rail.n}`);
   check("the rail says whether it is live", /live|saved/i.test(rail.live), rail.live);
-  check("and says where its numbers come from",
-    /measured here/i.test(rail.note), rail.note.slice(0, 40));
+  /* The provenance moved off the face of the panel and into its tooltip. It
+     still has to be there — a measured figure that does not say it was
+     measured here is the overclaim this whole page exists to avoid. */
+  check("and still says where its numbers come from",
+    /measured in this browser/i.test(rail.note), rail.note.slice(0, 46));
 
   /* THE LINES ARE REAL MESSAGES AND ARE TEXT. The fixture serves a message
      containing a script tag; if any of this were ever set as HTML rather than
@@ -451,6 +474,144 @@ console.log("\n=== E. the sound is data, and an idle city is silent");
   await pg.waitForTimeout(500);
   check("muting tears the tone down, it does not just turn it down",
     !(await pg.evaluate(() => window.__city.sound.toneRunning())));
+  check("no page errors", errs.length === 0, errs[0] || "");
+  bump = 0;
+  await ctx.close();
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   E2. THE AIR DOES NOT BEAT
+   ════════════════════════════════════════════════════════════════════════
+
+   Reported as "womp type background sound, unbearable", and it was exactly
+   that: two sines detuned by 0.8%, which at 146Hz is a 1.2Hz amplitude beat.
+   Two oscillators only beat when their frequencies differ slightly, so the
+   property to assert is not "it sounds nicer" — it is that the tone's
+   partials are EXACT ratios of its root. That is checkable, and it is the
+   thing that was wrong.
+   ════════════════════════════════════════════════════════════════════ */
+console.log("\n=== E2. the air is a chord, not a beat");
+{
+  const { pg, ctx, errs } = await open();
+  await pg.click("#mute");
+  bump = 40;
+  await pg.evaluate(() => document.dispatchEvent(new Event("visibilitychange")));
+  await pg.waitForFunction(() => window.__city.sound.toneRunning(), null, { timeout: 20000 })
+    .catch(() => {});
+
+  /* Two oscillators beat when their frequencies differ slightly, so the
+     property to read is what the air ASKS FOR.
+
+     THE CONTINUOUS VOICES ONLY. The first version of this shim caught every
+     oscillator built during the window, which in a live city includes the
+     ticks — and a tick is a struck note that glides slightly flat as it
+     decays, so two of them landing on the same room's note are momentarily a
+     few tenths of a Hz apart. That is not a drone and cannot womp: it is over
+     in under a second. The air's voices are the ones that are never given a
+     stop time, which is exactly the distinction that matters here. */
+  const pairs = await pg.evaluate(async () => {
+    const seen = [];
+    const origMake = AudioContext.prototype.createOscillator;
+    AudioContext.prototype.createOscillator = function () {
+      const o = origMake.call(this);
+      const rec = { o, hz: 0, stops: false };
+      const origStop = o.stop.bind(o);
+      o.stop = (...a) => { rec.stops = true; return origStop(...a); };
+      seen.push(rec);
+      return o;
+    };
+    window.__city.sound.cityToneOff();
+    window.__city.sound.cityTone(9000);
+    /* Read the frequency immediately: a struck note glides, and what is being
+       asked here is what each voice was BUILT at. */
+    for (const r of seen) r.hz = Math.round(r.o.frequency.value * 100) / 100;
+    await new Promise((res) => setTimeout(res, 250));
+    AudioContext.prototype.createOscillator = origMake;
+    return seen.filter((r) => !r.stops).map((r) => r.hz);
+  });
+
+  check("the air is built from more than one voice", pairs.length >= 2, pairs.join(","));
+  /* Every pair must be either identical or far enough apart that the
+     difference is a musical interval rather than a beat. Under ~12Hz apart
+     and the ear hears amplitude wobble instead of a chord. */
+  const beats = [];
+  for (let i = 0; i < pairs.length; i++) {
+    for (let j = i + 1; j < pairs.length; j++) {
+      const d = Math.abs(pairs[i] - pairs[j]);
+      if (d > 0.01 && d < 12) beats.push(`${pairs[i]}/${pairs[j]}`);
+    }
+  }
+  check("and no two of them beat against each other", beats.length === 0,
+    beats.length ? beats.join(" ") : pairs.join(","));
+  /* Exact ratios, which is what makes the above true by construction rather
+     than by luck: a fifth is 1.5 and an octave is 2, to the cent. */
+  const root = Math.min(...pairs);
+  const ratios = pairs.map((f) => Math.round((f / root) * 1000) / 1000).sort();
+  check("they are exact intervals of one root", ratios.every((r) => {
+    const near = [1, 1.5, 2, 3, 4];
+    return near.some((n) => Math.abs(r - n) < 0.005);
+  }), ratios.join(","));
+
+  check("no page errors", errs.length === 0, errs[0] || "");
+  bump = 0;
+  await ctx.close();
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   E3. THE FIRST LIVE READING IS A BASELINE, NOT A FLOOD
+   ════════════════════════════════════════════════════════════════════════
+
+   Reported as "starts very quiet, then once data loads it becomes ultra
+   noisy". The cause was not the sound. The page seeds itself from an
+   archived snapshot so a city is on screen instantly, and that snapshot's
+   sequence numbers can be days old — so the first live reading was diffed
+   against them and the delta was the whole weekend's traffic. Every room at
+   once, counts in the tens of thousands, the signal pool saturated.
+
+   We did not watch those messages arrive, so they are not arrivals. This is
+   the honesty rule and the fix for the noise, and they are the same rule.
+   ════════════════════════════════════════════════════════════════════ */
+console.log("\n=== E3. arriving from the archive is not a burst of activity");
+{
+  MODE = "snapshot";
+  const { pg, ctx, errs } = await open();
+  check("the city is up from saved data", await pg.evaluate(() => window.__city.city.roster.length > 0));
+  check("and nothing is animating off it",
+    (await pg.evaluate(() => window.__city.world.life.liveSignals)) === 0);
+
+  /* Now the live directory answers, and it is a long way ahead of the file —
+     which is exactly what a real first reading looks like. */
+  MODE = "live";
+  bump = 9000;
+  let count = 0;
+  await pg.exposeFunction("__sig", () => { count++; });
+  await pg.evaluate(() => {
+    const l = window.__city.world.life;
+    const orig = l.signal.bind(l);
+    l.signal = (...a) => { window.__sig(); return orig(...a); };
+  });
+  await pg.evaluate(() => document.dispatchEvent(new Event("visibilitychange")));
+  await pg.waitForFunction(() => window.__city.data.state.status.source === "live",
+    null, { timeout: 20000 }).catch(() => {});
+  await pg.waitForTimeout(5000);
+
+  check("the first live reading produces no arrivals at all", count === 0, `${count} signals`);
+  check("and no counts over the buildings",
+    (await pg.evaluate(() => document.querySelectorAll(".tally").length)) === 0);
+  check("the chip says live, so this is not just a failed poll",
+    /^Live$/i.test((await pg.evaluate(() => document.getElementById("status").innerText)).trim()));
+
+  /* The SECOND live reading is a genuine observation and must behave
+     normally — the baseline rule must not have switched the city off. */
+  bump = 9014;
+  await pg.evaluate(() => document.dispatchEvent(new Event("visibilitychange")));
+  await pg.waitForTimeout(5000);
+  check("the next reading does move the city", count > 0, `${count} signals`);
+  const labels = await pg.evaluate(() =>
+    [...document.querySelectorAll(".tally b")].map((b) => b.textContent));
+  check("and its counts are the real delta, not the gap to the archive",
+    labels.every((l) => Number(l.replace(/[+,]/g, "")) === 14), labels.join(" ") || "(none yet)");
+
   check("no page errors", errs.length === 0, errs[0] || "");
   bump = 0;
   await ctx.close();

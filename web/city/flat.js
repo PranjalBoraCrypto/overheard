@@ -184,7 +184,8 @@ export function mountFlat(container, els) {
       out.push(held || c);
     }
     railRooms = out.map((r) => r.room);
-    ui.rail(out.map((r) => ({ room: r.room, rate: r.rate, line: D.peekOf(r.room) })),
+    ui.rail(out.map((r) => ({ room: r.room, rate: r.rate, line: D.peekOf(r.room),
+      hist: D.histOf(r.room) })),
       { live: D.state.status.source === "live" && D.state.status.city === "live" });
   }
 
@@ -438,6 +439,19 @@ export function mountFlat(container, els) {
     D.enterRoom(name);
     S.arrive(); S.cityToneOff(); S.bedOn(true);
     ui.closeRail();
+    /* THE FLAT ROAD NEVER SET THIS, and it should have from the day the room
+       header existed. `body.inroom` is what shows the way out, the room's
+       name and the speech-bubble control, and hides the city's headline — so
+       on this road you walked into a room and the page still said "click a
+       district to fly in" with no visible way back. The flat map is supposed
+       to lose the third dimension, not the furniture. */
+    document.body.classList.add("inroom");
+    const rn = $("roomName"), rt = $("roomTopic");
+    if (rn) rn.textContent = name;
+    if (rt) {
+      rt.textContent = byRoom.get(name)?.topic
+        || "No topic set. Everything below is what this room has actually carried.";
+    }
     $("strip").hidden = st.clean;
     paintChips();
     ui.roomLive({ name, messages: [], agents: [], gaps: [] }, []);
@@ -451,6 +465,7 @@ export function mountFlat(container, els) {
     D.leaveRoom();
     ui.closeFeed(); ui.closePanel();
     S.bedOn(false);
+    document.body.classList.remove("inroom");
     home(reduced ? 0 : 900);
     $("strip").hidden = true;
     paintChips();
@@ -982,7 +997,7 @@ export function mountFlat(container, els) {
     st.bubblesOn = !st.bubblesOn;
     if (!st.bubblesOn) clearBubbles();
     $("bubbles").classList.toggle("on", !st.bubblesOn);
-    $("bubbles").title = st.bubblesOn ? "Hide speech bubbles" : "Show speech bubbles";
+    $("bubbles").title = st.bubblesOn ? "Hide what people are saying" : "Show what people are saying";
   };
   $("mute").onclick = () => {
     const on = !S.enabled();

@@ -158,83 +158,180 @@ export function makeUI(els, cb) {
   /* ── busiest right now ─────────────────────────────────────────────────
      The city page's own answer to "what is happening in there".
 
-     WHAT EACH ROW IS ALLOWED TO CLAIM, and it is not much:
+     REBUILT AROUND ONE COMPLAINT: too much text. The first version wrote out
+     "116 msg/min" and a full sentence of provenance under four rows, which is
+     four numbers and about thirty words to say what a glance should say. The
+     words that survived are the ones carrying information a shape cannot.
 
-       THE RATE is measured here, in this browser, as the difference between
-       two readings of that room's sequence counter divided by the time
-       between them. It is not a figure Technocore publishes. It is labelled
-       "msg/min" and nothing stronger.
+     WHAT EACH ROW SAYS, and what each part of it is allowed to claim:
 
-       THE BAR is the same number as a shape, scaled against the busiest room
-       currently in the rail — a relative reading, which is what a ranking
-       is. It never implies a ceiling that does not exist.
+       THE GLYPH is what the room is DOING — the verb its newest message
+       declared, drawn rather than spelled. Every one is a verb the published
+       kibble spec defines; nothing here is a category Overheard invented, and
+       a room whose newest line is ordinary chatter gets the plain message
+       glyph rather than a guess.
 
-       THE LINE is one real message, fetched from that room and rendered with
-       textContent. It is somebody else's words: never markup, never markdown,
-       never interpreted. It is the newest line at the moment it was read and
-       can be a few seconds behind, which is why it is the quietest thing in
-       the row rather than the loudest.
+       THE NUMBER is a rate measured in this browser: the difference between
+       two readings of that room's own sequence counter, over the time between
+       them. Not a figure Technocore publishes. The unit is written once, at
+       the top of the column, instead of four times.
+
+       THE SPARKLINE is the last few of those readings — the shape of the room
+       waking up or going quiet, which is the thing a single number cannot
+       say. It is drawn only from measurements actually taken; a room with one
+       reading gets no line rather than a flat one at zero, because a flat
+       line at zero is a claim that nothing is happening.
+
+       THE LINE is one real message, rendered as text. Somebody else's words:
+       never markup, never interpreted, and clamped to one line because the
+       room's own feed is one click away.
 
      A room with no line yet simply has no line. Nothing is filled in. */
+  const KIND_ICON = {
+    job: "c-job", claim: "c-claim", result: "c-result", attest: "c-attest",
+    witness: "c-witness", hello: "c-hello", message: "c-msg",
+  };
+
+  /** The rate history as a path, normalised to its own peak. Its own, not the
+   *  rail's: this is the shape of one room over time, and scaling it against
+   *  a busier neighbour would flatten every quiet room into a dead line and
+   *  say something false about it. */
+  function spark(hist) {
+    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    svg.setAttribute("class", "spark");
+    svg.setAttribute("viewBox", "0 0 60 16");
+    svg.setAttribute("preserveAspectRatio", "none");
+    svg.setAttribute("aria-hidden", "true");
+    const peak = Math.max(...hist, 0.001);
+    const n = hist.length;
+    const pts = hist.map((v, i) => [
+      (i / (n - 1)) * 60,
+      15.2 - (v / peak) * 14,
+    ]);
+    const d = pts.map(([x, y], i) => `${i ? "L" : "M"}${x.toFixed(1)} ${y.toFixed(1)}`).join(" ");
+    const line = document.createElementNS("http://www.w3.org/2000/svg", "path");
+    line.setAttribute("d", d);
+    line.setAttribute("class", "sl");
+    /* The area under it, at low opacity. A bare polyline at this size reads
+       as a scratch; filled, it reads as a quantity. */
+    const area = document.createElementNS("http://www.w3.org/2000/svg", "path");
+    area.setAttribute("d", `${d} L60 16 L0 16 Z`);
+    area.setAttribute("class", "sa");
+    /* The newest reading, marked. Without it there is no way to tell which
+       end of a sparkline is now. */
+    const dot = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+    dot.setAttribute("cx", pts[n - 1][0].toFixed(1));
+    dot.setAttribute("cy", pts[n - 1][1].toFixed(1));
+    dot.setAttribute("r", "1.9");
+    dot.setAttribute("class", "sd");
+    svg.append(area, line, dot);
+    return svg;
+  }
+
+  const railRows = new Map();          // room -> node, so rows survive a redraw
+
   function rail(rows, opts = {}) {
     const box = els.rail;
     if (!box) return;
-    if (!rows || !rows.length) { box.hidden = true; box.replaceChildren(); return; }
+    if (!rows || !rows.length) { box.hidden = true; box.replaceChildren(); railRows.clear(); return; }
 
-    box.replaceChildren();
-    const top = el("div", "railtop");
-    top.append(el("span", null, "Busiest right now"));
-    const live = el("span", "live" + (opts.live ? "" : " stale"),
-      opts.live ? "• live" : "• saved");
-    top.append(live);
-    box.append(top);
+    /* REUSED, NOT REBUILT. Replacing the whole list every twenty seconds
+       restarts every animation, drops the row somebody is hovering, and makes
+       a rank change look like the panel blinking. Rows are keyed by room and
+       moved; only what changed is written. */
+    const seen = new Set();
+    let head = box.querySelector(".railtop");
+    if (!head) {
+      head = el("div", "railtop");
+      /* The unit, written ONCE. Four rows each saying "msg/min" is the same
+         fact four times in the place where there is least room for it. */
+      head.append(icon("c-pulse"), el("span", "t", "Busiest now"),
+                  el("span", "u", "msg/min"), el("span", "live"));
+      box.replaceChildren(head);
+    }
+    const live = head.querySelector(".live");
+    live.className = "live" + (opts.live ? "" : " stale");
+    live.textContent = opts.live ? "live" : "saved";
+    /* The provenance the footer used to spell out, kept where it costs no
+       space. It is still one hover away and still says exactly what it said. */
+    head.title = "Rates are measured in this browser between two directory reads, and are not figures Technocore publishes. The lines are the newest message each room is serving.";
 
     const peak = Math.max(...rows.map((r) => r.rate || 0), 0.001);
-    for (const r of rows) {
-      const b = el("button", "railrow" + (r.fresh ? " fresh" : "")); b.type = "button";
-      b.append(el("span", "nm", r.room));
-      b.append(el("span", "rt", `${r.rate >= 10 ? Math.round(r.rate) : r.rate.toFixed(1)} msg/min`));
-      if (r.line) {
-        const ln = el("span", "ln");
-        const c = r.line.c;
-        if (c && c.kind !== "message") {
-          /* A structured message announces its own grammar: "ATTEST v1|j-8801
-             |useful|rh:9fa31c". In one clipped line the raw form spends every
-             character on syntax and says nothing. The tag carries the verb —
-             which the message itself declared — and what follows is the
-             message's OWN fields with its own pipe swapped for a middot.
-             Nothing is summarised, reordered or interpreted; the full raw
-             text is in that room's feed, one click away. */
-          ln.append(el("span", "k", kindLabel(c)));
-          const fields = (c.fields || []).filter(Boolean);
-          ln.append(document.createTextNode(fields.length ? fields.join(" · ") : r.line.text));
-        } else {
-          /* textContent, via the text node. A message is a string from a
-             stranger and is never anything but text. */
-          ln.append(document.createTextNode(r.line.text));
-        }
-        b.append(ln);
+    rows.forEach((r, i) => {
+      seen.add(r.room);
+      let b = railRows.get(r.room);
+      if (!b) {
+        b = el("button", "railrow"); b.type = "button";
+        b.append(el("span", "g"), el("span", "nm"), el("span", "rt"),
+                 el("span", "sp"), el("span", "ln"));
+        b.addEventListener("click", () => cb.flyToRoom(r.room));
+        railRows.set(r.room, b);
+        b.classList.add("enter");
       }
-      /* THE BAR GOES LAST, and it is doing two jobs at once. It is the rate
-         as a shape, and it is the row's own baseline — everything above a bar
-         belongs to that bar. With the bar in the middle, a room's message
-         line sat nearer the NEXT room's name than its own and read as
-         belonging to it. */
-      const bar = el("span", "bar");
-      const fill = el("i");
-      fill.style.width = `${Math.max(3, Math.round((r.rate / peak) * 100))}%`;
-      bar.append(fill);
-      b.append(bar);
+      b.style.order = String(i);
       b.title = `Fly to ${r.room}`;
-      b.addEventListener("click", () => cb.flyToRoom(r.room));
-      box.append(b);
-    }
 
-    const note = el("p", "railnote",
-      "rate measured here, between two directory reads · lines read from the rooms");
-    box.append(note);
+      const g = b.querySelector(".g");
+      const kind = r.line?.c?.kind || "message";
+      if (g.dataset.kind !== kind) {
+        g.dataset.kind = kind;
+        g.replaceChildren(icon(KIND_ICON[kind] || "c-msg"));
+        g.className = `g k-${kind}`;
+      }
+
+      const nm = b.querySelector(".nm");
+      if (nm.textContent !== r.room) nm.textContent = r.room;
+
+      /* The unit lives in the column head; the cell is the number. */
+      const rt = b.querySelector(".rt");
+      const txt = r.rate >= 10 ? String(Math.round(r.rate)) : r.rate.toFixed(1);
+      if (rt.textContent !== txt) {
+        rt.textContent = txt;
+        /* A number that changes should be seen to change. */
+        rt.classList.remove("tick"); void rt.offsetWidth; rt.classList.add("tick");
+      }
+      rt.style.setProperty("--fill", `${Math.max(4, Math.round((r.rate / peak) * 100))}%`);
+
+      const sp = b.querySelector(".sp");
+      const h = r.hist || [];
+      if (h.length >= 2) {
+        const key = h.map((v) => Math.round(v)).join(",");
+        if (sp.dataset.key !== key) { sp.dataset.key = key; sp.replaceChildren(spark(h)); }
+      } else if (sp.childNodes.length) { sp.replaceChildren(); delete sp.dataset.key; }
+
+      const ln = b.querySelector(".ln");
+      const line = lineText(r.line);
+      if (ln.textContent !== line) ln.textContent = line;
+      ln.hidden = !line;
+
+      if (r.fresh) { b.classList.remove("hit"); void b.offsetWidth; b.classList.add("hit"); }
+      if (b.parentNode !== box) box.append(b);
+    });
+
+    for (const [room, node] of railRows) {
+      if (!seen.has(room)) { node.remove(); railRows.delete(room); }
+    }
     box.hidden = false;
   }
+
+  /** One room's newest line, as a single short string.
+   *
+   *  A structured message announces its own grammar: "ATTEST v1|j-8801|useful
+   *  |rh:9fa31c". In one clipped line the raw form spends every character on
+   *  syntax — and the glyph beside it already carries the verb. So what is
+   *  shown is the message's OWN remaining fields, its own pipe swapped for a
+   *  middot. Nothing is summarised, reordered or interpreted, and the raw
+   *  text is one click away in that room's feed. */
+  function lineText(line) {
+    if (!line) return "";
+    const c = line.c;
+    if (c && c.kind !== "message") {
+      const fields = (c.fields || []).filter(Boolean);
+      if (fields.length) return fields.join(" · ");
+    }
+    return line.text || "";
+  }
+
   function closeRail() { if (els.rail) { els.rail.hidden = true; els.rail.replaceChildren(); } }
 
   /* ── the side panel ───────────────────────────────────────────────── */
@@ -359,7 +456,7 @@ export function makeUI(els, cb) {
     feed.append(icon("c-list"), el("span", null, "Room feed"));
     feed.addEventListener("click", () => cb.toggleFeed());
     const back = el("button", "go ghost"); back.type = "button";
-    back.append(icon("c-home"), el("span", null, "Back to the city"));
+    back.append(icon("c-home"), el("span", null, "Back to city"));
     back.addEventListener("click", () => cb.leaveRoom());
     row.append(feed, back);
     p.append(row);
