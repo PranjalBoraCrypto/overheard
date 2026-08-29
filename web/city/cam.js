@@ -174,8 +174,12 @@ export function makeCamera(THREE, camera, dom, { reduced = false } = {}) {
 
   const api = {
     get busy() { return !!flight; },
+    /** Has the visitor moved the camera themselves? Nothing may reframe a
+     *  view somebody has taken hold of. */
+    get touched() { return touched; },
     get dragging() { return !!dragging; },
     get dist() { return cur.dist; },
+    get pitch() { return cur.pitch; },
     get target() { return { x: cur.tx, y: cur.ty, z: cur.tz }; },
     set enabled(v) { enabled = v; if (!v) { dragging = null; pointers.clear(); } },
     onChange(fn) { onChange = fn; },

@@ -124,6 +124,15 @@ export async function boot() {
        mean nothing until somebody says what height and light are. After that
        it is behind the ⓘ, where it does not get in the way. */
     if (first && firstVisit && !st.room) { firstVisit = false; ui.legend(city); }
+    /* The arrival. A page that opens on a still image of a 3D scene looks
+       like a picture of one; a slow settle onto the skyline says "this
+       moves, and you can move it" without a tooltip. It is skipped for
+       anybody who has asked for less motion, and for anybody who has already
+       grabbed the camera in the second before the directory answered. */
+    if (first && !reduced && !cam.touched) {
+      cam.flyTo({ dist: cam.dist * 1.5, pitch: Math.min(1.2, cam.pitch + 0.28) }, 0);
+      cam.home(1900);
+    }
   });
 
   D.on("status", () => { paintChips(); if (!city) sayWhyEmpty(); });
