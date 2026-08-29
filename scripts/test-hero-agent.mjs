@@ -64,9 +64,22 @@ check('and again, the other way', await differs('/tmp/hero-look-dl.png','/tmp/he
 
 console.log('\n=== a shake spins it');
 const st = () => pg.evaluate(()=>{ const s=window.__hero?.state; return s?{yaw:s.yaw,vYaw:s.vYaw,spinning:s.spinning}:null; });
+/* WATCHED ON THE FRAME, NOT ON A TIMER.
+   This was a setInterval at 25ms, and under swiftshader it never ran once:
+   a single frame of this canvas costs so much that the timer queue is
+   starved for the whole three seconds the head is spinning. Measured — 36
+   samples in 3.2s, every one of them from requestAnimationFrame and not one
+   from the interval, while the flag was plainly up for the first five
+   frames. rAF is also the right clock for the question: the physics has just
+   run when it fires, so the frame sees exactly the state the frame drew. */
 await pg.evaluate(() => {
   window.__sawSpin = false;
-  window.__spinWatch = setInterval(() => { if(window.__hero.state.spinning) window.__sawSpin = true; }, 25);
+  window.__spinStop = false;
+  const watch = () => {
+    if(window.__hero?.state?.spinning) window.__sawSpin = true;
+    if(!window.__spinStop) requestAnimationFrame(watch);
+  };
+  requestAnimationFrame(watch);
 });
 /* The waggle is dispatched from inside the page rather than driven over CDP.
    A shake is three reversals inside 420ms, and under software rendering one
@@ -88,11 +101,10 @@ console.log('  velocity the instant the shake ended:', JSON.stringify(spun));
 check('it picked up angular velocity', Math.abs(spun.vYaw) > 4, spun.vYaw.toFixed(2));
 /* Watched, not sampled. At 25 rad/s the head does a whole revolution in a
    quarter second, so a snapshot of its ANGLE proves nothing — it can be back
-   where it started — and waitForFunction polls on rAF, which under software
-   rendering fires more slowly than the whole spin takes. A setInterval
-   installed before the shake sees the flag whenever it is up. */
+   where it started. The watcher above sees the flag on whichever frame it
+   is up. */
 await pg.waitForTimeout(3200);
-const sawSpin = await pg.evaluate(() => { clearInterval(window.__spinWatch); return window.__sawSpin; });
+const sawSpin = await pg.evaluate(() => { window.__spinStop = true; return window.__sawSpin; });
 check('and the spring let go, so it spun free', sawSpin === true);
 await pg.waitForTimeout(900); await shot('/tmp/hero-spin.png');
 await pg.waitForTimeout(4200);

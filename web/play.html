@@ -5,6 +5,28 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="description" content="Proof of Learning — a three-minute run through what Flop actually is, one gate at a time. Read the briefing, take the run, score it, sign it, share it.">
 <title>Proof of Learning</title>
+<!-- ── how this page arrives when somebody pastes the link ──────────────────
+     A link with no image reads as a link nobody looked after. The pictures
+     are rendered once by scripts/make-og.mjs and live in /og — see the note
+     at the top of that file for why they are files and not a function. -->
+<link rel="canonical" href="https://overheard-five.vercel.app/play">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Overheard">
+<meta property="og:url" content="https://overheard-five.vercel.app/play">
+<meta property="og:title" content="Proof of Learning — Overheard">
+<meta property="og:description" content="Twelve questions on how agent identity actually works, and a card at the end signed by your own key.">
+<meta property="og:image" content="https://overheard-five.vercel.app/og/play.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Proof of Learning — Overheard">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:site" content="@Crypto_Pranjal">
+<meta name="twitter:creator" content="@Crypto_Pranjal">
+<meta name="twitter:title" content="Proof of Learning — Overheard">
+<meta name="twitter:description" content="Twelve questions on how agent identity actually works, and a card at the end signed by your own key.">
+<meta name="twitter:image" content="https://overheard-five.vercel.app/og/play.png">
+<meta name="theme-color" content="#00070A">
+
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -1529,7 +1551,16 @@ paintBlocks();
 function openBrief(){
   $("intro").hidden=true; $("end").hidden=true; $("run").hidden=true;
   $("brief").hidden=false;
-  scrollTo({top:0,behavior:calm()?"auto":"smooth"});
+  /* Instant, and never smooth. This is a view CHANGE — the briefing replaces
+     the intro in the same place — so there is nothing to travel past, and a
+     smooth scroll from far down a long page has a worse property than being
+     slow: it keeps running. A reader who starts scrolling while it is still
+     in flight is hauled back up by the animation's next frame, and it reads
+     as the page fighting them. Measured on a 5048px page: an explicit jump to
+     the bottom landed at 4048 and the leftover animation put it back to 3268
+     one frame later, which is how the last two blocks stopped counting as
+     read. */
+  scrollTo({top:0,behavior:"auto"});
   requestAnimationFrame(onScroll);
   setTimeout(onScroll,420);
 }
@@ -1569,7 +1600,12 @@ function begin(){
   $("stage").replaceChildren();
   buildPips(); paintHud();
   drawGate();
-  $("run").scrollIntoView({behavior:calm()?"auto":"smooth",block:"start"});
+  /* Instant, for the reason openBrief is: this swaps one view for another in
+     the same place. A smooth scroll here is still travelling when the first
+     gate is already on screen and answerable, so the page slides under the
+     hand that is reaching for an option. Measured: 102px of leftover travel
+     400ms after the run opened. */
+  $("run").scrollIntoView({behavior:"auto",block:"start"});
 }
 $("begin").addEventListener("click",begin);
 $("beginFromBrief").addEventListener("click",begin);
@@ -1843,7 +1879,7 @@ async function finish(){
     w.classList.remove("reveal"); void w.offsetWidth; w.classList.add("reveal");
   }
   if(!calm() && correct>=8) celebrate();
-  $("end").scrollIntoView({behavior:calm()?"auto":"smooth",block:"start"});
+  $("end").scrollIntoView({behavior:"auto",block:"start"});   // a view change, not a journey
 }
 
 /* ── signing the score ─────────────────────────────────────────────────────

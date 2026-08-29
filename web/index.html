@@ -5,6 +5,28 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="description" content="Paste your agent DID and get a shareable credential card. Independent, reads the public Technocore network.">
 <title>Agent Credential</title>
+<!-- ── how this page arrives when somebody pastes the link ──────────────────
+     A link with no image reads as a link nobody looked after. The pictures
+     are rendered once by scripts/make-og.mjs and live in /og — see the note
+     at the top of that file for why they are files and not a function. -->
+<link rel="canonical" href="https://overheard-five.vercel.app/">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Overheard">
+<meta property="og:url" content="https://overheard-five.vercel.app/">
+<meta property="og:title" content="Overheard — give your agent a face">
+<meta property="og:description" content="Paste any did:key and get a shareable credential card that says what that identity has actually done on Technocore. No install, no account.">
+<meta property="og:image" content="https://overheard-five.vercel.app/og/home.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Overheard — give your agent a face">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:site" content="@Crypto_Pranjal">
+<meta name="twitter:creator" content="@Crypto_Pranjal">
+<meta name="twitter:title" content="Overheard — give your agent a face">
+<meta name="twitter:description" content="Paste any did:key and get a shareable credential card that says what that identity has actually done on Technocore. No install, no account.">
+<meta name="twitter:image" content="https://overheard-five.vercel.app/og/home.png">
+<meta name="theme-color" content="#00070A">
+
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -195,6 +217,42 @@ h1 em{
 }
 .field button:hover::after{opacity:1}
 .field button:active{transform:scale(.97)}
+/* ── the shortcut for whoever is already signed in ─────────────────────────
+   A button, not a hint: it does the thing rather than telling you how. The
+   DID is shown short and in the same mono the card uses, so it is obviously
+   the same string that would have gone in the box above. */
+.mine{margin-top:13px}
+.mine button{
+  display:inline-flex;align-items:center;gap:11px;padding:11px 16px 11px 12px;border-radius:13px;cursor:pointer;
+  font-family:var(--display);font-size:14px;font-weight:700;color:var(--txt);
+  background:linear-gradient(rgba(0,180,215,.13),rgba(0,180,215,.05));
+  border:1px solid rgba(0,180,215,.32);
+  transition:transform .25s var(--ease),border-color .25s var(--ease),box-shadow .25s var(--ease);
+}
+.mine button:hover{transform:translateY(-2px);border-color:var(--cy-hi);
+  box-shadow:0 16px 34px -20px rgba(0,180,215,.95)}
+.mine button:active{transform:translateY(0)}
+.mine .av{width:30px;height:30px;border-radius:10px;flex:none;display:block;overflow:hidden}
+.mine .av svg{width:100%;height:100%;display:block}
+.mine .who{display:flex;flex-direction:column;gap:2px;text-align:left;line-height:1.15}
+.mine .who small{font-family:var(--mono);font-size:10.5px;color:var(--faint);letter-spacing:.02em}
+.mine .go{width:15px;height:15px;color:var(--cy-hi);transition:transform .3s var(--ease)}
+.mine button:hover .go{transform:translateX(3px)}
+
+/* ── the way to the explainer, for somebody who has just landed ─────────── */
+.newhere{
+  display:inline-flex;align-items:center;gap:9px;margin-top:18px;padding:8px 13px 8px 9px;border-radius:999px;
+  font-size:13.5px;font-weight:600;color:var(--dim);text-decoration:none;
+  background:rgba(4,20,28,.6);border:1px solid rgba(0,180,215,.2);
+  transition:color .25s var(--ease),border-color .25s var(--ease),transform .25s var(--ease);
+}
+.newhere:hover{color:var(--txt);border-color:rgba(95,235,255,.5);transform:translateY(-1px)}
+.newhere .nh-ic{width:24px;height:24px;flex:none;border-radius:8px;display:grid;place-items:center;
+  color:var(--cy-hi);background:rgba(0,180,215,.14)}
+.newhere .nh-ic svg{width:14px;height:14px}
+.newhere .nh-go{width:14px;height:14px;color:var(--faint);transition:transform .3s var(--ease),color .25s}
+.newhere:hover .nh-go{transform:translateX(3px);color:var(--cy-hi)}
+
 .hint{margin-top:15px;font-size:13.5px;color:var(--faint);display:flex;gap:9px;flex-wrap:wrap;align-items:center}
 .hint b{color:var(--dim);font-weight:600}
 .hint button{background:none;border:0;color:var(--cy);font:inherit;font-weight:600;cursor:pointer;padding:0;text-decoration:underline;text-underline-offset:3px}
@@ -349,6 +407,19 @@ h1 em{
   background:linear-gradient(rgba(4,20,28,.86),rgba(4,20,28,.86)) padding-box,var(--bevel) border-box;
   border:1px solid transparent;backdrop-filter:blur(8px);
 }
+/* The same panel, opened as the finish bar's drawer. It keeps its reading
+   width — the prose in it is written for one column, and stretching it to
+   the card's width would make every line too long to read — and instead says
+   what it belongs to: the bar's amber, and a thread down from it. */
+.diag.inline{
+  margin-top:20px;position:relative;
+  background:linear-gradient(rgba(6,23,31,.9),rgba(4,20,28,.9)) padding-box,
+             linear-gradient(rgba(242,179,61,.42),rgba(242,179,61,.14)) border-box;
+}
+.diag.inline::before{
+  content:"";position:absolute;left:50%;top:-20px;width:1px;height:20px;
+  background:linear-gradient(rgba(242,179,61,.55),rgba(242,179,61,0));
+}
 .diag h3{font-weight:800;font-size:22px;letter-spacing:-.03em;margin-bottom:20px}
 .checks{display:flex;flex-direction:column;gap:2px;margin-bottom:22px}
 .check{display:grid;grid-template-columns:26px 1fr auto;gap:14px;align-items:baseline;padding:12px 0;border-bottom:1px solid rgba(16,57,74,.75)}
@@ -412,6 +483,68 @@ h1 em{
 .provebar.done .pb-ic{background:radial-gradient(circle at 34% 28%,rgba(95,235,255,.4),rgba(0,140,175,.2));
   box-shadow:inset 0 0 0 1px rgba(95,235,255,.6)}
 .provebar.done .pb-txt b::after{content:"  ·  proven";color:var(--cy-hi);font-weight:600}
+
+/* ── the finish line ───────────────────────────────────────────────────────
+   Same shape as the prove bar so the two read as a pair of offers rather
+   than as two unrelated widgets, but amber rather than cyan: this one is
+   about something UNFINISHED, and the card above it is already amber when
+   it says so. */
+.finish{
+  width:100%;margin-top:16px;border-radius:15px;overflow:hidden;
+  background:linear-gradient(rgba(242,179,61,.09),rgba(242,179,61,.03));
+  border:1px solid rgba(242,179,61,.3);
+  transition:border-color .3s var(--ease),transform .3s var(--ease),box-shadow .3s var(--ease);
+}
+.finish:hover{border-color:rgba(242,179,61,.65);transform:translateY(-2px);
+  box-shadow:0 18px 40px -24px rgba(242,179,61,.8)}
+.finish.open{border-color:rgba(242,179,61,.55);background:linear-gradient(rgba(242,179,61,.13),rgba(242,179,61,.04))}
+.fi-main{
+  display:flex;align-items:center;gap:15px;width:100%;
+  padding:15px 18px;cursor:pointer;text-align:left;
+  font-family:var(--display);background:none;border:0;
+}
+.fi-main:focus-visible{outline:2px solid var(--warn);outline-offset:-3px}
+/* The question that decides what this panel can do for you. Quiet, because
+   the answer is "no" for most people looking at somebody else's card. */
+.fi-own{
+  display:flex;align-items:center;gap:10px;width:100%;padding:12px 18px;cursor:pointer;
+  font-family:var(--display);font-size:13.5px;font-weight:700;color:var(--warn);
+  background:rgba(242,179,61,.07);border:0;border-top:1px solid rgba(242,179,61,.22);
+  transition:background .25s var(--ease),color .25s var(--ease);
+}
+.fi-own:hover{background:rgba(242,179,61,.15);color:#FFD98A}
+.fi-own svg{width:16px;height:16px;flex:none}
+/* the mark: a ring with a piece missing, which is what the card's seal shows */
+.fi-ring{
+  width:38px;height:38px;flex:none;border-radius:50%;position:relative;
+  --turn:.62turn;
+  background:conic-gradient(var(--warn) 0turn var(--turn),rgba(242,179,61,.16) var(--turn) 1turn);
+  transition:background .5s var(--ease);
+  display:grid;place-items:center;
+}
+.fi-ring::after{content:"";width:27px;height:27px;border-radius:50%;background:#06171f}
+.fi-arc{
+  position:absolute;inset:-4px;border-radius:50%;border:1px solid rgba(242,179,61,.35);
+  animation:fiPulse 2.8s var(--ease) infinite;
+}
+@keyframes fiPulse{0%{transform:scale(1);opacity:.7}70%{transform:scale(1.18);opacity:0}100%{opacity:0}}
+.fi-txt{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:3px}
+.fi-txt b{font-size:15.5px;font-weight:700;color:var(--txt);letter-spacing:-.01em}
+.fi-txt span{font-size:13px;color:var(--faint);line-height:1.45}
+.fi-go{width:24px;height:24px;flex:none;color:var(--warn);display:grid;place-items:center;
+  transition:transform .35s var(--ease)}
+.fi-go svg{width:19px;height:19px}
+.finish.open .fi-go{transform:rotate(180deg)}
+@media (prefers-reduced-motion:reduce){.fi-arc{animation:none}}
+/* Pointing at the control that is already there, rather than growing a
+   second copy of it further down the page. */
+.provebar.nudge{animation:nudge 1.2s var(--ease)}
+@keyframes nudge{
+  0%,100%{box-shadow:0 0 0 0 rgba(0,180,215,0)}
+  30%{box-shadow:0 0 0 5px rgba(0,180,215,.28)}
+  60%{box-shadow:0 0 0 3px rgba(0,180,215,.16)}
+}
+@media (prefers-reduced-motion:reduce){.provebar.nudge{animation:none;box-shadow:0 0 0 4px rgba(0,180,215,.3)}}
 .provebar[disabled]{opacity:1}
 .pb-ok{flex:0 0 auto;color:var(--cy-hi);display:none}
 .pb-ok svg{width:24px;height:24px;display:block;filter:drop-shadow(0 0 8px rgba(95,235,255,.55))}
@@ -1044,6 +1177,11 @@ footer a:hover{color:var(--cy-hi)}
       <div class="tagline"><span class="dot"></span>Technocore · agent identity</div>
       <h1>Your agent has an ID. Give it a <em>face</em>.</h1>
       <p class="lede">Paste your DID. Get a credential worth posting — no install, no account, nothing uploaded.</p>
+      <a class="newhere" href="/what">
+        <span class="nh-ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.6"/><path d="M9.6 9.4a2.5 2.5 0 1 1 3.4 2.3c-.7.3-1 .9-1 1.6v.3"/><path d="M12 16.9v.01"/></svg></span>
+        <span>New here? What is Overheard</span>
+        <svg class="nh-go" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h13"/><polyline points="12 6 18 12 12 18"/></svg>
+      </a>
     </div>
     <div class="hface" id="hface">
       <!-- Routing, not decoration: every elbow is 45°, the way a trace is
@@ -1071,6 +1209,10 @@ footer a:hover{color:var(--cy-hi)}
       <input id="did" type="text" spellcheck="false" autocomplete="off" placeholder="did:key:z6Mk…" aria-label="Your agent DID">
       <button type="submit">Issue credential</button>
     </form>
+    <!-- Only ever present for somebody already signed in on this browser:
+         the DID they would have pasted is one this page already knows, so
+         asking them to paste it is asking them to do our typing. -->
+    <div class="mine" id="mine" hidden></div>
     <div class="hint"><b>Public DID only.</b>
       <a href="/create.html" style="color:var(--mint);font-weight:600;text-decoration:underline;text-underline-offset:3px">No DID yet? Make one →</a></div>
     <div class="err" id="err" role="status" aria-live="polite"></div>
@@ -1127,6 +1269,32 @@ footer a:hover{color:var(--cy-hi)}
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7"/><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"/></svg>Copy proof link</button>
     </div>
 
+
+    <!-- WHAT A HALF-SET-UP CARD WAS MISSING.
+
+         The card can say HALF SET UP, and until now the page said nothing
+         at all about how to make it say anything else — the panel that
+         explains it only ever appeared INSTEAD of a card, which is the one
+         case where nobody is looking at those words. So this is one line,
+         under the card, that opens the same two jobs in place. -->
+    <div class="finish" id="finish" hidden>
+      <button class="fi-main" id="finishMain" type="button" aria-expanded="false" aria-controls="diag">
+        <span class="fi-ring" aria-hidden="true"><span class="fi-arc"></span></span>
+        <span class="fi-txt">
+          <b id="finishTitle">This card is half set up</b>
+          <span id="finishSub">Two things finish it. Both take under a minute.</span>
+        </span>
+        <span class="fi-go" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
+        </span>
+      </button>
+      <!-- Only for somebody who is NOT signed in as this identity: the one
+           question that changes what this panel can do for them. -->
+      <button class="fi-own" id="finishOwn" type="button" hidden>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="14.5" r="4"/><path d="M10.9 11.6 20 2.5"/><path d="M16.8 5.7 19 7.9M14.4 8.1l2.2 2.2"/></svg>
+        <span>This is mine — unlock and finish it</span>
+      </button>
+    </div>
 
     <!-- Shown instead of a card when there is nothing yet to put on one. It
          used to be a table of failed checks and a paragraph of instructions,
@@ -1310,7 +1478,8 @@ footer a:hover{color:var(--cy-hi)}
 <script type="module">
 /* One identity, one session, every page. Unlocking here signs this browser
    in, so the Rooms page and the bar do not ask again. */
-import { signIn } from "/session.js";
+import { signIn, getSession, onSession, shortDid, hueOf } from "/session.js";
+import { faceSVG } from "/nav.js";
 /* ── did:key → Ed25519 public key ───────────────────────── */
 const B58="123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
 function b58decode(s){
@@ -2745,6 +2914,7 @@ function renderDiagnostic(parsed, stats, note){
   if(!stats && (note?.registered || (lastOwned&&lastOwned.rooms&&lastOwned.rooms.length))){
     diag.hidden=true; wrap.hidden=false; actions.hidden=false;
     setupProve(parsed.did);
+    finishPanel(parsed, stats, note);
     return;
   }
 
@@ -2756,6 +2926,7 @@ function renderDiagnostic(parsed, stats, note){
     if(!stats.witnessed){ try{ localStorage.removeItem(postedKey(parsed.did)); }catch{} }
     diag.hidden=true; wrap.hidden=false; actions.hidden=false;
     setupProve(parsed.did);        // there is a card, so it can be claimed
+    finishPanel(parsed, stats, note);
     return;
   }
 
@@ -2764,6 +2935,131 @@ function renderDiagnostic(parsed, stats, note){
   // card there is nothing to prove ownership OF.
   actions.hidden=true;
   $("provebar").hidden=true;   // nothing to prove ownership OF
+  $("finish").hidden=true;     // the jobs are the whole screen here
+  buildFix(parsed, stats, note);
+}
+
+/**
+ * ONE LINE UNDER A CARD THAT IS NOT FINISHED.
+ *
+ * The card already says HALF SET UP in letters an inch high. What it never
+ * said was what the other half IS, or that this page can do it for you. So:
+ * a single row, closed, that opens the same two jobs in place — and never
+ * appears at all on a card that is already done, because a finished thing
+ * with a "fix me" button under it is an insult to the person who finished
+ * it.
+ *
+ * IT SHOWS FOR ANY CARD, NOT JUST YOURS. Somebody looking up a stranger's
+ * half-set-up identity is being told what that state means, which is worth
+ * knowing; what changes is what the panel can DO, and that is decided by
+ * whether this browser can unlock the key — the panel below already asks
+ * exactly that question and answers it honestly either way.
+ */
+function finishPanel(parsed, stats, note){
+  const bar=$("finish");
+  const reg=note?.registered===true;
+  const posted=!!(stats && stats.count>0);
+  const proven=!!(stats && stats.proof);
+  const sess=getSession();
+  const mine=sess?.did===parsed.did || savedIdentity?.did===parsed.did;
+
+  /* Done is done. A card with a note, messages and a proof has nothing left
+     to offer, and neither has this. */
+  if(reg && posted && proven){ bar.hidden=true; $("diag").hidden=true; return; }
+
+  /* The one case that is not "half set up": everything is done except the
+     proof, which is optional and already has its own control right above
+     this one. Pointing at that rather than repeating it. */
+  const onlyProof = reg && posted && !proven;
+
+  bar.hidden=false;
+  bar.classList.remove("open");
+  $("diag").hidden=true;
+  const main=$("finishMain"), own=$("finishOwn");
+  main.setAttribute("aria-expanded","false");
+
+  const missing=[!reg && "a profile note", !posted && "a signed message"].filter(Boolean);
+  /* One missing thing is not "both". The panel said "Both can be done on
+     this screen" under a card that was missing exactly one, which is the
+     kind of sentence that makes a reader stop trusting the rest. */
+  const one = missing.length === 1;
+  $("finishTitle").textContent = onlyProof
+    ? "One step from proven"
+    : mine ? "Your card is half set up" : "This card is half set up";
+  $("finishSub").textContent = onlyProof
+    ? "The setup is correct. Signing one line here would make it say PROVEN."
+    : `Missing ${missing.join(" and ")}. ${
+        mine ? (one ? "It can be done on this screen." : "Both can be done on this screen.")
+             : "Here is what that means, and how it gets finished."}`;
+
+  /* The ring is the card's own seal, and it shows the real fraction: a
+     third of the way round for a note on its own, two thirds once there is
+     a message on the record. A progress mark that is not measuring anything
+     is a decoration pretending to be information. */
+  const done=(reg?1:0)+(posted?1:0)+(proven?1:0);
+  $("finish").querySelector(".fi-ring").style.setProperty("--turn", (done/3).toFixed(3)+"turn");
+
+  /* The owner's route. Shown only when this browser is NOT already holding
+     this identity — when it is, the panel below opens straight onto the work
+     and a second button asking "is this yours?" would be asking a question it
+     has already answered. */
+  own.hidden = onlyProof || mine;
+
+  const openPanel=(scrollTo)=>{
+    bar.classList.add("open");
+    main.setAttribute("aria-expanded","true");
+    buildFix(parsed, stats, note, true);
+    const target = scrollTo && $("diag").querySelector(scrollTo);
+    (target || $("diag")).scrollIntoView({behavior:calm?"auto":"smooth",block:"nearest"});
+    if(target){ pointAt(target, target.querySelector("input,textarea")); }
+  };
+
+  main.onclick=()=>{
+    if(bar.classList.contains("open")){
+      bar.classList.remove("open");
+      main.setAttribute("aria-expanded","false");
+      $("diag").hidden=true;
+      return;
+    }
+    if(onlyProof){
+      /* Nothing to build — the prove bar above IS the step. Send them to it
+         rather than growing a second copy of the same button. */
+      const pb=$("provebar");
+      pb.hidden=false;
+      pb.scrollIntoView({behavior:calm?"auto":"smooth",block:"center"});
+      pb.classList.add("nudge");
+      setTimeout(()=>pb.classList.remove("nudge"),1400);
+      return;
+    }
+    openPanel(null);
+  };
+
+  /* Straight to the passphrase, because somebody who pressed "this is mine"
+     has already answered the only question the panel would have asked. */
+  own.onclick=()=>openPanel(".restore, .unlockrow");
+}
+
+/**
+ * The two jobs, and every way of getting at them.
+ *
+ * This used to be the tail of renderDiagnostic and it ran in exactly one
+ * situation: no card at all. But the commonest thing a person actually has
+ * is a card that says HALF SET UP — and that screen offered them nothing.
+ * So the work is a function now, and it is called from two places: as the
+ * whole screen when there is nothing to show, and underneath the card when
+ * there is one that is not finished.
+ */
+function buildFix(parsed, stats, note, inline=false){
+  const diag=$("diag"), wrap=$("cardwrap");
+  /* When there is a card on screen, the panel appears BELOW it and the card
+     stays exactly where it is. `show` is the one place that difference
+     lives, so no branch below can forget it and blank somebody's card. */
+  /* `inline` also carries the look: opened from the bar it is a drawer that
+     belongs to the bar, and it says so with the same amber and a thread
+     joining the two. Standing on its own it is the whole screen and keeps
+     the site's usual chrome. */
+  diag.classList.toggle("inline", inline);
+  const show=()=>{ diag.hidden=false; if(!inline) wrap.hidden=true; };
 
   const reg = note?.registered === true;
   const noteUnknown = note?.registered === null || note?.known === false || !note;
@@ -2787,7 +3083,7 @@ function renderDiagnostic(parsed, stats, note){
     const p2=document.createElement("p"); p2.className="small"; p2.style.marginTop="12px";
     p2.textContent="A note lives at a fixed address and does not expire, so a second look usually settles it.";
     doit.append(again,p2);
-    diag.hidden=false; wrap.hidden=true;
+    show();
     return;
   }
   const mine=savedIdentity?.did===parsed.did;
@@ -2829,7 +3125,7 @@ function renderDiagnostic(parsed, stats, note){
     // so this is the un-confirmed case, which is the one that really does
     // have to wait.
     witness(parsed.did) ? offerIssue(parsed.did) : offerRecheck(parsed.did);
-    diag.hidden=false; wrap.hidden=true;
+    show();
     return;
   }
   const para=(t,cls)=>{ const p=document.createElement("p"); if(cls)p.className=cls; p.textContent=t; doit.appendChild(p); return p; };
@@ -3190,7 +3486,7 @@ function renderDiagnostic(parsed, stats, note){
 
   // Posted, but the note is still open.
   if(donePost) (witness(parsed.did) ? offerIssue : offerRecheck)(parsed.did);
-  diag.hidden=false; wrap.hidden=true;
+  show();
 }
 
 /* ── importing an identity ─────────────────────────────────────────────────
@@ -3609,6 +3905,11 @@ let current=null, lastStats=null, lastNote=null, lastOwned=null;
 
 async function issue(raw){
   $("err").textContent="";
+  /* A new lookup answers a different question, so the previous answer's
+     offer to finish a different identity goes away before the first byte
+     arrives — not after it. */
+  $("finish").hidden=true;
+  $("finish").classList.remove("open");
   let p;
   try{ p=parseDid(raw); }
   catch(e){ $("err").textContent=e.message; return; }
@@ -4086,6 +4387,49 @@ $("proofBtn").addEventListener("click", async () => {
 });
 
 $("form").addEventListener("submit",e=>{ e.preventDefault(); issue($("did").value); });
+
+/* ── THE SHORTCUT FOR SOMEBODY ALREADY SIGNED IN ───────────────────────────
+   The box above asks you to paste a DID. If this browser is signed in, the
+   DID it would like you to paste is one the page already has — so it offers
+   to run the lookup instead of asking you to do its typing. Present only
+   while there is a session, and repainted by the same event that repaints
+   the bar, so signing out in another tab takes it away here too. */
+function paintMine(){
+  const box=$("mine");
+  const sess=getSession();
+  box.replaceChildren();
+  box.hidden=!sess;
+  if(!sess) return;
+
+  const b=document.createElement("button");
+  b.type="button";
+  b.title=sess.did;
+
+  const av=document.createElement("span");
+  av.className="av";
+  av.innerHTML=faceSVG(hueOf(sess.did),"avsvg");         // our own markup; the bar draws the same face
+
+  const who=document.createElement("div");
+  who.className="who";
+  who.append(Object.assign(document.createElement("span"),{textContent:"Create my credential"}));
+  who.append(Object.assign(document.createElement("small"),{textContent:shortDid(sess.did,8,6)}));
+
+  const go=document.createElementNS("http://www.w3.org/2000/svg","svg");
+  go.setAttribute("class","go"); go.setAttribute("viewBox","0 0 24 24");
+  go.setAttribute("fill","none"); go.setAttribute("stroke","currentColor");
+  go.setAttribute("stroke-width","2"); go.setAttribute("stroke-linecap","round"); go.setAttribute("stroke-linejoin","round");
+  const p1=document.createElementNS("http://www.w3.org/2000/svg","path");
+  p1.setAttribute("d","M5 12h13");
+  const p2=document.createElementNS("http://www.w3.org/2000/svg","polyline");
+  p2.setAttribute("points","12 6 18 12 12 18");
+  go.append(p1,p2);
+
+  b.append(av,who,go);
+  b.addEventListener("click",()=>{ $("did").value=sess.did; issue(sess.did); });
+  box.append(b);
+}
+paintMine();
+onSession(paintMine);
 
 /* A card you can link to. ?did=… fills the field and runs the lookup, which
    is what makes "Copy a link to its card" worth having.

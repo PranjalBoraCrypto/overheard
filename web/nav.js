@@ -98,3 +98,33 @@ export function ensureFont() {
 export function iconSVG(name, cls = "i") {
   return `<svg class="${cls}" viewBox="0 0 24 24" aria-hidden="true">${ICON[name] || ""}</svg>`;
 }
+
+/* ── the face ──────────────────────────────────────────────────────────────
+   The same rounded head, visor and ears the card draws, small enough for a
+   chip, tinted by the hue the key itself produces. Two identities are never
+   the same colour by accident, and yours is the one you learn to recognise.
+
+   It lives here rather than in the bar because the card page now shows it
+   too, next to "create my credential" — and a face that is nearly the same
+   in two places is worse than one that is not there at all. */
+let faceSeq = 0;
+export function faceSVG(hue, cls = "face") {
+  const id = `f${++faceSeq}`;
+  return `<svg class="${cls}" viewBox="0 0 40 40" aria-hidden="true">
+  <defs>
+    <linearGradient id="${id}a" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="hsl(${hue.toFixed(0)} 90% 68%)"/>
+      <stop offset="1" stop-color="hsl(${(hue - 22).toFixed(0)} 92% 40%)"/>
+    </linearGradient>
+    <linearGradient id="${id}b" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="hsl(${hue.toFixed(0)} 100% 78%)"/>
+      <stop offset="1" stop-color="hsl(${hue.toFixed(0)} 100% 62%)"/>
+    </linearGradient>
+  </defs>
+  <rect x="2" y="9" width="4" height="12" rx="2" fill="url(#${id}a)" opacity=".75"/>
+  <rect x="34" y="9" width="4" height="12" rx="2" fill="url(#${id}a)" opacity=".75"/>
+  <rect x="5" y="4" width="30" height="30" rx="10" fill="url(#${id}a)"/>
+  <rect x="10" y="11" width="20" height="13" rx="6" fill="#031015" opacity=".92"/>
+  <rect x="13.5" y="16" width="13" height="3" rx="1.5" fill="url(#${id}b)"/>
+</svg>`;
+}

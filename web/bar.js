@@ -23,7 +23,7 @@
  */
 
 import { getSession, getVault, signIn, signOut, onSession, shortDid, hueOf, openVault, saveVault } from "/session.js";
-import { PAGES, FONT_HREF } from "/nav.js";
+import { PAGES, FONT_HREF, faceSVG } from "/nav.js";
 
 /* The tabs are the pages that asked to be tabs, from the one list the footer
    also reads. `hot` marks a tab as worth noticing without pretending it is
@@ -237,31 +237,6 @@ const GLYPH = `
   <rect x="16" y="16" width="16" height="16" rx="5" fill="#00070A"/>
 </svg>`;
 
-/* The face from the card, small enough for a chip: the same rounded head,
-   visor and ears, tinted by the same hue the card and the message stream
-   derive from the key. Two identities are never the same colour by accident,
-   and yours is the one you learn to recognise. */
-let faceSeq = 0;
-function faceSVG(hue) {
-  const id = `f${++faceSeq}`;
-  return `<svg class="face" viewBox="0 0 40 40" aria-hidden="true">
-  <defs>
-    <linearGradient id="${id}a" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="hsl(${hue.toFixed(0)} 90% 68%)"/>
-      <stop offset="1" stop-color="hsl(${(hue - 22).toFixed(0)} 92% 40%)"/>
-    </linearGradient>
-    <linearGradient id="${id}b" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="hsl(${hue.toFixed(0)} 100% 78%)"/>
-      <stop offset="1" stop-color="hsl(${hue.toFixed(0)} 100% 62%)"/>
-    </linearGradient>
-  </defs>
-  <rect x="2" y="9" width="4" height="12" rx="2" fill="url(#${id}a)" opacity=".75"/>
-  <rect x="34" y="9" width="4" height="12" rx="2" fill="url(#${id}a)" opacity=".75"/>
-  <rect x="5" y="4" width="30" height="30" rx="10" fill="url(#${id}a)"/>
-  <rect x="10" y="11" width="20" height="13" rx="6" fill="#031015" opacity=".92"/>
-  <rect x="13.5" y="16" width="13" height="3" rx="1.5" fill="url(#${id}b)"/>
-</svg>`;
-}
 
 const ICONS = {
   copy: '<svg viewBox="0 0 24 24"><rect x="9" y="9" width="12" height="12" rx="2.5"/><path d="M6 15H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v1"/></svg>',

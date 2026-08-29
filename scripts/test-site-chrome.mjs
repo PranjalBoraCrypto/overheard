@@ -1,0 +1,360 @@
+/* The furniture: the bar, the footer, the explainer page, and the two things
+ * the card page now offers a signed-in visitor.
+ *
+ * These are the parts every page carries, which is exactly why they rot
+ * quietly — nobody opens a page to look at its footer. What is checked here:
+ *
+ *   · the gap above the footer, on every page, because it was ZERO on three
+ *     of them and negative on a fourth: the margin lived on :host and every
+ *     page's own `* { margin: 0 }` beat it;
+ *   · the footer links every page the site has, from the one list the bar
+ *     also reads, so a new page cannot appear in one and not the other;
+ *   · the bar shows a way in when signed out and a chip when signed in, and
+ *     the Testnet pill is a label rather than a link somebody can follow;
+ *   · /what answers its own question above the fold and every route off it
+ *     goes somewhere real;
+ *   · the card page offers a signed-in visitor their own card without
+ *     retyping their DID, and offers a half-set-up card a way to finish.
+ *
+ * Needs playwright and a chromium:  npx playwright install chromium
+ */
+import { chromium } from "playwright";
+import http from "http"; import fs from "fs"; import path from "path";
+import { fileURLToPath } from "url";
+
+const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "web");
+const DID = "did:key:z6MkngD8RZKCgJQCkJvHfGyYoCcNCG5rz9Tc7yRmWrMZExaz";
+
+/* The card page's state is decided by two lookups. These flags drive them, so
+   one server can stand in for "nothing on the record", "note but no
+   messages", and "fully set up and proven". */
+let REGISTERED = true, MESSAGES = 0, PROOF = false;
+
+const srv = http.createServer((req, res) => {
+  const u = new URL(req.url, "http://x");
+  let p = u.pathname;
+  if (p === "/") p = "/index.html";
+  if (p === "/what") p = "/what.html";
+  if (p === "/city") p = "/city.html";
+  if (p === "/play") p = "/play.html";
+  if (p === "/v") p = "/v.html";
+  if (p === "/rooms") p = "/rooms.html";
+  const J = (o) => { res.writeHead(200, { "content-type": "application/json" }); res.end(JSON.stringify(o)); };
+
+  if (p === "/api/note") return J({ did: DID, registered: REGISTERED, known: true, fingerprint: "ab".repeat(8), note: "a note" });
+  if (p === "/api/profile") return J({
+    owned: { rooms: [], owners: 312, identities: 97264 },
+    profile: MESSAGES
+      ? { count: MESSAGES, unique: MESSAGES, templates: 0, rooms: ["lobby"],
+          first: "2026-08-25T10:00:00Z", last: "2026-08-27T09:00:00Z", last_text: "hello from a test" }
+      : { count: 0, unique: 0, templates: 0, rooms: [], first: null, last: null, last_text: "" },
+    standing: null });
+  if (p === "/api/room") return J({ room: u.searchParams.get("room"), first_seq: null, last_seq: "0", count: 0, messages: [] });
+  if (p === "/api/identities") return J({ updated: new Date().toISOString(), identities: {} });
+  if (p.startsWith("/api/") || p.startsWith("/data/")) return J({});
+
+  const f = path.join(ROOT, p);
+  if (fs.existsSync(f) && fs.statSync(f).isFile()) {
+    const type = p.endsWith(".js") ? "text/javascript" : p.endsWith(".png") ? "image/png" : "text/html";
+    res.writeHead(200, { "content-type": type });
+    return res.end(fs.readFileSync(f));
+  }
+  res.writeHead(404); res.end("{}");
+}).listen(8971);
+
+let bad = 0;
+const check = (n, ok, d = "") => {
+  console.log(`  ${ok ? "ok  " : "FAIL"}  ${n}${d ? "   " + d : ""}`);
+  if (!ok) bad++;
+};
+
+const browser = await chromium.launch({ executablePath: "/opt/pw-browsers/chromium" });
+const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+/* The hero and the city both want a GPU. Headless has software WebGL, which
+   costs a second a frame and leaves nothing for the thing being tested. */
+await ctx.addInitScript(() => {
+  const g = HTMLCanvasElement.prototype.getContext;
+  HTMLCanvasElement.prototype.getContext = function (t, ...r) {
+    return String(t).startsWith("webgl") ? null : g.call(this, t, ...r);
+  };
+});
+const errs = [];
+const pg = await ctx.newPage();
+pg.on("pageerror", (e) => errs.push(e.message));
+
+/* ── 1. the footer, on every page ───────────────────────────────────────── */
+console.log("=== 1. the footer is the same floor under every page");
+const PAGES = ["/", "/rooms", "/create.html", "/v", "/play", "/city", "/what"];
+const shape = {};
+for (const route of PAGES) {
+  await pg.goto("http://localhost:8971" + route);
+  await pg.waitForTimeout(1400);
+  const m = await pg.evaluate(() => {
+    const f = document.querySelector("overheard-foot");
+    const r = f?.shadowRoot;
+    if (!r) return null;
+    const band = r.querySelector(".band").getBoundingClientRect();
+    return {
+      w: Math.round(band.width),
+      gap: Math.round(parseFloat(getComputedStyle(r.querySelector(".band")).marginTop)),
+      links: [...r.querySelectorAll(".col a")].map((a) => a.getAttribute("href")),
+      x: !!r.querySelector('a.xlink[href*="x.com"]'),
+      did: r.querySelector("a.did")?.textContent || "",
+      overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+    };
+  });
+  shape[route] = m;
+  check(`${route} has a footer with room above it`, !!m && m.gap >= 60, m ? `${m.gap}px` : "missing");
+  check(`${route} does not scroll sideways`, m && m.overflow <= 0, String(m?.overflow));
+}
+const widths = new Set(Object.values(shape).map((m) => m?.w));
+check("the band is the full width of the window on every page", widths.size === 1 && [...widths][0] === 1280,
+  [...widths].join(","));
+const links = shape["/"].links;
+check("every page of the site is linked from it",
+  ["/", "/rooms", "/city", "/play", "/create.html", "/v", "/what"].every((h) => links.includes(h)),
+  links.join(" "));
+check("and the builder's X profile", shape["/"].x);
+check("with the whole DID, not an ellipsis", shape["/"].did === DID);
+
+/* ── 2. the bar ─────────────────────────────────────────────────────────── */
+console.log("\n=== 2. the bar: a way in, and a label that is not a door");
+await pg.goto("http://localhost:8971/");
+await pg.waitForTimeout(1200);
+{
+  const b = await pg.evaluate(() => {
+    const r = document.querySelector("overheard-bar").shadowRoot;
+    const soon = r.querySelector(".soon");
+    return {
+      signIn: !!r.querySelector(".me .in"),
+      chip: !!r.querySelector(".chip"),
+      soonText: soon?.textContent.trim() || "",
+      soonIsLink: !!soon?.closest("a"),
+      soonCursor: soon ? getComputedStyle(soon).cursor : "",
+      tabs: [...r.querySelectorAll(".tabs a")].map((a) => a.getAttribute("href")),
+    };
+  });
+  check("signed out, the bar offers a way in", b.signIn && !b.chip);
+  check("Testnet says it is coming", /testnet/i.test(b.soonText) && /soon/i.test(b.soonText), b.soonText);
+  check("and it is not a link anybody can follow", !b.soonIsLink && b.soonCursor === "default");
+  check("the tabs come from the shared list", b.tabs.includes("/city") && b.tabs.includes("/play"), b.tabs.join(" "));
+  check("and the explainer is NOT a tab, so the bar still fits", !b.tabs.includes("/what"));
+
+  /* the popover */
+  await pg.evaluate(() => document.querySelector("overheard-bar").shadowRoot.querySelector(".me .in").click());
+  await pg.waitForTimeout(300);
+  const pop = await pg.evaluate(() => {
+    const r = document.querySelector("overheard-bar").shadowRoot;
+    const m = r.querySelector(".menu");
+    return { open: !!m, pw: !!m?.querySelector('input[type="password"]'),
+      file: !!m?.querySelector('input[type="file"]'),
+      make: m?.querySelector('a.row')?.getAttribute("href") || "",
+      text: m?.innerText || "" };
+  });
+  check("it opens a passphrase, not a page", pop.open && pop.pw);
+  check("a backup file is the other way in", pop.file);
+  check("and there is a route for somebody with neither", pop.make === "/create.html");
+  check("it promises nothing leaves the device", /never sent anywhere/i.test(pop.text));
+  await pg.keyboard.press("Escape");
+}
+
+/* ── 3. signed in ───────────────────────────────────────────────────────── */
+console.log("\n=== 3. signed in, the page stops asking for what it knows");
+await pg.evaluate((did) => {
+  localStorage.setItem("overheard.session", JSON.stringify({
+    did, jwk: { kty: "OKP", crv: "Ed25519", x: "aaa", d: "bbb" }, at: new Date().toISOString() }));
+}, DID);
+await pg.reload();
+await pg.waitForTimeout(1500);
+{
+  const m = await pg.evaluate(() => {
+    const box = document.getElementById("mine");
+    return { shown: !box.hidden, label: box.innerText.replace(/\n/g, " "), face: !!box.querySelector("svg") };
+  });
+  check("the card page offers to look up your own identity", m.shown, m.label);
+  check("it names the identity it means", /z6Mkng/.test(m.label), m.label);
+  check("and wears the same face the bar does", m.face);
+  const chip = await pg.evaluate(() =>
+    !!document.querySelector("overheard-bar").shadowRoot.querySelector(".chip"));
+  check("the bar shows the chip instead of the way in", chip);
+
+  await pg.click("#mine button");
+  await pg.waitForFunction(() => document.getElementById("did").value.length > 20, null, { timeout: 5000 });
+  check("pressing it fills the field and runs the lookup",
+    (await pg.inputValue("#did")) === DID);
+}
+
+/* ── 4. the half-set-up card ────────────────────────────────────────────── */
+console.log("\n=== 4. a card that is half set up says what the other half is");
+{
+  /* Registered, nothing posted: the card renders and says HALF SET UP. */
+  REGISTERED = true; MESSAGES = 0;
+  await pg.goto("http://localhost:8971/?did=" + encodeURIComponent(DID));
+  await pg.waitForFunction(() => !document.getElementById("finish").hidden, null, { timeout: 15000 });
+  const f = await pg.evaluate(() => ({
+    shown: !document.getElementById("finish").hidden,
+    cardShown: !document.getElementById("cardwrap").hidden,
+    title: document.getElementById("finishTitle").textContent,
+    sub: document.getElementById("finishSub").textContent,
+    own: !document.getElementById("finishOwn").hidden,
+    panel: !document.getElementById("diag").hidden,
+  }));
+  check("the offer appears under the card", f.shown && f.cardShown);
+  check("it starts closed", !f.panel);
+  check("it says which half is missing", /signed message/i.test(f.sub), f.sub);
+  check("and because this browser holds the identity, it does not ask whose it is", !f.own);
+
+  await pg.click("#finishMain");
+  await pg.waitForTimeout(600);
+  const open = await pg.evaluate(() => ({
+    panel: !document.getElementById("diag").hidden,
+    card: !document.getElementById("cardwrap").hidden,
+    jobs: document.querySelectorAll("#jobs .job").length,
+    done: document.querySelectorAll("#jobs .job.done").length,
+  }));
+  check("pressing it opens the two jobs", open.panel && open.jobs === 2, `${open.jobs} jobs`);
+  check("THE CARD IS STILL THERE", open.card);
+  check("and the half that is finished is ticked", open.done === 1, `${open.done} done`);
+
+  await pg.click("#finishMain");
+  await pg.waitForTimeout(400);
+  check("pressing it again puts it away", await pg.evaluate(() => document.getElementById("diag").hidden));
+}
+
+/* ── 5. somebody else's half-set-up card ────────────────────────────────── */
+console.log("\n=== 5. looking at a stranger's card");
+{
+  await pg.evaluate(() => localStorage.clear());
+  await pg.goto("http://localhost:8971/?did=" + encodeURIComponent(DID));
+  await pg.waitForFunction(() => !document.getElementById("finish").hidden, null, { timeout: 15000 });
+  const f = await pg.evaluate(() => ({
+    title: document.getElementById("finishTitle").textContent,
+    own: !document.getElementById("finishOwn").hidden,
+    ownText: document.getElementById("finishOwn").innerText,
+  }));
+  check("it does not call somebody else's card yours", /^This card/.test(f.title), f.title);
+  check("and it asks the one question that changes what it can do", f.own, f.ownText.trim());
+
+  await pg.click("#finishOwn");
+  await pg.waitForTimeout(700);
+  const after = await pg.evaluate(() => ({
+    panel: !document.getElementById("diag").hidden,
+    unlock: !!document.querySelector("#diag .restore, #diag .unlockrow"),
+    pw: !!document.querySelector('#diag input[type="password"]'),
+  }));
+  check("pressing it opens the panel", after.panel);
+  check("and lands on the passphrase, not at the top of it", after.unlock && after.pw);
+}
+
+/* ── 6. a finished card is left alone ───────────────────────────────────── */
+console.log("\n=== 6. a finished card is left alone");
+{
+  REGISTERED = true; MESSAGES = 12;
+  await pg.goto("http://localhost:8971/?did=" + encodeURIComponent(DID));
+  await pg.waitForTimeout(3500);
+  const f = await pg.evaluate(() => ({
+    shown: !document.getElementById("finish").hidden,
+    title: document.getElementById("finishTitle").textContent,
+    sub: document.getElementById("finishSub").textContent,
+  }));
+  /* Note published and messages on the record is VERIFIED — the only thing
+     left is the optional proof, so the row points at it rather than calling
+     a correctly set-up identity half done. */
+  check("a set-up card is not told it is half set up", !/half set up/i.test(f.title), f.title);
+  check("it offers the one optional step instead", !f.shown || /proven/i.test(f.title), f.title);
+}
+
+/* ── 7. the explainer ───────────────────────────────────────────────────── */
+console.log("\n=== 7. /what answers its own question");
+{
+  await pg.goto("http://localhost:8971/what");
+  await pg.waitForTimeout(1200);
+  const w = await pg.evaluate(() => {
+    const above = [...document.querySelectorAll("h1, .answer")].map((n) => n.innerText).join(" ");
+    return {
+      title: document.title,
+      above,
+      cards: document.querySelectorAll(".tcard").length,
+      qs: document.querySelectorAll(".q").length,
+      steps: document.querySelectorAll(".step").length,
+      hrefs: [...document.querySelectorAll("a.step, .qbody a.go")].map((a) => a.getAttribute("href")),
+      longest: Math.max(...[...document.querySelectorAll(".qbody p")].map((n) => n.textContent.length)),
+    };
+  });
+  check("the answer is above the fold", /window on a chat network/i.test(w.above), w.above.slice(0, 70));
+  check("three pictures carry the idea", w.cards === 3);
+  check("eight questions, no essay", w.qs === 8 && w.longest < 240, `longest answer ${w.longest} chars`);
+  check("three ways in at the end", w.steps === 3);
+  check("and every route goes somewhere real",
+    w.hrefs.every((h) => h.startsWith("/")), w.hrefs.join(" "));
+
+  /* one open at a time */
+  await pg.click(".q:nth-child(1) .qhead");
+  await pg.waitForTimeout(450);
+  await pg.click(".q:nth-child(2) .qhead");
+  await pg.waitForTimeout(450);
+  const open = await pg.evaluate(() => document.querySelectorAll(".q.open").length);
+  check("opening one closes the last", open === 1, `${open} open`);
+
+  const ov = await pg.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+  check("no sideways scroll", ov <= 0, String(ov));
+}
+
+/* ── 8. a phone ─────────────────────────────────────────────────────────── */
+console.log("\n=== 8. a phone");
+{
+  const ph = await ctx.newPage();
+  const perrs = []; ph.on("pageerror", (e) => perrs.push(e.message));
+  await ph.setViewportSize({ width: 390, height: 844 });
+  for (const route of ["/", "/what"]) {
+    await ph.goto("http://localhost:8971" + route);
+    await ph.waitForTimeout(1200);
+    const o = await ph.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+    check(`${route} does not scroll sideways on a phone`, o <= 0, String(o));
+  }
+  const foot = await ph.evaluate(() => {
+    const r = document.querySelector("overheard-foot").shadowRoot;
+    return { w: Math.round(r.querySelector(".band").getBoundingClientRect().width),
+      notes: getComputedStyle(r.querySelector("li a .note")).opacity };
+  });
+  check("the footer still spans the phone", foot.w === 390, String(foot.w));
+  check("and its notes are visible without a hover nobody has", foot.notes === "1", foot.notes);
+  check("no errors on a phone", perrs.length === 0, perrs.slice(0, 2).join(" | "));
+  await ph.close();
+}
+
+/* ── 9. the share images ────────────────────────────────────────────────── */
+console.log("\n=== 9. a pasted link arrives with a picture");
+{
+  const PAIRS = [["/", "home"], ["/rooms", "rooms"], ["/create.html", "create"], ["/v", "verify"],
+                 ["/play", "play"], ["/city", "city"], ["/what", "what"]];
+  for (const [route, img] of PAIRS) {
+    await pg.goto("http://localhost:8971" + route);
+    const m = await pg.evaluate(() => ({
+      img: document.querySelector('meta[property="og:image"]')?.content || "",
+      card: document.querySelector('meta[name="twitter:card"]')?.content || "",
+      title: document.querySelector('meta[property="og:title"]')?.content || "",
+      desc: document.querySelector('meta[property="og:description"]')?.content || "",
+      url: document.querySelector('meta[property="og:url"]')?.content || "",
+      w: document.querySelector('meta[property="og:image:width"]')?.content || "",
+    }));
+    const ok = m.img.endsWith(`/og/${img}.png`) && m.card === "summary_large_image"
+      && m.title.length > 8 && m.desc.length > 40 && m.w === "1200"
+      && m.url.startsWith("https://");
+    check(`${route} names its own picture`, ok, `${m.img.split("/").pop()} · ${m.title}`);
+  }
+  /* and the files those tags point at actually exist, at the size they claim */
+  const fsmod = await import("node:fs");
+  for (const [, img] of PAIRS) {
+    const f = path.join(ROOT, "og", `${img}.png`);
+    const there = fsmod.existsSync(f);
+    check(`og/${img}.png exists`, there && fsmod.statSync(f).size > 20000,
+      there ? `${(fsmod.statSync(f).size / 1024) | 0}KB` : "missing");
+  }
+}
+
+console.log("\nerrors:", errs);
+if (errs.length) bad++;
+await browser.close(); srv.close();
+console.log(bad ? `\n${bad} FAILED` : "\nall good");
+process.exit(bad ? 1 : 0);
