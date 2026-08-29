@@ -61,13 +61,15 @@ h1{font-weight:800;font-size:clamp(32px,5.4vw,48px);letter-spacing:-.035em;line-
 .go .i{width:17px;height:17px;stroke-width:2.1}
 /* The page is called Play. The thing it is for gets the size of the thing it
    is for, and the briefing sits beside it rather than in front of it. */
-.go.big{padding:19px 32px;font-size:17.5px;border-radius:16px;letter-spacing:-.01em;
-  box-shadow:0 20px 44px -18px rgba(0,180,215,.95)}
-.go.big .i{width:20px;height:20px}
+.go.big{padding:24px 44px;font-size:20.5px;border-radius:19px;letter-spacing:-.015em;
+  box-shadow:0 24px 52px -18px rgba(0,180,215,.95)}
+.go.big .i{width:23px;height:23px}
 .go.big:hover:not(:disabled){box-shadow:0 26px 52px -18px rgba(0,180,215,1)}
-.go.wide{padding:17px 26px;font-size:15.5px;border-radius:15px}
-.hint2{margin-top:13px;font-size:13px;color:var(--faint);line-height:1.5}
-.hint2 b{color:var(--dim);font-weight:600}
+.go.wide{padding:20px 30px;font-size:16.5px;border-radius:19px}
+/* Two buttons side by side are one row, so they are one height. Vertical
+   padding cannot deliver that when the labels are set at different sizes —
+   the box has to be told. */
+.hero .nextrow .go{min-height:74px;padding-top:0;padding-bottom:0}
 
 /* ── the first section ───────────────────────────────────────────────────
    Text on the left with room to breathe, the toy on its own on the right.
@@ -81,15 +83,17 @@ h1{font-weight:800;font-size:clamp(32px,5.4vw,48px);letter-spacing:-.035em;line-
    gives every page a sideways scroll — a bug this codebase has already paid
    for once in the footer. A bleed that is zero until there is provably room
    for it cannot do that. */
-.hero{display:grid;grid-template-columns:minmax(0,1fr) 470px;gap:52px;align-items:center;
+.hero{display:grid;grid-template-columns:minmax(0,1fr) 540px;gap:48px;align-items:center;
   padding:26px 0 12px;
   margin-left:calc(-1 * var(--bleed,0px));margin-right:calc(-1 * var(--bleed,0px))}
-@media (min-width:1010px){.hero{--bleed:104px}}
-@media (min-width:1250px){.hero{--bleed:200px}}
+@media (min-width:1010px){.hero{--bleed:110px}}
+@media (min-width:1250px){.hero{--bleed:210px}}
 .hcopy{animation:rise .55s var(--ease) both}
-.hero h1{margin:18px 0 12px;font-size:clamp(34px,4.3vw,52px)}
+/* The toy takes real width now, so the headline gets a ceiling that keeps
+   "Your agent is hungry." on one line in the column that is actually left. */
+.hero h1{margin:18px 0 12px;font-size:clamp(33px,3.55vw,46px)}
 .hero .lede{font-size:17px;max-width:42ch}
-@media (max-width:1040px){
+@media (max-width:1120px){
   .hero{grid-template-columns:1fr;gap:26px;padding-top:16px}
   /* On a narrow screen the toy goes FIRST. It is the reason to stay on the
      page, and burying it under three paragraphs wastes it. */
@@ -116,10 +120,10 @@ h1{font-weight:800;font-size:clamp(32px,5.4vw,48px);letter-spacing:-.035em;line-
    something you can pick up. */
 .toywrap{display:flex;flex-direction:column;align-items:center;gap:13px;
   animation:rise .7s .1s var(--ease) both}
-#toy{display:block;width:470px;height:452px;max-width:100%;cursor:grab;touch-action:manipulation}
+#toy{display:block;width:540px;height:470px;max-width:100%;cursor:grab;touch-action:manipulation}
 #toy.holding{cursor:grabbing}
-@media (max-width:1040px){#toy{width:420px;height:404px}}
-@media (max-width:620px){#toy{width:min(340px,88vw);height:min(327px,85vw)}}
+@media (max-width:1040px){#toy{width:480px;height:418px}}
+@media (max-width:620px){#toy{width:min(380px,92vw);height:min(331px,80vw)}}
 .toycap{font-family:var(--mono);font-size:10.5px;letter-spacing:.13em;text-transform:uppercase;
   color:var(--faint);text-align:center;min-height:1.4em;transition:color .3s var(--ease)}
 .toycap b{color:var(--cy-hi);font-weight:600}
@@ -827,11 +831,10 @@ canvas.confetti{position:fixed;inset:0;width:100%;height:100%;pointer-events:non
           <button class="go big" id="begin" type="button"><svg class="i"><use href="#i-play"/></svg>Start the run</button>
           <button class="go ghost wide" id="toBrief" type="button"><svg class="i"><use href="#i-book"/></svg>Read the briefing first</button>
         </div>
-        <p class="hint2">Twelve questions, and <b>every answer is in the briefing</b> &mdash; two minutes of reading makes the run a victory lap.</p>
       </div>
 
       <div class="toywrap">
-        <canvas id="toy" width="940" height="904" aria-hidden="true"></canvas>
+        <canvas id="toy" width="1080" height="940" aria-hidden="true"></canvas>
         <p class="toycap" id="toyCap">Throw them &middot; <b>they fall, bounce and stack</b></p>
       </div>
     </div>
@@ -2702,12 +2705,12 @@ function celebrate(){
 (function toy(){
   const cv=$("toy"); if(!cv) return;
   const g2=cv.getContext("2d");
-  const WORLD=470, WH=452;               // physics units; the canvas scales to it
-  /* A jar, not a tray. Across the full width the tokens landed in a single
-     edge-to-edge row and read as a hedge; at three hundred and thirty across
-     they pile two and three deep, which is what a heap looks like. The margin
-     either side is where the glow lives. */
-  const FLOOR=WH-14, WALL=58, ROOF=6;
+  const WORLD=540, WH=470;               // physics units; the canvas scales to it
+  /* Wide, and filled to match. A wide jar with twenty tokens in it lands them
+     in one edge-to-edge row that reads as a hedge rather than a heap — the
+     depth of a pile is the count divided by how many fit across, so widening
+     the jar means adding tokens or losing the heap. */
+  const FLOOR=WH-14, WALL=16, ROOF=6;
 
   /* ── the mark ──────────────────────────────────────────────────────────
      Flop's own logo, drawn rather than loaded: a chamfered octagon cut into
@@ -2972,6 +2975,12 @@ function celebrate(){
         if(went<3) c.still=SLEEP_FOR+0.01;
       }
       if(c.still>SLEEP_FOR){ c.vx=c.vy=0; c.av*=0.6; }
+      /* One flag rather than everybody re-deriving it from the timer: the
+         displacement path parks `still` just over the line and the window
+         keeps re-parking it there, so anything comparing against a slightly
+         different threshold read a body as awake that had not moved in
+         seconds. */
+      c.sleeping = c.still>SLEEP_FOR;
       /* A flat-sided thing does not come to rest at a random angle: it tips
          onto a face. Once a token has stopped, its angle eases to the nearest
          eighth-turn, which is the symmetry the silhouette actually has. */
@@ -3219,7 +3228,7 @@ function celebrate(){
   cv.addEventListener("pointerleave",()=>{ P.in=false; release(); });
 
   /* ── the loop ─────────────────────────────────────────────────────────── */
-  const COUNT=20;                        // enough for a heap rather than a row
+  const COUNT=30;                        // enough for a heap rather than a row
   function fit(){
     const dpr=Math.min(2,devicePixelRatio||1);
     const w=Math.round(cv.getBoundingClientRect().width*dpr);

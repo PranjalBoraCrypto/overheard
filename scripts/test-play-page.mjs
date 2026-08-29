@@ -90,6 +90,11 @@ check('nothing is graded before it starts', await pg.locator('#run').isHidden())
 const offsiteButtons = await pg.evaluate(() =>
   [...document.querySelectorAll('#intro .go')].filter(a => /^https?:/.test(a.getAttribute('href') || '')).length);
 check('the way to read is our own page, not somebody else\'s site', offsiteButtons === 0);
+/* Two buttons side by side are one row, so they are one height — different
+   label sizes plus vertical padding will not deliver that on its own. */
+const btns = await pg.evaluate(() => [...document.querySelectorAll('.hero .nextrow .go')]
+  .map(b => Math.round(b.getBoundingClientRect().height)));
+check('the two buttons are the same height', btns.length === 2 && btns[0] === btns[1], btns.join(' vs '));
 
 console.log('\n=== A2. the toy');
 /* A physics toy is the one thing on a page that cannot be checked by reading
@@ -99,15 +104,19 @@ console.log('\n=== A2. the toy');
    heap SETTLES, and a deadline is the honest way to state it. */
 await pg.waitForFunction(() =>
   window.__toy && window.__toy.coins.length >= 20
-  && window.__toy.coins.every(c => Math.hypot(c.vx, c.vy) < 1), null, { timeout: 12000 });
+  && window.__toy.coins.every(c => Math.hypot(c.vx, c.vy) < 1), null, { timeout: 14000 });
+/* The sleep flag is decided on a third-of-a-second displacement window, so it
+   trails the moment everything stops by up to that much. Give the last window
+   time to close before counting sleepers. */
+await pg.waitForTimeout(700);
 const toy = () => pg.evaluate(() => {
   const t = window.__toy;
   return {
     n: t.coins.length, fed: t.fed, floor: t.FLOOR, wall: t.WALL, w: t.WORLD,
-    asleep: t.coins.filter(c => c.still > 0.55).length,
+    asleep: t.coins.filter(c => c.sleeping).length,
     below: t.coins.filter(c => c.y + c.r > t.FLOOR + 1.5).length,
     outside: t.coins.filter(c => c.x - c.r < t.WALL - 2 || c.x + c.r > t.WORLD - t.WALL + 2).length,
-    stacked: t.coins.filter(c => c.still > 0.55 && c.y + c.r < t.FLOOR - 6).length,
+    stacked: t.coins.filter(c => c.sleeping && c.y + c.r < t.FLOOR - 6).length,
     head: { dx: t.HEAD.dx, dy: t.HEAD.dy },
   };
 });
@@ -125,20 +134,21 @@ check('they settle into a heap that holds', t0.stacked >= 5, `${t0.stacked} rest
    This is the cheaper one — that the solver has actually PARKED them rather
    than holding them still frame by frame. */
 check('and the heap goes to sleep rather than being held still',
-  t0.asleep >= t0.n - 3, `${t0.asleep} of ${t0.n} asleep`);
+  t0.asleep === t0.n, `${t0.asleep} of ${t0.n} asleep`);
 
 /* THROWING. Velocity comes from the last few pointer samples, so a flick has
    to actually throw — a drop is the bug this replaces. */
 const tbox = await pg.locator('#toy').boundingBox();
-const w2s = (wx, wy) => ({ x: tbox.x + wx / 470 * tbox.width, y: tbox.y + wy / 452 * tbox.height });
+const dims = await pg.evaluate(() => ({ w: window.__toy.WORLD, h: window.__toy.WH }));
+const w2s = (wx, wy) => ({ x: tbox.x + wx / dims.w * tbox.width, y: tbox.y + wy / dims.h * tbox.height });
 /* Tagged, not indexed: eating splices the array, and an index into a list
    that shifts under you measures the wrong token. */
 await pg.evaluate(() => {
-  const c = window.__toy.coins.find(k => k.still > 0.55) || window.__toy.coins[0];
+  const c = window.__toy.coins.find(k => k.sleeping) || window.__toy.coins[0];
   /* Parked and asleep, so it is still where the test last saw it when the
      grab lands — a falling token has moved on by the time a round trip
      through the browser gets back. */
-  c.__tag = 1; c.x = 90; c.y = 250; c.vx = 0; c.vy = 0; c.still = 9;
+  c.__tag = 1; c.x = 96; c.y = 250; c.vx = 0; c.vy = 0; c.still = 9;
 });
 const tagged = () => pg.evaluate(() => window.__toy.coins.find(k => k.__tag) || null);
 await pg.waitForTimeout(40);
