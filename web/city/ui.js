@@ -44,9 +44,11 @@ export const num = (n) => (n == null ? "—" : n.toLocaleString());
 /** The one place the signed/unsigned distinction is turned into words, so it
  *  cannot drift into an overclaim in one corner of the interface.
  *
- *  Technocore returns `sig: null` on every message it serves. A did:key in
- *  `from` means Technocore accepted that write as signed — its statement, on
- *  its own authority. Overheard never sees the signature and never checks it.
+ *  A room read carries no signature field at all — checked across seven rooms
+ *  and seven hundred messages, the fields are seq, ts, from, text, nonce. A
+ *  did:key in `from` means Technocore accepted that write as signed — its
+ *  statement, on its own authority. Overheard never sees a signature here and
+ *  never checks one.
  *  "Technocore-accepted signed" is therefore the strongest thing that can
  *  honestly be said, and "verified" is never said at all. */
 export function sigTag(signed) {
@@ -88,7 +90,7 @@ export function makeUI(els, cb) {
     fps.type = "button";
     fps.id = "fpsChip";
     fps.append(el("b", null, String(opts.fps ?? "—")), document.createTextNode(" fps"));
-    fps.title = "Click to hide the overlays for a clean view.";
+    fps.title = "Hide the overlays for a clean view of the city. Esc brings them back.";
     fps.addEventListener("click", () => cb.toggleClean());
     box.append(fps);
   }

@@ -294,7 +294,7 @@ export async function boot() {
       seq: info?.last_seq ? Number(info.last_seq) : null,
       bytes: info?.bytes ?? null,
       idle: info?.idle ?? null,
-      live: info?.live !== false,
+      live: info?.live ?? (info?.present !== false),
       seenAt: info?.seenAt ?? null,
       rate: info?.live ? D.rateOf(room) : null,
     };
@@ -685,6 +685,40 @@ export async function boot() {
     overlay.style.opacity = v ? "0" : "";
     if (v) ui.hover(0, 0, null);
   }
+
+
+  /* ── the keyboard ─────────────────────────────────────────────────────
+     Two things. Escape is a ladder out of wherever you are — a page whose
+     "hide the overlays" button hides the button is a trap, and it was one.
+     And the arrows drive the camera, because a 3D page you can only use with
+     a mouse is a 3D page some people cannot use at all. */
+  addEventListener("keydown", (e) => {
+    const t = e.target;
+    if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return;
+    if (e.key === "Escape") {
+      /* The ladder, in the order somebody would climb it: the clean view,
+         then the feed, then whichever identity or message they drilled into,
+         then the room itself, then the panel. Closing the sub-panel by
+         calling closePanel would immediately reopen the room's own panel —
+         which is right when a close button is clicked and wrong here, and is
+         why Escape used to loop instead of letting anybody out. */
+      if (st.clean) setClean(false);
+      else if (!els.feed.hidden) ui.closeFeed();
+      else if (st.agentId || st.msgKey) { st.agentId = null; st.msgKey = null; showRoomPanel(); }
+      else if (st.room) leaveRoom();
+      else if (!els.side.hidden) ui.closePanel();
+      return;
+    }
+    const k = e.key;
+    const step = e.shiftKey ? 3 : 1;
+    if (k === "ArrowLeft") { cam.nudge(-0.14 * step); e.preventDefault(); }
+    else if (k === "ArrowRight") { cam.nudge(0.14 * step); e.preventDefault(); }
+    else if (k === "ArrowUp") { cam.flyTo({ dist: cam.dist * (1 - 0.12 * step) }, 0); e.preventDefault(); }
+    else if (k === "ArrowDown") { cam.flyTo({ dist: cam.dist * (1 + 0.12 * step) }, 0); e.preventDefault(); }
+    else if (k === "+" || k === "=") cam.flyTo({ dist: cam.dist * 0.8 }, reduced ? 0 : 300);
+    else if (k === "-" || k === "_") cam.flyTo({ dist: cam.dist * 1.25 }, reduced ? 0 : 300);
+    else if (k === "Home") { st.tour = false; paintTour(); cam.home(reduced ? 0 : 900); }
+  });
 
   /* ── search ──────────────────────────────────────────────────────────── */
   const q = $("q");

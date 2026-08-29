@@ -362,7 +362,7 @@ export function mountFlat(container, els) {
       seq: info?.last_seq ? Number(info.last_seq) : null,
       bytes: info?.bytes ?? null,
       idle: info?.idle ?? null,
-      live: info?.live !== false,
+      live: info?.live ?? (info?.present !== false),
       seenAt: info?.seenAt ?? null,
       rate: info?.live ? D.rateOf(room) : null,
     };
@@ -986,6 +986,42 @@ export function mountFlat(container, els) {
     clearTimeout(tourTimer);
     if (st.tour) tourStep();
   };
+
+
+  /* ── the keyboard ─────────────────────────────────────────────────────
+     Escape is the ladder out of wherever you are, and the arrows move the
+     map — see the same note in boot.js. */
+  addEventListener("keydown", (e) => {
+    const t = e.target;
+    if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return;
+    if (e.key === "Escape") {
+      /* The ladder, in the order somebody would climb it: the clean view,
+         then the feed, then whichever identity or message they drilled into,
+         then the room itself, then the panel. Closing the sub-panel by
+         calling closePanel would immediately reopen the room's own panel —
+         which is right when a close button is clicked and wrong here, and is
+         why Escape used to loop instead of letting anybody out. */
+      if (st.clean) setClean(false);
+      else if (!els.feed.hidden) ui.closeFeed();
+      else if (st.agentId || st.msgKey) { st.agentId = null; st.msgKey = null; showRoomPanel(); }
+      else if (st.room) leaveRoom();
+      else if (!els.side.hidden) ui.closePanel();
+      return;
+    }
+    /* A keypress moves a proportion of what you can see, not a number of
+       world units: the same press should feel the same zoomed in or out. */
+    const step = (e.shiftKey ? 3 : 1) * (W / Math.max(0.001, want.s)) * 0.14;
+    if (e.key === "ArrowLeft") { seize(); want.x -= step; }
+    else if (e.key === "ArrowRight") { seize(); want.x += step; }
+    else if (e.key === "ArrowUp") { seize(); want.z -= step; }
+    else if (e.key === "ArrowDown") { seize(); want.z += step; }
+    else if (e.key === "+" || e.key === "=") zoomBy(1.35);
+    else if (e.key === "-" || e.key === "_") zoomBy(0.74);
+    else if (e.key === "Home") { stopTour(); home(reduced ? 0 : 800); }
+    else return;
+    if (e.key.startsWith("Arrow")) { normalise(); e.preventDefault(); }
+    mark();
+  });
 
   /* ── search ──────────────────────────────────────────────────────────── */
   const q = $("q");
