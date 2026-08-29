@@ -237,9 +237,14 @@ check('a seed for another identity is refused', /does not belong to this identit
   (await pg2.locator('#smsg').textContent()).slice(0, 50));
 
 await pg2.fill('#pseed', ID.seedHex);
-await pg2.fill('#pnp1', 'short'); await pg2.fill('#pnp2', 'short');
+await pg2.fill('#pnp1', 'abc'); await pg2.fill('#pnp2', 'abc');
 await pg2.click('#seedGo'); await pg2.waitForTimeout(500);
-check('a weak passphrase is refused', /at least 8/.test(await pg2.locator('#smsg').textContent()));
+/* The floor is PW_MIN and it is 6 on every page — this dialog had its own
+   rule of 8, a third number on a site that already disagreed with itself at
+   6 and 12. What is asserted is the shared floor, not a literal. */
+check('a passphrase under the floor is refused',
+  /at least 6/.test(await pg2.locator('#smsg').textContent()),
+  (await pg2.locator('#smsg').textContent()).slice(0, 50));
 await pg2.fill('#pnp1', 'longenough'); await pg2.fill('#pnp2', 'mismatched');
 await pg2.click('#seedGo'); await pg2.waitForTimeout(400);
 check('a mismatch is refused', /do not match/.test(await pg2.locator('#smsg').textContent()));

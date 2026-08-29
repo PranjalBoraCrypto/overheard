@@ -510,7 +510,16 @@ check('no passphrase box, because there is no key here', (await pg.locator('#qui
 await pg.locator('#signedBox button.go').click();
 await pg.waitForTimeout(400);
 check('Sign in opens the pop-up rather than navigating away', await pg.locator('#scrim').isVisible());
-check('with the safe way offered first', await pg.locator('#wayFile.on').count() === 1);
+/* THE SEED IS THE DEFAULT ROUTE. This used to assert the file was, on the
+   grounds that it is the safer of the two — but a backup file only exists if
+   this site made the identity and the person still has the download, while a
+   seed exists for every identity on Technocore however it was made. Opening
+   on the file put the rarer question first and left the common case behind a
+   tab nobody had a reason to press. The safety that argument was protecting
+   is still here and is checked on the next line: the seed route carries the
+   caution, in as many words. */
+check('the seed is the route it opens on', await pg.locator('#waySeed.on').count() === 1);
+check('and the seed box is the one showing', await pg.locator('#waySeedBox').isVisible());
 await pg.click('#waySeed'); await pg.waitForTimeout(250);
 check('a seed is the other way, and it warns what a seed is',
   /identity itself/i.test(await pg.locator('.warnbox').textContent()));

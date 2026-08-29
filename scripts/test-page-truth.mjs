@@ -125,6 +125,42 @@ const lefts = Object.values(geo).map(b => b?.l);
 check('and every one of them is the same width', new Set(widths).size === 1, JSON.stringify(geo));
 check('in the same place', new Set(lefts).size === 1, JSON.stringify(lefts));
 
+/* ── one rule, every page ──────────────────────────────────────────────────
+   THE DRIFT THIS EXISTS TO CATCH ACTUALLY HAPPENED. The passphrase floor was
+   lowered to 6 on rooms and play and left at 12 on the card and create
+   pages, so the same person could be refused a passphrase on one page and
+   given it on another — with a different sentence explaining the rule
+   depending on where they were standing. Nobody noticed for a while, because
+   each page is right about itself.
+
+   Read from the source rather than from a rendered page on purpose: the
+   failure mode is a NUMBER WRITTEN TWICE, and the only way to catch that is
+   to look at every place it is written. */
+console.log('\n=== the passphrase floor is one number everywhere');
+{
+  const PAGES = ['index.html', 'create.html', 'rooms.html', 'play.html'];
+  const mins = {};
+  let hard = [];
+  for (const f of PAGES) {
+    const src = fs.readFileSync(path.join(ROOT, f), 'utf8');
+    const m = /const PW_MIN\s*=\s*(\d+)/.exec(src);
+    mins[f] = m ? Number(m[1]) : null;
+    /* Any surviving hard-coded length rule, in a check or in a placeholder. */
+    for (const re of [/length\s*<\s*(\d+)\)/g, /at least (\d+) characters/g, /(\d+)\+ characters/g]) {
+      for (const hit of src.matchAll(re)) {
+        if (!/PW_MIN/.test(hit[0])) hard.push(`${f}: ${hit[0].trim()}`);
+      }
+    }
+  }
+  check('every page that asks for a passphrase declares the floor',
+    PAGES.every((f) => mins[f] != null), JSON.stringify(mins));
+  check('and they all declare the SAME floor',
+    new Set(Object.values(mins)).size === 1, JSON.stringify(mins));
+  check('which is 6', Object.values(mins).every((v) => v === 6), JSON.stringify(mins));
+  check('and no page still hard-codes a length of its own',
+    hard.length === 0, hard.join(' | '));
+}
+
 console.log('\nerrors:', errs);
 if (errs.length) bad++;
 await b.close(); srv.close();

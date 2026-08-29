@@ -114,7 +114,25 @@ await go();
 check('the compose box is locked', await pg.locator('#locked').isVisible());
 check('and there is no "no identity yet" button pushing you off the page',
   !(await pg.locator('#locked a[href*="create"]').count()));
-check('the way to a passphrase is offered here instead', await pg.locator('#noPass').isVisible());
+/* AN EMPTY BROWSER IS NOT A LOCKED ONE. There is no key here, so a
+   passphrase box is a field that cannot succeed — it used to sit directly
+   above the sentence explaining why it could not. What belongs here is a way
+   IN, and the two things somebody in this state can actually do. */
+check('no passphrase box, because there is nothing to unlock',
+  await pg.locator('#lockRow').isHidden());
+check('a way in is offered instead', await pg.locator('#doSignIn').isVisible());
+check('and a quieter offer for somebody with no identity at all',
+  await pg.locator('#doMake').isVisible());
+check('the line says what the state is', /No identity in this browser yet/i.test(
+  (await pg.locator('#lockWho').textContent()) || ''));
+await pg.click('#doSignIn');
+await pg.waitForTimeout(500);
+check('signing in opens the pop-up rather than leaving the room',
+  await pg.locator('#scrim').isVisible());
+check('on the route somebody with an identity elsewhere needs',
+  (await pg.locator('#tabHave').getAttribute('aria-selected')) === 'true');
+await pg.click('#mClose');
+await pg.waitForTimeout(300);
 check('and the reason for having a key at all is its own section', await pg.locator('#idbar').isVisible());
 const why = (await pg.locator('#idbar').textContent()) || '';
 check('which says what a key buys you, in one line', /signed/i.test(why) && /Create an identity/.test(why));
@@ -137,7 +155,10 @@ check('which it says rather than leaving it to be guessed', /Sign in above/.test
 await pg.fill('#rn', ''); await pg.click('#kOpen');
 
 console.log('\n=== B. the pop-up makes one, and then asks for the passphrase');
-await pg.click('#noPass');
+/* #noPass belongs to a browser that already HOLDS an identity and needs a
+   passphrase set for it. With nothing here, the quieter of the two offers is
+   the one that goes to "make a new one". */
+await pg.click('#doMake');
 check('it opens in the middle of the screen', await pg.locator('#scrim').isVisible());
 check('on the "make a new one" side', (await pg.locator('#tabNew').getAttribute('class')).includes('on'));
 check('and the other way in is one tab away', await pg.locator('#tabHave').isVisible());
@@ -624,10 +645,19 @@ const did = JSON.parse(vault).did;
 await pg.evaluate(() => { localStorage.removeItem('overheard.identity'); localStorage.setItem('overheard.lastdid', 'x'); });
 await pg.evaluate((d) => localStorage.setItem('overheard.lastdid', d), did);
 await go();
-await pg.click('#noPass');
+/* Nothing in this browser now, so the empty-state offers are what is on
+   screen — #noPass belongs to a browser that holds a vault. */
+await pg.click('#doMake');
 check('a browser with nothing in it opens on "make a new one"',
   (await pg.locator('#tabNew').getAttribute('class')).includes('on'));
 await pg.click('#tabHave');
+/* THE SEED IS THE DEFAULT ROUTE NOW, so the file route is a click away —
+   which is the right way round: a backup file only exists if this site made
+   the identity and the person still has the download, while a seed exists
+   for every identity on Technocore however it was made. */
+check('the seed route is the one it opens on',
+  (await pg.locator('#waySeed').getAttribute('class')).includes('on'));
+await pg.click('#wayFile'); await pg.waitForTimeout(150);
 check('the DID is filled in from the card last looked up',
   (await pg.inputValue('#hDid')) === did, (await pg.inputValue('#hDid')).slice(0, 24) + '…');
 await pg.fill('#hFile', did);
@@ -651,10 +681,12 @@ console.log('\n=== J2. the other thing people have: a seed');
    says what a seed is before anybody pastes one. */
 await pg.evaluate(() => { localStorage.clear(); });
 await go();
-await pg.click('#noPass'); await pg.click('#tabHave');
-check('the safe way in is the one offered first',
-  (await pg.locator('#wayFile').getAttribute('class')).includes('on'));
-await pg.click('#waySeed'); await pg.waitForTimeout(150);
+await pg.click('#doMake'); await pg.click('#tabHave');
+check('the seed is the way in it offers first',
+  (await pg.locator('#waySeed').getAttribute('class')).includes('on'));
+/* The safety that used to be carried by putting the file first is carried by
+   this instead, and it is on screen the moment the route opens rather than
+   one tab away. */
 check('a seed gets a warning before it gets a field',
   /A seed is the identity itself/.test(await pg.locator('#waySeedBox').textContent()));
 /* The seed already contains the DID, so asking for it is a field that can

@@ -3373,7 +3373,7 @@ function buildFix(parsed, stats, note, inline=false){
     setLbl.textContent="Choose a passphrase for this browser. It encrypts the seed here — you will use this instead of the seed from now on.";
     const pair=document.createElement("div"); pair.className="pair"; pair.hidden=true;
     const np1=document.createElement("input");
-    np1.type="password"; np1.autocomplete="new-password"; np1.placeholder="new passphrase, 12+ characters";
+    np1.type="password"; np1.autocomplete="new-password"; np1.placeholder=`new passphrase, ${PW_MIN}+ characters`;
     const np2=document.createElement("input");
     np2.type="password"; np2.autocomplete="new-password"; np2.placeholder="type it again";
     pair.append(np1,np2);
@@ -3411,7 +3411,7 @@ function buildFix(parsed, stats, note, inline=false){
 
     sgo.addEventListener("click",async()=>{
       if(!seedBytes) return;
-      if(np1.value.length<12){ smsg.className="small warn"; smsg.textContent="Twelve characters or more, please — this is the only thing standing between the file and your key."; np1.focus(); return; }
+      if(np1.value.length<PW_MIN){ smsg.className="small warn"; smsg.textContent=`${PW_MIN} characters or more, please — this is the only thing standing between the file and your key.`; np1.focus(); return; }
       if(np1.value!==np2.value){ smsg.className="small warn"; smsg.textContent="The two passphrases do not match."; np2.focus(); return; }
       const pass=np1.value, bytes=seedBytes;
       sgo.disabled=seed.disabled=np1.disabled=np2.disabled=true;
@@ -3462,7 +3462,14 @@ function buildFix(parsed, stats, note, inline=false){
 
     box.append(routes,fileBtn,or,text,loaded,pw,go,msg,seedBox);
     doit.appendChild(box);
-    pick(false);
+    /* THE SEED IS THE DEFAULT ROUTE, and it is the one almost everybody
+       needs. A backup file only exists if this site made the identity and
+       the person still has the download; a seed exists for every identity on
+       Technocore however it was made. Opening on the file asked the rarer
+       question first and left the common case one click behind a tab nobody
+       had a reason to press. The caution above the seed field carries the
+       warning that putting the file first used to imply. */
+    pick(true);
     loaded.hidden=true;
 
     const small=document.createElement("p"); small.className="small";
@@ -3488,6 +3495,16 @@ function buildFix(parsed, stats, note, inline=false){
    because an import that flashes past is indistinguishable from an import
    that did not happen — and this one is moving a private key into a browser,
    which is exactly the moment to show your working rather than hide it. */
+/* ONE NUMBER, AND IT IS THE SAME NUMBER ON EVERY PAGE. This was hard-coded
+   as 12 here and on the create page while rooms and play had already moved
+   to 6, so the same person could be refused a passphrase on one page and
+   given it on another — with a different sentence explaining the rule
+   depending on where they happened to be standing. It is a floor on a local
+   encryption key that never leaves the device, not a login on a server, so
+   it is deliberately low; length is still what makes it strong, and the text
+   beside the field is where that is said. */
+const PW_MIN = 6;
+
 const IMPORT_STEPS = [
   "Reading the backup",
   "Deriving the key from your passphrase",
@@ -4392,7 +4409,7 @@ $("seedGo").addEventListener("click", async () => {
   const seed=parseSeed($("pseed").value);
   const p1=$("pnp1").value, p2=$("pnp2").value;
   if(!seed) return smsg("That is not a 32-byte seed. Expect 64 hex characters, or 43 of base64url.","err");
-  if(p1.length<8) return smsg("Choose a passphrase of at least 8 characters — it is the only thing protecting the file.","err");
+  if(p1.length<PW_MIN) return smsg(`Choose a passphrase of at least ${PW_MIN} characters — it is the only thing protecting the file.`,"err");
   if(p1!==p2) return smsg("The two passphrases do not match.","err");
 
   const btn=$("seedGo"); btn.disabled=true;

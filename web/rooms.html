@@ -304,6 +304,9 @@ footer a:hover{color:var(--cy-hi)}
   font-family:var(--mono);font-size:13px;padding:12px 13px 12px 0}
 /* A quiet second door. It is not a button competing with Unlock — it is the
    sentence somebody reads when Unlock is not for them yet. */
+.lockcta{display:flex;flex-wrap:wrap;align-items:center;gap:10px;padding:4px 16px 15px}
+.lockcta .go{flex:0 0 auto}
+.linky.flush{margin:0}
 .linky{display:inline-flex;align-items:center;gap:8px;margin:0 16px 15px;padding:8px 12px;border-radius:10px;
   background:none;border:1px dashed rgba(0,180,215,.28);color:var(--dim);cursor:pointer;
   font-family:var(--display);font-size:13px;transition:.22s var(--ease)}
@@ -616,6 +619,21 @@ footer a:hover{color:var(--cy-hi)}
             <button class="go" id="unlock"><svg class="i"><use href="#ic-key"/></svg>Unlock to post</button>
           </div>
           <p class="who-am-i" id="lockWho"></p>
+          <!-- AN EMPTY BROWSER IS NOT A LOCKED ONE.
+               With no identity here at all, this used to show a passphrase
+               box and an Unlock button for a key that does not exist, under
+               the line "No identity in this browser yet" — a field that
+               cannot succeed, sitting above the sentence explaining why. The
+               passphrase row is for unlocking something; when there is
+               nothing to unlock it is hidden and this stands in its place. -->
+          <div class="lockcta" id="lockCta" hidden>
+            <button class="go" id="doSignIn" type="button">
+              <svg class="i"><use href="#ic-key"/></svg>Sign in to post</button>
+            <button class="linky flush" id="doMake" type="button">
+              <svg class="i"><use href="#ic-spark"/></svg>
+              <span>No identity anywhere? <b>Make one &rarr;</b></span>
+            </button>
+          </div>
           <!-- The old second button here read "No identity yet" and went to
                another page, which is a strange thing to offer somebody in the
                middle of a room they are already reading. Making one is a
@@ -757,7 +775,7 @@ footer a:hover{color:var(--cy-hi)}
         <div class="didout" id="newDid" hidden></div>
         <div class="mfield">
           <label for="np1">Choose a passphrase</label>
-          <input id="np1" type="password" autocomplete="new-password" placeholder="at least 6 characters">
+          <input id="np1" type="password" autocomplete="new-password">
           <p class="hint">Encrypts the key on this device. Longer is stronger, and there is no reset &mdash; nobody can recover it for you.</p>
         </div>
         <div class="mfield">
@@ -776,9 +794,9 @@ footer a:hover{color:var(--cy-hi)}
              file is already encrypted; a seed is the identity itself in
              plain text. -->
         <div class="pick" role="radiogroup" aria-label="What you have">
-          <button class="pk on" id="wayFile" type="button" role="radio" aria-checked="true">
+          <button class="pk" id="wayFile" type="button" role="radio" aria-checked="false">
             <svg class="i"><use href="#ic-file"/></svg>Backup file</button>
-          <button class="pk" id="waySeed" type="button" role="radio" aria-checked="false">
+          <button class="pk on" id="waySeed" type="button" role="radio" aria-checked="true">
             <svg class="i"><use href="#ic-key"/></svg>Seed</button>
         </div>
 
@@ -788,7 +806,7 @@ footer a:hover{color:var(--cy-hi)}
           <p class="hint">From the card you last looked up. Change it if that is not the one.</p>
         </div>
 
-        <div id="wayFileBox">
+        <div id="wayFileBox" hidden>
           <div class="mfield">
             <label for="hFile">Its backup file</label>
             <label class="filepick" for="hFileInput">
@@ -801,7 +819,7 @@ footer a:hover{color:var(--cy-hi)}
           </div>
         </div>
 
-        <div id="waySeedBox" hidden>
+        <div id="waySeedBox">
           <div class="warnbox">
             <svg class="i"><use href="#ic-info"/></svg>
             <span><b>A seed is the identity itself.</b> Whoever has it <em>is</em> you, for good. It is encrypted on your device and never sent anywhere &mdash; still, check the address bar before typing one into any site, this one included.</span>
@@ -979,13 +997,21 @@ function paintIdentity(){
        one — it now offers what it can actually do. */
     MINE=[]; paintMine();
     $("pw").disabled=false; $("unlock").disabled=false; $("pw").value="";
+    /* TWO DIFFERENT SITUATIONS, AND ONLY ONE OF THEM IS A LOCKED DOOR.
+       A browser holding a vault needs a passphrase and nothing else. A
+       browser holding nothing needs a way in — and a passphrase box there
+       is a field that cannot possibly work, which is worse than no field. */
+    $("lockRow").hidden = !vault;
+    $("lockCta").hidden = !!vault;
+    $("noPass").hidden  = !vault;
     $("lockWho").textContent = vault
       ? "This browser holds an identity. Enter its passphrase to post."
-      : "No identity in this browser yet.";
-    $("noPass").hidden=false;
-    $("noPass").querySelector("span").innerHTML = vault
-      ? 'Different identity, or lost the passphrase? <b>Set one up &rarr;</b>'
-      : 'No passphrase for this browser yet? <b>Set one up &rarr;</b>';
+      : "No identity in this browser yet. Bring yours in — it is encrypted here and never sent.";
+    /* Only ever shown over a vault now, so it only ever says the one thing
+       that is true of a browser that has one: a different identity, or a
+       passphrase that is gone. */
+    if (vault) $("noPass").querySelector("span").innerHTML =
+      'Different identity, or lost the passphrase? <b>Set one up &rarr;</b>';
   }
 }
 
@@ -1744,6 +1770,10 @@ async function openWho(row,name){
    the encryption stops meaning anything at all, so six is the floor and the
    field says plainly that longer is stronger. */
 const PW_MIN = 6;
+/* WRITTEN ONCE, READ EVERYWHERE. The placeholder used to spell the number out
+   in the markup, which is how the floor came to be 6 on this page and 12 on
+   two others: each place is right about itself and nothing compares them. */
+$("np1").placeholder = `at least ${PW_MIN} characters`;
 const DID_RE=/^did:key:z6Mk[1-9A-HJ-NP-Za-km-z]{44}$/;
 const b58=(bytes)=>{ let n=0n; for(const b of bytes) n=n*256n+BigInt(b);
   let out=""; while(n>0n){ out=B58[Number(n%58n)]+out; n/=58n; }
@@ -1780,6 +1810,10 @@ function showPane(which){
 }
 const msay=(id,t,cls="")=>{ $(id).textContent=t; $(id).className="msay "+cls; };
 
+/* Straight to the route that suits each: somebody who has an identity
+   elsewhere wants to bring it in, somebody with none wants to make one. */
+$("doSignIn").addEventListener("click",()=>openModal("have"));
+$("doMake").addEventListener("click",()=>openModal("new"));
 $("noPass").addEventListener("click",()=>openModal(getVault()?"have":"new"));
 $("mClose").addEventListener("click",closeModal);
 $("tabNew").addEventListener("click",()=>showPane("new"));
@@ -1858,7 +1892,14 @@ $("hFileInput").addEventListener("change",async(e)=>{
    passphrase here rather than asking for one — so the fields, the labels and
    the button all change with the choice rather than a seed being quietly
    bolted onto a form written for something else. */
-let way="file";
+/* THE SEED IS THE DEFAULT ROUTE, and it is the one almost everybody needs.
+   A backup file only exists if this site made the identity and the person
+   still has the download; a seed exists for every identity on Technocore,
+   however it was made. Opening on the file asked the rarer question first
+   and left the common case one click behind a tab nobody had reason to
+   press. The safety note beside the seed field carries the warning that
+   used to be implied by putting the file first. */
+let way="seed";
 function setWay(w){
   way=w;
   $("wayFile").classList.toggle("on",w==="file");
@@ -1879,6 +1920,11 @@ function setWay(w){
 }
 $("wayFile").addEventListener("click",()=>setWay("file"));
 $("waySeed").addEventListener("click",()=>setWay("seed"));
+/* Called once at load so every field, label and button that setWay drives
+   agrees with the markup's default. Setting the class in the HTML alone left
+   the DID field showing and the button reading "Bring it into this browser"
+   under a seed box. */
+setWay("seed");
 
 /** A seed is 32 bytes. It is written as hex by every Technocore tool, and
  *  this site hands it over inside a text file with other lines around it, so

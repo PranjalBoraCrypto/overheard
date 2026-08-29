@@ -699,7 +699,7 @@ const MAIN=[
       <details id="encBox">
         <summary>Also save an encrypted backup file (recommended)</summary>
         <p class="hint">A <code>.json</code> locked with a passphrase you choose. Safer on a laptop than the raw seed, and this page can restore from it later.</p>
-        <label for="pw">Passphrase</label><input id="pw" type="password" autocomplete="new-password" placeholder="at least 12 characters">
+        <label for="pw">Passphrase</label><input id="pw" type="password" autocomplete="new-password">
         <label for="pw2">Type it again</label><input id="pw2" type="password" autocomplete="new-password">
         <div class="row"><button class="go" id="doBackup">Encrypt and download</button></div>
         <div class="msg" id="m-backup"></div>
@@ -1088,10 +1088,22 @@ $("saveTxt").addEventListener("click", ()=>{
   $("gateBox").scrollIntoView({behavior:"smooth",block:"center"});
 });
 
+/* ONE NUMBER, AND IT IS THE SAME NUMBER ON EVERY PAGE. This was hard-coded
+   as 12 here and on the card page while rooms and play had already moved to
+   6, so the same identity could be refused a passphrase on one page and
+   given it on another — and the message told you a different rule depending
+   on where you were standing. It is a floor on a local encryption key that
+   never leaves the device, not a login on a server, so it is deliberately
+   low; length is still what makes it strong, which is what the hint beside
+   the field says. */
+const PW_MIN = 6;
+/* Written once, read everywhere — see the note in rooms.html. */
+$("pw").placeholder = `at least ${PW_MIN} characters`;
+
 $("doBackup").addEventListener("click", async ()=>{
   if(!ID) return;
   const pw=$("pw").value, pw2=$("pw2").value;
-  if(pw.length<12) return say("backup","Passphrase must be at least 12 characters.","err");
+  if(pw.length<PW_MIN) return say("backup",`Passphrase must be at least ${PW_MIN} characters.`,"err");
   if(pw!==pw2)     return say("backup","The two passphrases don't match.","err");
   say("backup","Encrypting on this device…");
 

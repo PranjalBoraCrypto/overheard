@@ -1191,9 +1191,9 @@ canvas.confetti{position:fixed;inset:0;width:100%;height:100%;pointer-events:non
 
       <div class="mpane">
         <div class="pick" role="radiogroup" aria-label="What you have">
-          <button class="pk on" id="wayFile" type="button" role="radio" aria-checked="true">
+          <button class="pk" id="wayFile" type="button" role="radio" aria-checked="false">
             <svg class="i"><use href="#i-file"/></svg>Backup file</button>
-          <button class="pk" id="waySeed" type="button" role="radio" aria-checked="false">
+          <button class="pk on" id="waySeed" type="button" role="radio" aria-checked="true">
             <svg class="i"><use href="#i-key"/></svg>Seed</button>
         </div>
 
@@ -1203,7 +1203,7 @@ canvas.confetti{position:fixed;inset:0;width:100%;height:100%;pointer-events:non
           <p class="hint">The public half. It is written on your backup file and on your card.</p>
         </div>
 
-        <div id="wayFileBox">
+        <div id="wayFileBox" hidden>
           <div class="mfield">
             <label for="hFile">Its backup file</label>
             <label class="filepick" for="hFileInput">
@@ -1216,7 +1216,7 @@ canvas.confetti{position:fixed;inset:0;width:100%;height:100%;pointer-events:non
           </div>
         </div>
 
-        <div id="waySeedBox" hidden>
+        <div id="waySeedBox">
           <div class="warnbox">
             <svg class="i"><use href="#i-info"/></svg>
             <span><b>A seed is the identity itself.</b> Whoever has it <em>is</em> you, for good. It is encrypted on your device and never sent anywhere &mdash; still, check the address bar before typing one into any site, this one included.</span>
@@ -2154,7 +2154,14 @@ $("hFileInput").addEventListener("change",async(e)=>{
    A seed is the identity in the clear, and taking one means MAKING a
    passphrase here rather than asking for one — so the fields, the labels and
    the button all change with the choice. */
-let way="file";
+/* THE SEED IS THE DEFAULT ROUTE, and it is the one almost everybody needs.
+   A backup file only exists if this site made the identity and the person
+   still has the download; a seed exists for every identity on Technocore,
+   however it was made. Opening on the file asked the rarer question first
+   and left the common case one click behind a tab nobody had reason to
+   press. The safety note beside the seed field carries the warning that
+   used to be implied by putting the file first. */
+let way="seed";
 function setWay(w){
   way=w;
   $("wayFile").classList.toggle("on",w==="file");
@@ -2174,6 +2181,11 @@ function setWay(w){
 }
 $("wayFile").addEventListener("click",()=>setWay("file"));
 $("waySeed").addEventListener("click",()=>setWay("seed"));
+/* Called once at load so every field, label and button that setWay drives
+   agrees with the markup's default. Setting the class in the HTML alone left
+   the DID field showing and the button reading "Bring it into this browser"
+   under a seed box. */
+setWay("seed");
 
 /* Show the DID the moment it can be worked out: a DID appearing under the box
    is the clearest confirmation that the seed pasted is the seed meant. */
