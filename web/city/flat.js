@@ -93,7 +93,10 @@ export function mountFlat(container, els) {
     localStorage.setItem("overheard.city.seen", "1");
   } catch { firstVisit = false; }
 
-  const pulses = [], beams = [], bubbles = [];
+  const pulses = [], beams = [];
+  /* The transmission layer, shared with the 3D road. Built lazily on the
+     first message so a visitor who never opens a room never pays for it. */
+  let tx = null;
   const labels = new Map();
   const declutter = makeDeclutter(els);
 
@@ -694,56 +697,48 @@ export function mountFlat(container, els) {
     });
   }
 
-  /* ── speech bubbles: HTML, exactly as in the 3D city ─────────────────── */
+  /* ── transmissions, exactly as in the 3D city ────────────────────────────
+     Same module, same pooled cards, same shared tether overlay — the flat
+     road loses the third dimension, not the information. The only thing it
+     supplies differently is the projection: here an agent's screen position
+     comes from the 2D map's own transform rather than from a camera. */
+  async function ensureTx() {
+    if (tx) return tx;
+    const { makeTransmit } = await import("./transmit.js");
+    tx = makeTransmit(els.overlay, {
+      open: (key, agentId) => { if (key) selectMessage(key); else if (agentId) selectAgent(agentId); },
+    }, reduced);
+    tx.resize(W, H);
+    return tx;
+  }
+
   function addBubble(m, agentId) {
     if (!agentId || !agentById.get(agentId)) return;
-    const old = bubbles.findIndex((b) => b.agentId === agentId);
-    if (old >= 0) retire(bubbles[old]);
-
-    const node = document.createElement("div");
-    node.className = `bub ${m.c.kind}`;
-    const w = document.createElement("span");
-    w.className = "w";
-    w.textContent = m.did ? m.did.replace(/^did:key:/, "").slice(0, 8) + "…" : m.nick || "—";
-    const t = document.createElement("span");
-    t.className = "t";
-    t.textContent = m.text;                       // text, never markup
-    node.append(w, t);
-    node.addEventListener("click", (e) => { e.stopPropagation(); selectMessage(m.key); });
-    els.overlay.append(node);
-    bubbles.push({ key: m.key, agentId, node, born: performance.now(), life: 6500 });
-    while (bubbles.length > BUBBLES) retire(bubbles[0]);
+    if (!tx) { ensureTx().then(() => addBubble(m, agentId)); return; }
+    const c = m.c;
+    const fields = (c.fields || []).filter(Boolean);
+    const text = c.kind !== "message" && fields.length ? fields.join(" · ") : m.text;
+    tx.sendFrom(agentId, {
+      key: m.key,
+      kind: c.kind,
+      who: m.did ? m.did.replace(/^did:key:/, "").slice(0, 10) + "…" : (m.nick || "—"),
+      kindLabel: c.kind === "message" ? "" : D.kindLabel(c),
+      text,
+      meta: `#${m.seq}${m.did ? " · signed" : ""}`,
+    });
   }
-
-  function retire(b) {
-    const i = bubbles.indexOf(b);
-    if (i >= 0) bubbles.splice(i, 1);
-    b.node.classList.add("out");
-    setTimeout(() => b.node.remove(), 360);
-  }
-  function clearBubbles() { while (bubbles.length) retire(bubbles[0]); }
+  function clearBubbles() { tx?.clear(); }
 
   function layoutBubbles(now) {
-    const placed = [];
-    for (const b of [...bubbles]) {
-      const life = st.agentId === b.agentId ? b.life * 2 : b.life;
-      if (now - b.born > life) { retire(b); continue; }
-      const a = agentById.get(b.agentId);
-      if (!a) { retire(b); continue; }
-      const x0 = SX(a.x), y0 = SY(a.z) - 16;
-      const at = declutter.placeAny(b, x0, y0,
-        [[0, 0], [0, -70], [0, -140], [-120, -36], [120, -36], [0, 64]]);
-      if (!at) { b.node.style.opacity = "0"; continue; }
-      const x = at.x, y = at.y;
-      placed.push({ x, y });
-      const k = 1 - Math.max(0, (now - b.born - life + 700) / 700);
-      b.node.style.opacity = String(clamp(k, 0, 1));
-      b.node.style.transform = `translate(${Math.round(x)}px,${Math.round(y)}px) translate(-50%,-100%)`;
-      b.node.classList.toggle("sel", st.msgKey === b.key || st.agentId === b.agentId);
-    }
+    if (!tx) return;
+    tx.step(now, { width: W, height: H }, (agentId) => {
+      const a = agentById.get(agentId);
+      if (!a) return null;
+      const x = SX(a.x), y = SY(a.z) - 18;
+      if (x < -40 || y < -40 || x > W + 40 || y > H + 40) return null;
+      return { x, y };
+    });
   }
-
-  /* ── hover ───────────────────────────────────────────────────────────── */
   function updateHover() {
     if (st.clean || dragging) { ui.hover(0, 0, null); return; }
     if (!pointerIn && !st.hoverKey) { ui.hover(0, 0, null); return; }
@@ -792,6 +787,7 @@ export function mountFlat(container, els) {
     cv.height = Math.round(H * dpr);
     ox = W >= 1024 ? Math.min(120, W * 0.075) : 0;
     oy = W >= 1024 ? 0 : Math.min(40, H * 0.04);
+    tx?.resize(W, H);
     const prevFit = fit;
     fit = Math.min(W, H) / (2 * 162);
     if (prevFit) { const k = fit / prevFit; view.s *= k; want.s *= k; } else { view.s = want.s = fit; }
@@ -1216,7 +1212,8 @@ export function mountFlat(container, els) {
   /* The same read-only handle the 3D page publishes, so one test suite can
      drive either view. */
   return {
-    state: st, view, bubbles, labels,
+    state: st, view, labels,
+    get tx() { return tx; },
     get city() { return city; },
     get rooms() { return rooms; },
     get agents() { return agents; },

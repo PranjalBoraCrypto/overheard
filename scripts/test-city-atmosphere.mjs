@@ -718,6 +718,118 @@ console.log("\n=== F. the three that did not work");
   await ctx.close();
 }
 
+/* ════════════════════════════════════════════════════════════════════════
+   G. TRANSMISSIONS, AND WHERE EACH ONE BELONGS
+   ════════════════════════════════════════════════════════════════════════
+
+   Two contexts, deliberately separated:
+
+     IN A ROOM the messages are attached to the agents that sent them —
+     world-anchored cards on tethers, which is only meaningful where the
+     bodies are. No global feed here: it would be the same activity written
+     twice beside the plaza it is already happening on.
+
+     IN THE CITY there are no bodies, so there is a compact global feed
+     instead — and there the room NAME is the useful part.
+
+   The interesting assertions are the negative ones: the feed must not be in
+   a room, the cards must not be in the city, and neither may ever show a
+   message the page did not actually read.
+   ════════════════════════════════════════════════════════════════════ */
+console.log("\n=== G. transmissions in the room, a feed in the city");
+{
+  const { pg, ctx, errs } = await open();
+  bump = 18;
+  await pg.evaluate(() => document.dispatchEvent(new Event("visibilitychange")));
+  await pg.waitForTimeout(2500);
+  bump = 37;
+  await pg.evaluate(() => document.dispatchEvent(new Event("visibilitychange")));
+  /* Long enough for the peek rotation to have read a couple of rooms. */
+  await pg.waitForTimeout(11000);
+
+  /* ── the city: a global feed ── */
+  check("the city offers a live feed", !(await pg.evaluate(() => document.getElementById("live").hidden)));
+  check("collapsed to a pill until asked",
+    await pg.evaluate(() => document.getElementById("liveBody").hidden));
+  await pg.click("#livePill");
+  await pg.waitForTimeout(400);
+
+  const feed = await pg.evaluate(() => {
+    const rows = [...document.querySelectorAll("#liveBody .liverow")];
+    return {
+      n: rows.length,
+      rooms: rows.map((r) => r.querySelector(".rm")?.textContent ?? ""),
+      note: document.querySelector("#liveBody .livenote")?.textContent ?? "",
+      html: document.getElementById("liveBody").innerHTML,
+    };
+  });
+  check("it lists what has been read", feed.n > 0 && feed.n <= 3, `${feed.n} rows`);
+  /* THE ROOM NAME IS THE POINT OF THIS PANEL. In the city there are no
+     bodies to attach a message to, so "which room" is the only spatial fact
+     a line can carry. */
+  check("and every line names its room",
+    feed.rooms.every((r) => /^in \S+/.test(r.trim())), feed.rooms.join(" | "));
+  /* AND IT DOES NOT OVERCLAIM. This is the newest line from the handful of
+     rooms the city peeks, not every message on Technocore, and the panel has
+     to say which it is. */
+  check("it says what it is and is not",
+    /each room the city is watching/i.test(feed.note), feed.note.slice(0, 48));
+  check("a stranger's words are still text, never markup",
+    !/<script/i.test(feed.html) && (await pg.evaluate(() => window.__pwned)) === undefined);
+
+  /* Clicking a line goes to the room it came from. */
+  const target = (feed.rooms[0] || "").replace(/^in\s+/, "").trim();
+  await pg.click("#liveBody .liverow");
+  await pg.waitForFunction(() => document.body.classList.contains("inroom"), null, { timeout: 20000 });
+  check("clicking a line walks into that room",
+    (await pg.evaluate(() => window.__city.state.room)) === target,
+    `${await pg.evaluate(() => window.__city.state.room)} vs ${target}`);
+
+  /* ── in the room: cards, not a feed ── */
+  check("and the global feed is not shown in there",
+    await pg.evaluate(() => document.getElementById("live").hidden));
+
+  await pg.waitForTimeout(6500);
+  const tx = await pg.evaluate(() => {
+    const cards = [...document.querySelectorAll(".tx")];
+    const shown = cards.filter((c) => c.style.display !== "none");
+    const paths = [...document.querySelectorAll(".tether")]
+      .filter((p) => (p.getAttribute("d") || "").length > 3);
+    return {
+      pool: cards.length,
+      live: window.__city.tx?.shown ?? -1,
+      tethers: paths.length,
+      anchored: shown.every((c) => /translate3d/.test(c.style.transform)),
+      svgs: document.querySelectorAll("svg.tethers").length,
+      xy: shown.map((c) => c.style.transform),
+    };
+  });
+  check("messages arrive as cards attached to their agent", tx.live > 0, `${tx.live} live`);
+  /* THREE, POOLED. Not three created and destroyed — three elements, reused
+     forever. A fourth message takes the oldest slot. */
+  check("out of a pool of exactly three elements", tx.pool === 3, `${tx.pool}`);
+  check("never more than three at once", tx.live <= 3, `${tx.live}`);
+  check("each one tethered to a body", tx.tethers >= tx.live, `${tx.tethers} tethers`);
+  /* ONE SVG FOR ALL OF THEM, not one per card. */
+  check("through a single shared overlay", tx.svgs === 1, `${tx.svgs} svg roots`);
+  check("positioned by transform, so nothing reflows", tx.anchored);
+
+  /* WORLD-ANCHORED IS THE WHOLE CLAIM: move the camera, and the cards move
+     with the agents they belong to. */
+  const before = await pg.evaluate(() =>
+    [...document.querySelectorAll(".tx")].map((c) => c.style.transform).join("|"));
+  await pg.evaluate(() => window.__city.roomCam.flyTo({ dist: 58, yaw: 1.5 }, 500));
+  await pg.waitForTimeout(1500);
+  const after = await pg.evaluate(() =>
+    [...document.querySelectorAll(".tx")].map((c) => c.style.transform).join("|"));
+  check("and they follow the camera, because they are anchored in the world",
+    before !== after, `${before.slice(0, 30)} → ${after.slice(0, 30)}`);
+
+  check("no page errors", errs.length === 0, errs[0] || "");
+  bump = 0;
+  await ctx.close();
+}
+
 console.log(bad ? `\n${bad} FAILURE(S)` : "\nall good");
 await browser.close(); srv.close();
 process.exit(bad ? 1 : 0);

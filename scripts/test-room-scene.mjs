@@ -117,13 +117,16 @@ console.log("\n=== B. saved history fills the room without pretending to be new"
 const onEntry = await pg.evaluate(() => ({
   figures: window.__city.room3d.figures.length,
   lit: window.__city.room3d.lit,
-  bubbles: document.querySelectorAll(".bub").length,
+  /* THE POOL IS ALWAYS IN THE DOM — three card elements, built once and
+     reused — so counting `.tx` counts the pool and always says three. What
+     is being asked is how many are LIVE. */
+  bubbles: window.__city.tx?.shown ?? 0,
 }));
 check("the identities that really spoke are standing there",
   onEntry.figures > 5, `${onEntry.figures} figures`);
 check("not one of them is lit", onEntry.lit === 0, `${onEntry.lit} lit`);
-check("and not one archived message became a speech bubble",
-  onEntry.bubbles === 0, `${onEntry.bubbles} bubbles`);
+check("and not one archived message became a transmission",
+  onEntry.bubbles === 0, `${onEntry.bubbles} cards`);
 
 /* ══ C. A REAL MESSAGE DOES BOTH ═══════════════════════════════════════ */
 console.log("\n=== C. a genuinely new message lights the speaker and speaks");
@@ -138,17 +141,17 @@ let peak = 0, bubbles = 0;
 for (let i = 0; i < 26; i++) {
   await pg.waitForTimeout(400);
   const s = await pg.evaluate(() => ({
-    lit: window.__city.room3d.lit, b: document.querySelectorAll(".bub").length }));
+    lit: window.__city.room3d.lit, b: window.__city.tx?.shown ?? 0 }));
   peak = Math.max(peak, s.lit); bubbles = Math.max(bubbles, s.b);
   if (peak > 0 && bubbles > 0) break;
 }
 check("the speaker lights up", peak > 0, `${peak} lit`);
-check("and says something", bubbles > 0, `${bubbles} bubble(s)`);
+check("and transmits it", bubbles > 0, `${bubbles} card(s)`);
 /* The light has to outlast nothing, and under-last nothing either: a
-   speaker who has gone dark while their own bubble is still up is a bubble
+   speaker who has gone dark while their own card is still up is a tether
    pointing at nobody. */
-check("the light is still on while the bubble is",
-  await pg.evaluate(() => document.querySelectorAll(".bub").length === 0
+check("the light is still on while the card is",
+  await pg.evaluate(() => (window.__city.tx?.shown ?? 0) === 0
     || window.__city.room3d.lit > 0));
 await pg.screenshot({ path: "/tmp/room-scene.png" });
 

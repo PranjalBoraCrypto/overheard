@@ -335,6 +335,72 @@ export function makeUI(els, cb) {
     return line.text || "";
   }
 
+  /* ── LIVE TRANSMISSIONS ────────────────────────────────────────────────
+     The city's global feed: the newest lines this browser has genuinely
+     fetched, across the rooms it is watching.
+
+     WHAT IT IS ALLOWED TO CLAIM, and it is narrower than "the latest
+     messages on Technocore". The city reads a directory of counters, not
+     messages; the only actual TEXT it ever holds comes from the peek channel,
+     which reads one busy room at a time on a slow rotation. So this is the
+     newest line from each of a handful of rooms, in the order they were
+     read — which is a true and useful thing, and is not the whole network.
+     The footnote says so rather than letting the panel imply otherwise.
+
+     It lives on the city and nowhere else. Inside a room the messages are
+     attached to the agents that sent them, and listing them again beside the
+     plaza would be the same activity written twice. */
+  function live(rows, opts = {}) {
+    const box = els.live, body = els.liveBody, pill = els.livePill, n = els.liveN;
+    if (!box) return;
+    if (!rows || !rows.length) { box.hidden = true; return; }
+    box.hidden = false;
+
+    pill.classList.toggle("stale", !opts.live);
+    n.classList.toggle("on", (opts.unread || 0) > 0);
+    n.textContent = opts.unread > 9 ? "9+" : String(opts.unread || "");
+
+    if (body.hidden) return;                 // collapsed: the pill is the whole UI
+
+    body.replaceChildren();
+    const head = el("div", "livehead");
+    head.append(el("span", null, "Live transmissions"));
+    body.append(head);
+
+    for (const r of rows.slice(0, 3)) {
+      const b = el("button", "liverow" + (r.fresh ? " fresh" : "")); b.type = "button";
+      const g = el("span", `g k-${r.kind || "message"}`);
+      g.append(icon(KIND_ICON[r.kind] || "c-msg"));
+      b.append(g);
+      b.append(el("span", "who", r.who));
+      b.append(el("span", "when", ago(r.at)));
+      const ln = el("span", "ln");
+      /* The same treatment the rail and the transmission cards give a
+         structured message: its own declared fields rather than its
+         punctuation. The glyph already carries the verb, and "JOB v1|" is
+         eight characters of syntax in a line that has room for about fifty. */
+      ln.append(document.createTextNode(lineText({ c: r.c, text: r.text })));
+      b.append(ln);
+      const rm = el("span", "rm");
+      rm.append(document.createTextNode("in "), el("b", null, r.room));
+      b.append(rm);
+      b.title = `Go into ${r.room} and find this message`;
+      b.addEventListener("click", () => cb.openTransmission?.(r));
+      body.append(b);
+    }
+
+    const note = el("p", "livenote",
+      "newest line from each room the city is watching · read here, not pushed");
+    body.append(note);
+  }
+
+  function liveOpen(v) {
+    if (!els.liveBody) return;
+    els.liveBody.hidden = !v;
+    els.livePill?.setAttribute("aria-expanded", String(!!v));
+  }
+  const liveShown = () => !!els.liveBody && !els.liveBody.hidden;
+
   function closeRail() { if (els.rail) { els.rail.hidden = true; els.rail.replaceChildren(); } }
 
   /* ── the feed lives IN the room panel ────────────────────────────────────
@@ -953,7 +1019,7 @@ export function makeUI(els, cb) {
 
   return {
     chips, status, roomSummary, roomLive, agentPanel, messagePanel, closePanel, legend, didPanel,
-    rail, closeRail,
+    rail, closeRail, live, liveOpen, liveShown,
     buildFeed, renderFeed, closeFeed, feedShown, feedState: feed,
     hover, hoverAgentCard, hoverRoomCard, hoverBlockCard, hits,
   };

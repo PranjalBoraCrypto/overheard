@@ -31,6 +31,7 @@ export async function boot() {
   const els = {
     stage, overlay, chips: $("chips"), side: $("side"),
     hover: $("hover"), hits: $("hits"), status: $("status"), rail: $("rail"),
+    live: $("live"), liveBody: $("liveBody"), livePill: $("livePill"), liveN: $("liveN"),
   };
 
   /* ── 1. what can this machine do ─────────────────────────────────────── */
@@ -90,9 +91,14 @@ export async function boot() {
     room3d = makeRoom(THREE, { renderer: world.renderer, preset, level: preset.tier, reduced });
     roomCam = makeCamera(THREE, room3d.camera, canvas, { reduced, limits: ROOM_LIMITS });
     roomCam.enabled = false;
+    const { makeTransmit } = await import("./transmit.js");
+    tx = makeTransmit(overlay, {
+      open: (key, agentId) => { if (key) selectMessage(key); else if (agentId) selectAgent(agentId); },
+    }, reduced);
     const r = canvas.getBoundingClientRect();
     room3d.resize(r.width, r.height);
     roomCam.setAspect?.(r.width / r.height);
+    tx.resize(r.width, r.height);
     return room3d;
   }
 
@@ -120,7 +126,9 @@ export async function boot() {
     localStorage.setItem("overheard.city.seen", "1");
   } catch { firstVisit = false; }
 
-  const bubbles = [];      // { key, agentId, node, born, life, kind }
+  /* The transmission layer: three pooled cards and one shared tether
+     overlay, built on first entry to a room. See transmit.js. */
+  let tx = null;
   const labels = new Map();
   const declutter = makeDeclutter(els);
 
@@ -154,6 +162,7 @@ export async function boot() {
     locate: (id) => { if (id) selectAgent(id); },
     /* The feed took the room panel over; this puts it back. */
     showRoom: () => { if (st.room) showRoomPanel(); },
+    openTransmission: (r) => openTransmission(r),
     flyToRoom: (room) => flyToRoom(room),
     toggleClean: () => setClean(!st.clean),
   });
@@ -178,6 +187,7 @@ export async function boot() {
     buildLabels();
     paintChips();
     refreshRail();
+    refreshLive();
     /* The tone follows the reading, not the clock. Standing in a room it is
        off and stays off; an idle city turns it off by itself, which is the
        point of it being a dial rather than a drone. */
@@ -199,9 +209,65 @@ export async function boot() {
   });
 
   D.on("status", () => { paintChips(); ui.status(D.state.status); });
-  /* A line arriving is a reason to redraw the rail and nothing else on the
-     page — it changes four rows of text and no geometry. */
-  D.on("peek", () => refreshRail());
+  /* A line arriving is a reason to redraw the rail and the feed and nothing
+     else on the page — it changes a few rows of text and no geometry. */
+  D.on("peek", () => { refreshRail(); refreshLive(true); });
+
+  /* ── LIVE TRANSMISSIONS ────────────────────────────────────────────────
+     The city's global feed. It reads the same log the peeks write, so it
+     costs no requests of its own and can never show a line the page did not
+     actually fetch. Collapsed to a pill by default; the unread count is the
+     number of lines that have arrived since it was last opened. */
+  let liveSeen = 0, liveUnread = 0, lastWire = "";
+  function refreshLive(isNew = false) {
+    if (st.room || mode === "room") { if (els.live) els.live.hidden = true; return; }
+    const log = D.wireLog();
+    if (!log.length) return;
+    const stamp = `${log[0].room}#${log[0].seq}`;
+    if (isNew && stamp !== lastWire) {
+      lastWire = stamp;
+      if (!ui.liveShown()) liveUnread++;
+    }
+    ui.live(log.map((w, i) => ({
+      room: w.room, kind: w.c?.kind || "message", text: w.text, c: w.c, at: w.at,
+      who: w.did ? D.shortDid(w.did, 8, 5) : (w.nick || "—"),
+      did: w.did, seq: w.seq,
+      fresh: i === 0 && isNew,
+    })), {
+      live: D.state.status.source === "live" && D.state.status.city === "live",
+      unread: liveUnread,
+    });
+  }
+
+  /** A transmission in the city feed was clicked: go where it came from.
+   *
+   *  The room is always known, so entering is always possible. The message
+   *  itself may or may not still be in the window Technocore is serving by
+   *  the time the room loads — it is a rolling window, and this line could
+   *  be a minute old — so the focus is attempted and quietly not done if the
+   *  message has aged out. Landing in the right room is the promise; landing
+   *  on the exact line is the bonus. */
+  function openTransmission(r) {
+    if (!r?.room) return;
+    pendingFocus = { room: r.room, seq: String(r.seq || ""), did: r.did || null, at: performance.now() };
+    enterRoom(r.room);
+  }
+  let pendingFocus = null;
+
+  function tryPendingFocus() {
+    if (!pendingFocus || pendingFocus.room !== st.room) return;
+    /* Ten seconds is long enough for a slow room read and short enough that
+       a stale intent never hijacks a later visit. */
+    if (performance.now() - pendingFocus.at > 10000) { pendingFocus = null; return; }
+    const room = D.state.room;
+    if (!room?.messages?.length) return;
+    const hit = pendingFocus.seq && room.messages.find((m) => String(m.seq) === pendingFocus.seq);
+    if (hit) { pendingFocus = null; selectMessage(hit.key); return; }
+    if (pendingFocus.did) {
+      const who = room.agents.find((a) => a.did === pendingFocus.did);
+      if (who) { pendingFocus = null; selectAgent(who.id); }
+    }
+  }
 
   /* Entering a room shows its saved history immediately — see the snapshot
      ladder in api/room.js. Those agents are real identities that really
@@ -798,8 +864,11 @@ export async function boot() {
        scene anchored to buildings that are no longer being drawn. */
     clearTallies();
     /* And the rail is a list of rooms to go to, read from outside. Inside
-       one, it is a distraction pointing away from where you just arrived. */
+       one, it is a distraction pointing away from where you just arrived —
+       and so is the global feed, which is why the transmissions in here are
+       attached to the agents instead. */
     ui.closeRail();
+    if (els.live) els.live.hidden = true;
 
     /* Saved BEFORE the approach flight, so "back" returns to the view the
        visitor arranged, not to wherever the transition left the camera. */
@@ -858,8 +927,9 @@ export async function boot() {
       camSaved = null;
       document.body.classList.remove("inroom");
       /* Inside the veil, not after it: `mode` is still "room" for the 280ms
-         the door is closing, and refreshRail refuses to draw in room mode. */
+         the door is closing, and both of these refuse to draw in room mode. */
       refreshRail();
+      refreshLive();
     });
     world.leaveRoom();
     D.leaveRoom();
@@ -920,6 +990,7 @@ export async function boot() {
        after it was opened — it appeared, then vanished, which reads as a
        button that half works. renderFeed keeps it current instead. */
     if (!st.agentId && !st.msgKey && !ui.feedShown()) showRoomPanel();
+    tryPendingFocus();
     ui.renderFeed(r, st.msgKey);
     paintStrip(r);
   });
@@ -975,163 +1046,58 @@ export async function boot() {
     paintStrip(r);
   });
 
-  /* ── bubbles ─────────────────────────────────────────────────────────── */
+  /* ── transmissions ───────────────────────────────────────────────────── */
 
+  /* ── TRANSMISSIONS ───────────────────────────────────────────────────────
+     The speech bubbles are gone; see transmit.js for what replaced them and
+     why. What is left here is the wiring: turning a message this reader has
+     genuinely not seen before into a transmission from the agent that sent
+     it, and stepping the whole thing from the frame loop that already runs.
+
+     The rules the bubbles obeyed are unchanged and are still the point: an
+     archived message never produces one, because `fresh` is what reaches
+     this code; and a card only ever exists for an agent that is actually
+     standing in the room, because it is anchored to that body. */
   function addBubble(m, agentId) {
-    if (!agentId || !world.agentAt(agentId)) return;
-    /* One per speaker: a burst from one agent should replace its bubble, not
-       stack five of them into a column nobody can read. */
-    const old = bubbles.findIndex((b) => b.agentId === agentId);
-    if (old >= 0) retire(bubbles[old]);
-
-    const node = document.createElement("div");
-    node.className = `bub ${m.c.kind}`;
-    /* Position outside, motion inside — see the note in tally() for the bug
-       this shape exists to prevent. */
-    const box = document.createElement("div");
-    box.className = "box";
-
-    /* THE HEADER LINE: who, what kind, and whether it was signed.
-       Three facts, at three weights, on one line. The old bubble had only
-       the truncated key, so a plaza of them was a wall of z6Mk… with no way
-       to tell an attestation from a hello without reading the pipes. */
-    const head = document.createElement("span");
-    head.className = "w";
-    const who = document.createElement("b");
-    who.textContent = (m.did ? m.did.replace(/^did:key:/, "").slice(0, 8) + "…" : m.nick || "—");
-    head.append(who);
-    if (m.c.kind !== "message") {
-      const k = document.createElement("i");
-      k.className = "k";
-      k.textContent = D.kindLabel(m.c);
-      head.append(k);
-    }
-    if (m.did) {
-      const sg = document.createElement("i");
-      sg.className = "sg";
-      sg.textContent = "signed";
-      head.append(sg);
-    }
-
-    const t = document.createElement("span");
-    t.className = "t";
-    /* A STRUCTURED MESSAGE SHOWS ITS OWN FIELDS, NOT ITS PUNCTUATION.
-       "ATTEST v1|k1a04ee1306|not|The result restates the task…" spends its
-       first thirty characters on syntax the header already carries, in a
-       bubble that only has room for about eighty. The verb is in the tag
-       above; what goes here is the message's own remaining fields, its own
-       pipe swapped for a middot. Nothing is summarised or reordered, and the
-       raw text is one click away in the feed. */
-    if (m.c.kind !== "message" && (m.c.fields || []).length) {
-      const fields = m.c.fields.filter(Boolean);
-      /* The verdict and the id are facts about the message; the prose field
-         is the message. Showing the prose last and largest is the reading
-         order somebody actually wants. */
-      t.textContent = fields.join(" · ");
-    } else {
-      t.textContent = m.text;                     // text, never markup
-    }
-    /* The tail. Its length is set every frame from the gap between where the
-       bubble was placed and where its speaker actually is — the declutter
-       pass moves bubbles wherever there is room, so a fixed CSS triangle
-       would point at whoever happens to be underneath. */
-    const tail = document.createElement("i");
-    tail.className = "tail";
-    box.append(head, t);
-    node.append(box, tail);
-    node.addEventListener("click", (e) => { e.stopPropagation(); selectMessage(m.key); });
-    overlay.append(node);
-
-    bubbles.push({ key: m.key, agentId, node, box, tail, born: performance.now(), life: 6500 });
-    while (bubbles.length > preset.bubbles) retire(bubbles[0]);
+    if (!tx || !agentId || !room3d || !room3d.agentAt(agentId)) return;
+    const c = m.c;
+    /* A structured message shows its own declared fields rather than its
+       pipes — the kind is already in the status line above, and spending
+       thirty of a hundred characters on "ATTEST v1|" says nothing. */
+    const fields = (c.fields || []).filter(Boolean);
+    const text = c.kind !== "message" && fields.length ? fields.join(" · ") : m.text;
+    tx.sendFrom(agentId, {
+      key: m.key,
+      kind: c.kind,
+      who: m.did ? m.did.replace(/^did:key:/, "").slice(0, 10) + "…" : (m.nick || "—"),
+      kindLabel: c.kind === "message" ? "" : D.kindLabel(c),
+      text,
+      meta: `#${m.seq}${m.did ? " · signed" : ""}`,
+    });
   }
+  function clearBubbles() { tx?.clear(); }
 
-  function retire(b) {
-    const i = bubbles.indexOf(b);
-    if (i >= 0) bubbles.splice(i, 1);
-    (b.box || b.node).classList.add("out");
-    setTimeout(() => b.node.remove(), 360);
-  }
-  function clearBubbles() { while (bubbles.length) retire(bubbles[0]); }
-
+  /** Stepped from the overlay tick. The anchor is a point in the scene just
+   *  above the agent's top fin, projected fresh every time — which is what
+   *  makes the card stay on the agent through a drag, a zoom or a drift. */
   function layoutBubbles(rect, now) {
-    const placed = [];
-    for (const b of [...bubbles]) {
-      /* The selected agent's bubble stays up longer, because it is the one
-         somebody is actually reading. */
-      const life = st.agentId === b.agentId ? b.life * 2 : b.life;
-      if (now - b.born > life) { retire(b); continue; }
-      /* Anchored to whichever scene the visitor is actually in. In the room
-         that is a figure standing on the plaza floor; in the city it is a
-         box on a district terrace. Same bubble, two projections. */
-      let s;
-      if (mode === "room" && room3d) {
-        s = room3d.project(b.agentId, rect.width, rect.height);
-        if (!s) { retire(b); continue; }
-      } else {
-        const a = world.agentAt(b.agentId);
-        if (!a) { retire(b); continue; }
-        s = world.project(a.x, a.y + 8, a.z, rect);
-        if (s.behind) { b.node.style.opacity = "0"; continue; }
-      }
-      /* Bubbles are placed by the same rule as the labels — they are the same
-         kind of thing, and a speech bubble under the side panel is a message
-         the visitor cannot read. Six tries going up, then it waits its turn;
-         they expire in a few seconds anyway. */
-      /* THE FIRST CANDIDATE IS NOT ZERO ANY MORE. Placed exactly on the
-         figure, a bubble's bottom edge sits on its speaker's head — which
-         covers the one thing it is pointing at and leaves no room for a tail
-         to be drawn in. Every candidate now clears the figure by at least a
-         couple of dozen pixels, so there is always somewhere for the tether
-         to run and the speaker stays visible underneath it. */
-      const at = declutter.placeAny(b, s.x, s.y,
-        [[0, -30], [0, -98], [0, -166], [-126, -62], [126, -62], [0, 60]]);
-      if (!at) { b.node.style.opacity = "0"; continue; }
-      const y = at.y;
-      placed.push({ x: at.x, y });
-      const k = 1 - Math.max(0, (now - b.born - life + 700) / 700);
-      b.node.style.opacity = String(Math.max(0, Math.min(1, k)));
-      b.node.style.transform = `translate(${Math.round(at.x)}px,${Math.round(y)}px) translate(-50%,-100%)`;
-      b.node.classList.toggle("sel", st.msgKey === b.key || st.agentId === b.agentId);
-      /* THE TAIL REACHES THE SPEAKER, wherever the declutter pass put the
-         bubble. `s` is where the figure is; `at` is where the bubble ended
-         up. The difference is the tail, and drawing it is the difference
-         between six labels over a crowd and six people talking. It is
-         skipped when the bubble was pushed sideways far enough that a
-         near-horizontal line would read as a stray rule across the plaza. */
-      if (b.tail) {
-        /* A REAL LINE, AT WHATEVER ANGLE IT TAKES. The first version hung a
-           vertical hairline from a fixed 22px inset, which pointed at a spot
-           on the floor beside the speaker rather than at the speaker — and
-           went badly wrong the moment the declutter pass pushed a bubble
-           sideways. This measures the actual gap and rotates to cover it.
-
-           The element grows downward from the bubble's bottom centre, so a
-           point at (0,h) rotated clockwise by A lands at (-h·sinA, h·cosA);
-           setting that equal to (dx,dy) gives A = atan2(-dx, dy). */
-        const dx = s.x - at.x, dy = s.y - y;
-        const len = Math.hypot(dx, dy);
-        const show = dy > 4 && len < 520;
-        b.tail.style.height = show ? `${Math.round(len)}px` : "0px";
-        if (show) b.tail.style.transform = `rotate(${Math.atan2(-dx, dy)}rad)`;
-      }
-    }
+    if (!tx) return;
+    tx.step(now, rect, (agentId) => {
+      if (mode !== "room" || !room3d) return null;
+      const p = room3d.project(agentId, rect.width, rect.height);
+      if (!p) return null;
+      /* Off the edge of the viewport is the same as gone: the card would be
+         anchored to something nobody can see. */
+      if (p.x < -40 || p.y < -40 || p.x > rect.width + 40 || p.y > rect.height + 40) return null;
+      return p;
+    });
   }
 
-  /* ── the activity strip ──────────────────────────────────────────────── */
+  /* The activity strip's own running state. It lived beside the speech
+     bubbles and went out with them; the strip still needs it. */
   const hist = new Array(48).fill(0);
-  let lastCount = 0, lastTick = 0;
-  function paintStrip(r) {
-    if (!r || $("strip").hidden) return;
-    $("stripTitle").textContent = `${r.name} · activity`;
-    const s = D.state.status;
-    $("stripLive").textContent =
-      s.room === "sampled" ? "• sampled" : s.room === "live" ? "• live" :
-      s.room === "throttled" ? "• throttled" : `• ${s.room}`;
-    $("stripLive").style.color = s.room === "live" ? "var(--good)" : "var(--warn)";
-    $("stripLeft").textContent = r.first_seq ? `#${r.first_seq}` : "";
-    $("stripRight").textContent = r.last_seq ? `#${r.last_seq} · ${ago(r.at)}` : "";
-  }
+  let lastTick = 0, lastCount = 0;
+
   const stripTimer = setInterval(() => {
     const r = D.state.room;
     if (!r) return;
@@ -1282,6 +1248,12 @@ export async function boot() {
     if (nowOn && st.room) S.bedOn(true);
   };
   $("legend").onclick = () => { st.agentId = null; st.msgKey = null; ui.legend(city); };
+  $("livePill").onclick = () => {
+    const open = !ui.liveShown();
+    ui.liveOpen(open);
+    if (open) liveUnread = 0;               // opening is reading
+    refreshLive();
+  };
 
   function paintMute() {
     const b = $("mute"), on = S.enabled();
@@ -1325,7 +1297,6 @@ export async function boot() {
     if (!isAuto) rebuild();
     else {
       world.renderer.setPixelRatio(Math.min(devicePixelRatio || 1, preset.dpr));
-      while (bubbles.length > preset.bubbles) retire(bubbles[0]);
     }
     paintQuality();
   }
@@ -1509,6 +1480,7 @@ export async function boot() {
     world.resize(w, h, devicePixelRatio || 1);
     cam.setAspect(w / h);
     if (room3d) { room3d.resize(w, h); roomCam.setAspect(w / h); }
+    if (tx) tx.resize(w, h);
   }
   addEventListener("resize", fit, { passive: true });
   fit();
@@ -1624,7 +1596,7 @@ export async function boot() {
   window.__city = {
     get level() { return level; }, get preset() { return preset; },
     get state() { return st; }, get city() { return city; },
-    get bubbles() { return bubbles; }, get labels() { return labels; },
+    get tx() { return tx; }, get labels() { return labels; },
     world, cam, data: D, sound: S,
     get room3d() { return room3d; }, get mode() { return mode; }, get roomCam() { return roomCam; },
     enterRoom, leaveRoom, flyToDistrict, flyToRoom, selectAgent, selectMessage, setLevel,
