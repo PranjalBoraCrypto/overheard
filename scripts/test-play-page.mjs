@@ -92,9 +92,17 @@ const offsiteButtons = await pg.evaluate(() =>
 check('the way to read is our own page, not somebody else\'s site', offsiteButtons === 0);
 /* Two buttons side by side are one row, so they are one height — different
    label sizes plus vertical padding will not deliver that on its own. */
-const btns = await pg.evaluate(() => [...document.querySelectorAll('.hero .nextrow .go')]
+const heights = async () => pg.evaluate(() => [...document.querySelectorAll('.hero .nextrow .go')]
   .map(b => Math.round(b.getBoundingClientRect().height)));
-check('the two buttons are the same height', btns.length === 2 && btns[0] === btns[1], btns.join(' vs '));
+for (const w of [1400, 1180, 900, 420]) {
+  await pg.setViewportSize({ width: w, height: 1000 });
+  await pg.waitForTimeout(220);
+  const hs = await heights();
+  check(`the two buttons are the same height at ${w}px`,
+    hs.length === 2 && hs[0] === hs[1], hs.join(' vs '));
+}
+await pg.setViewportSize({ width: 1100, height: 1000 });
+await pg.waitForTimeout(200);
 
 console.log('\n=== A2. the toy');
 /* A physics toy is the one thing on a page that cannot be checked by reading
@@ -148,14 +156,14 @@ await pg.evaluate(() => {
   /* Parked and asleep, so it is still where the test last saw it when the
      grab lands — a falling token has moved on by the time a round trip
      through the browser gets back. */
-  c.__tag = 1; c.x = 96; c.y = 250; c.vx = 0; c.vy = 0; c.still = 9;
+  c.__tag = 1; c.x = 80; c.y = 210; c.vx = 0; c.vy = 0; c.still = 9;
 });
 const tagged = () => pg.evaluate(() => window.__toy.coins.find(k => k.__tag) || null);
 await pg.waitForTimeout(40);
 let g = await tagged();
 let sp = w2s(g.x, g.y);
 await pg.mouse.move(sp.x, sp.y); await pg.mouse.down();
-for (let i = 1; i <= 9; i++) { const q = w2s(g.x + 22 * i, g.y - 7 * i); await pg.mouse.move(q.x, q.y); await pg.waitForTimeout(8); }
+for (let i = 1; i <= 12; i++) { const q = w2s(g.x + 26 * i, g.y - 8 * i); await pg.mouse.move(q.x, q.y); }
 const at = await tagged();
 await pg.mouse.up();
 const flung = await pg.evaluate(() => { const c = window.__toy.coins.find(k => k.__tag);

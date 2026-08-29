@@ -66,10 +66,11 @@ h1{font-weight:800;font-size:clamp(32px,5.4vw,48px);letter-spacing:-.035em;line-
 .go.big .i{width:23px;height:23px}
 .go.big:hover:not(:disabled){box-shadow:0 26px 52px -18px rgba(0,180,215,1)}
 .go.wide{padding:20px 30px;font-size:16.5px;border-radius:19px}
-/* Two buttons side by side are one row, so they are one height. Vertical
-   padding cannot deliver that when the labels are set at different sizes —
-   the box has to be told. */
-.hero .nextrow .go{min-height:74px;padding-top:0;padding-bottom:0}
+/* Two buttons side by side are one row, so they are one height. Neither
+   vertical padding nor min-height delivers that on its own: the taller label
+   brings a taller line box with it, and min-height only sets a floor. An
+   explicit height with line-height:1 leaves nothing to vary. */
+.hero .nextrow .go{height:76px;line-height:1;padding-top:0;padding-bottom:0}
 
 /* ── the first section ───────────────────────────────────────────────────
    Text on the left with room to breathe, the toy on its own on the right.
