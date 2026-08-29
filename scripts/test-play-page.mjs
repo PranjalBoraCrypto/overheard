@@ -200,12 +200,20 @@ check('and another one arrives to replace it', (await toy()).n >= t0.n - 1);
    label sizes plus vertical padding will not deliver that on its own. */
 const heights = async () => pg.evaluate(() => [...document.querySelectorAll('.hero .nextrow .go')]
   .map(b => Math.round(b.getBoundingClientRect().height)));
-for (const w of [1400, 1180, 900, 420]) {
+for (const w of [1600, 1440, 1280, 1100, 420]) {
   await pg.setViewportSize({ width: w, height: 1000 });
-  await pg.waitForTimeout(220);
+  await pg.waitForTimeout(240);
   const hs = await heights();
   check(`the two buttons are the same height at ${w}px`,
     hs.length === 2 && hs[0] === hs[1], hs.join(' vs '));
+  /* And on the same LINE, wherever there is a line to share. Below the
+     stacking breakpoint the column is one wide and they are meant to sit
+     under each other. */
+  if (w >= 1250) {
+    const tops = await pg.evaluate(() => [...document.querySelectorAll('.hero .nextrow .go')]
+      .map(b => Math.round(b.getBoundingClientRect().top)));
+    check(`and side by side at ${w}px`, tops[0] === tops[1], tops.join(' vs '));
+  }
 }
 await pg.setViewportSize({ width: 1100, height: 1000 });
 await pg.waitForTimeout(200);

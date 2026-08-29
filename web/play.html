@@ -61,11 +61,14 @@ h1{font-weight:800;font-size:clamp(32px,5.4vw,48px);letter-spacing:-.035em;line-
 .go .i{width:17px;height:17px;stroke-width:2.1}
 /* The page is called Play. The thing it is for gets the size of the thing it
    is for, and the briefing sits beside it rather than in front of it. */
-.go.big{padding:24px 54px;font-size:21.5px;border-radius:20px;letter-spacing:-.015em;
+/* Padding that gives ground before the row does. At 1280 the toy takes 540
+   of the width and the two buttons at full size no longer fit beside each
+   other, so they wrapped — one under the other, which is not a row. */
+.go.big{padding:24px clamp(28px,3vw,54px);font-size:21.5px;border-radius:20px;letter-spacing:-.015em;
   box-shadow:0 26px 56px -18px rgba(0,180,215,.95)}
 .go.big .i{width:24px;height:24px}
 .go.big:hover:not(:disabled){box-shadow:0 26px 52px -18px rgba(0,180,215,1)}
-.go.wide{padding:20px 34px;font-size:17px;border-radius:20px}
+.go.wide{padding:20px clamp(20px,2.2vw,34px);font-size:17px;border-radius:20px}
 /* Two buttons side by side are one row, so they are one height. Neither
    vertical padding nor min-height delivers that on its own: the taller label
    brings a taller line box with it, and min-height only sets a floor. An
@@ -87,14 +90,19 @@ h1{font-weight:800;font-size:clamp(32px,5.4vw,48px);letter-spacing:-.035em;line-
 .hero{display:grid;grid-template-columns:minmax(0,1fr) 540px;gap:48px;align-items:center;
   padding:26px 0 12px;
   margin-left:calc(-1 * var(--bleed,0px));margin-right:calc(-1 * var(--bleed,0px))}
-@media (min-width:1010px){.hero{--bleed:110px}}
-@media (min-width:1250px){.hero{--bleed:210px}}
+/* MEASURED, not guessed. The toy is a fixed 540 and the two buttons want
+   about 600 beside it, so two columns need roughly 1190 of hero — which is
+   only there once the bleed is 230, and the bleed can only be 230 once the
+   viewport is 1250. Below that the layout stacks, because a two-column
+   arrangement that cannot fit its own button row is not one. */
+@media (min-width:1250px){.hero{--bleed:230px}}
+@media (min-width:1380px){.hero{--bleed:270px}}
 .hcopy{animation:rise .55s var(--ease) both}
 /* The toy takes real width now, so the headline gets a ceiling that keeps
    "Your agent is hungry." on one line in the column that is actually left. */
 .hero h1{margin:18px 0 12px;font-size:clamp(33px,3.55vw,46px)}
 .hero .lede{font-size:17px;max-width:42ch}
-@media (max-width:1120px){
+@media (max-width:1249px){
   .hero{grid-template-columns:1fr;gap:26px;padding-top:16px}
   /* On a narrow screen the toy goes FIRST. It is the reason to stay on the
      page, and burying it under three paragraphs wastes it. */
@@ -634,9 +642,12 @@ canvas.confetti{position:fixed;inset:0;width:100%;height:100%;pointer-events:non
    hero, for the same reason: 100vw includes the scrollbar and would hang the
    whole page sideways. */
 .hist{display:block}
-#histIntro{margin-left:calc(-1 * var(--bleed,0px));margin-right:calc(-1 * var(--bleed,0px))}
-@media (min-width:1010px){#histIntro{--bleed:110px}}
-@media (min-width:1250px){#histIntro{--bleed:210px}}
+#histIntro{margin-left:calc(-1 * var(--bleed,0px));margin-right:calc(-1 * var(--bleed,0px));
+  /* A rule closes the first section off before the runs bar, so the bar reads
+     as its own thing rather than as more of the hero. */
+  margin-top:18px;padding-top:6px;border-top:1px solid rgba(16,57,74,.9)}
+@media (min-width:1250px){#histIntro{--bleed:230px}}
+@media (min-width:1380px){#histIntro{--bleed:270px}}
 .histpanel{margin-top:22px;padding:22px 24px;animation:riseY .5s var(--ease) both}
 @media (max-width:620px){.histpanel{padding:19px 17px}}
 
@@ -644,7 +655,14 @@ canvas.confetti{position:fixed;inset:0;width:100%;height:100%;pointer-events:non
    play should see one line about their runs and a way to open it — a table of
    past scores above the start button is a question nobody asked yet. */
 .histpanel.bar{padding:0;overflow:hidden}
-.histpanel.bar{background:linear-gradient(rgba(5,26,35,.9),rgba(4,20,28,.9)) padding-box,var(--bevel) border-box}
+/* A drawn edge, not the bevel gradient the panels use. Shut, this is a single
+   line of text on a dark page; without a boundary of its own it reads as
+   floating rather than as something with a lid. */
+.histpanel.bar{background:linear-gradient(rgba(5,26,35,.92),rgba(4,20,28,.92));
+  border:1px solid rgba(0,180,215,.32);
+  transition:border-color .25s var(--ease),box-shadow .25s var(--ease)}
+.histpanel.bar:hover{border-color:rgba(95,235,255,.5);box-shadow:0 18px 40px -30px rgba(0,180,215,.9)}
+.histpanel.bar.open{border-color:rgba(0,180,215,.42)}
 .histtoggle{display:flex;align-items:center;gap:13px;width:100%;padding:17px 22px;cursor:pointer;
   background:none;border:0;color:var(--txt);font-family:var(--display);text-align:left;
   transition:background .22s var(--ease)}
