@@ -551,10 +551,33 @@ export function buildWorld(THREE, { canvas, preset, reduced }) {
   }
 
   const cold = new THREE.Color(0x0d3d52), warm = new THREE.Color(CY), hot = new THREE.Color(CY_HI);
+  /* ── THE FLASH ────────────────────────────────────────────────────────────
+     A building that just carried a message says so, for about a second.
+
+     Heat is the room's RATE — a slow average that tells you which parts of
+     the city are busy, and by design it barely moves between readings. That
+     is the right behaviour for a skyline you are learning, and completely
+     the wrong behaviour for "something just happened here": a visitor
+     watching a specific building while its counter jumped saw nothing at
+     all. So the flash is a separate, short-lived term added on top, decaying
+     in about a second, and it is spent per event rather than averaged.
+
+     It is bounded by the same rule as everything else on this page: only a
+     room whose sequence number genuinely advanced ever gets one. */
+  const flashes = new Map();          // room -> 0..1, decaying
+
+  function flash(room, amount = 0.8) {
+    if (!byRoom.has(room) && !DISTRICTS.some((d) => d.room === room)) return false;
+    flashes.set(room, Math.min(1.4, (flashes.get(room) || 0) + amount));
+    paintRoofs();
+    return true;
+  }
+
   function paintRoofs() {
     if (!placed.length) return;
     for (let i = 0; i < placed.length; i++) {
-      const h = heat.get(placed[i].room) ?? 0;
+      const f = flashes.get(placed[i].room) || 0;
+      const h = Math.min(1, (heat.get(placed[i].room) ?? 0) + f);
       col.copy(h < 0.5 ? cold : warm).lerp(h < 0.5 ? warm : hot, h < 0.5 ? h * 2 : (h - 0.5) * 2);
       roofs.setColorAt(i, col);
       /* The halo carries the activity: a quiet room is a lit roof with almost
@@ -711,6 +734,16 @@ export function buildWorld(THREE, { canvas, preset, reduced }) {
     }
     if (dirty) writeAgents();
 
+    /* Flashes fade back into the average. Repainting only while at least one
+       is alive keeps a quiet city at zero cost per frame. */
+    if (flashes.size) {
+      for (const [room, v] of flashes) {
+        const next = v - dt * 1.15;
+        if (next <= 0.01) flashes.delete(room); else flashes.set(room, next);
+      }
+      paintRoofs();
+    }
+
     /* The half of the motion that is not the camera's. See life.js for the
        line between the ambient layer, which loops, and the signals, which
        only ever come from a message that genuinely arrived. */
@@ -815,7 +848,7 @@ export function buildWorld(THREE, { canvas, preset, reduced }) {
 
   return {
     scene, camera, renderer, root, life,
-    setRooms, setHeat, setAgents, enterRoom, leaveRoom,
+    setRooms, setHeat, setAgents, enterRoom, leaveRoom, flash,
     pulse, beam, lightAgent, agentAt,
     update, render, resize, pick, project, dispose,
     positionOf: (room) => {
@@ -825,6 +858,9 @@ export function buildWorld(THREE, { canvas, preset, reduced }) {
       return p ? { x: p.x, z: p.z, r: 8 } : null;
     },
     get rooms() { return placed; },
+    /* The rooms currently flaring, and how brightly. Read by the test that
+       asks whether a pulse fades rather than latching on. */
+    get flashes() { return flashes; },
     get blocks() { return blockInfo; },
     get agents() { return agents; },
   };

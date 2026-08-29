@@ -280,16 +280,45 @@ export async function boot() {
        rooms should light the ten that moved most, not spend the pool on the
        hundredth-most-interesting thing on screen. */
     events.sort((a, b) => b.delta - a.delta);
-    const cap = Math.min(events.length, Math.max(6, Math.round(preset.agents / 2)));
-    for (let i = 0; i < cap; i++) {
-      const e = events[i];
+    const cap = Math.min(events.length, Math.max(10, preset.agents));
+    queued = events.slice(0, cap).map((e, i) => ({
+      ...e,
       /* A destination only when the data supports one: the busiest room this
          poll is where the network's attention is, so a second busy room
          sends toward it. Rooms with no such relationship send straight up,
          which claims nothing beyond "something was said here". */
-      const to = i > 0 && e.weight > 1.4 ? events[0].room : null;
-      world.life.signal(e.room, to, e.weight);
-    }
+      to: i > 0 && e.weight > 1.4 ? events[0].room : null,
+    }));
+    /* SPREAD ACROSS THE WINDOW THEY HAPPENED IN, NOT FIRED IN A LUMP.
+       Every twenty seconds the whole poll's worth of activity used to go off
+       at once and then the city sat perfectly still for nineteen seconds —
+       which is a heartbeat, not a living place, and it made a busy network
+       look like an idle one four fifths of the time.
+
+       These messages did not arrive simultaneously. They arrived spread
+       across the twenty seconds we were not looking, so releasing them
+       across the next twenty is closer to the truth than the burst was, not
+       further from it — the same events, in the same order, at something
+       nearer their real spacing. Nothing is invented and nothing is held
+       back; the last one goes out before the next reading lands. */
+    queueAt = 0;
+    queueGap = Math.max(220, (CITY_POLL_MS * 0.82) / Math.max(1, queued.length));
+    queueNext = performance.now() + 120;
+  }
+
+  /* The release valve for the above, stepped from the frame loop. */
+  const CITY_POLL_MS = 20000;
+  let queued = [], queueAt = 0, queueNext = 0, queueGap = 500;
+  function releaseSignals(now) {
+    if (queueAt >= queued.length || now < queueNext || !world.life) return;
+    const e = queued[queueAt++];
+    queueNext = now + queueGap;
+    world.life.signal(e.room, e.to, e.weight);
+    /* AND THE BUILDING ITSELF ANSWERS. A light leaving a roof says something
+       left; a roof that flares says it came from HERE. That is the read a
+       visitor makes without being told anything — the building that just
+       spoke is the bright one. */
+    world.flash(e.room, Math.min(1, 0.45 + e.weight * 0.25));
   }
 
   function refreshHeat() {
@@ -515,7 +544,11 @@ export async function boot() {
       document.body.classList.add("inroom");
     });
 
-    S.arrive(); S.bedOn(true);
+    S.arrive();
+    /* A room has its own sound — the bed, and the tick of each message
+       arriving, which is information. Music over the top competes with the
+       thing somebody walked in there to hear. */
+    S.musicOn(false); S.bedOn(true);
     $("strip").hidden = st.clean;
     paintChips();
     ui.roomLive(D.state.room || { name, messages: [], agents: [], gaps: [] }, []);
@@ -538,7 +571,7 @@ export async function boot() {
     world.leaveRoom();
     D.leaveRoom();
     ui.closeFeed();
-    S.bedOn(false);
+    S.bedOn(false); S.musicOn(true);
     $("strip").hidden = true;
     ui.closePanel();
     paintChips();
@@ -869,7 +902,8 @@ export async function boot() {
        switching on a broken feature — and this soundtrack is deliberately
        sparse, so the next sound might be a minute away. One short
        confirmation is the difference between "it works" and "it does not". */
-    if (nowOn) S.pick();
+    if (nowOn) { S.pick(); if (!st.room) S.musicOn(true); }
+    else S.musicOn(false);
     if (nowOn && st.room) S.bedOn(true);
   };
   $("hideStrip").onclick = () => ($("strip").hidden = true);
@@ -1105,6 +1139,7 @@ export async function boot() {
          room scene on a weak machine. */
     } else {
       cam.step(dt);
+      releaseSignals(now);
       world.update(dt);
       world.render();
     }
@@ -1184,7 +1219,7 @@ export async function boot() {
       removeEventListener("keydown", wake);
       S.setEnabled(true);
       paintMute();
-      if (st.room) S.bedOn(true);
+      if (st.room) S.bedOn(true); else S.musicOn(true);
     };
     addEventListener("pointerdown", wake, { once: true });
     addEventListener("keydown", wake, { once: true });
@@ -1200,7 +1235,7 @@ export async function boot() {
     get level() { return level; }, get preset() { return preset; },
     get state() { return st; }, get city() { return city; },
     get bubbles() { return bubbles; }, get labels() { return labels; },
-    world, cam, data: D,
+    world, cam, data: D, sound: S,
     get room3d() { return room3d; }, get mode() { return mode; }, get roomCam() { return roomCam; },
     enterRoom, leaveRoom, flyToDistrict, flyToRoom, selectAgent, selectMessage, setLevel,
     fps: () => watcher.fps(),
