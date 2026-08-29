@@ -22,22 +22,14 @@
  * the tabs; leaving that to each page to remember is how it broke last time.
  */
 
-import { getSession, signOut, onSession, shortDid, hueOf } from "/session.js";
+import { getSession, getVault, signIn, signOut, onSession, shortDid, hueOf, openVault, saveVault } from "/session.js";
+import { PAGES, FONT_HREF } from "/nav.js";
 
-const FONT_HREF =
-  "https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap";
-
-/* `hot` marks a tab as worth noticing without pretending it is the page you
-   are on: a live dot and a hairline outline, never the active tab's fill.
-   The active state still wins when you are actually there. */
-const TABS = [
-  { href: "/",            label: "Card",   match: (p) => p === "/" || p === "/index.html" },
-  { href: "/rooms",       label: "Rooms",  match: (p) => p.startsWith("/rooms") },
-  { href: "/city",        label: "City",   match: (p) => p.startsWith("/city"), hot: true },
-  { href: "/create.html", label: "Create", match: (p) => p.startsWith("/create") },
-  { href: "/v",           label: "Verify", match: (p) => p === "/v" || p.startsWith("/v.html") },
-  { href: "/play",        label: "Play",   match: (p) => p.startsWith("/play") },
-];
+/* The tabs are the pages that asked to be tabs, from the one list the footer
+   also reads. `hot` marks a tab as worth noticing without pretending it is
+   the page you are on: a live dot and a hairline outline, never the active
+   tab's fill. The active state still wins when you are actually there. */
+const TABS = PAGES.filter((p) => p.bar);
 
 const CSS = `
 :host{
@@ -108,6 +100,66 @@ const CSS = `
 .tabs a[data-hot][aria-current="page"]::before{background:#001016;box-shadow:none;animation:none}
 .tabs a:focus-visible,.brand:focus-visible{outline:2px solid #5FEBFF;outline-offset:3px}
 
+/* ── testnet, when there is one ────────────────────────────────────────────
+   A label, not a control. It says what is coming without pretending to be a
+   place you can go, so it takes the shape of a status pill rather than a tab:
+   no hover lift, no pointer cursor, and a dot that breathes slowly enough to
+   read as "warming up" rather than "live". */
+.soon{
+  display:inline-flex;align-items:center;gap:8px;flex:none;margin-left:6px;
+  padding:8px 12px;border-radius:11px;cursor:default;user-select:none;
+  font-family:inherit;font-size:12.5px;font-weight:600;line-height:1;color:#5F8593;
+  background:rgba(9,32,43,.6);border:1px dashed rgba(0,180,215,.28);
+}
+.soon .i{width:14px;height:14px;flex:none;fill:none;stroke:currentColor;stroke-width:1.8;
+  stroke-linecap:round;stroke-linejoin:round;opacity:.7}
+.soon b{font-weight:700;color:#9CBFCB}
+.soon .tag{
+  font-family:"IBM Plex Mono",ui-monospace,Menlo,monospace;font-size:9px;font-weight:600;
+  letter-spacing:.13em;text-transform:uppercase;color:#3F6272;
+  padding:3px 6px;border-radius:6px;background:rgba(0,180,215,.08);
+}
+@media (max-width:760px){.soon{display:none}}
+
+/* ── the way in ────────────────────────────────────────────────────────────
+   Signed out, every page looked the same as signed in, and the only routes to
+   an identity were buried inside two other pages. This is the one button that
+   is always in the same place. */
+.in{
+  display:inline-flex;align-items:center;gap:8px;flex:none;margin-left:10px;
+  padding:10px 15px;border-radius:11px;cursor:pointer;
+  font-family:inherit;font-size:13.5px;font-weight:700;line-height:1;color:#001016;
+  background:linear-gradient(120deg,#5FEBFF,#00B4D7 60%,#0093BC);border:0;
+  box-shadow:0 12px 28px -16px rgba(0,180,215,1);
+  transition:transform .25s cubic-bezier(.22,.68,.24,1),box-shadow .25s cubic-bezier(.22,.68,.24,1);
+}
+.in:hover{transform:translateY(-2px);box-shadow:0 18px 34px -16px rgba(0,180,215,1)}
+.in:active{transform:translateY(0)}
+.in:focus-visible{outline:2px solid #5FEBFF;outline-offset:3px}
+.in .i{width:15px;height:15px;flex:none;fill:none;stroke:currentColor;stroke-width:2;
+  stroke-linecap:round;stroke-linejoin:round}
+.inwrap{position:relative;flex:none}
+.pw{
+  display:flex;gap:7px;margin-top:11px;
+}
+.pw input{
+  flex:1 1 auto;min-width:0;font-family:"IBM Plex Mono",ui-monospace,Menlo,monospace;font-size:12px;
+  padding:10px 11px;border-radius:10px;color:#EDFAFE;
+  background:rgba(0,7,10,.75);border:1px solid rgba(0,180,215,.22);outline:none;
+  transition:border-color .2s,box-shadow .2s;
+}
+.pw input:focus{border-color:#00B4D7;box-shadow:0 0 0 4px rgba(0,180,215,.12)}
+.pw button{
+  flex:none;padding:0 14px;border-radius:10px;border:0;cursor:pointer;
+  font-family:inherit;font-size:12.5px;font-weight:700;color:#001016;
+  background:linear-gradient(120deg,#5FEBFF,#00B4D7);
+  transition:transform .2s cubic-bezier(.22,.68,.24,1)}
+.pw button:hover{transform:translateY(-1px)}
+.pw button:disabled{opacity:.6;cursor:default;transform:none}
+.say{font-size:11.5px;line-height:1.5;color:#5F8593;margin-top:9px;min-height:1.2em}
+.say.err{color:#FF9B9B}
+.say.ok{color:#3BE3B0}
+
 /* ── who you are, on every page ────────────────────────────────────────────
    The identity was legible on exactly one screen — the compose box of the
    Rooms page, and only while you were looking at it. Everywhere else a signed
@@ -119,6 +171,10 @@ const CSS = `
    is present only when there IS a session, and it takes no room at all
    otherwise. */
 .me{position:relative;margin-left:10px;flex:none}
+.me:empty{display:none}
+/* The sign-in popover reuses the profile menu's surface, so the two never
+   drift apart visually — one card, two contents. */
+.me .in{margin-left:0}
 .chip{
   display:flex;align-items:center;gap:9px;padding:5px 11px 5px 5px;border-radius:999px;cursor:pointer;
   font-family:inherit;font-size:12.5px;font-weight:600;line-height:1;color:#CDEAF3;
@@ -213,6 +269,9 @@ const ICONS = {
   rooms: '<svg viewBox="0 0 24 24"><path d="M21 12a8 8 0 1 1-3.2-6.4"/><path d="M8 20l-4 1 1-4"/><path d="M9 11h6M9 15h4"/></svg>',
   out: '<svg viewBox="0 0 24 24"><path d="M15 17l5-5-5-5"/><path d="M20 12H9"/><path d="M12 4H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h6"/></svg>',
   caret: '<svg class="car" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>',
+  key: '<svg class="i" viewBox="0 0 24 24"><circle cx="8" cy="14.5" r="4"/><path d="M10.9 11.6 20 2.5"/><path d="M16.8 5.7 19 7.9M14.4 8.1l2.2 2.2"/></svg>',
+  flask: '<svg class="i" viewBox="0 0 24 24"><path d="M9.5 3.5v6L4.9 17a2 2 0 0 0 1.7 3h10.8a2 2 0 0 0 1.7-3l-4.6-7.5v-6"/><path d="M8 3.5h8"/><path d="M7.2 14h9.6"/></svg>',
+  spark: '<svg class="i" viewBox="0 0 24 24"><path d="M12 3.5v4M12 16.5v4M3.5 12h4M16.5 12h4"/><path d="M6.4 6.4 9 9M15 15l2.6 2.6M17.6 6.4 15 9M9 15l-2.6 2.6"/></svg>',
 };
 
 /** Load the bar's typeface if the host page has not. Document-level, because
@@ -304,11 +363,20 @@ class OverheardBar extends HTMLElement {
       nav.appendChild(a);
     }
 
+    /* Coming, and saying so. A dashed pill reads as "not yet" in a way that a
+       greyed-out tab does not — a greyed tab reads as broken. */
+    const soon = document.createElement("span");
+    soon.className = "soon";
+    soon.title = "A Technocore testnet view is being built. Nothing to click yet.";
+    soon.innerHTML = ICONS.flask;                    // our own markup
+    soon.append(Object.assign(document.createElement("b"), { textContent: "Testnet" }));
+    soon.append(Object.assign(document.createElement("span"), { className: "tag", textContent: "soon" }));
+
     const me = document.createElement("div");
     me.className = "me";
     me.hidden = true;
 
-    bar.append(brand, nav, me);
+    bar.append(brand, nav, soon, me);
     wrap.appendChild(bar);
     root.append(style, wrap);
 
@@ -320,6 +388,143 @@ class OverheardBar extends HTMLElement {
   disconnectedCallback() { this._off?.(); }
 }
 
+/* ── signed out ────────────────────────────────────────────────────────────
+   One button, in the same place on every page, that does the whole job where
+   the visitor is standing rather than sending them to a page that has a form
+   on it. Three states, in the order they are likely:
+
+     · this browser holds a vault  → a passphrase, and that is the whole flow
+     · it holds a backup file      → choose it, then its passphrase
+     · it holds nothing            → make an identity
+
+   The key is decrypted here, on this device, by the same routine the create
+   page sealed it with. Nothing is sent anywhere. */
+function paintSignIn(me) {
+  const btn = document.createElement("button");
+  btn.className = "in";
+  btn.type = "button";
+  btn.setAttribute("aria-haspopup", "dialog");
+  btn.setAttribute("aria-expanded", "false");
+  btn.innerHTML = ICONS.key;                        // our own markup
+  btn.append(Object.assign(document.createElement("span"), { textContent: "Sign in" }));
+  me.appendChild(btn);
+
+  let menu = null;
+  const close = () => {
+    menu?.remove(); menu = null;
+    me.classList.remove("open");
+    btn.setAttribute("aria-expanded", "false");
+    removeEventListener("pointerdown", away, true);
+    removeEventListener("keydown", esc, true);
+  };
+  const away = (e) => { if (!e.composedPath().includes(me)) close(); };
+  const esc = (e) => { if (e.key === "Escape") { close(); btn.focus(); } };
+
+  const open = () => {
+    const vault = getVault();
+    menu = document.createElement("div");
+    menu.className = "menu";
+    menu.setAttribute("role", "dialog");
+    menu.setAttribute("aria-label", "Sign in");
+
+    const h = document.createElement("h3");
+    h.textContent = vault ? "Welcome back" : "No identity here yet";
+    menu.append(h);
+
+    const say = document.createElement("p");
+    say.className = "say";
+    let picked = vault;                              // the vault being unlocked
+
+    if (vault) {
+      const did = document.createElement("div");
+      did.className = "did";
+      did.textContent = vault.did;                   // text, never markup
+      menu.append(did);
+    }
+
+    /* the passphrase, present whenever there is something to unlock */
+    const row = document.createElement("div");
+    row.className = "pw";
+    const pw = document.createElement("input");
+    pw.type = "password";
+    pw.autocomplete = "current-password";
+    pw.placeholder = "passphrase";
+    const go = document.createElement("button");
+    go.type = "button";
+    go.textContent = "Unlock";
+    row.append(pw, go);
+
+    const tryIt = async () => {
+      if (!picked) { say.className = "say err"; say.textContent = "Choose your backup file first."; return; }
+      if (!pw.value) { say.className = "say err"; say.textContent = "Enter your passphrase."; return; }
+      go.disabled = true;
+      say.className = "say"; say.textContent = "Decrypting on this device…";
+      try {
+        const jwk = await openVault(picked, pw.value);
+        saveVault(picked);
+        signIn(picked.did, jwk);                     // repaints this bar, and every page listening
+      } catch {
+        say.className = "say err";
+        say.textContent = "Wrong passphrase, or that file is not a backup from here.";
+        go.disabled = false;
+      }
+    };
+    go.addEventListener("click", tryIt);
+    pw.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); tryIt(); } });
+
+    /* a backup file, for a browser that holds nothing */
+    const file = document.createElement("input");
+    file.type = "file";
+    file.accept = "application/json,.json";
+    file.hidden = true;
+    const pick = document.createElement("button");
+    pick.className = "row"; pick.type = "button";
+    pick.innerHTML = ICONS.copy;
+    const pickLabel = document.createElement("span");
+    pickLabel.textContent = vault ? "Use a different backup file" : "Choose a backup file";
+    pick.appendChild(pickLabel);
+    pick.addEventListener("click", () => file.click());
+    file.addEventListener("change", async () => {
+      const f = file.files?.[0];
+      if (!f) return;
+      try {
+        const v = JSON.parse(await f.text());
+        if (!v?.did || !v?.data || !v?.salt || !v?.iv) throw new Error("shape");
+        picked = v;
+        pickLabel.textContent = f.name;
+        say.className = "say"; say.textContent = "Now its passphrase.";
+        pw.focus();
+      } catch {
+        say.className = "say err";
+        say.textContent = "That file is not an Overheard backup.";
+      }
+    });
+
+    const make = document.createElement("a");
+    make.className = "row";
+    make.href = "/create.html";
+    make.innerHTML = ICONS.spark;
+    make.appendChild(Object.assign(document.createElement("span"),
+      { textContent: vault ? "Make another identity" : "Make an identity" }));
+
+    menu.append(row, say, pick, file, make);
+
+    const fine = document.createElement("p");
+    fine.className = "fine";
+    fine.textContent = "Decrypted here, on this device. Your key is never sent anywhere.";
+    menu.append(fine);
+
+    me.appendChild(menu);
+    me.classList.add("open");
+    btn.setAttribute("aria-expanded", "true");
+    addEventListener("pointerdown", away, true);
+    addEventListener("keydown", esc, true);
+    setTimeout(() => pw.focus(), 30);
+  };
+
+  btn.addEventListener("click", () => (menu ? close() : open()));
+}
+
 /* One place decides whether there is anybody to show, so the chip cannot
    drift out of step with the session — sign out in another tab and this is
    repainted by the same call that repaints the page under it. */
@@ -327,8 +532,8 @@ function paintMe(me, root) {
   const s = getSession();
   me.replaceChildren();
   me.classList.remove("open");
-  me.hidden = !s;
-  if (!s) return;
+  me.hidden = false;
+  if (!s) return paintSignIn(me);
 
   const chip = document.createElement("button");
   chip.className = "chip";

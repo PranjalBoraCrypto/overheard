@@ -600,8 +600,13 @@ await pg.click('#me #signout');
 await pg.waitForFunction(() => !document.getElementById('locked').hidden, null, { timeout: 8000 });
 check('the compose box locks again', await pg.locator('#locked').isVisible());
 check('the invitation comes back', await pg.locator('#idbar').isVisible());
+/* The chip goes, and the way back in takes its place — the slot is never
+   empty now, because a signed-out browser with no visible route to an
+   identity is how somebody ends up pasting a seed into a page that asked. */
 check('the bar chip goes with it', await pg.evaluate(() =>
-  document.querySelector('overheard-bar').shadowRoot.querySelector('.me').hidden));
+  !document.querySelector('overheard-bar').shadowRoot.querySelector('.chip')));
+check('and the bar offers the way back in', await pg.evaluate(() =>
+  !!document.querySelector('overheard-bar').shadowRoot.querySelector('.me .in')));
 check('the session is gone', await pg.evaluate(() => !localStorage.getItem('overheard.session')));
 check('but the identity is NOT deleted', await pg.evaluate(() => !!localStorage.getItem('overheard.identity')));
 check('and the passphrase brings it straight back', await pg.locator('#pw').isEnabled());

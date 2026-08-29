@@ -507,13 +507,18 @@ const F = await pg.evaluate(() => {
   const f = r.querySelector('footer').getBoundingClientRect();
   const s = document.querySelector('.shell').getBoundingClientRect();
   const did = r.querySelector('a.did');
-  return { text: r.querySelector('footer').innerText, rows: r.querySelectorAll('.row').length,
+  return { text: r.querySelector('footer').innerText,
+           links: [...r.querySelectorAll('.col a')].map((a) => a.getAttribute('href')),
            x: !!r.querySelector('a[href="https://x.com/Crypto_Pranjal"]'),
            didHref: did?.getAttribute('href') || '',
            footer: Math.round(f.width), column: Math.round(s.width), doc: document.documentElement.clientWidth };
 });
 console.log('   ', JSON.stringify({ footer: F.footer, column: F.column, doc: F.doc }));
-check('two rows', F.rows === 2);
+/* The footer carries the whole site now, so a page nobody linked to is still
+   one click away from every other page. */
+check('every page of the site is linked', ['/', '/rooms', '/city', '/play', '/create.html', '/v', '/what']
+  .every((h) => F.links.includes(h)), F.links.join(' '));
+check('and it points off the site as well', F.links.includes('https://technocore.chat'));
 check('a full-bleed footer does not give the page a sideways scrollbar',
   await pg.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth),
   await pg.evaluate(() => `${document.documentElement.scrollWidth}/${document.documentElement.clientWidth}`));

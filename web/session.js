@@ -108,6 +108,49 @@ export function onSession(fn) {
   return () => { removeEventListener(EVENT, local); removeEventListener("storage", cross); };
 }
 
+/**
+ * Keep a vault in this browser, so next time is one passphrase.
+ *
+ * Never on top of a DIFFERENT identity that is already here: somebody signing
+ * in to a second identity should not silently lose the first one's backup,
+ * which may be the only copy they have.
+ */
+export function saveVault(vault) {
+  if (!vault || !DID_RE.test(String(vault.did || "")) || !vault.data) return false;
+  const here = getVault();
+  if (here && here.did !== vault.did) return false;
+  try { localStorage.setItem(VAULT_KEY, JSON.stringify(vault)); return !!getVault(); }
+  catch { return false; }
+}
+
+/**
+ * Open the vault this browser holds, with a passphrase.
+ *
+ * The same 310,000 PBKDF2 rounds and AES-GCM the create page seals with —
+ * written here rather than a fourth time in a page, because the bar now needs
+ * to sign somebody in from any page on the site and a fourth copy of a
+ * key-derivation routine is a fourth place for it to drift.
+ *
+ * Throws on a wrong passphrase, which is the only signal WebCrypto gives:
+ * AES-GCM authentication failure is indistinguishable from a damaged record,
+ * and callers say both rather than guessing which.
+ */
+export async function openVault(vault, pass) {
+  const b = (s64) => {
+    const s = String(s64).replace(/-/g, "+").replace(/_/g, "/");
+    const bin = atob(s + "=".repeat((4 - (s.length % 4)) % 4));
+    return Uint8Array.from(bin, (c) => c.charCodeAt(0));
+  };
+  const base = await crypto.subtle.importKey("raw", new TextEncoder().encode(pass), "PBKDF2", false, ["deriveKey"]);
+  const aes = await crypto.subtle.deriveKey(
+    { name: "PBKDF2", salt: b(vault.salt), iterations: 310000, hash: "SHA-256" },
+    base, { name: "AES-GCM", length: 256 }, false, ["decrypt"]);
+  const plain = await crypto.subtle.decrypt({ name: "AES-GCM", iv: b(vault.iv) }, aes, b(vault.data));
+  const jwk = JSON.parse(new TextDecoder().decode(plain));
+  if (!jwk || jwk.kty !== "OKP" || !jwk.d) throw new Error("not a key");
+  return jwk;
+}
+
 /** did:key:z6Mkab…wxyz — enough of both ends to recognise, short enough for a
  *  chip. Cutting the middle and never an end is deliberate: both ends are the
  *  parts somebody might actually know by sight. */
