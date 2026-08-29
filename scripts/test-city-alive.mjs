@@ -82,6 +82,10 @@ const browser = await chromium.launch({
   args: ["--use-gl=swiftshader", "--enable-unsafe-swiftshader"],
 });
 
+/* Each section takes a fresh context and MUST give it back. Left open, five
+   software-rendered WebGL contexts pile up and the browser starts refusing
+   new ones — which surfaces as the last section timing out on page load and
+   looks exactly like a bug in the page rather than in the test. */
 async function open(level) {
   const ctx = await browser.newContext({ viewport: { width: 1100, height: 760 } });
   await ctx.addInitScript((lvl) => {
@@ -112,7 +116,7 @@ const sampleLife = (pg) => pg.evaluate(() => window.__city.world.life.sample());
    ════════════════════════════════════════════════════════════════════ */
 console.log("=== A. the city is alive with nobody touching it");
 {
-  const { pg, errs } = await open("balanced");
+  const { pg, ctx, errs } = await open("balanced");
   /* The arrival flight is a deliberate transition and belongs to the first
      paint; what is being tested is whether anything moves AFTER it. Sampling
      mid-flight would measure the very thing this rebuild is trying to stop
@@ -145,6 +149,7 @@ console.log("=== A. the city is alive with nobody touching it");
   }
   check("within five seconds of looking at it", moved, `${Date.now() - t0}ms`);
   check("no page errors", errs.length === 0, errs.slice(0, 2).join(" | "));
+  await ctx.close();
 }
 
 /* ════════════════════════════════════════════════════════════════════════
@@ -168,7 +173,7 @@ for (const level of ["performance", "balanced", "high"]) {
 console.log("\n=== C. signals come from messages that really happened");
 {
   live = true; bump = 0;
-  const { pg } = await open("balanced");
+  const { pg, ctx } = await open("balanced");
   await pg.waitForTimeout(1200);
 
   /* A poll where nothing changed. Every room's counter is where it was, so
@@ -199,6 +204,7 @@ console.log("\n=== C. signals come from messages that really happened");
   check("a directory that moved does light something", lit > 0, `${lit} signals in flight`);
   check("but never more than the pool holds",
     lit <= (await pg.evaluate(() => window.__city.world.life.counts.signals)), String(lit));
+  await ctx.close();
 }
 
 /* ════════════════════════════════════════════════════════════════════════
@@ -207,7 +213,7 @@ console.log("\n=== C. signals come from messages that really happened");
 console.log("\n=== D. a snapshot is a photograph, and is not animated");
 {
   live = false; bump = 0;
-  const { pg } = await open("balanced");
+  const { pg, ctx } = await open("balanced");
   await pg.waitForTimeout(1500);
   bump = 5000;                       // the file "changes", which a file cannot really do
   await pg.waitForTimeout(3000);
@@ -222,6 +228,7 @@ console.log("\n=== D. a snapshot is a photograph, and is not animated");
     (await sampleLife(pg)) !== a);
   const cls = await pg.evaluate(() => document.getElementById("status").className);
   check("and the chip still says the data is saved", /warn/.test(cls), cls);
+  await ctx.close();
 }
 
 /* ════════════════════════════════════════════════════════════════════════
@@ -230,7 +237,7 @@ console.log("\n=== D. a snapshot is a photograph, and is not animated");
 console.log("\n=== E. it cannot grow under load");
 {
   live = true; bump = 50;
-  const { pg } = await open("high");
+  const { pg, ctx } = await open("high");
   await pg.waitForTimeout(1500);
   /* NOT draw calls: `renderer.info.render.calls` is whatever the last frame
      happened to draw, and it moves by a few either way as the camera settles
@@ -266,6 +273,7 @@ console.log("\n=== E. it cannot grow under load");
     after.cap === before.cap, `${before.cap} → ${after.cap} slots`);
   check("the whole life layer is four draw calls",
     (await pg.evaluate(() => window.__city.world.life.root.children.length)) === 4);
+  await ctx.close();
 }
 
 console.log(bad ? `\n${bad} FAILURE(S)` : "\nall good");

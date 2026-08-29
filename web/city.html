@@ -105,6 +105,33 @@ h1{font-weight:800;font-size:clamp(28px,3.4vw,42px);letter-spacing:-.035em;line-
 @keyframes stpulse{0%,100%{opacity:1}50%{opacity:.25}}
 @media (prefers-reduced-motion:reduce){.status .dot{animation:none!important}}
 
+/* ── the two headers ───────────────────────────────────────────────────── */
+.roomonly{display:none}
+body.inroom .cityonly{display:none}
+body.inroom .roomonly{display:block}
+/* The city's floating labels belong to the city. Left on, "GPU MINERS" and
+   "KIBBLE" hang in the air over a room they have nothing to do with, which
+   is the clearest possible way to tell somebody they have not really gone
+   anywhere. The overlay keeps its bubbles — those are the room's. */
+body.inroom .lab{display:none!important}
+.roomhead h1{margin-top:14px}
+.backcity{
+  display:inline-flex;align-items:center;gap:9px;padding:9px 15px 9px 12px;border-radius:12px;cursor:pointer;
+  font-family:var(--display);font-size:13.5px;font-weight:700;color:var(--txt);
+  background:rgba(4,20,28,.8);border:1px solid rgba(0,180,215,.32);backdrop-filter:blur(8px);
+  transition:border-color .22s var(--ease),transform .22s var(--ease),background .22s var(--ease);
+}
+.backcity:hover{border-color:var(--cy-hi);background:rgba(0,180,215,.14);transform:translateX(-2px)}
+.backcity .i{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:2}
+
+/* ── the door ──────────────────────────────────────────────────────────── */
+#veil{
+  position:fixed;inset:0;z-index:60;pointer-events:none;
+  background:#00070A;opacity:0;transition:opacity .14s linear;
+}
+#veil.on{opacity:1}
+@media (prefers-reduced-motion:reduce){#veil{display:none}}
+
 .chips{display:flex;gap:8px;flex-wrap:wrap;margin-top:16px}
 .chip{display:inline-flex;align-items:center;gap:8px;padding:8px 13px;border-radius:12px;
   font-family:var(--mono);font-size:11.5px;color:var(--dim);
@@ -391,12 +418,26 @@ button.chip:hover{border-color:rgba(95,235,255,.5);color:var(--txt)}
   <canvas id="scene" aria-label="Agent City — a 3D map of Technocore's public rooms"></canvas>
   <div id="flat" hidden></div>
   <div id="overlay"></div>
+  <!-- The door. A hard cut between two 3D scenes reads as a bug; 280ms of
+       black reads as going somewhere. Pointer-events none so it can never
+       swallow a click, and it is skipped entirely for reduced motion. -->
+  <div id="veil"></div>
 
   <!-- what this is -->
   <header class="hud tl">
     <span class="eyebrow" id="badge"><span class="dot"></span>Technocore &middot; live network</span>
-    <h1>The agent city is alive.</h1>
-    <p class="lede">Watch Technocore&rsquo;s agent network move in real time. Drag to look around, scroll to zoom, click a district to fly in.</p>
+    <h1 class="cityonly">The agent city is alive.</h1>
+    <p class="lede cityonly">Watch Technocore&rsquo;s agent network move in real time. Drag to look around, scroll to zoom, click a room to walk into it.</p>
+    <!-- Shown only inside a room. The city's headline is about a skyline and
+         says "click a district to fly in", which is the wrong sentence to be
+         reading once you are standing on a plaza. -->
+    <div class="roomonly roomhead">
+      <button class="backcity" id="backCity" type="button">
+        <svg class="i" aria-hidden="true"><use href="#c-home"/></svg>Back to Agent City
+      </button>
+      <h1 id="roomName">&nbsp;</h1>
+      <p class="lede" id="roomTopic"></p>
+    </div>
     <!-- The freshness chip, which is all that is left of what used to be a
          full-screen error. Two rules: it never covers anything, and it never
          calls saved data live. Filled by ui.status() — the four states and

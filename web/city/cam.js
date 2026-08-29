@@ -27,11 +27,32 @@
    put the visitor inside the skyline looking at four towers with the rest of
    the city off screen. The opening shot has to be the city, whole. */
 const TAU = 0.13;                    // seconds; the ease time constant
-const MIN_DIST = 30, MAX_DIST = 820;
-const MIN_PITCH = 0.16, MAX_PITCH = 1.35;
 
-export function makeCamera(THREE, camera, dom, { reduced = false } = {}) {
-  const home = { yaw: -0.72, pitch: 0.54, dist: 356, tx: 0, ty: 8, tz: 0 };
+/* THE LIMITS ARE ARGUMENTS NOW, NOT CONSTANTS.
+   ──────────────────────────────────────────────────────────────────────────
+   This controller was written for one scene and had the city's dimensions
+   baked into it: a floor of 30 units, a ceiling of 820, a target leashed to
+   the 132-unit plate, and an opening distance of 356 that frames a skyline.
+   Every one of those is wrong inside a room, where the whole environment is
+   sixty units across and 356 would put the visitor in orbit above it.
+
+   The alternative was a second controller for the room scene, and that is
+   how two pieces of software that are supposed to feel identical stop
+   feeling identical: the drag inertia diverges, the pinch behaves
+   differently on one of them, and a fix lands in one file and not the other.
+   One controller, two sets of limits. */
+export const CITY_LIMITS = {
+  minDist: 30, maxDist: 820, minPitch: 0.16, maxPitch: 1.35,
+  radius: 132, minY: -4, maxY: 40,
+  home: { yaw: -0.72, pitch: 0.54, dist: 356, tx: 0, ty: 8, tz: 0 },
+  fit: (a, clamp) => clamp((552 / a) * (a < 1 ? 0.6 : 1), 330, 820),
+};
+
+export function makeCamera(THREE, camera, dom, { reduced = false, limits = CITY_LIMITS } = {}) {
+  const L = limits;
+  const MIN_DIST = L.minDist, MAX_DIST = L.maxDist;
+  const MIN_PITCH = L.minPitch, MAX_PITCH = L.maxPitch;
+  const home = { ...L.home };
   // dist is replaced by setAspect() as soon as the canvas has a size
 
   const cur = { ...home };
@@ -45,7 +66,7 @@ export function makeCamera(THREE, camera, dom, { reduced = false } = {}) {
   let enabled = true;
 
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
-  const CITY_R = 132;
+  const CITY_R = L.radius;
   let touched = false;              // has the visitor moved the camera themselves?
 
   /* The opening distance depends on the shape of the window, not just its
@@ -59,8 +80,9 @@ export function makeCamera(THREE, camera, dom, { reduced = false } = {}) {
     /* Portrait cannot show the whole plate and a legible city at once at the
        desktop's three-quarter angle, so it does two things instead of one:
        looks down more steeply, which turns a wide ellipse into a rounder one
-       that fits a tall screen, and gives up a little of the outer plate. */
-    return clamp((552 / a) * (a < 1 ? 0.6 : 1), 330, MAX_DIST);
+       that fits a tall screen, and gives up a little of the outer plate. The
+       room scene supplies its own version of the same trade. */
+    return L.fit(a, clamp);
   }
 
   function normalise() {
@@ -68,7 +90,7 @@ export function makeCamera(THREE, camera, dom, { reduced = false } = {}) {
     want.dist = clamp(want.dist, MIN_DIST, MAX_DIST);
     const r = Math.hypot(want.tx, want.tz);
     if (r > CITY_R) { want.tx *= CITY_R / r; want.tz *= CITY_R / r; }
-    want.ty = clamp(want.ty, -4, 40);
+    want.ty = clamp(want.ty, L.minY, L.maxY);
   }
 
   /** Anything the visitor does stops the camera doing its own thing. */
@@ -195,6 +217,24 @@ export function makeCamera(THREE, camera, dom, { reduced = false } = {}) {
     },
 
     home(ms = 1100) { api.flyTo({ ...home }, ms); },
+
+    /* ── LEAVING AND COMING BACK ──────────────────────────────────────────
+       Walking into a room and out again must not cost the visitor the view
+       they arranged. `snapshot` takes the whole camera state — including
+       whether they had taken hold of it, which decides whether anything is
+       later allowed to reframe on their behalf — and `restore` puts it back
+       with no flight at all, because a journey home from a place you were
+       never taken from is just the page moving on its own again. */
+    snapshot() { return { ...cur, touched }; },
+    restore(s) {
+      if (!s) return;
+      flight = null;
+      Object.assign(cur, { yaw: s.yaw, pitch: s.pitch, dist: s.dist, tx: s.tx, ty: s.ty, tz: s.tz });
+      Object.assign(want, cur);
+      touched = !!s.touched;
+      normalise();
+      apply();
+    },
 
     /** Frame a point: look at it from a sensible height and distance without
      *  changing which way round the city the visitor had it. */

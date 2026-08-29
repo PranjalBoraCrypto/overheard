@@ -65,6 +65,46 @@ export async function boot() {
   let world = buildWorld(THREE, { canvas, preset, reduced });
   let cam = makeCamera(THREE, world.camera, canvas, { reduced });
 
+  /* ── THE SECOND SCENE ────────────────────────────────────────────────────
+     A room is a place now, not a closer camera. It has its own THREE.Scene,
+     its own camera and its own camera limits — a sixty-unit plaza cannot be
+     framed by numbers chosen for a three-hundred-unit skyline — and it
+     shares only the renderer and the canvas with the city.
+
+     Two consequences are the point of doing it this way. The city is left
+     standing exactly as it was while somebody is inside a room, so coming
+     back is a restoration and not a rebuild. And the room is free to look
+     like somewhere else, which is the whole complaint the old version could
+     not answer: it was the same city, from nearer.
+
+     Built on first entry, never at boot. Most visits to this page never open
+     a room, and a scene nobody asked for is bytes and memory spent on
+     nothing. */
+  let room3d = null, roomCam = null;
+  let mode = "city";                     // "city" | "room"
+  let camSaved = null;                   // where the visitor was standing
+
+  async function ensureRoomScene() {
+    if (room3d) return room3d;
+    const { makeRoom, ROOM_LIMITS } = await import("./room3d.js");
+    room3d = makeRoom(THREE, { renderer: world.renderer, preset, level: preset.tier, reduced });
+    roomCam = makeCamera(THREE, room3d.camera, canvas, { reduced, limits: ROOM_LIMITS });
+    roomCam.enabled = false;
+    const r = canvas.getBoundingClientRect();
+    room3d.resize(r.width, r.height);
+    roomCam.setAspect?.(r.width / r.height);
+    return room3d;
+  }
+
+  /** The crossfade. A cut between two 3D scenes reads as a bug; a short fade
+   *  reads as a door. 280ms, and skipped entirely for reduced motion. */
+  function veil(then) {
+    const v = $("veil");
+    if (reduced || !v) { then(); return; }
+    v.classList.add("on");
+    setTimeout(() => { then(); v.classList.remove("on"); }, 280);
+  }
+
   /* ── 3. state ────────────────────────────────────────────────────────── */
   const st = {
     room: null,            // the room we are standing in
@@ -86,6 +126,11 @@ export async function boot() {
   const bubbles = [];      // { key, agentId, node, born, life, kind }
   const labels = new Map();
   const declutter = makeDeclutter(els);
+
+  /* The way out, at the top of the screen rather than buried in a panel.
+     "Back to Agent City" is the one control somebody standing in a room
+     always wants to be able to find without looking for it. */
+  $("backCity").addEventListener("click", () => leaveRoom());
 
   const ui = makeUI(els, {
     closePanel: () => { ui.closePanel(); st.agentId = null; st.msgKey = null; if (st.room) showRoomPanel(); },
@@ -137,6 +182,14 @@ export async function boot() {
   });
 
   D.on("status", () => { paintChips(); ui.status(D.state.status); });
+
+  /* Entering a room shows its saved history immediately — see the snapshot
+     ladder in api/room.js. Those agents are real identities that really
+     spoke, so they stand in the plaza; none of them is lit, because none of
+     them has said anything since the visitor arrived. */
+  D.on("room", (r) => {
+    if (mode === "room" && room3d) room3d.setAgents(r?.agents || []);
+  });
 
   /* THE FULL-SCREEN ERROR IS GONE, AND IT IS NOT COMING BACK.
      ────────────────────────────────────────────────────────────────────────
@@ -304,7 +357,7 @@ export async function boot() {
       const t = document.createElement("span");
       t.textContent = d.title;
       node.append(n, t);
-      node.addEventListener("click", (e) => { e.stopPropagation(); flyToDistrict(d.room); });
+      node.addEventListener("click", (e) => { e.stopPropagation(); enterRoom(d.room); });
       node.addEventListener("mouseenter", () => (st.hoverKey = `room:${d.room}`));
       node.addEventListener("mouseleave", () => (st.hoverKey = null));
       overlay.append(node);
@@ -353,7 +406,7 @@ export async function boot() {
       if (rl.room !== n.p.room) {
         rl.room = n.p.room;
         rl.node.textContent = n.p.room;
-        rl.node.onclick = (e) => { e.stopPropagation(); flyToRoom(n.p.room); };
+        rl.node.onclick = (e) => { e.stopPropagation(); enterRoom(n.p.room); };
         rl.node.onmouseenter = () => (st.hoverKey = `room:${n.p.room}`);
         rl.node.onmouseleave = () => (st.hoverKey = null);
       }
@@ -398,26 +451,81 @@ export async function boot() {
 
   function showSummary(room) { ui.roomSummary(summaryFor(room)); }
 
-  function enterRoom(name) {
+  /**
+   * ONE ACTION, AND IT ENDS SOMEWHERE ELSE.
+   *
+   * This used to be the second half of a two-step: click a building to open
+   * a summary, then press "Enter the room". Nobody asked for the summary,
+   * and the thing behind the second click was the same city 118 units
+   * nearer. Clicking a room now goes into the room.
+   *
+   * The sequence is a door rather than a cut: the camera flies to the
+   * building, so the room you are about to be in is the one you pointed at,
+   * and then a short fade hands over to a different scene entirely. Where
+   * the visitor was standing in the city is saved first, untouched, so that
+   * coming back is exactly that.
+   */
+  async function enterRoom(name) {
+    if (st.room === name && mode === "room") return;
     st.room = name; st.agentId = null; st.msgKey = null; st.following = null;
     clearBubbles();
+
+    /* Saved BEFORE the approach flight, so "back" returns to the view the
+       visitor arranged, not to wherever the transition left the camera. */
+    if (mode === "city") camSaved = cam.snapshot();
+
     const p = world.enterRoom(name);
-    cam.focus(p.x, p.z, 118, reduced ? 0 : 1400, 0.46);
-    D.enterRoom(name);
+    const scene = ensureRoomScene();          // starts loading during the flight
+    if (p && !reduced) cam.focus(p.x, p.z, 96, 620, 0.5);
+
+    D.enterRoom(name);                        // cached room data starts arriving now
+    await scene;
+    await new Promise((r) => setTimeout(r, reduced ? 0 : 480));
+
+    veil(() => {
+      mode = "room";
+      cam.enabled = false;
+      roomCam.enabled = true;
+      roomCam.home(0);
+      room3d.setRoom(name);
+      room3d.setAgents(D.state.room?.agents || []);
+      /* The header swaps with the scene. "Drag to look around, scroll to
+         zoom, click a room to walk into it" is the wrong sentence to be
+         reading once you are standing on a plaza. */
+      const info = (city?.roster || []).find((r) => r.room === name);
+      $("roomName").textContent = name;
+      $("roomTopic").textContent = info?.topic
+        ? info.topic
+        : "No topic set. Everything below is what this room has actually carried.";
+      const r = canvas.getBoundingClientRect();
+      room3d.resize(r.width, r.height);
+      document.body.classList.add("inroom");
+    });
+
     S.arrive(); S.bedOn(true);
     $("strip").hidden = st.clean;
     paintChips();
-    ui.roomLive({ name, messages: [], agents: [], gaps: [] }, []);
+    ui.roomLive(D.state.room || { name, messages: [], agents: [], gaps: [] }, []);
   }
 
   function leaveRoom() {
     st.room = null; st.agentId = null; st.msgKey = null; st.following = null;
     clearBubbles();
+    veil(() => {
+      mode = "city";
+      if (roomCam) roomCam.enabled = false;
+      cam.enabled = true;
+      /* RESTORED, NOT RE-FRAMED. The visitor spent time arranging that view;
+         flying them home instead would throw it away and make leaving a room
+         feel like starting again. */
+      if (camSaved) cam.restore(camSaved);
+      camSaved = null;
+      document.body.classList.remove("inroom");
+    });
     world.leaveRoom();
     D.leaveRoom();
     ui.closeFeed();
     S.bedOn(false);
-    cam.home(reduced ? 0 : 1300);
     $("strip").hidden = true;
     ui.closePanel();
     paintChips();
@@ -470,16 +578,39 @@ export async function boot() {
     paintStrip(r);
   });
 
-  D.on("messages", ({ added }) => {
+  D.on("messages", ({ added, fresh }) => {
     if (!added.length) return;
     const r = D.state.room;
+    /* Everything that MOVES uses `fresh`; everything that merely LISTS uses
+       `added`. On the first read of a room those differ by the whole
+       archived tail, which is exactly the set that must not be animated. */
+    const live = fresh || added;
+    /* THE ROOM SCENE REACTS ONLY TO WHAT IS NEW.
+       `added` is exactly the messages whose sequence numbers this reader had
+       not seen — the archive that filled the feed on entry never passes
+       through here, which is what stops a saved conversation being replayed
+       as if it were happening. */
+    if (mode === "room" && room3d) {
+      room3d.setAgents(r?.agents || []);
+      const per = r?.rate ?? null;
+      room3d.setEnergy(per == null ? Math.min(1, added.length / 8) : Math.min(1, per / 25));
+      for (const m of live) {
+        const from = m.did || (m.nick ? `nick:${m.nick}` : null);
+        if (!from) continue;
+        room3d.speak(from, 1);
+        const to = D.addressee(m, r.agents);
+        /* A signal between two figures is a claim that one addressed the
+           other, so it is drawn only when the message itself said so. */
+        if (to && to !== from) room3d.reply(from, to);
+      }
+    }
     /* A burst is grouped rather than staged one effect per message: forty
        messages in a second is forty pulses nobody can see, and the data layer
        has already kept every one of them regardless of what is drawn. */
-    const budget = Math.min(added.length, 6);
-    const step = Math.max(1, Math.floor(added.length / budget));
-    for (let i = 0; i < added.length; i += step) {
-      const m = added[i];
+    const budget = Math.min(live.length, 6);
+    const step = Math.max(1, Math.floor(live.length / budget)) || 1;
+    for (let i = 0; i < live.length; i += step) {
+      const m = live[i];
       const from = m.did || (m.nick ? `nick:${m.nick}` : null);
       const a = from ? world.agentAt(from) : null;
       if (a) {
@@ -538,10 +669,19 @@ export async function boot() {
          somebody is actually reading. */
       const life = st.agentId === b.agentId ? b.life * 2 : b.life;
       if (now - b.born > life) { retire(b); continue; }
-      const a = world.agentAt(b.agentId);
-      if (!a) { retire(b); continue; }
-      const s = world.project(a.x, a.y + 8, a.z, rect);
-      if (s.behind) { b.node.style.opacity = "0"; continue; }
+      /* Anchored to whichever scene the visitor is actually in. In the room
+         that is a figure standing on the plaza floor; in the city it is a
+         box on a district terrace. Same bubble, two projections. */
+      let s;
+      if (mode === "room" && room3d) {
+        s = room3d.project(b.agentId, rect.width, rect.height);
+        if (!s) { retire(b); continue; }
+      } else {
+        const a = world.agentAt(b.agentId);
+        if (!a) { retire(b); continue; }
+        s = world.project(a.x, a.y + 8, a.z, rect);
+        if (s.behind) { b.node.style.opacity = "0"; continue; }
+      }
       /* Bubbles are placed by the same rule as the labels — they are the same
          kind of thing, and a speech bubble under the side panel is a message
          the visitor cannot read. Six tries going up, then it waits its turn;
@@ -615,11 +755,19 @@ export async function boot() {
     const held = performance.now() - downAt.t;
     downAt = null;
     if (moved > 6 || held > 500) return;            // that was a drag, not a click
-    const hit = world.pick(e.clientX, e.clientY, canvas.getBoundingClientRect());
+    const rect0 = canvas.getBoundingClientRect();
+    if (mode === "room" && room3d) {
+      const nx = ((e.clientX - rect0.left) / rect0.width) * 2 - 1;
+      const ny = -((e.clientY - rect0.top) / rect0.height) * 2 + 1;
+      const id = room3d.pick(nx, ny);
+      if (id) selectAgent(id);
+      return;
+    }
+    const hit = world.pick(e.clientX, e.clientY, rect0);
     if (!hit) return;
     if (hit.type === "agent") selectAgent(hit.id);
-    else if (hit.type === "district") st.room === hit.room ? showSummary(hit.room) : flyToDistrict(hit.room);
-    else if (hit.type === "room") flyToRoom(hit.room);
+    else if (hit.type === "district") enterRoom(hit.room);
+    else if (hit.type === "room") enterRoom(hit.room);   // one click, into the room
   });
 
   /** The hover test raycasts a few hundred instances, so it runs when there
@@ -840,7 +988,7 @@ export async function boot() {
     }
     ui.hits(out, (h) => {
       q.value = ""; ui.hits(null);
-      if (h.kind === "room") flyToRoom(h.room);
+      if (h.kind === "room") enterRoom(h.room);
       else findDid(h.did);
     });
   });
@@ -889,6 +1037,7 @@ export async function boot() {
     const w = Math.max(1, r.width), h = Math.max(1, r.height);
     world.resize(w, h, devicePixelRatio || 1);
     cam.setAspect(w / h);
+    if (room3d) { room3d.resize(w, h); roomCam.setAspect(w / h); }
   }
   addEventListener("resize", fit, { passive: true });
   fit();
@@ -898,9 +1047,19 @@ export async function boot() {
     const dt = Math.min(0.05, (now - last) / 1000 || 0.016);
     last = now;
     watcher.tick(now);
-    cam.step(dt);
-    world.update(dt);
-    world.render();
+    if (mode === "room" && room3d) {
+      roomCam.step(dt);
+      room3d.update(dt);
+      room3d.render();
+      /* The city is not updated while nobody is looking at it. It keeps its
+         state — every building, every roster entry, the camera the visitor
+         left — but it costs nothing per frame, which is what pays for the
+         room scene on a weak machine. */
+    } else {
+      cam.step(dt);
+      world.update(dt);
+      world.render();
+    }
 
     /* The overlays are DOM, and DOM is the expensive part of a frame like
        this. They are updated at 30Hz rather than every frame; nothing in them
@@ -994,6 +1153,7 @@ export async function boot() {
     get state() { return st; }, get city() { return city; },
     get bubbles() { return bubbles; }, get labels() { return labels; },
     world, cam, data: D,
+    get room3d() { return room3d; }, get mode() { return mode; }, get roomCam() { return roomCam; },
     enterRoom, leaveRoom, flyToDistrict, flyToRoom, selectAgent, selectMessage, setLevel,
     fps: () => watcher.fps(),
   };
