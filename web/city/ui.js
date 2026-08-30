@@ -13,7 +13,7 @@
  * the information.
  */
 
-import { safeText, shortDid, kindLabel } from "./data.js";
+import { safeText, shortDid, kindLabel, wokeRecently } from "./data.js";
 
 const el = (tag, cls, text) => {
   const n = document.createElement(tag);
@@ -127,15 +127,41 @@ export function makeUI(els, cb) {
          while the first poll is still in flight is the overclaim this chip
          exists to prevent. */
       cls = "live"; text = "Live";
-      title = `Read from Technocore's public directory ${age}. Refreshing every 20 seconds.`;
+      title = `Read from Technocore's public directory ${age}. Refreshing every 7 seconds.`;
     } else if (s.city === "reconnecting") {
-      /* Two different sentences on purpose: reconnecting over a live reading
-         from a minute ago is a blip, and reconnecting over a file from two
-         days ago is a different thing to be told. */
+      /* ── WHICH SIDE IS NOT ANSWERING, ON THE CHIP ─────────────────────
+         "Reconnecting · last live 34m ago" was the whole message, and the
+         question it produced was the right one and could not be answered
+         from it: is this Overheard or is it Technocore? The endpoint has
+         always known — it says so in `why` — and it was buried in a title
+         attribute, which is a tooltip nobody hovers and a phone cannot show
+         at all.
+
+         So the chip names the side. There are only two, they fail for
+         completely different reasons, and only one of them is ours to fix. */
+      const upstream = /technocore|upstream|directory/i.test(s.why || "");
+      const side = upstream ? "Technocore" : "Overheard's proxy";
       cls = "warn";
-      text = live ? `Reconnecting · last live ${age}` : `Saved snapshot · ${age}`;
+      if (!live) {
+        text = `Saved snapshot · ${age}`;
+      } else if (wokeRecently()) {
+        /* JUST BACK FROM A SLEEPING TAB. Polling stops while nobody is
+           looking, so the reading on screen is old because it was not asked
+           for — not because anything is broken. The very first request after
+           a wake also fails routinely on a machine whose network interface
+           is still coming up, and calling that "reconnecting" over a
+           half-hour-old reading reads as a catastrophe. */
+        cls = "wait";
+        text = `Resuming · last live ${age}`;
+      } else {
+        text = `${side} not answering · ${age}`;
+      }
       title = (s.why ? s.why + ". " : "") + (live
-        ? "The last live reading is still on screen. Retrying in the background."
+        ? `The last live reading is still on screen and is ${age}. ${
+            upstream
+              ? "Technocore's directory is not answering Overheard; nothing on this page is wrong, and it will catch up on its own."
+              : "Overheard's own proxy is not answering this browser — that is this site's problem, not Technocore's."
+          } Retrying in the background.`
         : "Technocore is not answering, so this is genuine public data this site archived earlier — not a reading of the network right now. Retrying in the background.");
     } else {
       /* Starting or updating, with something already drawn. Which something

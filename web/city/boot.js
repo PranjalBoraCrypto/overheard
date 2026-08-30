@@ -119,6 +119,17 @@ export async function boot() {
     clean: false,
     hoverKey: null,
   };
+
+  /* A PANEL THAT WAS CLOSED STAYS CLOSED.
+     Pressing × inside a room shut the panel, and then the next arriving
+     message put it straight back — because the room poll reopened it on
+     every reading. From the visitor's side that is a close button that works
+     for four seconds. The dismissal is now remembered: the panel comes back
+     when THEY ask for it (the reopen tab, an agent, a message, the feed) and
+     not because data moved. Walking into a room clears it, since a new room
+     is a new question. */
+  let roomShut = false;
+
   let firstVisit = false;
   try {
     firstVisit = !localStorage.getItem("overheard.city.seen");
@@ -163,7 +174,10 @@ export async function boot() {
     showRoom: () => { if (st.room) showRoomPanel(); },
     /* A closed panel leaves a way back where it was, but only while there is
        a room for it to describe. On the city there is nothing to reopen. */
-    panelClosed: () => { const b = $("reopen"); if (b) b.hidden = !st.room; },
+    panelClosed: () => {
+      if (st.room) roomShut = true;
+      const b = $("reopen"); if (b) b.hidden = !st.room;
+    },
     panelOpened: () => { const b = $("reopen"); if (b) b.hidden = true; },
     flyToRoom: (room) => flyToRoom(room),
     toggleClean: () => setClean(!st.clean),
@@ -876,6 +890,7 @@ export async function boot() {
   async function enterRoom(name) {
     if (st.room === name && mode === "room") return;
     st.room = name; st.agentId = null; st.msgKey = null; st.following = null;
+    roomShut = false;          // a new room is a new question
     clearBubbles();
     /* The counts belong to the city. Left up, they would hang in the room
        scene anchored to buildings that are no longer being drawn. */
@@ -942,6 +957,7 @@ export async function boot() {
       camSaved = null;
       document.body.classList.remove("inroom");
     $("reopen").hidden = true;
+      roomShut = false;
       /* Inside the veil, not after it: `mode` is still "room" for the 280ms
          the door is closing, and both of these refuse to draw in room mode. */
       refreshRail();
@@ -960,6 +976,10 @@ export async function boot() {
   function showRoomPanel() {
     const r = D.state.room;
     if (!r) return;
+    /* Every caller of this is somebody asking for the panel — the reopen tab,
+       stepping back from an agent, the feed's back arrow. The one caller that
+       is not (the room poll) checks `roomShut` before it gets here. */
+    roomShut = false;
     ui.roomLive(r, r.agents, st.agentId);
   }
 
@@ -1003,7 +1023,7 @@ export async function boot() {
        repainting the room summary on every poll wiped the feed a few seconds
        after it was opened — it appeared, then vanished, which reads as a
        button that half works. renderFeed keeps it current instead. */
-    if (!st.agentId && !st.msgKey && !ui.feedShown()) showRoomPanel();
+    if (!roomShut && !st.agentId && !st.msgKey && !ui.feedShown()) showRoomPanel();
     ui.renderFeed(r, st.msgKey);
     paintStrip(r);
   });

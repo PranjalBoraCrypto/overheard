@@ -723,6 +723,67 @@ console.log("\n=== F. the three that did not work");
 }
 
 /* ════════════════════════════════════════════════════════════════════════
+   F2. A CLOSED PANEL STAYS CLOSED
+   ════════════════════════════════════════════════════════════════════════
+
+   Reported from a room: × shut the panel, and the moment the next message
+   arrived it was back. The cause was the room poll — it repainted the room
+   summary into that element on EVERY reading, which is right when the panel
+   is open and wrong the instant somebody has closed it. Four seconds later
+   the visitor is looking at the thing they just dismissed, and the only
+   reading available to them is that the close button does not work.
+
+   The rule this locks in: data reopens nothing. The panel comes back when
+   the visitor asks — the reopen tab, an agent, a message, the feed — and a
+   fresh room clears the dismissal, because walking in is asking.
+   ════════════════════════════════════════════════════════════════════ */
+console.log("\n=== F2. a closed room panel stays closed");
+{
+  const { pg, ctx, errs } = await open();
+  await pg.evaluate(() => window.__city.enterRoom("lobby"));
+  await pg.waitForFunction(() => document.body.classList.contains("inroom"), null, { timeout: 20000 });
+  await pg.waitForFunction(() => !!document.querySelector("#side .rowlist"), null, { timeout: 20000 });
+
+  const shown = () => pg.evaluate(() => !document.getElementById("side").hidden);
+  check("the room panel is up on arrival", await shown());
+
+  await pg.evaluate(() => document.querySelector("#side .px").click());
+  await pg.waitForTimeout(300);
+  check("× closes it", !(await shown()));
+  check("and leaves a way back", !(await pg.evaluate(() => document.getElementById("reopen").hidden)));
+
+  /* LONGER THAN THE POLL. The room is re-read every few seconds; this waits
+     out several readings, so if anything in the data path reopens the panel
+     it has had every chance to. */
+  await pg.waitForTimeout(9000);
+  check("and several room readings later it is still closed", !(await shown()));
+
+  /* Messages arriving is the exact trigger that was reported. */
+  const got = await pg.evaluate(() => (window.__city.state.room, document.querySelectorAll(".tx").length));
+  await pg.waitForTimeout(3000);
+  check("including while transmissions are landing", !(await shown()), `${got} cards`);
+
+  await pg.evaluate(() => document.getElementById("reopen").click());
+  await pg.waitForTimeout(400);
+  check("the reopen tab brings it back", await shown());
+  check("and the tab stands down once it has",
+    await pg.evaluate(() => document.getElementById("reopen").hidden));
+
+  /* Closing again, then walking into another room: a new room is a new
+     question, so the panel is due back without being asked. */
+  await pg.evaluate(() => document.querySelector("#side .px").click());
+  await pg.waitForTimeout(200);
+  await pg.evaluate(() => window.__city.leaveRoom());
+  await pg.waitForTimeout(900);
+  await pg.evaluate(() => window.__city.enterRoom("lobby"));
+  await pg.waitForFunction(() => !!document.querySelector("#side .rowlist"), null, { timeout: 20000 });
+  check("walking back into a room shows it again", await shown());
+
+  check("no page errors", errs.length === 0, errs[0] || "");
+  await ctx.close();
+}
+
+/* ════════════════════════════════════════════════════════════════════════
    G. TRANSMISSIONS, AND THE CITY'S ONE READOUT
    ════════════════════════════════════════════════════════════════════════
 

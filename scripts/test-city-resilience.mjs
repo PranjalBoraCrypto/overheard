@@ -233,6 +233,57 @@ check("still nothing covering it", !(await bootShown()));
     /not a reading of the network right now/i.test(title), title.slice(0, 60) + "…");
 }
 
+/* ════════════════════════════════════════════════════════════════════════
+   C2. THE CHIP SAYS WHICH SIDE IS NOT ANSWERING
+   ════════════════════════════════════════════════════════════════════════
+
+   Asked, in exactly these words, about a chip reading "Reconnecting · last
+   live 34m ago": is this our build or Flop's? It is the right question and
+   the chip could not answer it, while the endpoint had known all along and
+   was saying so into a title attribute — a tooltip nobody hovers and a phone
+   cannot show.
+
+   There are two sides, they fail for unrelated reasons, and only one of them
+   is ours. The chip names it.
+   ════════════════════════════════════════════════════════════════════ */
+console.log("\n=== C2. and which side is not answering");
+{
+  /* A live reading first, so the page has something to be stale ABOUT — the
+     wording differs over a live reading and over the shipped snapshot. */
+  MODE = "live";
+  await pg.reload();
+  await pg.waitForFunction(() => /^Live$/i.test(document.getElementById("status").innerText.trim()),
+    null, { timeout: 20000 });
+
+  /* Technocore refusing. The endpoint answers with the snapshot and says so,
+     and the page must attribute it upstream. */
+  MODE = "down";
+  await pg.evaluate(() => {
+    /* Straight past the backoff: this is about wording, not scheduling. */
+    document.dispatchEvent(new Event("visibilitychange"));
+  });
+  /* A tab that has just been woken says "Resuming" for a few seconds before
+     it is willing to call anything a failure — one missed poll on a laptop
+     coming out of sleep is not evidence of an outage, and saying so would be
+     the alarming lie this whole section exists to prevent. That state is
+     deliberate and temporary, so the test waits for the chip to SETTLE rather
+     than reading it mid-recovery. */
+  await pg.waitForFunction(() => /technocore|saved snapshot|proxy/i.test(
+    document.getElementById("status").innerText), null, { timeout: 45000 }).catch(() => {});
+  await pg.waitForTimeout(400);
+  const t = await pg.evaluate(() => ({
+    text: document.getElementById("status").innerText.replace(/\s+/g, " ").trim(),
+    title: document.getElementById("status").title,
+  }));
+  check("it names Technocore rather than saying only 'reconnecting'",
+    /technocore/i.test(t.text) || /saved snapshot/i.test(t.text), t.text);
+  check("and the tooltip says whose problem it is",
+    /not answering overheard|this site's problem|not a reading of the network/i.test(t.title),
+    t.title.slice(0, 70) + "…");
+  check("it never blames the wrong side", !/overheard's proxy not answering/i.test(t.text), t.text);
+  MODE = "live";
+}
+
 console.log("\n=== D. live data merges without disturbing anything");
 /* The arrival flight belongs to the FIRST paint and is meant to run — that is
    the seed doing its job. What must not happen is a second one when live data

@@ -212,7 +212,14 @@ export default async function handler(request) {
          "Reconnecting" on the chip. The directory is a sorted scan over
          thirty-odd thousand rooms; it is allowed to be slow. Waiting is
          invisible here and giving up is not. */
-      signal: AbortSignal.timeout(9000),
+      /* FOURTEEN. Nine was better than six and is still on the low side.
+         The directory is a sorted scan over thirty-odd thousand rooms and it
+         is allowed to take its time; the page has a city on screen the whole
+         while and is never waiting on this. Every second shaved off here buys
+         nothing and risks turning a slow-but-alive read into a degrade, which
+         is what puts a warning on the chip. Edge functions get twenty-five,
+         so fourteen leaves room for the snapshot fallback underneath it. */
+      signal: AbortSignal.timeout(14000),
     });
     if (r.status === 429) return snapshotResponse(request, "rate limited upstream");
     if (!r.ok) return snapshotResponse(request, `technocore returned ${r.status}`);
