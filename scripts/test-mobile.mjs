@@ -135,6 +135,20 @@ for (const [w, h, tag] of [[390, 844, "iphone"], [360, 740, "android"]]) {
       return { over, wide: wide.slice(0, 6), clash: clash.slice(0, 6), small: [...new Set(small)].slice(0, 6) };
     });
     const name = `${tag} ${route}`;
+    /* THE ONE-TIME DESKTOP NOTE. It is a fixed bar over the bottom of the
+       page, so it must be dismissed before anything is measured — and the
+       fact that it appears at all, on the first page of the run only, is
+       itself the thing being checked. */
+    const hint = await pg.evaluate(() => {
+      const h = [...document.body.children].find((n) => n.shadowRoot?.querySelector(".wrap .tx b"));
+      if (!h) return null;
+      const t = h.shadowRoot.querySelector(".tx b").textContent;
+      h.shadowRoot.querySelector(".x").click();
+      return t;
+    });
+    if (route === PAGES[0]) check(`${tag} says the site is better on a computer, once`, !!hint, hint || "not shown");
+    else check(`${tag} ${route} does not say it again`, hint === null, hint || "");
+    await pg.waitForTimeout(120);
     check(`${name} does not scroll sideways`, r.over <= 0, `${r.over}px`);
     check(`${name} keeps everything inside the window`, r.wide.length === 0, r.wide.join(" | "));
     check(`${name} has no two cards on top of each other`, r.clash.length === 0, r.clash.join(" | "));

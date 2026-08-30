@@ -32,8 +32,9 @@
  * room, but it does not put a background of its own between the visitor and
  * the page — no dome, no shell, no veil. The floor carries concentric etched
  * rings that the conversation lights up, and a bright rim draws the edge
- * where the floor stops. The middle is empty on purpose: what marks the
- * centre is that every pod in the room is facing it.
+ * where the floor stops. The middle is empty: a turning hub of light used to
+ * stand there, and it was the brightest thing in a quiet room while carrying
+ * nothing the floor rings do not already say.
  *
  * ═════════════════════════════════════════════════════════════════════════
  * THE AGENTS, AND WHAT THEY ARE ALLOWED TO DO
@@ -43,42 +44,52 @@
  * you come back and a conversation can be followed by watching two specific
  * pods rather than two moving dots.
  *
- * A POD DOES EXACTLY TWO THINGS, and both of them are evidence:
- *
- *   IT BLINKS. Every three to eight seconds, on its own schedule. This is
- *   the one piece of pure life in the room and it claims nothing — it is
- *   there so a plaza of two hundred does not read as a car park.
+ * A POD DOES THREE THINGS. Two of them are evidence and the third is life:
  *
  *   ITS BOTTOM PANEL PULSES when a sequence number the live reader has not
  *   seen before arrives FROM THAT IDENTITY. Nobody else's panel moves. An
  *   archived message never pulses anyone, which is the same rule the city
  *   obeys and the reason a saved room can show its history without
- *   pretending to be busy.
+ *   pretending to be busy. This is the one thing here that is a claim.
  *
- * EVERYTHING ELSE WAS REMOVED, and the list is worth keeping because each
- * item was once defended: idle hover, drift, momentum lean, body turning,
- * eye tracking, thruster breathing, per-identity colour, the halo, the ring
- * above the head, the light on the floor underneath. Every one of them was
- * either decoration dressed as information, or motion that made a still
- * scene harder to read.
+ *   IT BLINKS. Every three to eight seconds, on its own schedule. Claims
+ *   nothing; it is there so a plaza of two hundred does not read as a car
+ *   park.
  *
- * FACING is not an animation. Every pod's rotation is a vector from where it
- * stands toward the centre of the plaza, computed once when it appears. Pods
- * on the far side show you their faces, pods near the camera show you their
- * backs, and that is correct: it is a room of agents talking to the room,
- * seen from a seat in it, rather than two hundred posters turned to face you.
+ *   ABOUT A THIRD OF THEM DRIFT. A slow closed loop around the pod's own
+ *   station, from two sines at rates that do not divide into each other, so
+ *   no path repeats and no two pods move together. Which third is decided by
+ *   the identity's hash, so the same agents move on every visit.
+ *
+ *   The loop is BOUNDED to its own station on purpose. A pod's position is a
+ *   hash of its id and means nothing — but it is stable, and being able to
+ *   find the same agent in the same place on a second visit is the one true
+ *   thing about it. A pod that wandered the plaza would spend that.
+ *
+ * WHAT IS STILL GONE, because each was once defended: momentum lean, eye
+ * tracking, thruster breathing, body-turning toward whoever was addressed,
+ * per-identity colour, the halo, the ring above the head, the light on the
+ * floor underneath. Each was either decoration dressed as information, or
+ * motion that made the scene harder to read.
+ *
+ * FACING. A still pod's angle is drawn from its own hash — arbitrary, stable,
+ * and claiming nothing about a room the data has no opinion on. A drifting
+ * pod turns toward where it is going, easing rather than snapping.
  *
  * ═════════════════════════════════════════════════════════════════════════
  * COST
  *
  * Seven instanced meshes for the whole population — shell, face panel, two
- * eyes, two side tabs, light bar — plus the pooled reply sparks and the fixed
- * furniture of the plaza. A room with two hundred speakers costs the same
- * draw calls as a room with three. And because nothing moves, every instance
- * matrix is written once and then left alone: the per-frame work is the
- * handful of pods mid-blink and the handful mid-pulse. Agents past the cap
- * are folded into the crowd ring — a count, drawn as a band of light, never
- * as invented people.
+ * eyes, two side tabs, light bar — plus the hover washes, the pooled reply
+ * sparks and the fixed furniture of the plaza. A room with two hundred
+ * speakers costs the same draw calls as a room with three.
+ *
+ * A STILL POD COSTS NOTHING PER FRAME. Its matrices are written once and then
+ * left alone, so the per-frame work is the third that drift, the handful
+ * mid-blink and the handful mid-pulse — and drift is parked past the mid
+ * distance band, where a pod is a few pixels and its movement is invisible.
+ * Agents past the cap are folded into the crowd ring: a count, drawn as a
+ * band of light, never as invented people.
  */
 
 const TAU = Math.PI * 2;
@@ -93,10 +104,11 @@ export const ROOM_LIMITS = {
 };
 
 /* HOW MANY ARE DRAWN AS PODS BEFORE THE REST BECOME A COUNT.
-   26/44/70 under the old design, because every figure was animating every
-   frame. The pods do not move: their matrices are written once and the
-   steady-state cost of a still pod is zero, so the ceiling is fill rate
-   rather than per-frame work. Two hundred on the top tier, and the weakest
+   26/44/70 under the old design, because every figure animated every frame.
+   Two thirds of these are genuinely still — matrices written once, zero cost
+   per frame — and the third that drift are parked past the mid distance
+   band, so the per-frame work scales with what is close enough to see rather
+   than with the head count. Two hundred on the top tier, and the weakest
    machine still draws sixty individually before folding anyone into the
    crowd ring — background agents are given up before near ones lose detail,
    which is the right way round. */
@@ -579,11 +591,41 @@ export function makeRoom(THREE, { renderer, preset, level = "balanced", reduced 
         f = {
           id: a.id, x: s.x, z: s.z, a: s.a,
           yaw: hash01(hashId(a.id), 53) * TAU,
-          /* Kept as aliases of the station so agentAt() and project() have
-             one thing to read. The pod does not drift, so these never
-             change — but the callers should not have to know that. */
+          /* Where it actually is. A drifting pod trails its station; a still
+             one sits on it. Everything that needs a pod's position —
+             agentAt, project, the reply sparks — reads these. */
           px: s.x, pz: s.z,
           born: clock,
+
+          /* ── ANIMATION 3: DRIFT ─────────────────────────────────────────
+             ABOUT A THIRD OF THEM MOVE, and which third is decided by the
+             identity's own hash, so the same agents drift on every visit and
+             a room is a place you can learn rather than a screensaver.
+
+             A drifter walks a closed Lissajous loop around ITS OWN STATION —
+             two sines at incommensurate rates, so the path never repeats
+             exactly and never wanders off. That boundary is the point. A pod
+             that crossed the plaza would be making a claim about where an
+             identity is, and its position is a hash of its id and means
+             nothing; keeping it near its own mark keeps the one true thing
+             about it true, which is that you can find it again.
+
+             The rates, the radii and the phases are all per-agent, so no two
+             move together and nothing beats into step. `still` agents have
+             drift = 0 and are skipped entirely by the frame loop. */
+          drift: hash01(hashId(a.id), 59) < 0.34
+            ? 0.7 + hash01(hashId(a.id), 61) * 1.1 : 0,
+          dRateA: 0.055 + hash01(hashId(a.id), 67) * 0.05,
+          dRateB: 0.041 + hash01(hashId(a.id), 71) * 0.043,
+          dPhase: hash01(hashId(a.id), 73) * TAU,
+          /* Kept under 1.1 so the loop's longest reach is about 2.5 units.
+             Stations sit a few units apart; a wider loop and two pods start
+             passing through each other, which reads as a glitch rather than
+             as movement. */
+          dSkew: 0.5 + hash01(hashId(a.id), 79) * 0.55,
+          /* Which way it is pointing right now. A mover turns toward where
+             it is going; a still pod keeps the fixed angle above. */
+          face: hash01(hashId(a.id), 53) * TAU,
 
           /* ── ANIMATION 1: BLINKING ──────────────────────────────────────
              The only thing about a pod that moves on its own. Each one
@@ -742,7 +784,13 @@ export function makeRoom(THREE, { renderer, preset, level = "balanced", reduced 
   /** Write every matrix for one pod. Called once per agent per roster
    *  change, and never from the steady state. */
   function place(f, i) {
-    const { x, z, yaw } = f;
+    /* WHERE IT IS AND WHICH WAY IT IS POINTING, not where its station is.
+       A still pod's px/pz never leave its station and its face never leaves
+       its hash angle, so this is the same thing for two thirds of the room —
+       but a drifter has moved since it was last written, and every part of
+       it has to be written from the same pair of numbers or the eyes end up
+       somewhere the face is not. */
+    const x = f.px, z = f.pz, yaw = f.face;
     dummy.rotation.set(0, yaw, 0);
     dummy.scale.setScalar(S);
 
@@ -764,8 +812,11 @@ export function makeRoom(THREE, { renderer, preset, level = "balanced", reduced 
     faces.setMatrixAt(i, dummy.matrix);
 
     /* Eyes, on the panel. Written here too so a pod that never blinks still
-       has them; the blink pass rewrites only these two. */
-    writeEyes(f, i, 1);
+       has them — and at the lid position it is CURRENTLY at, not wide open.
+       A drifting pod is re-placed every frame, and forcing 1 here would
+       overwrite its blink on the same frame the blink pass wrote it: the
+       third of the room that moves would be the third that never blinks. */
+    writeEyes(f, i, f.eyeOpen ?? 1);
 
     if (tabs) {
       /* Flush against the widest ring, at the pod's own left and right. */
@@ -808,7 +859,8 @@ export function makeRoom(THREE, { renderer, preset, level = "balanced", reduced 
   /** The two eyes, at a given openness. The ONLY thing rewritten per frame
    *  for a blinking pod. */
   function writeEyes(f, i, open) {
-    const { x, z, yaw } = f;
+    f.eyeOpen = open;
+    const x = f.px, z = f.pz, yaw = f.face;
     const fwdX = Math.sin(yaw), fwdZ = Math.cos(yaw);
     const rX = fwdZ, rZ = -fwdX;
     const eyeZ = 0.520 * S;                       // just proud of the panel
@@ -836,10 +888,46 @@ export function makeRoom(THREE, { renderer, preset, level = "balanced", reduced 
 
       if (!f.placed) { place(f, i); placedAny = true; movedBars = true; f.barLast = -1; }
 
-      /* Distance, for one decision only: is this pod's blink worth drawing.
-         `lod` is kept on the figure because the suites read it. */
-      const dist2 = (f.x - camPos.x) ** 2 + (camPos.y - HOVER) ** 2 + (f.z - camPos.z) ** 2;
+      /* Distance, for two decisions: whether this pod's blink is worth
+         drawing, and whether its drift is. `lod` is kept on the figure
+         because the suites read it. */
+      const dist2 = (f.px - camPos.x) ** 2 + (camPos.y - HOVER) ** 2 + (f.pz - camPos.z) ** 2;
       f.lod = dist2 < NEAR2 ? 0 : dist2 < MID2 ? 1 : 2;
+
+      /* ── ANIMATION 3: DRIFT ───────────────────────────────────────────
+         About a third of the room moves; the rest are genuinely still and
+         cost nothing, which is what keeps two hundred affordable even now
+         that the scene is not frozen.
+
+         A closed loop around the pod's own station, from two sines at rates
+         that do not divide into each other — so the path is a slow figure
+         that never quite repeats and never leaves the neighbourhood. The
+         heading comes from the derivative, and the pod turns TOWARD it
+         rather than snapping, which is the difference between something
+         moving and something being moved.
+
+         Reduced motion, and distance past the mid band, park it. A pod at
+         160 units is a few pixels across and its drift is invisible; not
+         computing it is free and not writing it is the saving. */
+      if (f.drift && !reduced && f.lod < 2) {
+        const t = clock + f.dPhase;
+        const nx = f.x + Math.sin(t * f.dRateA * TAU) * f.drift;
+        const nz = f.z + Math.sin(t * f.dRateB * TAU) * f.drift * f.dSkew;
+        const dx = nx - f.px, dz = nz - f.pz;
+        f.px = nx; f.pz = nz;
+        /* Only turn while genuinely travelling. Near the ends of the loop
+           the pod is almost stationary and the heading is numerical noise —
+           steering by it makes a pod that jitters on the spot. */
+        if (dx * dx + dz * dz > 1e-7) {
+          const want = Math.atan2(dx, dz);
+          /* The short way round. Without this a pod crossing the ±π seam
+             takes the long route and spins on its axis. */
+          let d = (want - f.face + Math.PI * 3) % TAU - Math.PI;
+          f.face += d * Math.min(1, dt * 2.2);
+        }
+        place(f, i);
+        placedAny = true;
+      }
 
       /* ── ANIMATION 1: BLINKING ────────────────────────────────────────
          Every three to eight seconds, and about one in six is a double.
@@ -967,7 +1055,7 @@ export function makeRoom(THREE, { renderer, preset, level = "balanced", reduced 
     /* Just above the pod's top edge. The pod is a fixed height and a fixed
        size, so this is one number rather than the old per-figure sum — and
        it has to track HOVER, or a transmission card tethers to empty air. */
-    v.set(f.x, HOVER + 0.60 * S + 0.45 * S, f.z).project(camera);
+    v.set(f.px, HOVER + 0.60 * S + 0.45 * S, f.pz).project(camera);
     if (v.z > 1) return null;
     return { x: (v.x * 0.5 + 0.5) * w, y: (-v.y * 0.5 + 0.5) * h };
   }

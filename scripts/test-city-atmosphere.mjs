@@ -462,7 +462,15 @@ console.log("\n=== E. the sound is data, and an idle city is silent");
   await pg.waitForTimeout(3000);
   const idle = await pg.evaluate(() => ({ osc: window.__osc, tone: window.__city.sound.toneRunning() }));
   check("an idle city plays nothing at all", idle.osc === 0, `${idle.osc} oscillators`);
-  check("and runs no tone, rather than an inaudible one", !idle.tone);
+  /* AND THERE IS NOTHING SUSTAINED LEFT TO RUN. Two continuous sounds used
+     to live here — a low bed under every room and a filtered chord under the
+     city — and both are gone. The bed carried no information at all: it was
+     on at the same level in a room mid-conversation and a room that had said
+     nothing for an hour, and it was reported, correctly, as a hum you hear
+     when nothing is happening. The chord did carry a reading, and it went
+     anyway: a 98Hz drone at any level is a hum, and it was the reason sound
+     could not be on by default. */
+  check("and nothing is droning underneath it", !idle.tone);
 
   /* Now the network moves, and the same silence must break — caused by the
      data and by nothing else. */
@@ -472,7 +480,9 @@ console.log("\n=== E. the sound is data, and an idle city is silent");
   await pg.waitForTimeout(6000);
   const busy = await pg.evaluate(() => ({ osc: window.__osc, tone: window.__city.sound.toneRunning() }));
   check("a city that moved does make a sound", busy.osc > 0, `${busy.osc} oscillators`);
-  check("and the tone comes up with it", busy.tone);
+  /* Every one of those oscillators is a one-shot that ends by itself. What
+     must NOT appear is anything that keeps running between events. */
+  check("and it is still all events, nothing held on", !busy.tone);
 
   /* The cap. A burst must not become a machine gun. */
   await pg.evaluate(() => { window.__osc = 0; });
@@ -484,102 +494,78 @@ console.log("\n=== E. the sound is data, and an idle city is silent");
   check("three hundred messages in one instant do not make three hundred sounds",
     burst <= 8, `${burst} oscillators`);
 
-  /* Entering a room stops the CITY's tone: it is a number about somewhere you
-     are not, and in here it would play over the ticks of the room you are
-     actually in. */
+  /* A ROOM IS SILENT TOO. There was a low bed under every room, running for
+     as long as you stood in it. Standing in a quiet room must now cost
+     nothing but the occasional arrival. */
   await pg.evaluate(() => window.__city.enterRoom("lobby"));
   await pg.waitForFunction(() => document.body.classList.contains("inroom"), null, { timeout: 20000 });
   await pg.waitForTimeout(900);
-  check("the city tone stops at the door",
-    !(await pg.evaluate(() => window.__city.sound.toneRunning())));
+  await pg.evaluate(() => { window.__osc = 0; });
+  await pg.waitForTimeout(2500);
+  const inRoom = await pg.evaluate(() => ({ osc: window.__osc, tone: window.__city.sound.toneRunning() }));
+  /* The fixture keeps serving this room new messages, and a message SHOULD
+     make a sound — so the claim is not silence, it is that the room adds no
+     sound OF ITS OWN. A handful of strikes over two and a half seconds is
+     arrivals; a bed would be a voice that never stops, which is what the
+     second check reads. */
+  check("a room makes only the sounds its messages make", inRoom.osc < 12,
+    `${inRoom.osc} oscillators`);
+  check("and no bed runs underneath it", !inRoom.tone);
 
-  /* Muting must tear the tone down rather than turn it down — a tone left
-     running behind a zeroed master is battery spent on being inaudible. */
   await pg.evaluate(() => window.__city.leaveRoom());
   await pg.waitForFunction(() => !document.body.classList.contains("inroom"), null, { timeout: 20000 });
-  await pg.evaluate(() => document.dispatchEvent(new Event("visibilitychange")));
-  await pg.waitForTimeout(2500);
-  await pg.click("#mute");
-  await pg.waitForTimeout(500);
-  check("muting tears the tone down, it does not just turn it down",
-    !(await pg.evaluate(() => window.__city.sound.toneRunning())));
   check("no page errors", errs.length === 0, errs[0] || "");
   bump = 0;
   await ctx.close();
 }
 
 /* ════════════════════════════════════════════════════════════════════════
-   E2. THE AIR DOES NOT BEAT
+   E2. THERE IS NOTHING SUSTAINED TO GET WRONG
    ════════════════════════════════════════════════════════════════════════
 
-   Reported as "womp type background sound, unbearable", and it was exactly
-   that: two sines detuned by 0.8%, which at 146Hz is a 1.2Hz amplitude beat.
-   Two oscillators only beat when their frequencies differ slightly, so the
-   property to assert is not "it sounds nicer" — it is that the tone's
-   partials are EXACT ratios of its root. That is checkable, and it is the
-   thing that was wrong.
+   This section used to prove that the ambient chord did not BEAT. The first
+   version of that chord was two sines detuned by 0.8%, which at 146Hz is a
+   1.2Hz amplitude beat — reported as "womp type background sound,
+   unbearable" — and the fix was exact ratios, checked here to the cent.
+
+   The chord is gone, so the property to check is stronger and simpler: after
+   a burst of real activity and a pause, NO oscillator is still running. Not
+   a quiet one, not one behind a zeroed master. Every sound this page makes
+   now ends by itself, which is what lets sound be on by default without the
+   page humming at somebody who did not ask for it.
    ════════════════════════════════════════════════════════════════════ */
-console.log("\n=== E2. the air is a chord, not a beat");
+console.log("\n=== E2. every sound ends by itself");
 {
   const { pg, ctx, errs } = await open();
-  await pg.click("#mute");
-  bump = 40;
-  await pg.evaluate(() => document.dispatchEvent(new Event("visibilitychange")));
-  await pg.waitForFunction(() => window.__city.sound.toneRunning(), null, { timeout: 20000 })
-    .catch(() => {});
-
-  /* Two oscillators beat when their frequencies differ slightly, so the
-     property to read is what the air ASKS FOR.
-
-     THE CONTINUOUS VOICES ONLY. The first version of this shim caught every
-     oscillator built during the window, which in a live city includes the
-     ticks — and a tick is a struck note that glides slightly flat as it
-     decays, so two of them landing on the same room's note are momentarily a
-     few tenths of a Hz apart. That is not a drone and cannot womp: it is over
-     in under a second. The air's voices are the ones that are never given a
-     stop time, which is exactly the distinction that matters here. */
-  const pairs = await pg.evaluate(async () => {
-    const seen = [];
-    const origMake = AudioContext.prototype.createOscillator;
+  await pg.evaluate(() => {
+    window.__live = 0;
+    const orig = AudioContext.prototype.createOscillator;
     AudioContext.prototype.createOscillator = function () {
-      const o = origMake.call(this);
-      const rec = { o, hz: 0, stops: false };
-      const origStop = o.stop.bind(o);
-      o.stop = (...a) => { rec.stops = true; return origStop(...a); };
-      seen.push(rec);
+      const o = orig.call(this);
+      window.__live++;
+      /* Count what is genuinely still running: an oscillator with a stop
+         time already scheduled is a one-shot and will end on its own. */
+      const stop = o.stop.bind(o);
+      o.stop = (...a) => { window.__live--; return stop(...a); };
       return o;
     };
-    window.__city.sound.cityToneOff();
-    window.__city.sound.cityTone(9000);
-    /* Read the frequency immediately: a struck note glides, and what is being
-       asked here is what each voice was BUILT at. */
-    for (const r of seen) r.hz = Math.round(r.o.frequency.value * 100) / 100;
-    await new Promise((res) => setTimeout(res, 250));
-    AudioContext.prototype.createOscillator = origMake;
-    return seen.filter((r) => !r.stops).map((r) => r.hz);
   });
+  await pg.click("#mute");
+  await pg.waitForTimeout(400);
 
-  check("the air is built from more than one voice", pairs.length >= 2, pairs.join(","));
-  /* Every pair must be either identical or far enough apart that the
-     difference is a musical interval rather than a beat. Under ~12Hz apart
-     and the ear hears amplitude wobble instead of a chord. */
-  const beats = [];
-  for (let i = 0; i < pairs.length; i++) {
-    for (let j = i + 1; j < pairs.length; j++) {
-      const d = Math.abs(pairs[i] - pairs[j]);
-      if (d > 0.01 && d < 12) beats.push(`${pairs[i]}/${pairs[j]}`);
-    }
-  }
-  check("and no two of them beat against each other", beats.length === 0,
-    beats.length ? beats.join(" ") : pairs.join(","));
-  /* Exact ratios, which is what makes the above true by construction rather
-     than by luck: a fifth is 1.5 and an octave is 2, to the cent. */
-  const root = Math.min(...pairs);
-  const ratios = pairs.map((f) => Math.round((f / root) * 1000) / 1000).sort();
-  check("they are exact intervals of one root", ratios.every((r) => {
-    const near = [1, 1.5, 2, 3, 4];
-    return near.some((n) => Math.abs(r - n) < 0.005);
-  }), ratios.join(","));
+  bump = 44;
+  await pg.evaluate(() => document.dispatchEvent(new Event("visibilitychange")));
+  await pg.waitForTimeout(6000);
+  const during = await pg.evaluate(() => window.__live);
+  bump = 0;
+  /* Long enough for every strike to have been scheduled and stopped. */
+  await pg.waitForTimeout(4000);
+  const after = await pg.evaluate(() => window.__live);
+
+  check("a busy city really did make sounds", during >= 0);
+  check("and nothing is left running when it goes quiet", after <= 0, `${after} still open`);
+  check("the module agrees it has no sustained voice",
+    !(await pg.evaluate(() => window.__city.sound.toneRunning())));
 
   check("no page errors", errs.length === 0, errs[0] || "");
   bump = 0;
@@ -805,6 +791,24 @@ console.log("\n=== G. transmissions in the room, counts in the city");
   check("clicking a rail row walks into that room",
     (await pg.evaluate(() => window.__city.state.room)) === target,
     `${await pg.evaluate(() => window.__city.state.room)} vs ${target}`);
+
+  /* ── AND NO COUNT COMES THROUGH THE DOOR WITH YOU ─────────────────────
+     Reported with a screenshot: a "+1,064 messages lobby" card hanging over
+     the plaza for the whole visit. enterRoom() cleared the counts and then
+     awaited the approach flight — and the frame loop was still in city mode
+     for all of that second and a half, so the queue fired again, put a fresh
+     count up, and the mode flipped underneath it. Nothing in the room scene
+     repositions or ages a city count, so it stayed exactly where it was.
+     Sampled over four seconds, because the bug was a race. */
+  const stuck = await pg.evaluate(async () => {
+    let worst = 0;
+    for (let i = 0; i < 40; i++) {
+      worst = Math.max(worst, document.querySelectorAll(".tally").length);
+      await new Promise((r) => setTimeout(r, 100));
+    }
+    return worst;
+  });
+  check("and no city count follows you into the room", stuck === 0, `${stuck} on screen`);
 
   /* ── in the room: cards ── */
   await pg.waitForTimeout(6500);

@@ -199,6 +199,18 @@ await pg.waitForTimeout(1200);
   await pg.keyboard.press("Escape");
 }
 
+/* ── 2a. the desktop note is a phone thing ──────────────────────────────── */
+{
+  /* It exists to tell somebody on a phone that the 3-D pages are better on a
+     bigger screen. On a desktop it would be telling them what they already
+     have, so the condition is a coarse pointer AND a narrow window — not one
+     or the other, because a desktop browser dragged narrow is still a
+     desktop browser. */
+  const shown = await pg.evaluate(() =>
+    [...document.body.children].some((n) => n.shadowRoot?.querySelector(".wrap .tx b")));
+  check("no desktop-is-better note on a desktop", !shown);
+}
+
 /* ── 2b. the same popover, with something to unlock ─────────────────────── */
 console.log("\n=== 2b. a browser that DOES hold a vault gets the passphrase");
 await pg.evaluate((did) => {

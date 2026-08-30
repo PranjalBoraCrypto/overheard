@@ -55,7 +55,6 @@
  */
 
 let ctx = null, master = null, wet = null, verb = null, comp = null;
-let bed = null, bedGain = null;
 let on = false;
 let lastTick = 0, ticksThisSecond = 0, secondStart = 0;
 
@@ -114,11 +113,9 @@ export function setEnabled(v) {
   on = !!v;
   if (!on) {
     if (master) master.gain.setTargetAtTime(0, ctx.currentTime, 0.08);
-    /* Torn down, not just turned down. Air left running behind a zeroed
-       master is oscillators burning battery to be inaudible, and it is also
-       the bug where unmuting later brings back a reading taken minutes ago
-       as if it were current. */
-    airOff();
+    /* Nothing to tear down any more: every sound this module makes is a
+       one-shot that ends on its own. There is no oscillator alive between
+       events to leave running behind a zeroed master. */
     return;
   }
   if (!ensure()) return;
@@ -261,109 +258,50 @@ export function pick() {
     send: 0.45, when: 0.055 });
 }
 
-/** The room bed. A single low sine, barely there, so leaving a room is
- *  audible as a change of space rather than as silence being switched off. */
-export function bedOn(v) {
-  if (!on || !ensure()) return;
-  if (v && !bed) {
-    /* 58Hz was below what a laptop speaker can physically reproduce, so the
-       "change of space" on entering a room was silent on exactly the
-       hardware most people are using. 116Hz is the same note an octave up:
-       still a low bed, and one that actually comes out of the box. */
-    bed = ctx.createOscillator(); bed.type = "sine"; bed.frequency.value = 116;
-    bedGain = ctx.createGain(); bedGain.gain.value = 0.0001;
-    bed.connect(bedGain); bedGain.connect(master); bed.start();
-    bedGain.gain.setTargetAtTime(0.05, ctx.currentTime, 1.2);
-  } else if (!v && bed) {
-    const b = bed, g = bedGain; bed = null; bedGain = null;
-    g.gain.setTargetAtTime(0.0001, ctx.currentTime, 0.4);
-    setTimeout(() => { try { b.stop(); } catch {} }, 1500);
-  }
-}
+/* ── THE BED, AND WHY IT IS GONE ───────────────────────────────────────────
+   Entering a room used to start a 116Hz sine and leave it running for as
+   long as you stayed. It was meant as a change of space, and as a piece of
+   sound design it worked — but it carried no information at all. It was on
+   in a room having a conversation and on in a room that had said nothing for
+   an hour, at exactly the same level.
+
+   Reported as a hum you hear when nothing is happening, which is precisely
+   what it was, and it is the one thing on this page that could not answer
+   the question every other sound here answers: what changed?
+
+   Nothing replaces it. A quiet room is now silent, and that is the reading. */
+export function bedOn() { /* deliberately nothing — see the note above */ }
 
 /* ══════════════════════════════════════════════════════════════════════════
-   THE AIR — a dial you can hear, not a drone
+   THE AIR, AND WHY THERE IS NONE
    ══════════════════════════════════════════════════════════════════════════
 
-   One soft chord under the overview whose BRIGHTNESS follows the city's total
-   measured rate. It is the closest thing here to ambience and it is still a
-   reading: an idle city is silent, and a busy one is audibly more open than a
-   slow one. If Technocore stops, this stops, which is a property no loop
-   could have.
+   A soft chord under the overview whose brightness followed the city's total
+   measured rate. Unlike the bed it WAS a reading — an idle city was silent
+   and a busy one audibly more open — and it went through two versions to get
+   there: the first was two sines detuned by 0.8%, which beat against each
+   other at 1.2Hz and produced the womp that was reported as unbearable, and
+   the second used exact ratios and moved a filter instead.
 
-   WHAT WENT WRONG THE FIRST TIME, because it is a good lesson. It was two
-   sines detuned by 0.8% and it moved by getting LOUDER and HIGHER. Detuning
-   two sines makes them beat at the difference frequency: at 146Hz, 0.8% is a
-   1.2Hz amplitude modulation — a womp, once a second, indefinitely. Reported,
-   correctly, as unbearable.
+   The second one was fine, and it is still gone, because "fine" is not the
+   bar for a sound that plays continuously. A 98Hz drone at any level is a
+   hum, and a hum under a page nobody asked to make noise is the reason
+   sound was off by default. Removing it is what let sound be on by default,
+   which is worth more than the reading it carried — the same reading is on
+   screen as a number, a rail and a set of counts.
 
-   So: exact ratios, which do not beat at all. Root, fifth, octave — one still
-   chord. And the movement is a lowpass filter opening and closing instead of
-   the amplitude changing, which the ear reads as a room getting busier rather
-   than as something being turned up. The gain barely moves and never gets
-   near the level of a tick, because the events are the information and this
-   is the floor they stand on. */
-let air = null;
-
-/**
- * @param perMin the city's total measured rate. Real values run from zero to
- *        tens of thousands, which is why the curve below is logarithmic and
- *        anchored at 20,000 rather than at the 400 the first version assumed
- *        — that mistake pinned the filter wide open on every real reading and
- *        made the tone a constant, maximally bright drone.
- */
-export function cityTone(perMin) {
-  if (!on || !ensure()) { if (!on) airOff(); return; }
-  const r = Math.max(0, Number(perMin) || 0);
-  const load = Math.min(1, Math.log10(1 + r) / Math.log10(20001));
-
-  if (load < 0.02) return airOff();
-  if (!air) {
-    const g = ctx.createGain(); g.gain.value = 0.0001;
-    const f = ctx.createBiquadFilter();
-    f.type = "lowpass"; f.frequency.value = 200; f.Q.value = 0.7;
-    g.connect(f); f.connect(master);
-    /* A little of it in the room, so it sits behind the strikes rather than
-       in front of them. */
-    const s = ctx.createGain(); s.gain.value = 0.5;
-    f.connect(s); s.connect(wet);
-
-    /* Root, fifth, octave — exact ratios. No beating by construction. */
-    const os = [1, 1.5, 2].map((mul, i) => {
-      const o = ctx.createOscillator();
-      o.type = i === 2 ? "triangle" : "sine";
-      o.frequency.value = 98 * mul;
-      const og = ctx.createGain();
-      og.gain.value = i === 0 ? 1 : i === 1 ? 0.42 : 0.16;
-      o.connect(og); og.connect(g); o.start();
-      return o;
-    });
-    air = { g, f, os, s };
-  }
-  const t = ctx.currentTime;
-  /* Slow, on purpose. Twelve seconds to cross the range means the air answers
-     the network's shape over minutes and never twitches at one poll. */
-  air.f.frequency.setTargetAtTime(200 + load * 1500, t, 12);
-  air.g.gain.setTargetAtTime(0.016 + load * 0.014, t, 12);
-}
-
-function airOff() {
-  if (!air) return;
-  const a = air; air = null;
-  try { a.g.gain.setTargetAtTime(0.0001, ctx.currentTime, 0.7); } catch {}
-  setTimeout(() => {
-    try { a.os.forEach((o) => o.stop()); a.g.disconnect(); a.f.disconnect(); a.s.disconnect(); } catch {}
-  }, 3000);
-}
-export const toneRunning = () => !!air;
-/** Stop the air without arguing about the rate — used on entering a room,
- *  where the city is no longer what you are listening to. */
-export function cityToneOff() { airOff(); }
+   WHAT IS LEFT is entirely discrete and entirely caused: a strike per
+   arrival, pitched by the room; a surge when a room goes far past its own
+   normal; a note for arriving and for picking something. If Technocore says
+   nothing, this page makes no sound whatsoever, and that is now literally
+   true rather than nearly true.
+   ══════════════════════════════════════════════════════════════════════════ */
+export function cityTone() { /* deliberately nothing — see the note above */ }
+export function cityToneOff() { /* nothing to stop */ }
+export const toneRunning = () => false;
 
 export function dispose() {
-  airOff();
-  bedOn(false);
   try { ctx?.close(); } catch {}
   ctx = null; master = null; wet = null; verb = null; comp = null;
-  on = false; air = null; bed = null; bedGain = null;
+  on = false;
 }

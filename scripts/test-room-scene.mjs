@@ -224,31 +224,44 @@ console.log("\n=== E. two hundred pods, and not one of them a draw call");
   check("and every agent is an instance in them",
     shape.counts.filter((c) => c === shape.agents).length >= 5, shape.counts.join(","));
 
-  /* ── NOTHING MOVES ──────────────────────────────────────────────────────
-     The whole budget argument is that a pod's matrix is written once and
-     then left alone. That is only true if the pod genuinely has no moving
-     parts, so this reads its transform twice, a second apart, and demands
-     that it has not shifted by so much as a float. */
-  const still = await pg.evaluate(async () => {
+  /* ── SOME MOVE, MOST DO NOT ─────────────────────────────────────────────
+     About a third of the room drifts on a slow closed loop around its own
+     station; the rest are genuinely still, and THAT is what keeps two
+     hundred affordable — a still pod's matrices are written once and never
+     touched again.
+
+     So the claim is a split, and both halves matter. If nothing moved the
+     room would be a photograph; if everything moved, every frame would write
+     fourteen hundred matrices and the budget argument would be gone. */
+  const motion = await pg.evaluate(async () => {
     const r = window.__city.room3d;
-    const read = () => {
-      const m = [];
-      r.scene.traverse((o) => { if (o.isInstancedMesh && o.count > 50) m.push(o); });
-      /* The shell batch: sample twenty instances' translations. */
-      const shell = m[0];
-      const out = [];
-      for (let i = 0; i < 20; i++) {
-        const a = shell.instanceMatrix.array;
-        out.push(a[i * 16 + 12], a[i * 16 + 13], a[i * 16 + 14]);
-      }
-      return out;
-    };
+    const n = Math.min(60, r.figures.length);
+    const read = () => r.figures.slice(0, n).map((f) => `${f.px.toFixed(4)},${f.pz.toFixed(4)}`);
     const before = read();
-    await new Promise((r2) => setTimeout(r2, 1000));
+    await new Promise((z) => setTimeout(z, 900));
     const after = read();
-    return before.every((v, i) => v === after[i]);
+    let moved = 0;
+    for (let i = 0; i < n; i++) if (before[i] !== after[i]) moved++;
+    return { n, moved, declared: r.figures.filter((f) => f.drift > 0).length };
   });
-  check("a pod does not move, at all, ever", still);
+  check("some of the room is moving", motion.moved > 0, `${motion.moved} of ${motion.n}`);
+  check("and most of it is not", motion.moved < motion.n * 0.6, `${motion.moved} of ${motion.n}`);
+  /* A DRIFTER STAYS ITS OWN. The position is a hash of the identity and the
+     one true thing about it is that you can find it again — so a pod is
+     allowed to move around its station and not away from it. */
+  const bounded = await pg.evaluate(async () => {
+    const r = window.__city.room3d;
+    let worst = 0;
+    for (let k = 0; k < 40; k++) {
+      for (const f of r.figures) {
+        const d = Math.hypot(f.px - f.x, f.pz - f.z);
+        if (d > worst) worst = d;
+      }
+      await new Promise((z) => requestAnimationFrame(z));
+    }
+    return worst;
+  });
+  check("and no pod wanders away from its own station", bounded < 2.8, `${bounded.toFixed(2)} units`);
   /* A poll landing marks the whole roster for a re-place, so this waits for
      the next frame rather than racing it. */
   check("and every one of them has been placed",

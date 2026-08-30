@@ -90,7 +90,21 @@ export function guessLevel() {
 }
 
 export function saveLevel(level) { if (LEVELS.includes(level)) write(KEY, level); }
-export const muted = () => read(MUTE) !== "0";       // muted unless explicitly unmuted
+/* ── SOUND IS ON UNLESS SOMEBODY TURNED IT OFF ─────────────────────────────
+   It was the other way round, and the reason it was is still a good one: a
+   page that makes noise at a visitor who did not ask for it is rude, and
+   there is no undoing a first impression.
+
+   Two things changed and together they settle it. The soundtrack is now
+   entirely EVENTS — the constant hum under the city and the low bed under a
+   room are both gone — so an idle page is genuinely silent and a visitor
+   hears nothing until the network does something. And the browser will not
+   let a page make a sound before the first click or key anyway, so "on"
+   means "armed", not "playing at you".
+
+   The stored value is still the user's, and it still wins: "0" is the
+   explicit off that a person set, and nothing here overrides it. */
+export const muted = () => read(MUTE) === "0";       // on unless explicitly muted
 export const setMuted = (v) => write(MUTE, v ? "1" : "0");
 
 /**

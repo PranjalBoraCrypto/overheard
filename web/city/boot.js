@@ -192,7 +192,6 @@ export async function boot() {
     /* The tone follows the reading, not the clock. Standing in a room it is
        off and stays off; an idle city turns it off by itself, which is the
        point of it being a dial rather than a drone. */
-    if (!st.room) S.cityTone(cityRate());
     $("boot").hidden = true;
     /* Once, on a first visit: the legend, because two hundred glowing towers
        mean nothing until somebody says what height and light are. After that
@@ -421,10 +420,31 @@ export async function boot() {
   let overMsgs = 0, overRooms = 0;
 
   function releaseSignals(now) {
+    /* NOT WHILE A ROOM IS BEING WALKED INTO. enterRoom() clears the counts
+       and then awaits the approach flight, and the frame loop is still in
+       city mode for the whole of that second and a half — so the queue kept
+       firing, put a fresh count on screen, and the mode flipped underneath
+       it. Nothing repositions or ages a count once the city stops drawing,
+       so it hung over the plaza until the visitor left. Reported as a total
+       that never goes away. */
+    if (st.room || mode !== "city") return;
     if (queueAt >= queued.length || now < queueNext || !world.life) return;
+    /* ── HOW MANY LAND TOGETHER ────────────────────────────────────────
+       An even split — ceil(left / beatsLeft) — gives three, three, three,
+       three, which is a metronome. Real activity does not arrive in equal
+       handfuls, and a page that pretends it does reads as a loop.
+
+       So the split is the FLOOR, and the remainder is spent as chance: with
+       eleven left over four beats the average is 2.75, so each beat takes
+       two with a one-in-four chance of a third. Over a window it delivers
+       exactly the same events in exactly the same order, and it never gives
+       the eye the same number twice running for long. Bounded at both ends —
+       never zero, never more than three — so it stays a set you can read. */
     const left = queued.length - queueAt;
     const beatsLeft = Math.max(1, Math.ceil(left / TALLY_BATCH));
-    const take = Math.min(TALLY_BATCH, Math.ceil(left / beatsLeft));
+    const share = left / beatsLeft;
+    const take = Math.max(1, Math.min(TALLY_BATCH, left,
+      Math.floor(share) + (Math.random() < share - Math.floor(share) ? 1 : 0)));
     queueNext = now + TALLY_BEAT;
     /* The previous beat steps aside as this one arrives. dropTally animates
        out over 320ms, so the two overlap rather than one blinking off. */
@@ -684,20 +704,9 @@ export async function boot() {
     }
   }
 
-  /** The city's total measured rate, messages per minute. Null readings are
-   *  dropped rather than counted as zero: a room nobody has measured twice
-   *  yet is unknown, and averaging unknowns in as zeroes would make a busy
-   *  city sound quiet for its first twenty seconds. */
-  function cityRate() {
-    if (!city) return 0;
-    let sum = 0;
-    for (const r of city.roster) {
-      if (!r.live) continue;
-      const v = D.rateOf(r.room);
-      if (v != null) sum += v;
-    }
-    return sum;
-  }
+  /* cityRate() lived here. Its only caller was the ambient chord, whose
+     brightness it set; the chord is gone and the same figure is on screen in
+     the chips row, computed there from the same readings. */
 
   function paintChips() {
     if (!city) return;
@@ -914,7 +923,6 @@ export async function boot() {
        would be a number about somewhere you are not, playing over the ticks
        of the place you are actually in. So it stops at the door and the
        room's own bed takes over. */
-    S.cityToneOff(); S.bedOn(true);
     $("strip").hidden = st.clean;
     paintChips();
     ui.roomLive(D.state.room || { name, messages: [], agents: [], gaps: [] }, []);
@@ -941,7 +949,6 @@ export async function boot() {
     world.leaveRoom();
     D.leaveRoom();
     ui.closeFeed();
-    S.bedOn(false);
     /* The tone comes back on the next reading rather than instantly, because
        the rate it would play right now is the one measured before you went
        in. It is a few seconds of silence that means something. */
@@ -1250,8 +1257,7 @@ export async function boot() {
        switching on a broken feature — and this soundtrack is deliberately
        sparse, so the next sound might be a minute away. One short
        confirmation is the difference between "it works" and "it does not". */
-    if (nowOn) { S.pick(); if (!st.room) S.cityTone(cityRate()); }
-    if (nowOn && st.room) S.bedOn(true);
+    if (nowOn) S.pick();
   };
   $("legend").onclick = () => { st.agentId = null; st.msgKey = null; ui.legend(city); };
   $("reopen").onclick = () => { if (st.room) showRoomPanel(); };
@@ -1492,6 +1498,11 @@ export async function boot() {
     last = now;
     watcher.tick(now);
     if (mode === "room" && room3d) {
+      /* Belt as well as braces. Nothing in here draws or ages a city count,
+         so one that survived the door would stay on screen for the whole
+         visit. Clearing here catches every route in, including the flat
+         road's and a quality rebuild's. */
+      if (tallies.length) clearTallies();
       roomCam.step(dt);
       room3d.update(dt);
       room3d.render();
@@ -1582,7 +1593,6 @@ export async function boot() {
       removeEventListener("keydown", wake);
       S.setEnabled(true);
       paintMute();
-      if (st.room) S.bedOn(true); else S.cityTone(cityRate());
     };
     addEventListener("pointerdown", wake, { once: true });
     addEventListener("keydown", wake, { once: true });

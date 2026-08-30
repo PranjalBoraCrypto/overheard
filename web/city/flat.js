@@ -442,7 +442,7 @@ export function mountFlat(container, els) {
     const p = positionOf(name) || { x: 0, z: 0 };
     focus(p.x, p.z, fit * 3.9, reduced ? 0 : 1000);
     D.enterRoom(name);
-    S.arrive(); S.cityToneOff(); S.bedOn(true);
+    S.arrive();
     ui.closeRail();
     /* THE FLAT ROAD NEVER SET THIS, and it should have from the day the room
        header existed. `body.inroom` is what shows the way out, the room's
@@ -469,7 +469,6 @@ export function mountFlat(container, els) {
     agents = []; agentById.clear();
     D.leaveRoom();
     ui.closeFeed(); ui.closePanel();
-    S.bedOn(false);
     document.body.classList.remove("inroom");
     home(reduced ? 0 : 900);
     $("strip").hidden = true;
@@ -999,7 +998,6 @@ export function mountFlat(container, els) {
     const on = !S.enabled();
     S.setEnabled(on); Q.setMuted(!on); paintMute();
     if (on) S.pick();
-    if (on && st.room) S.bedOn(true);
   };
   $("legend").onclick = () => { st.agentId = null; st.msgKey = null; ui.legend(city); };
 
@@ -1200,7 +1198,6 @@ export function mountFlat(container, els) {
       removeEventListener("keydown", wake);
       S.setEnabled(true);
       paintMute();
-      if (st.room) S.bedOn(true);
     };
     addEventListener("pointerdown", wake, { once: true });
     addEventListener("keydown", wake, { once: true });

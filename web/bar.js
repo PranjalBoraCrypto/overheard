@@ -852,4 +852,122 @@ function paintMe(me, root) {
   chip.addEventListener("click", () => (menu ? close() : open()));
 }
 
+/* ══════════════════════════════════════════════════════════════════════════
+   ONE NOTE, ON A PHONE, ONCE
+
+   Every page here works on a phone and none of them apologise for it. But
+   the city is a WebGL plaza you drag and zoom, the room is a scene you look
+   around, and the Play toy is something you throw coins in — all of them are
+   better with a pointer and a big window, and somebody arriving on a phone
+   deserves to know that before they decide the site is small rather than
+   that their screen is.
+
+   THE RULES, and each of them is the difference between a note and a nag:
+
+     · ONCE PER BROWSER, EVER. Dismissed is dismissed — not per page, not per
+       session, not per day. It records that and never asks again.
+     · ONCE PER VISIT even before that. It shows on the FIRST page loaded and
+       is then suppressed for the rest of the session, so somebody who
+       ignores it rather than closing it does not meet it again on the next
+       page they open.
+     · PHONES ONLY. A coarse pointer AND a narrow window. A tablet in
+       landscape, or a laptop with a touchscreen, gets nothing.
+     · NEVER IN FRONT OF ANYTHING. It sits at the bottom, above the thumb
+       line, and it is dismissible by tapping it, by the ×, or by Escape.
+
+   It lives in the bar because the bar is the one component on every page,
+   and because a shadow root means no page's CSS can push it anywhere.
+   ══════════════════════════════════════════════════════════════════════════ */
+const SEEN_KEY = "overheard.deskhint";
+const SESSION_KEY_HINT = "overheard.deskhint.session";
+
+const HINT_CSS = `
+:host{all:initial}
+.wrap{
+  position:fixed;left:14px;right:14px;bottom:14px;z-index:9999;
+  display:flex;align-items:flex-start;gap:11px;
+  padding:13px 13px 13px 14px;border-radius:15px;
+  font-family:"Outfit",system-ui,-apple-system,"Segoe UI",sans-serif;
+  color:#CDEAF3;
+  background:linear-gradient(rgba(5,26,35,.97),rgba(3,16,22,.97));
+  border:1px solid rgba(0,180,215,.34);
+  box-shadow:0 22px 50px -22px rgba(0,0,0,.95);
+  animation:up .42s cubic-bezier(.2,.9,.3,1.1) both;
+}
+@keyframes up{from{opacity:0;transform:translateY(18px)}}
+.ic{width:30px;height:30px;flex:none;border-radius:10px;display:grid;place-items:center;
+  background:rgba(0,180,215,.13);color:#5FEBFF}
+.ic svg{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:1.9;
+  stroke-linecap:round;stroke-linejoin:round}
+.tx{flex:1 1 auto;min-width:0;font-size:12.5px;line-height:1.45}
+.tx b{display:block;font-size:13.5px;font-weight:700;color:#EDFAFE;margin-bottom:2px;
+  letter-spacing:-.01em}
+.x{flex:none;width:30px;height:30px;border-radius:9px;background:none;cursor:pointer;
+  border:1px solid rgba(0,180,215,.24);color:#9CBFCB;display:grid;place-items:center;padding:0}
+.x svg{width:13px;height:13px;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round}
+.x:active{background:rgba(0,180,215,.14)}
+@media (prefers-reduced-motion:reduce){.wrap{animation:none}}
+`;
+
+function deskHint() {
+  /* A phone, not merely a small window. Both conditions, because a desktop
+     browser dragged narrow is still a desktop browser. */
+  const coarse = matchMedia("(pointer: coarse)").matches;
+  const narrow = Math.min(innerWidth, innerHeight) < 620;
+  if (!coarse || !narrow) return;
+
+  try { if (localStorage.getItem(SEEN_KEY)) return; } catch { return; }
+  try { if (sessionStorage.getItem(SESSION_KEY_HINT)) return; } catch {}
+  try { sessionStorage.setItem(SESSION_KEY_HINT, "1"); } catch {}
+
+  const host = document.createElement("div");
+  const root = host.attachShadow({ mode: "open" });
+  const st = document.createElement("style");
+  st.textContent = HINT_CSS;
+
+  const wrap = document.createElement("div");
+  wrap.className = "wrap";
+  wrap.setAttribute("role", "status");
+
+  const ic = document.createElement("span");
+  ic.className = "ic";
+  ic.innerHTML = '<svg viewBox="0 0 24 24"><rect x="2.6" y="4" width="18.8" height="12.5" rx="2"/><path d="M8.5 20.2h7"/><path d="M12 16.5v3.7"/></svg>';
+
+  const tx = document.createElement("div");
+  tx.className = "tx";
+  tx.append(Object.assign(document.createElement("b"), { textContent: "Better on a computer" }));
+  /* Says WHY, and truthfully. "Best experience" on its own is a slogan; this
+     names the three things a small screen actually costs you. */
+  tx.append(document.createTextNode(
+    "The city and the rooms are 3-D scenes you drag around, and Play is a toy you throw things in. It all works here — there is just more of it on a bigger screen."));
+
+  const x = document.createElement("button");
+  x.className = "x";
+  x.type = "button";
+  x.setAttribute("aria-label", "Dismiss");
+  x.innerHTML = '<svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>';
+
+  const close = () => {
+    try { localStorage.setItem(SEEN_KEY, "1"); } catch {}
+    removeEventListener("keydown", esc, true);
+    host.remove();
+  };
+  const esc = (e) => { if (e.key === "Escape") close(); };
+  x.addEventListener("click", close);
+  /* Tapping anywhere on it dismisses too — a 30px × on a phone is a target
+     somebody has to aim at, and there is nothing else in here to press. */
+  wrap.addEventListener("click", close);
+  addEventListener("keydown", esc, true);
+
+  wrap.append(ic, tx, x);
+  root.append(st, wrap);
+  document.body.appendChild(host);
+}
+
+if (document.readyState === "loading") {
+  addEventListener("DOMContentLoaded", deskHint, { once: true });
+} else {
+  deskHint();
+}
+
 customElements.define("overheard-bar", OverheardBar);

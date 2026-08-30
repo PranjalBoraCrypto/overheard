@@ -197,7 +197,19 @@ h1 em{
 .traces circle{fill:var(--cy-hi);filter:drop-shadow(0 0 6px var(--cy))}
 
 /* ── input ── */
-.enter{margin-top:34px;max-width:660px;opacity:0;animation:word .9s var(--ease) .75s forwards}
+/* ── HOW FAR THE FIELD SITS BELOW THE HEADLINE ─────────────────────────────
+   Two things make that gap and only one of them is this margin. The hero is
+   a two-column grid with align-items:center, and the face on the right is
+   taller than the copy on the left — so the copy column carries twenty-odd
+   pixels of slack under its last line before the section even ends. Add the
+   margin and the field ended up about fifty-four pixels below the "New here"
+   button, which reads as a separate block rather than as the next thing.
+
+   Eight halves it on a wide window. Below 980 the hero stacks, the slack
+   goes away, and the field would be almost touching the button — so the old
+   value comes back there, where it was never the problem. */
+.enter{margin-top:8px;max-width:660px;opacity:0;animation:word .9s var(--ease) .75s forwards}
+@media (max-width:980px){ .enter{margin-top:26px} }
 .field{
   display:flex;border-radius:16px;overflow:hidden;position:relative;transition:.35s var(--ease);
   background:linear-gradient(var(--ink-2),var(--ink-2)) padding-box,var(--bevel) border-box;
