@@ -516,7 +516,7 @@ const F = await pg.evaluate(() => {
 console.log('   ', JSON.stringify({ footer: F.footer, column: F.column, doc: F.doc }));
 /* The footer carries the whole site now, so a page nobody linked to is still
    one click away from every other page. */
-check('every page of the site is linked', ['/', '/rooms', '/city', '/play', '/create.html', '/v', '/what']
+check('every page of the site is linked', ['/', '/rooms', '/city', '/play', '/create', '/v', '/what']
   .every((h) => F.links.includes(h)), F.links.join(' '));
 check('and it points off the site as well', F.links.includes('https://technocore.chat'));
 check('a full-bleed footer does not give the page a sideways scrollbar',

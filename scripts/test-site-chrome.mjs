@@ -39,6 +39,7 @@ const srv = http.createServer((req, res) => {
   if (p === "/play") p = "/play.html";
   if (p === "/v") p = "/v.html";
   if (p === "/rooms") p = "/rooms.html";
+  if (p === "/create") p = "/create.html";
   const J = (o) => { res.writeHead(200, { "content-type": "application/json" }); res.end(JSON.stringify(o)); };
 
   if (p === "/api/note") return J({ did: DID, registered: REGISTERED, known: true, fingerprint: "ab".repeat(8), note: "a note" });
@@ -62,6 +63,22 @@ const srv = http.createServer((req, res) => {
   res.writeHead(404); res.end("{}");
 }).listen(8971);
 
+/* ── THE TRAP THIS FILE WARNS ABOUT, CHECKED RATHER THAN TRUSTED ──────────
+   bar.js keeps its whole stylesheet in a template literal, and its own header
+   says "no backticks anywhere in here: one stray backtick ends the string and
+   takes the file with it". A comment inside that block was written with a
+   backticked identifier in it, the module stopped parsing, and every page on
+   the site lost its navigation — caught by a probe rather than by a suite,
+   which is the wrong way round. The CSS block cannot contain one. */
+{
+  const src = fs.readFileSync(path.join(ROOT, "bar.js"), "utf8");
+  const open = src.indexOf("const CSS = `");
+  const close = src.indexOf("\n`;", open);
+  const block = src.slice(open + 13, close);
+  if (block.includes("`")) { console.log("  FAIL  bar.js CSS block contains a backtick"); }
+  else console.log("  ok    bar.js CSS block has no backtick in it to end the string early");
+}
+
 let bad = 0;
 const check = (n, ok, d = "") => {
   console.log(`  ${ok ? "ok  " : "FAIL"}  ${n}${d ? "   " + d : ""}`);
@@ -84,7 +101,7 @@ pg.on("pageerror", (e) => errs.push(e.message));
 
 /* ── 1. the footer, on every page ───────────────────────────────────────── */
 console.log("=== 1. the footer is the same floor under every page");
-const PAGES = ["/", "/rooms", "/create.html", "/v", "/play", "/city", "/what"];
+const PAGES = ["/", "/rooms", "/create", "/v", "/play", "/city", "/what"];
 const shape = {};
 for (const route of PAGES) {
   await pg.goto("http://localhost:8971" + route);
@@ -112,7 +129,7 @@ check("the band is the full width of the window on every page", widths.size === 
   [...widths].join(","));
 const links = shape["/"].links;
 check("every page of the site is linked from it",
-  ["/", "/rooms", "/city", "/play", "/create.html", "/v", "/what"].every((h) => links.includes(h)),
+  ["/", "/rooms", "/city", "/play", "/create", "/v", "/what"].every((h) => links.includes(h)),
   links.join(" "));
 check("and the builder's X profile", shape["/"].x);
 check("with the whole DID, not an ellipsis", shape["/"].did === DID);
@@ -166,7 +183,7 @@ await pg.waitForTimeout(1200);
   check("and does not ask to unlock something that is not here", !pop.unlock);
   check("the passphrase it wants is one being set", /encrypt/i.test(pop.seal), pop.seal);
   check("a backup file is the other way in", pop.file);
-  check("and there is a route for somebody with neither", pop.make === "/create.html");
+  check("and there is a route for somebody with neither", pop.make === "/create");
   check("it promises nothing leaves the device", /never sent anywhere/i.test(pop.text));
   /* The mechanics behind an `i`, not spilled down the popover. */
   check("the detail is there to open, and closed until it is", pop.info && pop.noteHidden);
@@ -326,12 +343,29 @@ console.log("\n=== 6b. signed in as this identity, proving asks for nothing");
   REGISTERED = true; MESSAGES = 12;
   /* Section 5 emptied this browser to look at the card as a stranger, so the
      session has to be put back before "signed in" means anything here. */
-  await pg.evaluate((did) => {
+  /* A REAL KEY, because the answer now depends on whether one imports.
+     The session record no longer carries key material — it is a DID and a
+     date, and the key lives in IndexedDB as a non-extractable CryptoKey — so
+     a made-up `{d:"bbb"}` is exactly what a browser that CANNOT sign looks
+     like, and the page correctly says so. Writing the old-format record with
+     a genuine key also exercises the migration path on the way through. */
+  await pg.evaluate(async (did) => {
+    const kp = await crypto.subtle.generateKey({ name: "Ed25519" }, true, ["sign", "verify"]);
+    const jwk = await crypto.subtle.exportKey("jwk", kp.privateKey);
     localStorage.setItem("overheard.session", JSON.stringify({
-      did, jwk: { kty: "OKP", crv: "Ed25519", x: "aaa", d: "bbb" }, at: new Date().toISOString() }));
+      did, jwk, at: new Date().toISOString() }));
   }, DID);
   await pg.goto("http://localhost:8971/?did=" + encodeURIComponent(DID));
   await pg.waitForTimeout(3500);
+  /* THE MIGRATION MUST HAVE HAPPENED, and it must have taken the old copy
+     with it. This is the whole point of the change: after one page load
+     there is no key material in localStorage for anything to read. */
+  const migrated = await pg.evaluate(() => {
+    const rec = JSON.parse(localStorage.getItem("overheard.session") || "null");
+    return { hasJwk: !!rec?.jwk, did: rec?.did || "" };
+  });
+  check("the unlocked key is not in localStorage any more", !migrated.hasJwk);
+  check("and the session still knows who it is", migrated.did === DID);
   const line = await pg.evaluate(() => document.getElementById("pbSub").textContent);
   check("the bar says out loud that it will not ask",
     /signed in as this identity/i.test(line), line.slice(0, 58));
@@ -411,7 +445,7 @@ console.log("\n=== 8. a phone");
 /* ── 9. the share images ────────────────────────────────────────────────── */
 console.log("\n=== 9. a pasted link arrives with a picture");
 {
-  const PAIRS = [["/", "home"], ["/rooms", "rooms"], ["/create.html", "create"], ["/v", "verify"],
+  const PAIRS = [["/", "home"], ["/rooms", "rooms"], ["/create", "create"], ["/v", "verify"],
                  ["/play", "play"], ["/city", "city"], ["/what", "what"]];
   for (const [route, img] of PAIRS) {
     await pg.goto("http://localhost:8971" + route);

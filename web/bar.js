@@ -294,11 +294,31 @@ const CSS = `
 .menu .row.out:hover{background:rgba(255,107,107,.10);color:#FF9B9B}
 .menu .fine{font-size:11px;line-height:1.5;color:#5F8593;margin-top:10px}
 @media (prefers-reduced-motion:reduce){.glyph::after{animation:none}.menu{animation:none}}
+/* ── the phone ─────────────────────────────────────────────────────────────
+   THE ORDER WAS WRONG, AND ON EVERY PAGE. An order:-1 on .me put the sign-in
+   button BEFORE the wordmark, so a phone opened this site to a bar that read
+   "Sign in · Overheard" — the one element that is meant to be the site's name
+   was the second thing on the row.
+
+   Brand left, the way in right, tabs on their own line underneath. And the
+   tabs SCROLL sideways rather than wrapping: six of them wrapped to two rows
+   and pushed the whole page down by forty pixels of navigation before
+   anything else appeared. */
 @media (max-width:560px){
-  .bar{gap:10px}
-  .tabs{margin-left:0;width:100%}
-  .tabs a{padding:9px 12px;font-size:13px}
-  .me{margin-left:0;order:-1}
+  .bar{gap:9px;padding:16px 0}
+  .brand{font-size:19px;gap:10px}
+  .glyph{width:30px;height:30px}
+  .me{margin-left:auto;order:0}
+  .tabs{
+    order:1;margin-left:0;width:100%;flex-wrap:nowrap;
+    overflow-x:auto;overscroll-behavior-x:contain;
+    scrollbar-width:none;-ms-overflow-style:none;
+    /* Bleed to the window edges so the row reads as scrollable rather than
+       as a row that happens to be cut off inside a margin. */
+    margin-left:-26px;margin-right:-26px;padding:0 26px 2px;
+  }
+  .tabs::-webkit-scrollbar{display:none}
+  .tabs a{flex:none;padding:9px 12px;font-size:13px}
   .menu,.menu.wide{width:min(344px,calc(100vw - 52px))}
 }
 `;
@@ -613,8 +633,18 @@ function paintSignIn(me) {
     const box = document.createElement("div");
     box.className = "seed";
     const seed = document.createElement("textarea");
+    /* NOT SPELL-CHECKED, NOT AUTOFILLED, NOT REMEMBERED.
+       A seed is the master secret. Chrome's enhanced spell check sends the
+       contents of a field to Google to check them, which is a plaintext key
+       leaving the device by a route nobody would ever think to look at; and a
+       password manager offering to save "the thing you typed" is a copy of
+       the key in a second place the user did not choose. Both are off. */
     seed.spellcheck = false;
     seed.autocapitalize = "off";
+    seed.autocomplete = "off";
+    seed.setAttribute("autocorrect", "off");
+    seed.setAttribute("data-lpignore", "true");
+    seed.setAttribute("data-1p-ignore", "");
     seed.setAttribute("aria-label", "Your seed");
     seed.placeholder = "Paste your seed — 64 hex characters. The whole identity .txt works too.";
     const sdid = document.createElement("div");
@@ -713,7 +743,7 @@ function paintSignIn(me) {
   function makeRow(label) {
     const a = document.createElement("a");
     a.className = "row";
-    a.href = "/create.html";
+    a.href = "/create";
     a.innerHTML = ICONS.spark;                        // our own markup
     a.append(Object.assign(document.createElement("span"), { textContent: label }));
     return a;

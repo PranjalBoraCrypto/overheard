@@ -29,7 +29,7 @@
  * a page there and it appears in both.
  */
 
-import { PAGES, ELSEWHERE, BUILDER_DID, X_GLYPH, ensureFont, iconSVG } from "/nav.js";
+import { PAGES, ELSEWHERE, BUILDER_DID, X_GLYPH, X_URL, ensureFont, iconSVG } from "/nav.js";
 
 const CSS = `
 :host{
@@ -132,7 +132,10 @@ li a[aria-current="page"] .i{opacity:1}
 @media (max-width:560px){
   .col{flex:1 1 100%}
   li a .note{max-width:180px;opacity:1;padding-left:10px}   /* no hover on a phone */
-  .did{margin-left:0;width:100%}
+  /* A 113x18 tap target on a phone is a link you miss. Padding rather than a
+     bigger font: the DID is meant to be quiet, and what it needs is somewhere
+     to land a thumb, not more attention. */
+  .did{margin-left:0;width:100%;padding:7px 0;line-height:1.5}
   .by{padding-bottom:38px}
 }
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
@@ -258,7 +261,12 @@ class OverheardFoot extends HTMLElement {
     who.append(document.createTextNode("Built by"));
     const me = document.createElement("a");
     me.className = "xlink";
-    me.href = ELSEWHERE.find((e) => e.x)?.href || "https://x.com/Crypto_Pranjal";
+    /* X_URL DIRECTLY, not whichever Elsewhere row happens to carry the X
+       glyph. That lookup was fine while the only X link on the page was the
+       builder's; the moment another account was listed there, "Built by"
+       would have pointed at somebody who did not build it. An authorship
+       credit reads from the one constant that means authorship. */
+    me.href = X_URL;
     me.target = "_blank"; me.rel = "noopener noreferrer";
     me.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true">${X_GLYPH}</svg>`;
     me.append(el("span", null, "Pranjal Bora"));

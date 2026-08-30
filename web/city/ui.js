@@ -314,6 +314,29 @@ export function makeUI(els, cb) {
     for (const [room, node] of railRows) {
       if (!seen.has(room)) { node.remove(); railRows.delete(room); }
     }
+
+    /* ── WHAT THE COUNTS COULD NOT FIT ────────────────────────────────────
+       The city releases the poll's activity in beats of at most three, which
+       is what makes the numbers readable — and on a busy reading that leaves
+       events with nowhere to go. They are summed here rather than dropped in
+       silence, because a page showing nine of forty events while implying
+       that was all of them is under-reporting the network.
+
+       It is present only when there IS an overflow. A permanent "+0 more"
+       is a row that trains people to stop reading the panel. */
+    let more = box.querySelector(".railmore");
+    if (opts.overRooms > 0) {
+      if (!more) { more = el("div", "railmore"); box.append(more); }
+      more.style.order = "999";
+      const n = opts.overMsgs.toLocaleString();
+      more.replaceChildren(
+        el("b", null, `+${n}`),
+        document.createTextNode(
+          ` more message${opts.overMsgs === 1 ? "" : "s"} in ${opts.overRooms} other room${opts.overRooms === 1 ? "" : "s"}`));
+      more.title = `The directory's last reading also moved ${opts.overRooms} other room${opts.overRooms === 1 ? "" : "s"}, by ${n} message${opts.overMsgs === 1 ? "" : "s"} in total. The counts over the buildings show the busiest few at a pace you can read; this is everything else that reading contained.`;
+    } else if (more) {
+      more.remove();
+    }
     box.hidden = false;
   }
 
@@ -334,72 +357,6 @@ export function makeUI(els, cb) {
     }
     return line.text || "";
   }
-
-  /* ── LIVE TRANSMISSIONS ────────────────────────────────────────────────
-     The city's global feed: the newest lines this browser has genuinely
-     fetched, across the rooms it is watching.
-
-     WHAT IT IS ALLOWED TO CLAIM, and it is narrower than "the latest
-     messages on Technocore". The city reads a directory of counters, not
-     messages; the only actual TEXT it ever holds comes from the peek channel,
-     which reads one busy room at a time on a slow rotation. So this is the
-     newest line from each of a handful of rooms, in the order they were
-     read — which is a true and useful thing, and is not the whole network.
-     The footnote says so rather than letting the panel imply otherwise.
-
-     It lives on the city and nowhere else. Inside a room the messages are
-     attached to the agents that sent them, and listing them again beside the
-     plaza would be the same activity written twice. */
-  function live(rows, opts = {}) {
-    const box = els.live, body = els.liveBody, pill = els.livePill, n = els.liveN;
-    if (!box) return;
-    if (!rows || !rows.length) { box.hidden = true; return; }
-    box.hidden = false;
-
-    pill.classList.toggle("stale", !opts.live);
-    n.classList.toggle("on", (opts.unread || 0) > 0);
-    n.textContent = opts.unread > 9 ? "9+" : String(opts.unread || "");
-
-    if (body.hidden) return;                 // collapsed: the pill is the whole UI
-
-    body.replaceChildren();
-    const head = el("div", "livehead");
-    head.append(el("span", null, "Live transmissions"));
-    body.append(head);
-
-    for (const r of rows.slice(0, 3)) {
-      const b = el("button", "liverow" + (r.fresh ? " fresh" : "")); b.type = "button";
-      const g = el("span", `g k-${r.kind || "message"}`);
-      g.append(icon(KIND_ICON[r.kind] || "c-msg"));
-      b.append(g);
-      b.append(el("span", "who", r.who));
-      b.append(el("span", "when", ago(r.at)));
-      const ln = el("span", "ln");
-      /* The same treatment the rail and the transmission cards give a
-         structured message: its own declared fields rather than its
-         punctuation. The glyph already carries the verb, and "JOB v1|" is
-         eight characters of syntax in a line that has room for about fifty. */
-      ln.append(document.createTextNode(lineText({ c: r.c, text: r.text })));
-      b.append(ln);
-      const rm = el("span", "rm");
-      rm.append(document.createTextNode("in "), el("b", null, r.room));
-      b.append(rm);
-      b.title = `Go into ${r.room} and find this message`;
-      b.addEventListener("click", () => cb.openTransmission?.(r));
-      body.append(b);
-    }
-
-    const note = el("p", "livenote",
-      "newest line from each room the city is watching · read here, not pushed");
-    body.append(note);
-  }
-
-  function liveOpen(v) {
-    if (!els.liveBody) return;
-    els.liveBody.hidden = !v;
-    els.livePill?.setAttribute("aria-expanded", String(!!v));
-  }
-  const liveShown = () => !!els.liveBody && !els.liveBody.hidden;
 
   function closeRail() { if (els.rail) { els.rail.hidden = true; els.rail.replaceChildren(); } }
 
@@ -445,6 +402,7 @@ export function makeUI(els, cb) {
     p.replaceChildren();
     feedOn = false;   // whatever this is, it is not the feed
     p.hidden = false;
+    cb.panelOpened?.();
     p.append(panelHead(info.landmark ? "c-pin" : "c-list", info.title || info.room,
       info.landmark ? info.sub || "district" : "public room"));
 
@@ -508,6 +466,7 @@ export function makeUI(els, cb) {
     p.replaceChildren();
     feedOn = false;   // whatever this is, it is not the feed
     p.hidden = false;
+    cb.panelOpened?.();
     p.append(panelHead("c-bot", room.name, `${agents.length} active ${agents.length === 1 ? "identity" : "identities"}`));
 
     const signed = agents.filter((a) => a.signed).length;
@@ -573,6 +532,7 @@ export function makeUI(els, cb) {
     p.replaceChildren();
     feedOn = false;   // whatever this is, it is not the feed
     p.hidden = false;
+    cb.panelOpened?.();
     p.append(panelHead("c-bot", a.did ? shortDid(a.did, 12, 8) : a.nick || "unknown",
       a.signed ? "technocore-accepted signed" : "self-asserted nickname"));
 
@@ -633,6 +593,7 @@ export function makeUI(els, cb) {
     p.replaceChildren();
     feedOn = false;   // whatever this is, it is not the feed
     p.hidden = false;
+    cb.panelOpened?.();
     p.append(panelHead("c-list", kindLabel(m.c), `sequence ${m.seq}`));
 
     const body = el("div", "msg open");
@@ -674,7 +635,16 @@ export function makeUI(els, cb) {
     return p;
   }
 
-  function closePanel() { feedOn = false; els.side.hidden = true; els.side.replaceChildren(); }
+  /* CLOSING IS NOT LEAVING. Pressing × on the room panel used to be a
+     one-way door: the panel went away and nothing on the page could bring it
+     back short of walking out of the room and back in. The caller is told,
+     so it can put a way back where the panel was. */
+  function closePanel() {
+    feedOn = false;
+    els.side.hidden = true;
+    els.side.replaceChildren();
+    cb.panelClosed?.();
+  }
 
   /**
    * WHERE THIS IDENTITY HAS BEEN — the answer to a pasted did:key.
@@ -701,6 +671,7 @@ export function makeUI(els, cb) {
     p.replaceChildren();
     feedOn = false;   // whatever this is, it is not the feed
     p.hidden = false;
+    cb.panelOpened?.();
     p.append(panelHead("c-bot", shortDid(q.did, 12, 8), "identity"));
 
     if (q.state === "looking") {
@@ -781,6 +752,7 @@ export function makeUI(els, cb) {
     p.replaceChildren();
     feedOn = false;   // whatever this is, it is not the feed
     p.hidden = false;
+    cb.panelOpened?.();
     p.append(panelHead("c-info", "How to read the city", "what the shapes mean"));
 
     const row = (swatchClass, title, text) => {
@@ -793,8 +765,10 @@ export function makeUI(els, cb) {
       return d;
     };
 
-    const box = el("div");
-    box.style.marginTop = "12px";
+    /* THE LEGEND IS THE LONGEST THING THIS PANEL EVER SHOWS, and on a phone
+       the panel is 48% of the screen. It scrolls itself rather than spilling
+       out of the card or being silently clipped by it. */
+    const box = el("div", "legendbody");
     box.append(
       row("tall", "Height is history",
         "Every message the room has ever carried, on a log scale. It does not change while you watch."),
@@ -960,6 +934,7 @@ export function makeUI(els, cb) {
     const p = els.side;
     p.replaceChildren();
     p.hidden = false;
+    cb.panelOpened?.();
     feedOn = true;
     /* A BACK ARROW, NOT A CLOSE BOX. The feed replaced something — the room's
        own panel — so the way out of it is backwards, to that. A × here would
@@ -1147,7 +1122,7 @@ export function makeUI(els, cb) {
 
   return {
     chips, status, roomSummary, roomLive, agentPanel, messagePanel, closePanel, legend, didPanel,
-    rail, closeRail, live, liveOpen, liveShown,
+    rail, closeRail,
     buildFeed, renderFeed, closeFeed, feedShown, feedState: feed,
     hover, hoverAgentCard, hoverRoomCard, hoverBlockCard, hits,
   };

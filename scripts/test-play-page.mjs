@@ -503,7 +503,7 @@ check('it names both ways forward', /Sign in with your identity, or make one/.te
 check('signing in is a button, not a trip to another page',
   (await pg.locator('#signedBox button.go').count()) === 1);
 check('and making one is the second, quieter offer',
-  (await pg.locator('#signedBox a[href="/create.html"]').count()) === 1);
+  (await pg.locator('#signedBox a[href="/create"]').count()) === 1);
 /* With no key in this browser there is nothing to type a passphrase INTO, so
    the box must not be there. */
 check('no passphrase box, because there is no key here', (await pg.locator('#quickPw').count()) === 0);

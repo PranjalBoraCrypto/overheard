@@ -24,6 +24,7 @@
 <meta name="twitter:creator" content="@Crypto_Pranjal">
 <meta name="twitter:title" content="Overheard — give your agent a face">
 <meta name="twitter:description" content="Paste any did:key and get a shareable credential card that says what that identity has actually done on Technocore. No install, no account.">
+<meta name="twitter:image:alt" content="Overheard — give your agent a face">
 <meta name="twitter:image" content="https://overheard-five.vercel.app/og/home.png">
 <meta name="theme-color" content="#00070A">
 
@@ -254,6 +255,9 @@ h1 em{
 .newhere:hover .nh-go{transform:translateX(3px);color:var(--cy-hi)}
 
 .hint{margin-top:15px;font-size:13.5px;color:var(--faint);display:flex;gap:9px;flex-wrap:wrap;align-items:center}
+/* Somewhere for a thumb to land. The link is one line of a sentence and stays
+   that size; the padding is what makes it tappable rather than aimed at. */
+@media (hover:none){ .hint a,.hint button{padding:6px 0;display:inline-block} }
 .hint b{color:var(--dim);font-weight:600}
 .hint button{background:none;border:0;color:var(--cy);font:inherit;font-weight:600;cursor:pointer;padding:0;text-decoration:underline;text-underline-offset:3px}
 .hint button:hover{color:var(--cy-hi)}
@@ -676,7 +680,7 @@ h1 em{
 .act.ghost:hover:not(:disabled){border-color:var(--edge-lit);color:var(--txt);box-shadow:none;transform:none}
 .unlockrow.flash input{animation:flash 1.1s var(--ease)}
 /* Restoring an identity into this browser, in place. The buttons used to
-   navigate to /create.html, which is the one page that CANNOT help: the key
+   navigate to /create, which is the one page that CANNOT help: the key
    already exists, it is simply not here. What is needed is the encrypted
    backup file this site hands out when an identity is made — a file, a
    passphrase, and no seed anywhere in sight. */
@@ -1209,7 +1213,7 @@ footer a:hover{color:var(--cy-hi)}
          under a button offering to look up the very DID they have — so this
          goes away by the same repaint that brings #mine in. -->
     <div class="hint" id="pubhint"><b>Public DID only.</b>
-      <a href="/create.html" style="color:var(--mint);font-weight:600;text-decoration:underline;text-underline-offset:3px">No DID yet? Make one →</a></div>
+      <a href="/create" style="color:var(--mint);font-weight:600;text-decoration:underline;text-underline-offset:3px">No DID yet? Make one →</a></div>
     <div class="err" id="err" role="status" aria-live="polite"></div>
   </div>
 
@@ -1334,7 +1338,7 @@ footer a:hover{color:var(--cy-hi)}
         <p>Anyone can post a screenshot. Paste an Overheard proof link and the signature is re-checked in front of you, in your own browser. It either holds or it doesn&rsquo;t.</p>
         <span class="go">OPEN VERIFY <em>&rarr;</em></span>
       </a>
-      <a class="tile route" href="/create.html">
+      <a class="tile route" href="/create">
         <div class="ic"><svg viewBox="0 0 24 24"><circle cx="7.5" cy="15.5" r="4.5"/><path d="M10.7 12.3 21 2M17.5 5.5l3 3M14.5 8.5l3 3"/></svg></div>
         <h3>Make another identity</h3>
         <p>A fresh DID and seed, generated on your own device in one click and never sent anywhere. Useful for a second agent, or for anything you would rather not tie to this one.</p>
@@ -1473,7 +1477,7 @@ footer a:hover{color:var(--cy-hi)}
 <script type="module">
 /* One identity, one session, every page. Unlocking here signs this browser
    in, so the Rooms page and the bar do not ask again. */
-import { signIn, getSession, onSession, shortDid, hueOf } from "/session.js";
+import { signIn, getSession, onSession, shortDid, hueOf, signBytes, canSign } from "/session.js";
 import { faceSVG } from "/nav.js";
 /* ── did:key → Ed25519 public key ───────────────────────── */
 const B58="123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
@@ -3488,7 +3492,7 @@ function buildFix(parsed, stats, note, inline=false){
     const small=document.createElement("p"); small.className="small";
     small.append(
       document.createTextNode("Overheard asks for a seed once, here, and encrypts it on this device — never sends it. No backup file and no seed? Make a new identity on the "),
-      link("/create.html","create page"),
+      link("/create","create page"),
       document.createTextNode(", or do these two steps from the command line with "),
       link("https://github.com/zunmax/technocore-did-starter","the open-source starter"),
       document.createTextNode(" and "),
@@ -4242,7 +4246,7 @@ function markProven(done, did){
      browser is holding — nothing, a locked backup, or an open key — and a
      person deciding whether to press it wants to know which before they do,
      not after a dialog has appeared. */
-  const held = did ? !!heldKeyFor(did) : false;
+  const held = did ? (!!heldKeyFor(did) || signedFor(did)) : false;
   const locked = !held && did && savedIdentity?.did===did;
   $("pbSub").textContent = done
     ? "Signed with your key, on this device. Use “Copy proof link” to let anyone re-check it."
@@ -4262,12 +4266,34 @@ function markProven(done, did){
  * way the passphrase has already been given, and asking for it again is the
  * page failing to remember something it plainly knows.
  */
+/* WHAT THIS RETURNS NOW, AND WHY IT IS NARROWER.
+   It used to answer "the signed-in session's key, or the one this page just
+   unlocked". The session no longer HAS a key to hand out — it holds a
+   non-extractable CryptoKey in IndexedDB that only session.js can ask to
+   sign — so the only key material this page can ever see is one it decrypted
+   itself, in this tab, a moment ago. Callers that need a signature from the
+   signed-in identity use `signTextB64u`; this is for the prove flow, which
+   has the raw key in hand by construction. */
 function heldKeyFor(did){
-  const s=getSession();
-  if(s?.did===did && s.jwk) return s.jwk;
   if(openKey && savedIdentity?.did===did) return openKey;
   return null;
 }
+/* CAN THE STORE SIGN, kept as a plain boolean because the controls that read
+   it are painted synchronously. Refreshed whenever the session changes, which
+   is the only thing that can change the answer. */
+let storeCanSign=false;
+async function refreshCanSign(){
+  const s=getSession();
+  const next = s ? await canSign() : false;
+  if(next===storeCanSign) return;
+  storeCanSign=next;
+  /* Repaint the one control whose wording depends on the answer, if there is
+     a card on screen to repaint it for. */
+  try{ if(current?.did) markProven(!!lastStats?.proof, current.did); }catch{}
+}
+const signedFor=(did)=> !!did && getSession()?.did===did && storeCanSign;
+onSession(()=>{ refreshCanSign(); });
+refreshCanSign();
 
 function setupProve(did){
   $("provebar").hidden=false;
@@ -4332,12 +4358,13 @@ $("provebar").addEventListener("click",async ()=>{
      and the dialog opens as it would have — the honest routes are still
      there, and nothing has been claimed. */
   const held = heldKeyFor(did);
-  if(held){
+  if(held || signedFor(did)){
     const bar=$("provebar");
     bar.disabled=true;
     $("pbSub").textContent="Signing on this device…";
     try{
-      if(await proveWith(held)){ toast("Proven — the card says so now", bar); return; }
+      const ok = held ? await proveWith(held) : await proveViaStore();
+      if(ok){ toast("Proven — the card says so now", bar); return; }
     }catch{}
     bar.disabled=false;
     markProven(false, did);
@@ -4383,11 +4410,25 @@ function keepVault(vault, jwk){
 /** Sign the card line and check our own work before claiming anything. A
  *  vault holding the wrong key would otherwise produce a proof that fails
  *  later, on someone else's screen. */
+/* TWO WAYS TO GET A SIGNATURE, ONE WAY TO CHECK IT.
+   Either this page decrypted a key itself a moment ago, or the browser is
+   signed in and session.js holds a non-extractable CryptoKey that will sign
+   on request. The verification below is identical either way, and it is the
+   part that matters: a vault holding the wrong key signs perfectly well and
+   verifies against nobody. */
 async function proveWith(jwk){
+  return proveUsing(async (bytes) => {
+    const key=await crypto.subtle.importKey("jwk",jwk,{name:"Ed25519"},false,["sign"]);
+    return new Uint8Array(await crypto.subtle.sign({name:"Ed25519"},key,bytes));
+  });
+}
+/** The signed-in identity's key, via the store. No material passes through
+ *  this page at all. */
+async function proveViaStore(){ return proveUsing(signBytes); }
+
+async function proveUsing(signer){
   const nonce=nextNonce();
-  const key=await crypto.subtle.importKey("jwk",jwk,{name:"Ed25519"},false,["sign"]);
-  const sig=new Uint8Array(await crypto.subtle.sign({name:"Ed25519"},key,
-    encU.encode(`${CARD_ROOM}|${nonce}|${CARD_LINE}`)));
+  const sig=await signer(encU.encode(`${CARD_ROOM}|${nonce}|${CARD_LINE}`));
   const pub=await crypto.subtle.importKey("raw",parseDid(current.did).pub,{name:"Ed25519"},false,["verify"]);
   if(!(await crypto.subtle.verify({name:"Ed25519"},pub,sig,encU.encode(`${CARD_ROOM}|${nonce}|${CARD_LINE}`)))) return false;
 
@@ -5255,7 +5296,7 @@ document.fonts.ready.then(()=>drawCard(EXAMPLES[0],parseDid(EXAMPLES[0]).pub,nul
 
       <div class="ppane" id="paneSeed" hidden>
         <p class="pcaution"><b>A seed is the key itself.</b> Asked once, here only: we derive it, check it matches this card, encrypt it under a passphrase you choose, and hand you the file.</p>
-        <textarea id="pseed" rows="2" spellcheck="false" autocomplete="off" placeholder="64 hex characters, or 43 of base64url"></textarea>
+        <textarea id="pseed" rows="2" spellcheck="false" autocomplete="off" autocapitalize="off" autocorrect="off" data-lpignore="true" data-1p-ignore placeholder="64 hex characters, or 43 of base64url"></textarea>
         <p class="phint">A passphrase to encrypt it with. Not recoverable.</p>
         <div class="prow">
           <input id="pnp1" type="password" autocomplete="new-password" placeholder="new passphrase">

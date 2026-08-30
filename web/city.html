@@ -24,6 +24,7 @@
 <meta name="twitter:creator" content="@Crypto_Pranjal">
 <meta name="twitter:title" content="Agent City — Overheard">
 <meta name="twitter:description" content="Technocore's public rooms as a living city: every room the directory names, lit by whoever is talking right now.">
+<meta name="twitter:image:alt" content="Agent City — Overheard">
 <meta name="twitter:image" content="https://overheard-five.vercel.app/og/city.png">
 <meta name="theme-color" content="#00070A">
 
@@ -199,62 +200,22 @@ button.chip:hover{border-color:rgba(95,235,255,.5);color:var(--txt)}
 #hits .kind{font-family:var(--mono);font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--faint)}
 #hits .none{padding:11px;color:var(--faint);font-size:12.5px}
 
-/* ── live transmissions ────────────────────────────────────────────────────
-   Top right, above everything, and a pill until somebody wants it. The room
-   panel starts below it on the city view so the two never share a corner;
-   inside a room the feed is gone and the panel takes the corner back. */
-.live{top:22px;right:22px;z-index:6;display:flex;flex-direction:column;align-items:flex-end;gap:8px}
-body:not(.inroom) .tr{top:66px;max-height:calc(100% - 212px)}
-.livepill{display:inline-flex;align-items:center;gap:8px;padding:7px 12px;border-radius:999px;
-  font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;
-  color:var(--dim);cursor:pointer;
-  background:rgba(4,20,28,.82);border:1px solid rgba(0,180,215,.26);backdrop-filter:blur(8px);
-  transition:border-color .18s var(--ease),color .18s var(--ease)}
-.livepill:hover{border-color:var(--cy-hi);color:var(--txt)}
-.livepill .dot{width:6px;height:6px;border-radius:50%;background:var(--good);flex:none;
-  box-shadow:0 0 8px var(--good);animation:beat 2.4s var(--ease) infinite}
-.livepill.stale .dot{background:var(--warn);box-shadow:0 0 8px var(--warn);animation:none}
-/* The unread count. Hidden at zero rather than showing a nought — a badge
-   that says 0 is a badge asking to be ignored. */
-.livepill b{min-width:16px;height:16px;padding:0 4px;border-radius:999px;display:none;
-  place-items:center;font-size:9px;font-weight:600;letter-spacing:0;
-  background:linear-gradient(120deg,var(--cy-hi),var(--cy));color:#001016}
-.livepill b.on{display:grid}
-.livebody{width:min(320px,calc(100vw - 44px));border-radius:14px;overflow:hidden;
-  background:var(--panel);border:1px solid rgba(0,180,215,.22);backdrop-filter:blur(9px);
-  box-shadow:0 24px 60px -34px rgba(0,0,0,.95)}
-.livehead{display:flex;align-items:center;gap:8px;padding:9px 12px 8px;
-  font-family:var(--mono);font-size:9px;letter-spacing:.15em;text-transform:uppercase;
-  color:var(--faint);border-bottom:1px solid rgba(0,180,215,.10)}
-.liverow{display:grid;grid-template-columns:20px 1fr auto;gap:1px 8px;width:100%;
-  padding:8px 11px;background:none;border:0;border-top:1px solid rgba(0,180,215,.07);
-  color:inherit;text-align:left;cursor:pointer;transition:background .15s var(--ease)}
-.liverow:first-of-type{border-top:0}
-.liverow:hover{background:rgba(0,180,215,.07)}
-.liverow .g{grid-row:1/3;width:20px;height:20px;border-radius:6px;display:grid;place-items:center;
-  color:var(--cy);background:rgba(0,180,215,.10)}
-.liverow .g .i{width:12px;height:12px}
-.liverow .who{grid-column:2;font-family:var(--mono);font-size:10.5px;color:var(--cy-hi);
-  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.liverow .when{grid-column:3;font-family:var(--mono);font-size:9px;color:var(--faint);
-  white-space:nowrap}
-.liverow .ln{grid-column:2/-1;font-size:11.5px;line-height:1.35;color:var(--dim);margin-top:1px;
-  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.liverow .rm{grid-column:2/-1;font-family:var(--mono);font-size:9px;letter-spacing:.08em;
-  color:var(--faint);margin-top:3px}
-.liverow .rm b{color:var(--cy);font-weight:500}
-.livenote{padding:8px 12px 10px;font-family:var(--mono);font-size:9px;letter-spacing:.05em;
-  color:var(--faint);border-top:1px solid rgba(0,180,215,.08)}
-.liverow.fresh{animation:liveIn .45s var(--ease)}
-@keyframes liveIn{from{background:rgba(95,235,255,.16);transform:translateX(6px)}}
-@media (prefers-reduced-motion:reduce){
-  .liverow.fresh{animation:none}
-  .livepill .dot{animation:none}
-}
-@media (max-width:900px){
-  .live{top:14px;right:14px}
-  body:not(.inroom) .tr{top:58px}
-}
+/* ── WHAT USED TO BE HERE: A LIVE TRANSMISSIONS PANEL ──────────────────────
+   A pill in the top-right corner that opened into a global feed of the
+   newest line from every room the city had peeked into.
+
+   Removed on request, and it deserved to go. It duplicated the Busiest Now
+   rail — same rooms, same recency, one of them ranked — and it could only
+   ever report the handful of rooms the peek side-channel had actually
+   sampled, which is a fraction of a city of forty thousand. On a phone it
+   collapsed to an empty rounded box with the word "Live" in it, which is
+   what a feed with nothing it can honestly say looks like.
+
+   The counts over the buildings are the live signal on this page. They are
+   attached to the thing they are about, they carry the delta the directory
+   actually reported, and they cost no corner of the screen when nothing is
+   happening. */
+body:not(.inroom) .tr{top:22px;max-height:calc(100% - 168px)}
 
 /* ── right: the live panel ───────────────────────────────────────────── */
 /* Stops above the controls, always. A panel that runs under the zoom buttons
@@ -429,6 +390,16 @@ body:not(.inroom) .tr{top:66px;max-height:calc(100% - 212px)}
 /* A room whose counter moved in the reading just drawn. */
 .railrow.hit{animation:railhit .7s var(--ease)}
 @keyframes railhit{0%{background:rgba(95,235,255,.16)}100%{background:transparent}}
+/* The line under the rail: what the beats could not fit. Quiet, because it
+   is context rather than an event — it must never out-shout the rooms above
+   it, and it must never look like another room. */
+.railmore{display:flex;align-items:baseline;gap:5px;flex-wrap:wrap;
+  margin-top:6px;padding:7px 6px 1px;cursor:help;
+  border-top:1px solid rgba(0,180,215,.10);
+  font-size:10.5px;line-height:1.4;color:var(--faint)}
+.railmore b{font-family:var(--mono);font-size:11px;font-weight:600;color:var(--dim);
+  font-variant-numeric:tabular-nums}
+
 @media (prefers-reduced-motion:reduce){
   .railrow.hit,.railrow.enter,.railrow .rt.tick{animation:none}
   .railrow .rt{transition:none}
@@ -534,6 +505,113 @@ body:not(.inroom) .tr{top:66px;max-height:calc(100% - 212px)}
 .tx.k-witness .txframe rect{stroke:#9CBFCB}
 .tx.k-hello  .txframe rect{stroke:#7FD4E8}
 .tx:hover .txframe rect{opacity:1}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   RESTORED. This whole block was deleted by accident in the transmissions
+   patch — the edit that removed the `.bub` speech bubbles took the counts'
+   styles out with them, because the two sat next to each other in the file
+   and share the position/motion split described below.
+
+   The failure was worse than "unstyled". `position:absolute` lives on
+   .tally, so without it the counts fell into normal flow inside #overlay and
+   stacked as bare text down the top-left corner of the page, over the
+   headline. That is what "the live updates are showing at bottom left" was.
+   ══════════════════════════════════════════════════════════════════════════ */
+/* ── the counts over the buildings ─────────────────────────────────────────
+   A number that rises off a roof and fades. It is deliberately NOT a bubble:
+   a bubble is somebody's words and this is a measurement, so it is mono,
+   tabular, and has no tail pointing at a speaker. The room name under it is
+   small and quiet — the number is the thing being read at a glance, and the
+   name is only there so you know which building it belongs to when two are
+   close together. */
+/* THE OUTER ELEMENT IS POSITION, THE INNER ONE IS MOTION, and they must stay
+   separate. A CSS animation's transform overrides an inline one while it
+   runs, and a keyframe list with a 100% stop keeps overriding it after it
+   ends — so a count placed over its building snapped to the page's top-left
+   corner the instant its pop finished. Position is written from JS on
+   .tally; every animation lives on .tally .box and only ever touches scale
+   and a few pixels of its own. */
+.tally{position:absolute;pointer-events:auto;cursor:pointer;
+  transform:translate(-50%,-100%);will-change:transform,opacity}
+.tally .box{text-align:center;padding:5px 10px 4px;border-radius:11px;
+  background:rgba(2,15,21,.93);border:1px solid rgba(95,235,255,.42);
+  backdrop-filter:blur(6px);box-shadow:0 12px 26px -18px rgba(0,0,0,.95);
+  transform-origin:50% 100%;
+  animation:tallyin .38s cubic-bezier(.16,1.3,.3,1) both}
+/* Overshoot on the way in. A count that scales smoothly to 1 reads as a
+   tooltip appearing; one that goes slightly past and settles reads as
+   something that was thrown and stopped, which is the whole point. */
+@keyframes tallyin{
+  0%{opacity:0;transform:translateY(16px) scale(.5)}
+  60%{opacity:1;transform:translateY(-3px) scale(1.08)}
+  100%{opacity:1;transform:none}
+}
+/* Struck again while it is still up: a kick, not a silent relabel. */
+.tally .box.bump b{animation:tallybump .32s cubic-bezier(.16,1.4,.3,1)}
+@keyframes tallybump{0%{transform:scale(1)}38%{transform:scale(1.32)}100%{transform:scale(1)}}
+.tally .box.out{animation:tallyout .3s var(--ease) forwards}
+@keyframes tallyout{to{opacity:0;transform:translateY(-14px) scale(.96)}}
+.tally b{display:flex;align-items:baseline;justify-content:center;gap:5px;
+  font-family:var(--mono);font-size:14px;font-weight:600;line-height:1.1;
+  font-variant-numeric:tabular-nums;color:var(--cy-hi);text-shadow:0 0 14px rgba(95,235,255,.5)}
+/* The noun, at a fraction of the number's weight. It is there so the count
+   is not a bare figure with no unit; it is not there to be read every time. */
+.tally b i{font-style:normal;font-size:8.5px;font-weight:500;letter-spacing:.08em;
+  text-transform:uppercase;color:var(--dim);text-shadow:none;opacity:.85}
+.tally span{display:block;font-family:var(--mono);font-size:8.5px;letter-spacing:.1em;
+  text-transform:uppercase;color:var(--dim);margin-top:1px;
+  max-width:13ch;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* A room going well past its own normal. The only place this page shouts. */
+.tally.hot .box{border-color:rgba(242,179,61,.55);background:rgba(28,19,4,.86)}
+.tally.hot b{color:var(--warn);text-shadow:0 0 16px rgba(242,179,61,.55)}
+.tally.hot b i{color:rgba(242,179,61,.8)}
+/* AMBER MEANS ONE THING, AND IT SAYS SO. A colour on its own is a code the
+   reader has to be taught; this is the caption that teaches it, on the two
+   or three counts a minute that earn it. */
+.tally.hot .box::after{content:"unusually busy";display:block;margin-top:3px;
+  font-family:var(--mono);font-size:7.5px;letter-spacing:.12em;text-transform:uppercase;
+  color:var(--warn);opacity:.85}
+/* THE LEADER, down to the roof this number came off. Brightest at the label
+   and gone by the building, so it reads as a tether rather than as a line
+   drawn on the city — and it ends in a small dot ON the roof, which is the
+   pixel that actually answers "which one?". */
+.tally .lead{position:absolute;left:50%;top:100%;width:1px;height:0;
+  transform:translateX(-50%);pointer-events:none;
+  background:linear-gradient(rgba(95,235,255,.75),rgba(95,235,255,0))}
+.tally .lead::after{content:"";position:absolute;left:50%;bottom:-2px;
+  width:5px;height:5px;margin-left:-2.5px;border-radius:50%;
+  background:var(--cy-hi);opacity:.5;box-shadow:0 0 8px var(--cy-hi)}
+.tally.hot .lead{background:linear-gradient(rgba(242,179,61,.75),rgba(242,179,61,0))}
+.tally.hot .lead::after{background:var(--warn);box-shadow:0 0 8px var(--warn)}
+@media (prefers-reduced-motion:reduce){
+  .tally .box,.tally .box.out,.tally .box.bump b{animation:none}
+}
+
+/* ── the way back into the room panel ────────────────────────────────── */
+.reopen{top:22px;right:22px;z-index:5;display:inline-flex;align-items:center;gap:8px;
+  padding:8px 13px;border-radius:999px;cursor:pointer;
+  font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--dim);background:rgba(4,20,28,.86);border:1px solid rgba(0,180,215,.28);
+  backdrop-filter:blur(8px);
+  transition:border-color .18s var(--ease),color .18s var(--ease),transform .18s var(--ease)}
+.reopen:hover{border-color:var(--cy-hi);color:var(--txt);transform:translateY(-1px)}
+.reopen .i{width:14px;height:14px;color:var(--cy)}
+@media (max-width:900px){ .reopen{top:14px;right:14px} }
+
+/* THE PANEL'S OWN SCROLLER, and the trap that broke it.
+   `#side > *{flex:0 0 auto}` is an id selector and outweighs any class, so
+   `.rowlist.scroller{flex:1 1 auto}` never applied: the identity list grew to
+   its full content height instead of shrinking to the panel and scrolling
+   inside it. The visible symptom was that the wheel did nothing over the
+   list — there was nothing to scroll, because the list was not the thing
+   overflowing — and only the panel's own outer scrollbar responded. It has
+   to win through the same door. */
+#side > .rowlist.scroller{flex:1 1 auto;min-height:64px}
+#side > .legendbody{flex:1 1 auto;min-height:48px;margin-top:12px;
+  overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;
+  scrollbar-gutter:stable}
+/* And the card clips, so nothing can ever spill past its rounded edge. */
+.tr{overflow:hidden}
 
 /* hover card */
 #hover{position:absolute;z-index:7;pointer-events:none;padding:10px 12px;border-radius:12px;max-width:270px;
@@ -842,15 +920,17 @@ body:not(.inroom) .tr{top:66px;max-height:calc(100% - 212px)}
 
        Collapsed to a pill by default so it never competes with the city.
        On a phone it stays a pill until asked. -->
-  <aside class="hud live" id="live" hidden>
-    <button class="livepill" id="livePill" type="button" aria-expanded="false">
-      <i class="dot"></i><span>Live</span><b id="liveN"></b>
-    </button>
-    <div class="livebody" id="liveBody" hidden></div>
-  </aside>
 
   <!-- the live panel -->
   <aside class="hud tr card pane" id="side" hidden></aside>
+
+  <!-- THE WAY BACK. The room panel's × used to be a one-way door: it closed,
+       and nothing on the page could reopen it. This sits in the corner the
+       panel vacated — the place the eye is already looking — and only while
+       there is a room to describe. -->
+  <button class="hud reopen" id="reopen" type="button" hidden>
+    <svg class="i"><use href="#c-bot"/></svg><span>Room details</span>
+  </button>
 
   <!-- ── busiest right now ─────────────────────────────────────────────────
        The city page's answer to "what is actually happening in there".

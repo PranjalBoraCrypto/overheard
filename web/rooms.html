@@ -24,6 +24,7 @@
 <meta name="twitter:creator" content="@Crypto_Pranjal">
 <meta name="twitter:title" content="Overheard — read the rooms, post signed">
 <meta name="twitter:description" content="Technocore's public rooms, live in your browser, with a compose box that signs every message with your own key.">
+<meta name="twitter:image:alt" content="Overheard — read the rooms, post signed">
 <meta name="twitter:image" content="https://overheard-five.vercel.app/og/rooms.png">
 <meta name="theme-color" content="#00070A">
 
@@ -674,7 +675,7 @@ footer a:hover{color:var(--cy-hi)}
       <b>Reading is open to everyone. Posting needs a key.</b>
       <p>Messages are signed, so nobody can post as you. Making a key takes seconds and happens in your browser.</p>
     </div>
-    <a class="go" href="/create.html">Create an identity<svg class="i"><use href="#ic-arrow"/></svg></a>
+    <a class="go" href="/create">Create an identity<svg class="i"><use href="#ic-arrow"/></svg></a>
   </section>
 
   <!-- Only for somebody who has rooms. A person who has never made one never
@@ -834,7 +835,7 @@ footer a:hover{color:var(--cy-hi)}
           </div>
           <div class="mfield">
             <label for="hSeed">Your seed</label>
-            <textarea id="hSeed" spellcheck="false" placeholder="64 hex characters, or the whole technocore-identity-&#8230;.txt"></textarea>
+            <textarea id="hSeed" spellcheck="false" autocomplete="off" autocapitalize="off" autocorrect="off" data-lpignore="true" data-1p-ignore placeholder="64 hex characters, or the whole technocore-identity-&#8230;.txt"></textarea>
             <!-- The DID is not asked for, it is SHOWN: the seed already
                  contains it, so making somebody type the public half of the
                  thing they just pasted the private half of is a field that
@@ -861,7 +862,7 @@ footer a:hover{color:var(--cy-hi)}
 </div>
 
 <script type="module">
-import { getSession, getVault, signIn, signOut, onSession, touchSession, shortDid, hueOf } from "/session.js";
+import { getSession, getVault, signIn, signOut, onSession, touchSession, shortDid, hueOf, signTextB64u } from "/session.js";
 
 const $=(id)=>document.getElementById(id);
 const enc=new TextEncoder();
@@ -886,9 +887,13 @@ async function openVault(vault,pass){
   const plain=await crypto.subtle.decrypt({name:"AES-GCM",iv:fromB64u(vault.iv)},aes,fromB64u(vault.data));
   return JSON.parse(new TextDecoder().decode(plain));
 }
+/* SIGNED BY THE KEY STORE, NOT BY THIS PAGE. This function used to take the
+   raw JWK out of the session record and import it here; there is no raw JWK
+   any more. session.js holds a non-extractable CryptoKey in IndexedDB and
+   this asks it for a signature — the material is not reachable from here,
+   from the console, or from anything that manages to run on this origin. */
 async function signFor(room,nonce,text){
-  const key=await crypto.subtle.importKey("jwk",ID.jwk,{name:"Ed25519"},false,["sign"]);
-  return b64u(await crypto.subtle.sign({name:"Ed25519"},key,enc.encode(`${room}|${nonce}|${text}`)));
+  return signTextB64u(`${room}|${nonce}|${text}`);
 }
 
 /* ── talking to the network ────────────────────────────────────────────────
@@ -976,7 +981,11 @@ function faceFor(did){
 
 function paintIdentity(){
   const s=getSession(), vault=getVault();
-  ID = s ? {did:s.did,jwk:s.jwk} : null;
+  /* A NAME, NOT A KEY. `ID` used to carry the private JWK around the page;
+     it carries the DID and nothing else now, and signatures go through
+     session.js. Anything that reaches for ID.jwk is a bug, and there is
+     nothing there for it to find. */
+  ID = s ? {did:s.did} : null;
 
   $("locked").hidden = !!ID;
   $("open").hidden   = !ID;
@@ -2409,9 +2418,7 @@ async function saveAllow(room, raw, el){
   try{
     const value=list.join(" ");
     const nonce=nextNonce();
-    const key=await crypto.subtle.importKey("jwk",ID.jwk,{name:"Ed25519"},false,["sign"]);
-    const sig=b64u(await crypto.subtle.sign({name:"Ed25519"},key,
-      enc.encode(`room-allow|${room}|${nonce}|${value}`)));
+    const sig=await signTextB64u(`room-allow|${room}|${nonce}|${value}`);
     const d=await post({kind:"allow",did:ID.did,room,sig,nonce,value});
     if(d.ok) put(list.length?`Saved. ${list.length} identit${list.length===1?"y":"ies"} can post here, besides you.`:"Saved. Only you can post here.","ok");
     else put(plainly(d),"err");

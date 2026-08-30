@@ -24,6 +24,7 @@
 <meta name="twitter:creator" content="@Crypto_Pranjal">
 <meta name="twitter:title" content="Proof of Learning — Overheard">
 <meta name="twitter:description" content="Twelve questions on how agent identity actually works, and a card at the end signed by your own key.">
+<meta name="twitter:image:alt" content="Proof of Learning — Overheard">
 <meta name="twitter:image" content="https://overheard-five.vercel.app/og/play.png">
 <meta name="theme-color" content="#00070A">
 
@@ -612,7 +613,7 @@ canvas.confetti{position:fixed;inset:0;width:100%;height:100%;pointer-events:non
 .pwrow .go{flex:none;padding:11px 18px;font-size:13.5px}
 .signrow{display:flex;gap:9px;margin-top:12px;flex-wrap:wrap;align-items:center}
 .signrow .go{padding:11px 18px;font-size:13.5px}
-.linkalt{background:none;border:0;padding:0;cursor:pointer;color:var(--cy);font-family:var(--display);
+.linkalt{background:none;border:0;padding:6px 0;cursor:pointer;color:var(--cy);font-family:var(--display);
   font-weight:600;font-size:12.5px;text-decoration:none}
 .linkalt:hover{color:var(--cy-hi)}
 .saysm{font-family:var(--mono);font-size:11.5px;line-height:1.5;color:var(--faint);margin-top:9px;min-height:16px}
@@ -1225,7 +1226,7 @@ canvas.confetti{position:fixed;inset:0;width:100%;height:100%;pointer-events:non
           </div>
           <div class="mfield">
             <label for="hSeed">Your seed</label>
-            <textarea id="hSeed" spellcheck="false" placeholder="64 hex characters, or the whole technocore-identity-&#8230;.txt"></textarea>
+            <textarea id="hSeed" spellcheck="false" autocomplete="off" autocapitalize="off" autocorrect="off" data-lpignore="true" data-1p-ignore placeholder="64 hex characters, or the whole technocore-identity-&#8230;.txt"></textarea>
             <!-- Shown, not asked for: the seed already contains the DID, so
                  making somebody type the public half of the thing they just
                  pasted the private half of is a field that can only be got
@@ -1244,7 +1245,7 @@ canvas.confetti{position:fixed;inset:0;width:100%;height:100%;pointer-events:non
           <button class="go" id="doHave" type="button"><svg class="i"><use href="#i-key"/></svg><span>Sign in</span></button>
         </div>
         <p class="msay" id="haveSay"></p>
-        <p class="mfoot">No identity yet? <a href="/create.html">Make one on the Create page &rarr;</a> It takes about a minute and never leaves your browser.</p>
+        <p class="mfoot">No identity yet? <a href="/create">Make one on the Create page &rarr;</a> It takes about a minute and never leaves your browser.</p>
       </div>
     </div>
   </div>
@@ -1276,7 +1277,7 @@ canvas.confetti{position:fixed;inset:0;width:100%;height:100%;pointer-events:non
 </div>
 
 <script type="module">
-import { getSession, getVault, signIn, shortDid } from "/session.js";
+import { getSession, getVault, signIn, shortDid, signTextB64u, canSign } from "/session.js";
 
 const $=(id)=>document.getElementById(id);
 const enc=new TextEncoder();
@@ -1993,7 +1994,7 @@ function signInRow(cls="signrow"){
   go.append(icon("i-key"), el("span",null,"Sign in"));
   go.addEventListener("click",()=>openModal());
   const mk=document.createElement("a");
-  mk.className="linkalt"; mk.href="/create.html"; mk.textContent="No identity yet? Make one →";
+  mk.className="linkalt"; mk.href="/create"; mk.textContent="No identity yet? Make one →";
   row.append(go,mk);
   return row;
 }
@@ -2029,9 +2030,10 @@ async function sign(){
     const room="proof-of-learning";
     const text=`Proof of Learning: ${correct}/${GATES.length}, ${score} points, rank ${rank().word}.`;
     const nonce=(BigInt(Date.now())*1000000n+BigInt(Math.floor(Math.random()*1e6))).toString();
-    const key=await crypto.subtle.importKey("jwk",s.jwk,{name:"Ed25519"},false,["sign"]);
-    const sig=await crypto.subtle.sign({name:"Ed25519"},key,enc.encode(`${room}|${nonce}|${text}`));
-    PROOF={did:s.did,link:`${location.origin}/v#b=${b64u(enc.encode(JSON.stringify({v:1,kind:"msg",did:s.did,room,nonce,sig:b64u(sig),text})))}`};
+    /* Through the key store: this page never sees the key material, and
+       there is none in the session record to see. */
+    const sig=await signTextB64u(`${room}|${nonce}|${text}`);
+    PROOF={did:s.did,link:`${location.origin}/v#b=${b64u(enc.encode(JSON.stringify({v:1,kind:"msg",did:s.did,room,nonce,sig,text})))}`};
     body.innerHTML=`<b>Signed by ${shortDid(s.did,10,6)}.</b> The card carries a proof link, so the score cannot be `
       + `edited into a better one — anyone can check it on the Verify page.`
       + `<details><summary>What a signature proves here</summary><span>That <em>this key</em> claimed this score. `
@@ -3423,8 +3425,27 @@ function celebrate(){
     /* Only take the gesture when it landed on something. Anywhere else the
        page still scrolls, which on a phone is most of this canvas. */
     if(hit||HEAD.held){ P.down=true; cv.classList.add("holding");
-      cv.setPointerCapture?.(e.pointerId); e.preventDefault(); }
+      cv.setPointerCapture?.(e.pointerId); e.preventDefault();
+      /* ── AND ON A PHONE, TAKE THE GESTURE PROPERLY ────────────────────
+         preventDefault() on a pointerdown does not stop a touch scroll. The
+         browser decides whether a gesture is a scroll from `touch-action`,
+         and with `manipulation` it starts panning the page the instant the
+         finger moves — cancelling the pointer stream mid-drag. Reported
+         exactly that way: "if a user slides a coin inside the box the page
+         scrolls down, so you cannot play it".
+
+         Two things are needed and neither is enough alone. This flips
+         touch-action off for the duration of the grab, which is what newer
+         engines read; the non-passive touchmove listener below is what
+         actually cancels the scroll, and it is the one that works
+         everywhere. Both are undone on release, so the empty two thirds of
+         this canvas still scroll the page. */
+      cv.style.touchAction = "none"; }
   });
+  /* Non-passive ON PURPOSE — a passive listener cannot preventDefault, and
+     preventDefault is the entire job. It fires only while something is
+     actually held, so a touch that missed still scrolls normally. */
+  cv.addEventListener("touchmove",(e)=>{ if(P.down) e.preventDefault(); },{passive:false});
   cv.addEventListener("pointermove",(e)=>{
     const p=toWorld(e); P.x=p.x; P.y=p.y; P.in=true;
     hist.push({x:p.x,y:p.y,t:performance.now()});
@@ -3434,6 +3455,7 @@ function celebrate(){
   });
   const release=()=>{
     cv.classList.remove("holding"); P.down=false;
+    cv.style.touchAction = "";          // the page can scroll here again
     HEAD.held=false;
     const held=coins.find(c=>c.held);
     if(held){

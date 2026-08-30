@@ -1,0 +1,33 @@
+# Overheard — everything here is public and meant to be read.
+#
+# WHY THIS FILE EXISTS. It is not needed: with no robots.txt a crawler is
+# allowed everywhere by default, and this grants nothing it did not already
+# have. It is here because a link preview that fails to render gives no
+# reason, and "is the crawler being turned away?" is one of the few questions
+# about it that can be answered in advance rather than guessed at. Now it is
+# answered, in writing, and the next person debugging a card can rule it out
+# in one request instead of wondering.
+#
+# /api/ is excluded from crawling only because it is a set of JSON proxies
+# with no pages in it — nothing there is secret, and nothing there is a
+# document anybody would want in a search result.
+
+User-agent: *
+Allow: /
+Disallow: /api/
+
+# The card renderers, named explicitly. Same permission as everyone else;
+# stated so that a blocked preview cannot be blamed on this file.
+User-agent: Twitterbot
+Allow: /
+
+User-agent: facebookexternalhit
+Allow: /
+
+User-agent: Slackbot-LinkExpanding
+Allow: /
+
+User-agent: Discordbot
+Allow: /
+
+Sitemap: https://overheard-five.vercel.app/sitemap.xml

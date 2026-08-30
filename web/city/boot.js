@@ -31,7 +31,6 @@ export async function boot() {
   const els = {
     stage, overlay, chips: $("chips"), side: $("side"),
     hover: $("hover"), hits: $("hits"), status: $("status"), rail: $("rail"),
-    live: $("live"), liveBody: $("liveBody"), livePill: $("livePill"), liveN: $("liveN"),
   };
 
   /* ── 1. what can this machine do ─────────────────────────────────────── */
@@ -162,7 +161,10 @@ export async function boot() {
     locate: (id) => { if (id) selectAgent(id); },
     /* The feed took the room panel over; this puts it back. */
     showRoom: () => { if (st.room) showRoomPanel(); },
-    openTransmission: (r) => openTransmission(r),
+    /* A closed panel leaves a way back where it was, but only while there is
+       a room for it to describe. On the city there is nothing to reopen. */
+    panelClosed: () => { const b = $("reopen"); if (b) b.hidden = !st.room; },
+    panelOpened: () => { const b = $("reopen"); if (b) b.hidden = true; },
     flyToRoom: (room) => flyToRoom(room),
     toggleClean: () => setClean(!st.clean),
   });
@@ -187,7 +189,6 @@ export async function boot() {
     buildLabels();
     paintChips();
     refreshRail();
-    refreshLive();
     /* The tone follows the reading, not the clock. Standing in a room it is
        off and stays off; an idle city turns it off by itself, which is the
        point of it being a dial rather than a drone. */
@@ -211,63 +212,7 @@ export async function boot() {
   D.on("status", () => { paintChips(); ui.status(D.state.status); });
   /* A line arriving is a reason to redraw the rail and the feed and nothing
      else on the page — it changes a few rows of text and no geometry. */
-  D.on("peek", () => { refreshRail(); refreshLive(true); });
-
-  /* ── LIVE TRANSMISSIONS ────────────────────────────────────────────────
-     The city's global feed. It reads the same log the peeks write, so it
-     costs no requests of its own and can never show a line the page did not
-     actually fetch. Collapsed to a pill by default; the unread count is the
-     number of lines that have arrived since it was last opened. */
-  let liveSeen = 0, liveUnread = 0, lastWire = "";
-  function refreshLive(isNew = false) {
-    if (st.room || mode === "room") { if (els.live) els.live.hidden = true; return; }
-    const log = D.wireLog();
-    if (!log.length) return;
-    const stamp = `${log[0].room}#${log[0].seq}`;
-    if (isNew && stamp !== lastWire) {
-      lastWire = stamp;
-      if (!ui.liveShown()) liveUnread++;
-    }
-    ui.live(log.map((w, i) => ({
-      room: w.room, kind: w.c?.kind || "message", text: w.text, c: w.c, at: w.at,
-      who: w.did ? D.shortDid(w.did, 8, 5) : (w.nick || "—"),
-      did: w.did, seq: w.seq,
-      fresh: i === 0 && isNew,
-    })), {
-      live: D.state.status.source === "live" && D.state.status.city === "live",
-      unread: liveUnread,
-    });
-  }
-
-  /** A transmission in the city feed was clicked: go where it came from.
-   *
-   *  The room is always known, so entering is always possible. The message
-   *  itself may or may not still be in the window Technocore is serving by
-   *  the time the room loads — it is a rolling window, and this line could
-   *  be a minute old — so the focus is attempted and quietly not done if the
-   *  message has aged out. Landing in the right room is the promise; landing
-   *  on the exact line is the bonus. */
-  function openTransmission(r) {
-    if (!r?.room) return;
-    pendingFocus = { room: r.room, seq: String(r.seq || ""), did: r.did || null, at: performance.now() };
-    enterRoom(r.room);
-  }
-  let pendingFocus = null;
-
-  function tryPendingFocus() {
-    if (!pendingFocus || pendingFocus.room !== st.room) return;
-    /* Ten seconds is long enough for a slow room read and short enough that
-       a stale intent never hijacks a later visit. */
-    if (performance.now() - pendingFocus.at > 10000) { pendingFocus = null; return; }
-    const room = D.state.room;
-    if (!room?.messages?.length) return;
-    const hit = pendingFocus.seq && room.messages.find((m) => String(m.seq) === pendingFocus.seq);
-    if (hit) { pendingFocus = null; selectMessage(hit.key); return; }
-    if (pendingFocus.did) {
-      const who = room.agents.find((a) => a.did === pendingFocus.did);
-      if (who) { pendingFocus = null; selectAgent(who.id); }
-    }
-  }
+  D.on("peek", () => refreshRail());
 
   /* Entering a room shows its saved history immediately — see the snapshot
      ladder in api/room.js. Those agents are real identities that really
@@ -401,7 +346,21 @@ export async function boot() {
        rooms should light the ten that moved most, not spend the pool on the
        hundredth-most-interesting thing on screen. */
     events.sort((a, b) => b.delta - a.delta);
-    const cap = Math.min(events.length, Math.max(10, preset.agents));
+    /* ── HOW MANY OF THEM THIS WINDOW CAN HONESTLY SHOW ──────────────────
+       A beat is TALLY_BEAT long and carries at most TALLY_BATCH counts, so a
+       poll window holds a fixed number of readable events and no more. Past
+       that the choice is between a wall of numbers nobody reads and saying
+       what was left out. The rail says it. */
+    /* ROUND, NOT FLOOR. Flooring 7000/1800 gives three beats — 5.4s of counts
+       and then 1.6s of an empty city every single cycle, which is the
+       burst-then-silence rhythm this whole scheme exists to remove, just at a
+       smaller amplitude. Four beats slightly overrun the window and are cut
+       off by the next reading, which is the right way to be wrong. */
+    const beats = Math.max(1, Math.round(CITY_POLL_MS / TALLY_BEAT));
+    const cap = Math.min(events.length, beats * TALLY_BATCH);
+    const rest = events.slice(cap);
+    overMsgs = rest.reduce((n, e) => n + Math.max(1, Math.round(e.delta || 0)), 0);
+    overRooms = rest.length;
     queued = events.slice(0, cap).map((e, i) => ({
       ...e,
       /* A destination only when the data supports one: the busiest room this
@@ -423,16 +382,57 @@ export async function boot() {
        nearer their real spacing. Nothing is invented and nothing is held
        back; the last one goes out before the next reading lands. */
     queueAt = 0;
-    queueGap = Math.max(140, (CITY_POLL_MS * 0.82) / Math.max(1, queued.length));
     queueNext = performance.now() + 120;
+    refreshRail();                      // the overflow line is part of the rail
   }
 
-  /* The release valve for the above, stepped from the frame loop. */
-  let queued = [], queueAt = 0, queueNext = 0, queueGap = 500;
+  /* ══════════════════════════════════════════════════════════════════════
+     THE RELEASE VALVE, IN BEATS
+     ══════════════════════════════════════════════════════════════════════
+
+     WHAT IT WAS DOING WRONG, TWICE OVER.
+
+     First it fired the whole poll at once: twenty seconds of network
+     activity in one second, then nineteen seconds of a dead city. That was
+     fixed by spreading the events evenly across the window — one every
+     `queueGap` milliseconds — which solved the silence and created a
+     different problem. An even drip at, say, 180ms means a number appears,
+     and before your eye has finished reading it the next one has appeared
+     somewhere else. Forty counts went past in twenty seconds and none of
+     them was read.
+
+     A BEAT IS A SET YOU CAN READ. One to three counts land together, stay up
+     for TALLY_BEAT while you read them, and are replaced by the next set.
+     The eye gets a fixed rhythm and a fixed number of things to look at,
+     which is the difference between a readout and a slot machine.
+
+     HOW MANY LAND TOGETHER is decided by how many are left and how many
+     beats are left to show them in — so a quiet poll gives you one at a
+     time and a busy one gives you three, and neither is a random choice.
+
+     AND WHAT DOES NOT FIT IS SAID, NOT DROPPED SILENTLY. A window holds a
+     known number of beats. Anything past that is summed and reported in the
+     rail as "+412 more in 6 rooms", because a page that shows nine of forty
+     events and says nothing is under-reporting the network while looking
+     like it is telling you everything. */
+  const TALLY_BEAT = 1800;              // how long one set stays up
+  const TALLY_BATCH = 3;                // most that can share a beat
+  let queued = [], queueAt = 0, queueNext = 0;
+  let overMsgs = 0, overRooms = 0;
+
   function releaseSignals(now) {
     if (queueAt >= queued.length || now < queueNext || !world.life) return;
-    const e = queued[queueAt++];
-    queueNext = now + queueGap;
+    const left = queued.length - queueAt;
+    const beatsLeft = Math.max(1, Math.ceil(left / TALLY_BATCH));
+    const take = Math.min(TALLY_BATCH, Math.ceil(left / beatsLeft));
+    queueNext = now + TALLY_BEAT;
+    /* The previous beat steps aside as this one arrives. dropTally animates
+       out over 320ms, so the two overlap rather than one blinking off. */
+    clearTallies();
+    for (let k = 0; k < take && queueAt < queued.length; k++) fire(queued[queueAt++]);
+  }
+
+  function fire(e) {
     world.life.signal(e.room, e.to, e.weight);
     /* A muzzle ring at roof height was tried here and removed. Three markers
        now say "it came from this building" — the roof flashes, the spark
@@ -472,7 +472,9 @@ export async function boot() {
      A room that is already showing one adds to it rather than stacking a
      second, which is also the truthful thing to do: two readings a second
      apart are one event as far as a person watching is concerned. */
-  const TALLY_MAX = 8, TALLY_LIFE = 2600;
+  /* A set lives a little longer than the beat that replaces it, so a late
+     beat leaves the last one fading rather than the screen going blank. */
+  const TALLY_MAX = 3, TALLY_LIFE = 2200;
   const tallies = [];
 
   function tally(room, delta, weight = 1) {
@@ -662,7 +664,13 @@ export async function boot() {
       line: D.peekOf(r.room),
       hist: D.histOf(r.room),
       fresh: freshRooms.has(r.room),
-    })), { live: D.state.status.source === "live" && D.state.status.city === "live" });
+    })), {
+      live: D.state.status.source === "live" && D.state.status.city === "live",
+      /* WHAT THE BEATS COULD NOT FIT. Reported rather than dropped: the
+         alternative is a page that shows nine of forty events and implies
+         that was all of them. */
+      overMsgs, overRooms,
+    });
   }
 
   /** One peek per turn, round-robin over exactly the rooms on show. Nothing
@@ -868,7 +876,6 @@ export async function boot() {
        and so is the global feed, which is why the transmissions in here are
        attached to the agents instead. */
     ui.closeRail();
-    if (els.live) els.live.hidden = true;
 
     /* Saved BEFORE the approach flight, so "back" returns to the view the
        visitor arranged, not to wherever the transition left the camera. */
@@ -926,10 +933,10 @@ export async function boot() {
       if (camSaved) cam.restore(camSaved);
       camSaved = null;
       document.body.classList.remove("inroom");
+    $("reopen").hidden = true;
       /* Inside the veil, not after it: `mode` is still "room" for the 280ms
          the door is closing, and both of these refuse to draw in room mode. */
       refreshRail();
-      refreshLive();
     });
     world.leaveRoom();
     D.leaveRoom();
@@ -990,7 +997,6 @@ export async function boot() {
        after it was opened — it appeared, then vanished, which reads as a
        button that half works. renderFeed keeps it current instead. */
     if (!st.agentId && !st.msgKey && !ui.feedShown()) showRoomPanel();
-    tryPendingFocus();
     ui.renderFeed(r, st.msgKey);
     paintStrip(r);
   });
@@ -1248,12 +1254,7 @@ export async function boot() {
     if (nowOn && st.room) S.bedOn(true);
   };
   $("legend").onclick = () => { st.agentId = null; st.msgKey = null; ui.legend(city); };
-  $("livePill").onclick = () => {
-    const open = !ui.liveShown();
-    ui.liveOpen(open);
-    if (open) liveUnread = 0;               // opening is reading
-    refreshLive();
-  };
+  $("reopen").onclick = () => { if (st.room) showRoomPanel(); };
 
   function paintMute() {
     const b = $("mute"), on = S.enabled();

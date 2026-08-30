@@ -233,16 +233,30 @@ console.log("\n=== B. inside a room, the header reads left and has room above it
 console.log("\n=== C. what is happening in there, read from out here");
 {
   const { pg, ctx, errs } = await open();
+  /* TWO READINGS, AND THE SECOND ONE IS THE TEST. The first moves every room
+     by 14 and is what gives the page a live baseline to diff against; the
+     second moves them to 31, so the delta on screen must be 17. Waiting for
+     the first reading's counts to actually appear — rather than sleeping and
+     hoping — is what makes the second one's arithmetic meaningful. */
   bump = 14;                                   // every room moved
   await pg.evaluate(() => document.dispatchEvent(new Event("visibilitychange")));
-  await pg.waitForTimeout(2200);
+  await pg.waitForFunction(() => document.querySelectorAll(".tally").length > 0,
+    null, { timeout: 15000 });
+  await pg.evaluate(() => { window.__seen = document.querySelector(".tally b").textContent; });
   bump = 31;
   await pg.evaluate(() => document.dispatchEvent(new Event("visibilitychange")));
-  /* Long enough for the staggered release to put several counts up and for
-     the peek budget to fetch at least one line. */
-  await pg.waitForTimeout(9000);
 
-  /* ── the counts over the buildings ── */
+  /* ── the counts over the buildings ──
+     CAUGHT ON A BEAT, NOT AT A FIXED MOMENT. The counts arrive in sets of one
+     to three, hold for TALLY_BEAT and are replaced by the next set; a whole
+     poll's worth is shown and gone inside about seven seconds. A sleep of a
+     fixed length followed by one evaluate() tests the phase of the clock
+     rather than the feature — and did, reporting zero counts on a page that
+     had just shown twelve. This waits for a set to be up and reads it then. */
+  await pg.waitForFunction(() => {
+    const n = document.querySelector(".tally b");
+    return n && n.textContent !== window.__seen;
+  }, null, { timeout: 15000 });
   const t = await pg.evaluate(() => {
     const ns = [...document.querySelectorAll(".tally")];
     return {
@@ -278,7 +292,11 @@ console.log("\n=== C. what is happening in there, read from out here");
   check("the number is the delta the directory reported",
     t.labels.every((l) => Number(l.replace(/[+,]/g, "")) === 17), t.labels.join(" "));
 
-  /* ── the busiest-now rail ── */
+  /* ── the busiest-now rail ──
+     The peek budget fetches one room's newest line every few seconds, so the
+     rail needs a moment before it has lines in it. That wait used to sit
+     above the counts and is now here, where it is the thing that needs it. */
+  await pg.waitForTimeout(9000);
   const rail = await pg.evaluate(() => {
     const box = document.getElementById("rail");
     const rows = [...box.querySelectorAll(".railrow")];
@@ -719,24 +737,22 @@ console.log("\n=== F. the three that did not work");
 }
 
 /* ════════════════════════════════════════════════════════════════════════
-   G. TRANSMISSIONS, AND WHERE EACH ONE BELONGS
+   G. TRANSMISSIONS, AND THE CITY'S ONE READOUT
    ════════════════════════════════════════════════════════════════════════
 
-   Two contexts, deliberately separated:
+   IN A ROOM the messages are attached to the agents that sent them —
+   world-anchored cards on tethers, which is only meaningful where the
+   bodies are.
 
-     IN A ROOM the messages are attached to the agents that sent them —
-     world-anchored cards on tethers, which is only meaningful where the
-     bodies are. No global feed here: it would be the same activity written
-     twice beside the plaza it is already happening on.
-
-     IN THE CITY there are no bodies, so there is a compact global feed
-     instead — and there the room NAME is the useful part.
-
-   The interesting assertions are the negative ones: the feed must not be in
-   a room, the cards must not be in the city, and neither may ever show a
-   message the page did not actually read.
+   IN THE CITY there are no bodies, so activity is read two ways: the counts
+   that rise off the buildings that moved, and the Busiest Now rail. A global
+   Live Transmissions feed was tried here and removed — it duplicated the
+   rail, it could only ever report the handful of rooms the peek channel had
+   sampled, and on a phone it collapsed to an empty box with the word "Live"
+   in it. The negative assertions below are the interesting ones: no feed
+   anywhere, and the cards only ever inside a room.
    ════════════════════════════════════════════════════════════════════ */
-console.log("\n=== G. transmissions in the room, a feed in the city");
+console.log("\n=== G. transmissions in the room, counts in the city");
 {
   const { pg, ctx, errs } = await open();
   bump = 18;
@@ -747,48 +763,50 @@ console.log("\n=== G. transmissions in the room, a feed in the city");
   /* Long enough for the peek rotation to have read a couple of rooms. */
   await pg.waitForTimeout(11000);
 
-  /* ── the city: a global feed ── */
-  check("the city offers a live feed", !(await pg.evaluate(() => document.getElementById("live").hidden)));
-  check("collapsed to a pill until asked",
-    await pg.evaluate(() => document.getElementById("liveBody").hidden));
-  await pg.click("#livePill");
-  await pg.waitForTimeout(400);
+  /* ── the city: no feed, anywhere ── */
+  const gone = await pg.evaluate(() => ({
+    panel: !!document.getElementById("live"),
+    pill: !!document.getElementById("livePill"),
+    body: !!document.getElementById("liveBody"),
+    rows: document.querySelectorAll(".liverow").length,
+    css: /liverow|livepill/.test([...document.styleSheets]
+      .flatMap((sh) => { try { return [...sh.cssRules].map((r) => r.selectorText || ""); }
+                         catch { return []; } }).join(" ")),
+  }));
+  check("the city has no live-transmissions panel", !gone.panel && !gone.pill && !gone.body);
+  check("and no rows left behind by it", gone.rows === 0, String(gone.rows));
+  check("and its styles went with it", !gone.css);
 
-  const feed = await pg.evaluate(() => {
-    const rows = [...document.querySelectorAll("#liveBody .liverow")];
-    return {
-      n: rows.length,
-      rooms: rows.map((r) => r.querySelector(".rm")?.textContent ?? ""),
-      note: document.querySelector("#liveBody .livenote")?.textContent ?? "",
-      html: document.getElementById("liveBody").innerHTML,
-    };
+  /* WHAT REPLACED IT is the rail, and it must be carrying real rooms. */
+  const rail = await pg.evaluate(() => ({
+    up: !document.getElementById("rail").hidden,
+    rows: document.querySelectorAll("#rail .railrow").length,
+  }));
+  check("the rail is what the city reads instead", rail.up && rail.rows > 0,
+    `${rail.rows} rows`);
+
+  /* AND THE OVERFLOW IS DECLARED. A reading that moves more rooms than the
+     beats can show must say so rather than quietly showing a subset. */
+  const over = await pg.evaluate(() => {
+    const n = document.querySelector("#rail .railmore");
+    return n ? { text: n.textContent, title: n.title } : null;
   });
-  check("it lists what has been read", feed.n > 0 && feed.n <= 3, `${feed.n} rows`);
-  /* THE ROOM NAME IS THE POINT OF THIS PANEL. In the city there are no
-     bodies to attach a message to, so "which room" is the only spatial fact
-     a line can carry. */
-  check("and every line names its room",
-    feed.rooms.every((r) => /^in \S+/.test(r.trim())), feed.rooms.join(" | "));
-  /* AND IT DOES NOT OVERCLAIM. This is the newest line from the handful of
-     rooms the city peeks, not every message on Technocore, and the panel has
-     to say which it is. */
-  check("it says what it is and is not",
-    /each room the city is watching/i.test(feed.note), feed.note.slice(0, 48));
-  check("a stranger's words are still text, never markup",
-    !/<script/i.test(feed.html) && (await pg.evaluate(() => window.__pwned)) === undefined);
+  if (over) {
+    check("and says what the counts could not fit", /more message/.test(over.text), over.text);
+    check("with the whole reading on hover", /other room/.test(over.title));
+  } else {
+    check("no overflow line when everything fitted", true);
+  }
 
-  /* Clicking a line goes to the room it came from. */
-  const target = (feed.rooms[0] || "").replace(/^in\s+/, "").trim();
-  await pg.click("#liveBody .liverow");
+  /* Walk into a room the normal way, since there is no feed line to click. */
+  const target = await pg.evaluate(() => document.querySelector("#rail .railrow .nm").textContent);
+  await pg.click("#rail .railrow");
   await pg.waitForFunction(() => document.body.classList.contains("inroom"), null, { timeout: 20000 });
-  check("clicking a line walks into that room",
+  check("clicking a rail row walks into that room",
     (await pg.evaluate(() => window.__city.state.room)) === target,
     `${await pg.evaluate(() => window.__city.state.room)} vs ${target}`);
 
-  /* ── in the room: cards, not a feed ── */
-  check("and the global feed is not shown in there",
-    await pg.evaluate(() => document.getElementById("live").hidden));
-
+  /* ── in the room: cards ── */
   await pg.waitForTimeout(6500);
   const tx = await pg.evaluate(() => {
     const cards = [...document.querySelectorAll(".tx")];

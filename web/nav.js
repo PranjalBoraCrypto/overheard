@@ -56,7 +56,7 @@ export const PAGES = [
   { href: "/play", label: "Play", icon: "play", bar: true,
     match: (p) => p.startsWith("/play"),
     blurb: "Proof of Learning" },
-  { href: "/create.html", label: "Create", icon: "create", bar: true,
+  { href: "/create", label: "Create", icon: "create", bar: true,
     match: (p) => p.startsWith("/create"),
     blurb: "Make an identity" },
   { href: "/v", label: "Verify", icon: "verify", bar: true,
@@ -74,10 +74,17 @@ export const PAGES = [
     blurb: "Start here" },
 ];
 
-/** Where the site points off itself. */
+/** Where the site points off itself.
+ *
+ *  NOTE THE LABELS. "the network" and "worth following" are descriptions of
+ *  the relationship, and they have to stay accurate: @CryptoHayes is not the
+ *  builder of this site and must never sit under a note that says it is.
+ *  The builder's own handle is X_URL above — it carries the twitter:site and
+ *  twitter:creator tags on every page and the "Built by" credit in the
+ *  footer, and those three are the places that make an authorship claim. */
 export const ELSEWHERE = [
   { href: "https://technocore.chat", label: "technocore.chat", note: "the network" },
-  { href: X_URL, label: "@Crypto_Pranjal", note: "the builder", x: true },
+  { href: "https://x.com/CryptoHayes", label: "@CryptoHayes", note: "worth following", x: true },
 ];
 
 /** The X glyph. Filled, not stroked — it is a wordmark, not a line icon. */

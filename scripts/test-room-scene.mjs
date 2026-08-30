@@ -173,16 +173,23 @@ if (errs.length) bad++;
    E. THE POPULATION
    ════════════════════════════════════════════════════════════════════════
 
-   The figures were tapered columns with domes on them, which at the size
-   most of them are drawn is a chess pawn. They are floating orbs now — a
-   faceted shell, a screen with two eyes, fins, a thruster — and the point of
-   the rebuild is that a room reads as a POPULATION: two hundred of them, all
-   alive, none of them moving in step, and none of them costing a draw call
-   of their own.
+   The agents are hexagonal pods now — a low-poly shell, an inset black face
+   panel, two cyan eyes, side tabs, a light bar underneath and a hover wash
+   under that. Four things about the rebuild are claims, and all four are
+   easy to appear to have satisfied:
 
-   Every claim in that sentence is checkable, so this checks them.
+     · A ROOM IS A POPULATION. Two hundred pods, none of them costing a draw
+       call of their own.
+     · NOTHING MOVES EXCEPT THE TWO THINGS THAT MAY. Blinking, and the light
+       bar of whoever just sent a message. No hover, no drift, no lean, no
+       turning — which is what lets every matrix be written once.
+     · THEY DO NOT ALL FACE THE SAME WAY. The angle is drawn from the
+       identity's own hash, so the room reads as a room rather than as a
+       parade, and an agent is turned the same way on every visit.
+     · THE PALETTE IS LOCKED. One shell colour, one eye colour, for
+       everybody. No hue that varies by identity, status or activity.
    ════════════════════════════════════════════════════════════════════ */
-console.log("\n=== E. two hundred agents, and not one of them a draw call");
+console.log("\n=== E. two hundred pods, and not one of them a draw call");
 {
   /* A room with two hundred distinct speakers, which is the number the whole
      design was sized for. */
@@ -209,51 +216,86 @@ console.log("\n=== E. two hundred agents, and not one of them a draw call");
   });
   check("the room draws the whole population individually", shape.agents >= 100,
     `${shape.agents} agents`);
-  /* THE COST IS FIXED. Eight instanced meshes for the agents plus the pooled
+  /* THE COST IS FIXED. Seven instanced meshes for the pods plus the pooled
      reply sparks — a room with two hundred speakers costs what a room with
      three costs, which is the property that makes two hundred possible. */
   check("out of a handful of instanced meshes, not one per agent",
-    shape.meshes <= 11, `${shape.meshes} meshes`);
+    shape.meshes <= 10, `${shape.meshes} meshes`);
   check("and every agent is an instance in them",
     shape.counts.filter((c) => c === shape.agents).length >= 5, shape.counts.join(","));
 
-  /* NOBODY MOVES IN STEP. The whole population on one hover rate is a wave
-     going through a crowd, which reads as more mechanical than standing
-     still. Every agent's rate, amplitude and phase come from its own hash. */
-  /* MEASURED AGAINST WHAT THE RANGE CAN HOLD, not against the head count.
-     `size` spans 0.86–1.16, so rounded to two places there are only thirty
-     distinct values available — a hundred and thirty agents CANNOT have a
-     hundred and thirty different sizes, and a test demanding it is testing
-     arithmetic rather than the code. What matters is that the values are
-     spread across the range they are drawn from rather than clustered. */
-  const spread = await pg.evaluate(() => {
-    const f = window.__city.room3d.figures;
-    const stat = (k, lo, hi) => {
-      const vals = f.map((x) => x[k]);
-      const buckets = Math.min(f.length, Math.round((hi - lo) * 100));
-      const seen = new Set(vals.map((v) => Math.round(v * 100)));
-      return { used: seen.size, of: buckets };
+  /* ── NOTHING MOVES ──────────────────────────────────────────────────────
+     The whole budget argument is that a pod's matrix is written once and
+     then left alone. That is only true if the pod genuinely has no moving
+     parts, so this reads its transform twice, a second apart, and demands
+     that it has not shifted by so much as a float. */
+  const still = await pg.evaluate(async () => {
+    const r = window.__city.room3d;
+    const read = () => {
+      const m = [];
+      r.scene.traverse((o) => { if (o.isInstancedMesh && o.count > 50) m.push(o); });
+      /* The shell batch: sample twenty instances' translations. */
+      const shell = m[0];
+      const out = [];
+      for (let i = 0; i < 20; i++) {
+        const a = shell.instanceMatrix.array;
+        out.push(a[i * 16 + 12], a[i * 16 + 13], a[i * 16 + 14]);
+      }
+      return out;
     };
-    return {
-      n: f.length,
-      phase: stat("phase", 0, 6.29),
-      rate: stat("bobRate", 0.72, 1.27),
-      size: stat("size", 0.86, 1.16),
-      hue: stat("hue", 168, 202),
-    };
+    const before = read();
+    await new Promise((r2) => setTimeout(r2, 1000));
+    const after = read();
+    return before.every((v, i) => v === after[i]);
   });
-  const fills = (o, frac) => o.used >= o.of * frac;
-  check("their hover phases differ", fills(spread.phase, 0.5),
-    `${spread.phase.used} of ${spread.phase.of} possible`);
-  check("and so do their rates, so it is not one wave", fills(spread.rate, 0.7),
-    `${spread.rate.used} of ${spread.rate.of} possible`);
-  check("they are not all the same size", fills(spread.size, 0.7),
-    `${spread.size.used} of ${spread.size.of} possible`);
-  check("and not all the same colour", fills(spread.hue, 0.7),
-    `${spread.hue.used} of ${spread.hue.of} possible`);
+  check("a pod does not move, at all, ever", still);
+  /* A poll landing marks the whole roster for a re-place, so this waits for
+     the next frame rather than racing it. */
+  check("and every one of them has been placed",
+    await pg.evaluate(async () => {
+      await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+      return window.__city.room3d.figures.every((f) => f.placed);
+    }));
 
-  /* LEVEL OF DETAIL. A far agent must be genuinely skipped, not merely given
-     a cheaper animation — the whole budget argument rests on it. */
+  /* ── THEY DO NOT ALL FACE THE SAME WAY ──────────────────────────────────
+     Facing was, briefly, "every pod turns to the centre of the plaza". That
+     is tidy and it is a claim the data does not support, and it put whole
+     arcs of the room into identical rotations. The angle is arbitrary and
+     hash-derived now, so what matters is that the values are spread right
+     round the circle rather than clustered. */
+  const yaws = await pg.evaluate(() => {
+    const f = window.__city.room3d.figures;
+    /* Twelve buckets of thirty degrees. A hash spread over two hundred
+       agents should touch every one of them. */
+    const b = new Array(12).fill(0);
+    for (const x of f) {
+      const a = ((x.yaw % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
+      b[Math.floor(a / (Math.PI * 2) * 12) % 12]++;
+    }
+    return b;
+  });
+  check("pods face every direction, not one", yaws.filter((n) => n > 0).length >= 10,
+    yaws.join(","));
+  check("and no single direction swallows the room",
+    Math.max(...yaws) < yaws.reduce((a, b) => a + b, 0) * 0.3, yaws.join(","));
+
+  /* ── ONE PALETTE ────────────────────────────────────────────────────────
+     No per-identity hue, no per-identity size. Checked on the figures rather
+     than on pixels, because the claim is about what the code assigns. */
+  const palette = await pg.evaluate(() => {
+    const f = window.__city.room3d.figures;
+    const keys = new Set();
+    for (const x of f) for (const k of Object.keys(x)) keys.add(k);
+    return { keys: [...keys], sizes: new Set(f.map((x) => x.size)).size };
+  });
+  check("no agent carries a colour of its own",
+    !palette.keys.includes("hue") && !palette.keys.includes("tint"),
+    palette.keys.join(" "));
+  check("and none carries a size of its own", palette.sizes <= 1,
+    `${palette.sizes} distinct`);
+
+  /* LEVEL OF DETAIL. Distance decides whether a pod's blink is drawn at all;
+     past the mid band an eye is a fraction of a pixel. */
   const lods = await pg.evaluate(() => {
     const c = [0, 0, 0];
     for (const f of window.__city.room3d.figures) c[f.lod]++;
@@ -268,8 +310,8 @@ console.log("\n=== E. two hundred agents, and not one of them a draw call");
   const blinks = await pg.evaluate(async () => {
     const f = window.__city.room3d.figures;
     let any = 0, all = 0, frames = 0;
-    for (let i = 0; i < 100; i++) {
-      const n = f.filter((x) => x.blink > 0).length;
+    for (let i = 0; i < 140; i++) {
+      const n = f.filter((x) => x.blinkT >= 0).length;
       if (n > 0) any++;
       if (n === f.length) all++;
       frames++;
@@ -280,6 +322,43 @@ console.log("\n=== E. two hundred agents, and not one of them a draw call");
   check("somebody is always blinking in a room this size", blinks.any > 0,
     `${blinks.any}/${blinks.frames} frames`);
   check("and never everybody at once", blinks.all === 0, `${blinks.all} frames had all of them`);
+
+  /* ── THE MESSAGE PULSE BELONGS TO ONE POD ───────────────────────────────
+     The bar under a pod means "this identity just sent something". If it
+     lights on anybody else it is a lie, and the neighbours-glance version of
+     this feature was removed for exactly that reason. */
+  /* Stop the fixture feeding the room first. Otherwise the next poll speaks
+     for the very agent this is watching, re-arms its pulse, and the test
+     reads correct behaviour as a stuck light. */
+  fresh = [];
+  await pg.waitForTimeout(2600);
+  const pulse = await pg.evaluate(async () => {
+    const r = window.__city.room3d;
+    const id = r.figures[7].id;
+    r.speak(id);
+    await new Promise((s) => setTimeout(s, 200));
+    const litNow = r.figures.filter((f) => f.pulseT >= 0).map((f) => f.id);
+    const mine = r.figures[7].lit;
+    /* DID IT EVER END, rather than is it dark right now. The room is live:
+       another message can legitimately arrive for this same agent inside the
+       window and re-arm the pulse, and a snapshot at the end would read that
+       as a light that never went out. Sampling for the moment it returns to
+       rest is the claim that actually matters. */
+    let ended = false;
+    for (let k = 0; k < 30; k++) {
+      await new Promise((s) => setTimeout(s, 50));
+      const self = r.figures.find((f) => f.id === id);
+      if (self && self.pulseT < 0) { ended = true; break; }
+    }
+    return { litNow, mine, after: ended ? 0 : 1, target: id };
+  });
+  check("a new message lights exactly one pod",
+    pulse.litNow.length === 1 && pulse.litNow[0] === pulse.target,
+    `${pulse.litNow.length} lit`);
+  check("and it is genuinely bright while it is lit", pulse.mine > 0.3,
+    pulse.mine.toFixed(2));
+  check("and it is over inside a second and a half", pulse.after === 0,
+    `${pulse.after} still lit`);
 
   check("no page errors from any of it", errs.length === 0, errs.slice(0, 2).join(" | "));
   if (errs.length) bad++;

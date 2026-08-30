@@ -137,7 +137,7 @@ check('and the reason for having a key at all is its own section', await pg.loca
 const why = (await pg.locator('#idbar').textContent()) || '';
 check('which says what a key buys you, in one line', /signed/i.test(why) && /Create an identity/.test(why));
 check('with the create button on the edge of the bar',
-  await pg.locator('#idbar a.go[href="/create.html"]').isVisible());
+  await pg.locator('#idbar a.go[href="/create"]').isVisible());
 
 /* Checking whether a name is taken is two public reads. Refusing to answer
    until somebody signs in asks them to commit before they know the name they
