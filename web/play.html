@@ -3037,8 +3037,28 @@ function celebrate(){
   const P={ x:-999, y:-999, px:-999, py:-999, vx:0, vy:0, down:false, in:false };
   const hist=[];                          // recent samples, for throwing
 
+  /* ── letting go ─────────────────────────────────────────────────────────
+     Detected in the solver rather than in the pointer handler, so every way
+     of letting go goes through it: the mouse, the finger, a cancelled touch,
+     and the test handle. */
+  let wasHeld=false, clock=0, thudAt=-9;
+  function letGo(){
+    const d=Math.hypot(HEAD.dx,HEAD.dy);
+    const extra=Math.max(0, (HEAD.strain||0) - 1);
+    HEAD.strain=0;
+    if(d<1 || extra<=0) return;
+    /* The load the mount took, coming back as speed — the way anything bent
+       does. Bounded, because a mount that returns unbounded energy is a
+       catapult, and this is a robot with a coin slot. */
+    const kick=Math.min(4200, 520*extra);
+    HEAD.vx += -HEAD.dx/d*kick;
+    HEAD.vy += -HEAD.dy/d*kick;
+  }
+
   /* ── the solver ───────────────────────────────────────────────────────── */
   function step(dt){
+    if(!HEAD.held && wasHeld) letGo();
+    wasHeld=HEAD.held;
     // the head: a stiffening spring on a pivot
     if(HEAD.held){
       /* Resistance, and an honest reason for it. The raw pull is squashed
@@ -3052,6 +3072,18 @@ function celebrate(){
       const rx=(P.x-HEAD.hx), ry=(P.y-HEAD.hy);
       const raw=Math.hypot(rx,ry)||1e-6;
       const mag=MAXPULL*Math.tanh(raw/MAXPULL);
+      /* HOW HARD, not just how far. tanh stops the head after 34px however
+         hard you pull, which is right — that is what a stiff mount looks
+         like — but it also threw the effort away. Measured before this
+         existed: pulling 30px snapped back at 857, pulling 120 at 1710, and
+         pulling 480 at 1715. Past about a hundred pixels the toy stopped
+         caring, so a gentle tug and a two-handed yank landed identically and
+         the pile could not tell them apart.
+
+         `strain` is the pull the hand actually made, unclamped. The head
+         still refuses to move past the limit; the mount behind it is taking
+         the load, and letGo() gives it back. */
+      HEAD.strain=Math.min(12, raw/MAXPULL);
       const nx=rx/raw*mag, ny=ry/raw*mag;
       HEAD.vx=(nx-HEAD.dx)/Math.max(dt,1e-4); HEAD.vy=(ny-HEAD.dy)/Math.max(dt,1e-4);
       HEAD.dx=nx; HEAD.dy=ny;
@@ -3062,6 +3094,7 @@ function celebrate(){
       HEAD.vx+=(-K*HEAD.dx - C*HEAD.vx)*dt;
       HEAD.vy+=(-K*HEAD.dy - C*HEAD.vy)*dt;
       const wasOut=d>4;
+      const pdx=HEAD.dx, pdy=HEAD.dy;            // where it was, for the crossing test
       HEAD.dx+=HEAD.vx*dt; HEAD.dy+=HEAD.vy*dt;
       // and it is allowed to be properly still
       if(Math.hypot(HEAD.dx,HEAD.dy)<0.5 && Math.hypot(HEAD.vx,HEAD.vy)<9){
@@ -3070,8 +3103,29 @@ function celebrate(){
       const now=Math.hypot(HEAD.dx,HEAD.dy);
       const sp=Math.hypot(HEAD.vx,HEAD.vy);
       /* It lands when it comes back through the middle with speed still on
-         it. That is the thud, and everything loose nearby knows about it. */
-      if(wasOut && now<=4 && sp>150) impact(sp);
+         it. That is the thud, and everything loose nearby knows about it.
+
+         THE WINDOW USED TO BE A PLACE, AND A FAST HEAD STEPPED OVER IT. The
+         test was "is it now within 4px of centre", and a head returning at
+         three thousand pixels a second covers fifty in a frame: it was at 34
+         on one side before the update and 30 on the other after it, never
+         inside the window at all. So the thud was not recorded on the pass
+         that deserved it — it was recorded several oscillations later, once
+         the spring had decayed enough to land a step inside 4px.
+
+         Measured, with the slam strength printed at the moment impact() was
+         called: pulling 30px reported 298, pulling 480px reported 302. The
+         head really was coming back four times faster; the detector was
+         simply reading a different, later, slower pass every time. That is
+         the whole reason a hard drag felt the same as a gentle one.
+
+         A crossing is an event, not a location. The displacement vector
+         reversing through zero is the pass, at any speed. */
+      const crossed=(pdx*HEAD.dx + pdy*HEAD.dy) < 0;
+      clock+=dt;
+      if(wasOut && (now<=4 || crossed) && sp>150 && clock-thudAt>0.15){
+        thudAt=clock; impact(sp);
+      }
     }
     HEAD.tilt += ((HEAD.dx*0.0042) - HEAD.tilt) * Math.min(1,dt*14);
     HEAD.squash = Math.max(0, HEAD.squash - dt*4.2);
@@ -3260,22 +3314,76 @@ function celebrate(){
     rings.push({x:x0,y:y0,t:0,life:.5,r0:6,r1:30+j*0.05,w:2.4,col:"cy"});
   }
   function impact(sp){
+    /* How hard this one was, on a scale the rest of the function can use.
+       A head coming back from a light tug arrives around 850; one thrown by
+       a real yank arrives at several thousand. */
+    const hard=Math.min(1, Math.max(0,(sp-800))/2600);
+    HEAD.lastSlam=sp; HEAD.lastHard=Math.max(HEAD.lastHard||0,hard); HEAD.thuds=(HEAD.thuds||0)+1;
+    HEAD.peakSlam=Math.max(HEAD.peakSlam||0, sp);   // published, so it can be measured
     shake=Math.min(1,sp/900);
     HEAD.squash=Math.min(1,sp/700);
     HEAD.flash=1;
-    rings.push({x:HEAD.bx,y:FLOOR-6,t:0,life:.72,r0:20,r1:150,w:4,col:"hi"});
-    for(let i=0;i<10;i++) spark.push({x:HEAD.bx+rnd(-40,40),y:FLOOR-8,
-      vx:rnd(-190,190),vy:rnd(-260,-70),t:0});
+    rings.push({x:HEAD.bx,y:FLOOR-6,t:0,life:.72,r0:20,r1:150+120*hard,w:4,col:"hi"});
+    for(let i=0;i<10+Math.round(14*hard);i++) spark.push({x:HEAD.bx+rnd(-40,40),y:FLOOR-8,
+      vx:rnd(-190,190)*(1+hard),vy:rnd(-260,-70)*(1+hard*1.4),t:0});
     /* Everything loose nearby learns about it. Inverse-square-ish falloff,
        so the coins at its feet jump and the ones across the well do not. */
     for(const c of coins){
       if(c.held) continue;
       const dx=c.x-HEAD.bx, dy=c.y-(FLOOR-20), d=Math.max(28,Math.hypot(dx,dy));
-      const f=Math.min(420, 16000*sp/900/(d*d)*40);
-      c.vx+=dx/d*f; c.vy+=dy/d*f - f*0.55;
+      const f=Math.min(420+760*hard, 16000*sp/900/(d*d)*40);
+      /* The shove the far pile feels: outward from the point of impact. */
+      let ivx=dx/d*f, ivy=dy/d*f - f*0.55;
+
+      /* ── AND THE ONES AT ITS FEET GO UP ITS FACE ────────────────────────
+         A dome slamming down and rebounding does not push the things touching
+         it straight outwards. They are in contact with a curved surface that
+         is moving, so they leave along its TANGENT — and near the crown the
+         tangent points up and inward. It is why a coin on the shoulder of a
+         struck bell flips over the top of it rather than off the side.
+
+         That is the whole mechanism by which some of them end up in the slot.
+         Nothing aims at the slot and nothing is teleported into it: they are
+         thrown up the face, and the ones whose arc happens to come down
+         inside the throat are eaten by the same collision test that catches a
+         coin you threw in by hand. Most miss. */
+      /* MEASURED FROM THE FACE, NOT FROM THE MIDDLE. The body is 88px wide
+         and a coin is 16, so nothing can rest closer than about 62px to the
+         centre — a falloff measured from the centre therefore spends its top
+         half on positions no coin can occupy, and the ones actually touching
+         the head scored 0.6 of an effect meant for something in contact with
+         it. Measured from the surface, a coin leaning on the face gets all
+         of it, which is the only place the story makes sense. */
+      const up=Math.max(0, 1 - Math.max(0, d-62)/130);
+      if(up>0 && hard>0){
+        /* REPLACING the outward shove near the head rather than adding to
+           it, because a coin in contact with the face is not being pushed
+           away from the impact — it is being carried by a surface, and it
+           leaves along that surface. Adding both is how the first attempt
+           launched them 570px into the roof.
+
+           And the speed it leaves at belongs to the DOME, not to the arm:
+           a coin can only ride a curved face so fast before it separates
+           from it, so this saturates where the outward shove does not. That
+           is why a harder pull throws the whole pile further but does not
+           simply fire more of them through the ceiling. */
+        const ride=690+110*hard, side=(dx<0?1:-1);
+        const inward=265+40*hard;
+        /* Weighted by the slam as well as the distance. Blending on `up`
+           alone handed a feather tug the same 600px ride as a real yank —
+           measured, it fed the slot once in four light pulls, which made the
+           toy look like it was doing it on purpose. A tap should rattle the
+           pile and nothing more. */
+        const w=up*hard;
+        ivx = ivx*(1-w) + side*inward*w;
+        ivy = ivy*(1-w) - ride*w;
+        c.av += side*up*hard*7;                  // spinning, because it rolled off
+      }
+      c.vx+=ivx; c.vy+=ivy;
       c.still=0; c.ox=c.x; c.oy=c.y; c.wake=0;
     }
-    say("It felt that &middot; <b>the whole frame did</b>");
+    say(hard>0.45 ? "It felt that &middot; <b>the whole frame did</b>"
+                  : "It felt that &middot; <b>the whole frame did</b>");
   }
   function eat(c){
     const i=coins.indexOf(c); if(i>=0) coins.splice(i,1);
@@ -3575,6 +3683,10 @@ function celebrate(){
                  pull:(dx,dy)=>{ HEAD.held=true; HEAD.hx=HEAD.bx; HEAD.hy=HEAD.by;
                    P.x=HEAD.bx+dx; P.y=HEAD.by+dy; for(let i=0;i<20;i++) step(1/180); },
                  drop:()=>{ HEAD.held=false; },
+                 get strain(){ return HEAD.strain||0; },
+                 get slam(){ return HEAD.peakSlam||0; },
+                 get thuds(){ return HEAD.thuds||0; },
+                 get hard(){ return HEAD.lastHard||0; },
                  feed:()=>{ const c=coins.find(k=>!k.held); if(!c) return;
                    c.x=HEAD.bx+HEAD.dx; c.y=HEAD.by-200; c.vx=0; c.vy=300; c.still=0; } };
 })();

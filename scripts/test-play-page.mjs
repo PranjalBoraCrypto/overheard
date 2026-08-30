@@ -1025,6 +1025,107 @@ await pg.screenshot({ path: '/tmp/play-start.png', fullPage: true }).catch(() =>
 await pg.click('#toBrief'); await pg.waitForTimeout(700);
 await pg.screenshot({ path: '/tmp/play-brief.png', fullPage: true }).catch(() => {});
 
+/* ════════════════════════════════════════════════════════════════════════
+   THE SLAM CARRIES HOW HARD IT WAS PULLED
+   ════════════════════════════════════════════════════════════════════════
+
+   Asked for: dragging the head should throw the coins, harder for a harder
+   drag, and some of them should end up in the slot.
+
+   The first half was already meant to work and did not, for a reason worth
+   writing down. The thud fired on a POSITION — "is the head now within 4px
+   of centre" — and a head returning at three thousand pixels a second covers
+   fifty in a frame. It was at 34 on one side before the update and 30 on the
+   other after it, and never inside the window at all, so the slam was not
+   recorded on the pass that deserved it. It was recorded several
+   oscillations later, once the spring had decayed enough to land a step
+   inside 4px.
+
+   Measured, printing the strength passed to impact(): a 30px pull reported
+   298 and a 480px pull reported 302. The head really was coming back four
+   times faster. The detector was reading a different, slower pass every
+   time, which is exactly why a hard drag felt like a gentle one.
+
+   A crossing is an event, not a location. These are the guards.
+   ════════════════════════════════════════════════════════════════════ */
+console.log('\n=== M. the slam carries how hard it was pulled');
+{
+  /* BACK TO THE TOY, AND LET IT SETTLE. Section L left this page in the
+     briefing, where the toy is not on screen — and it stops stepping when
+     nobody can see it, which is correct and which quietly froze the first
+     version of this section: the head stayed where pull() put it, no thud
+     ever fired, and the coin speeds being measured were leftovers from
+     section B. */
+  await pg.goto('http://localhost:8909/play');
+  await pg.waitForFunction(() => window.__toy && window.__toy.coins.length >= 20,
+    null, { timeout: 20000 });
+  await pg.evaluate(() => document.querySelector('#toy, canvas')?.scrollIntoView({ block: 'center' }));
+  await pg.waitForFunction(() => window.__toy.coins.every((c) => Math.hypot(c.vx, c.vy) < 6),
+    null, { timeout: 20000 }).catch(() => {});
+
+  const slam = async (dist) => pg.evaluate(async (dist) => {
+    const T = window.__toy;
+    /* Wait for the pile to actually stop, so what is measured is this slam
+       and not the tail of the last one. */
+    const t1 = performance.now();
+    while (performance.now() - t1 < 4000
+      && !T.coins.every((c) => Math.hypot(c.vx, c.vy) < 8)) {
+      await new Promise((r) => requestAnimationFrame(r));
+    }
+    T.HEAD.peakSlam = 0; T.HEAD.lastHard = 0;
+    const fed0 = T.fed;
+    T.pull(0, -dist);
+    T.drop();
+    let maxCoin = 0;
+    const t0 = performance.now();
+    while (performance.now() - t0 < 2000) {
+      await new Promise((r) => requestAnimationFrame(r));
+      for (const c of T.coins) maxCoin = Math.max(maxCoin, Math.hypot(c.vx, c.vy));
+    }
+    await new Promise((r) => setTimeout(r, 1600));
+    return { slam: Math.round(T.slam), coin: Math.round(maxCoin), ate: T.fed - fed0 };
+  }, dist);
+
+  const soft = await slam(30);
+  const hard = await slam(360);
+
+  /* THE REGRESSION GUARD, and the one that would have caught the original.
+     Before the crossing detector these two numbers were 298 and 302. */
+  check('a hard pull lands harder than a gentle one',
+    hard.slam > soft.slam * 2.5, `${soft.slam} vs ${hard.slam}`);
+  check('and the pile is thrown harder for it',
+    hard.coin > soft.coin * 2, `${soft.coin} vs ${hard.coin} px/s`);
+  check('a gentle pull puts nothing in the slot', soft.ate === 0, `${soft.ate} fed`);
+
+  /* SOME OF THEM GO IN, and "some" is the honest word: nothing aims at the
+     slot. Coins in contact with the face leave along its tangent, which near
+     the crown points up and inward, and the ones whose arc happens to come
+     down inside the throat are eaten by the same test that catches a coin
+     thrown in by hand. Most miss. So this is asserted over several slams
+     rather than one, because a single chaotic pile is not evidence. */
+  let ate = hard.ate, slams = 1;
+  for (let i = 0; i < 5 && ate === 0; i++) { ate += (await slam(360)).ate; slams++; }
+  check(`and a hard slam feeds the slot within a few goes`,
+    ate > 0, `${ate} over ${slams} slam(s)`);
+
+  /* AND IT IS NOT A MACHINE THAT FEEDS ITSELF. The whole point of the toy is
+     the throw; a slam that emptied the well would replace it. */
+  const many = await pg.evaluate(async () => {
+    const T = window.__toy;
+    const fed0 = T.fed, n0 = T.coins.length;
+    for (let i = 0; i < 4; i++) {
+      T.pull(0, -420); T.drop();
+      await new Promise((r) => setTimeout(r, 2600));
+    }
+    return { ate: T.fed - fed0, left: T.coins.length, n0 };
+  });
+  check('four hard slams do not empty the well', many.ate <= 8, `${many.ate} fed in four`);
+  check('and the well refills itself', many.left >= many.n0 - 4, `${many.n0} → ${many.left}`);
+
+  const rest = await pg.evaluate(() => Math.round(Math.hypot(window.__toy.HEAD.dx, window.__toy.HEAD.dy)));
+  check('the head still comes to rest afterwards', rest < 3, `${rest}px off centre`);
+}
+
 console.log('\nerrors:', errs);
 if (errs.length) bad++;
 await b.close(); srv.close();
