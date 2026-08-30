@@ -244,6 +244,20 @@ a.step{text-decoration:none;color:inherit;display:block}
   .rise{opacity:1;transform:none}
   .tcard::before{display:none}
 }
+
+/* ── A FINGER IS NOT A CURSOR ────────────────────────────────────────────
+   Measured across the whole site at 390px before changing anything: this
+   page carried controls between 30 and 43px tall. They are fine to click and
+   fiddly to tap — Apple asks for 44pt and Android for 48dp, and the ones
+   that miss are the ones people jab at twice.
+
+   Only the boxes grow. Nothing moves to a different place, nothing changes
+   what it does, and none of it exists above 620px. Links that live inside a
+   sentence are deliberately left alone: a text link is the height of its
+   line, and padding one out to 44px puts a hole in the paragraph. */
+@media (max-width:620px){
+  .go{min-height:44px;display:inline-flex;align-items:center}
+}
 </style>
 <script src="/bar.js" type="module"></script>
 <script src="/foot.js" type="module"></script>

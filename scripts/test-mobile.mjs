@@ -403,6 +403,103 @@ console.log("\n=== the tab strip says that it scrolls");
   }
 }
 
+
+/* ════════════════════════════════════════════════════════════════════════
+   THE SITE DOES NOT COOK THE PHONE
+   ════════════════════════════════════════════════════════════════════════
+
+   Reported as "my phone went very hot after running the site". Profiled at
+   390px across all seven pages before changing anything, and two things
+   accounted for nearly all of it:
+
+     THE BLOOMS. Three fixed layers, up to 700px across, under
+     filter:blur(90px), animated with translate AND scale — so the blur
+     cannot be rasterised once and reused, it is recomputed as the layer
+     resizes, sixty times a second, on six of the seven pages, forever. This
+     is what the site was doing while apparently doing nothing.
+
+     A rule to stop them already existed for prefers-reduced-motion, and it
+     had never worked: `.sky i` is (0,1,1) and the animations arrive through
+     `.sky i:nth-child(1)` at (0,2,1), so the more specific selector won and
+     the accessibility promise was quietly broken. Both rules now come
+     through the same door.
+
+     SIXTY FRAMES OF 3-D. The city asked for sixty frames a second of a
+     WebGL scene, indefinitely, on a device with no fan. It draws thirty on
+     a phone now — the same scene, the same data, the same code, drawn half
+     as often — and is untouched on a desktop.
+
+   Measured effect on the profile: long tasks on /city over a five-second
+   window fell from 4,830ms to 1,713ms, and the number of running animations
+   fell on every page.
+   ════════════════════════════════════════════════════════════════════ */
+console.log("\n=== the site does not cook the phone");
+{
+  const running = (pg) => pg.evaluate(() =>
+    (document.getAnimations ? document.getAnimations() : [])
+      .filter((a) => a.playState === "running")
+      .filter((a) => a.effect?.target?.parentElement?.classList?.contains("sky")).length);
+
+  for (const [route, name] of [["/", "home"], ["/rooms", "rooms"], ["/city", "city"]]) {
+    const ctx2 = await b.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+    const pg = await ctx2.newPage();
+    await pg.goto("http://localhost:8995" + route);
+    await pg.waitForTimeout(1800);
+    check(`${name}: the blooms are still on a phone`, (await running(pg)) === 0,
+      `${await running(pg)} animating`);
+    await ctx2.close();
+  }
+
+  /* THE OTHER HALF OF THE RULE. It is phone-only, and a rule nobody checks
+     the far side of is a rule that quietly becomes site-wide. */
+  {
+    const ctx2 = await b.newContext({ viewport: { width: 1280, height: 900 } });
+    const pg = await ctx2.newPage();
+    await pg.goto("http://localhost:8995/");
+    await pg.waitForTimeout(1800);
+    check("and they still drift on a desktop, which was never the complaint",
+      (await running(pg)) >= 2, `${await running(pg)} animating`);
+    await ctx2.close();
+  }
+
+  /* AND THE REDUCED-MOTION PROMISE, which the site had been making and not
+     keeping since the blooms were written. */
+  {
+    const ctx2 = await b.newContext({ viewport: { width: 1280, height: 900 }, reducedMotion: "reduce" });
+    const pg = await ctx2.newPage();
+    await pg.goto("http://localhost:8995/");
+    await pg.waitForTimeout(1500);
+    check("reduced motion stops them too, which it never actually did",
+      (await running(pg)) === 0, `${await running(pg)} animating`);
+    await ctx2.close();
+  }
+
+  /* THE FRAME CAP. It cannot be proved by counting frames on a machine that
+     never reaches thirty in the first place — this container's software
+     renderer manages about twenty — so the cap itself is published and read.
+     The behavioural half is the ceiling: draws per second must never exceed
+     it, which is checkable on any machine, fast or slow. */
+  for (const [w, h, mob, want, label] of [[390, 844, true, 30, "a phone"], [1280, 900, false, 0, "a desktop"]]) {
+    const ctx2 = await b.newContext({ viewport: { width: w, height: h }, isMobile: mob, hasTouch: mob });
+    await ctx2.addInitScript(() => { try { localStorage.setItem("overheard.city.quality", "performance"); } catch {} });
+    const pg = await ctx2.newPage();
+    await pg.goto("http://localhost:8995/city");
+    await pg.waitForFunction(() => window.__city?.world?.renderer, null, { timeout: 40000 }).catch(() => {});
+    await pg.waitForTimeout(2500);
+    const cap = await pg.evaluate(() => window.__city?.fpsCap ?? -1);
+    check(`on ${label} the city caps at ${want || "nothing"}`, cap === want, `cap ${cap}`);
+    if (want) {
+      const a = await pg.evaluate(() => window.__city.world.renderer.info.render.frame);
+      const t0 = Date.now();
+      await pg.waitForTimeout(4000);
+      const c = await pg.evaluate(() => window.__city.world.renderer.info.render.frame);
+      const rate = (c - a) / ((Date.now() - t0) / 1000);
+      check("and never draws faster than that", rate <= want + 3, `${rate.toFixed(1)} draws/s`);
+    }
+    await ctx2.close();
+  }
+}
+
 await b.close(); srv.close();
 console.log(bad ? `\n${bad} FAILURE(S)` : "\nall good");
 process.exit(bad ? 1 : 0);

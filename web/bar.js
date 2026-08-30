@@ -334,6 +334,11 @@ const CSS = `
   .tabs::-webkit-scrollbar{display:none}
   .tabs a{flex:none;padding:9px 11px;font-size:13px}
   .menu,.menu.wide{width:min(344px,calc(100vw - 52px))}
+  /* The wordmark's halo is a blurred conic gradient rotating forever, on
+     every page of the site. It is small, so it is not the biggest cost on a
+     phone, but it is a continuous one that buys a shimmer nobody came for.
+     The glyph keeps its glow; only the rotation stops. */
+  .glyph::after{animation:none}
 }
 `;
 

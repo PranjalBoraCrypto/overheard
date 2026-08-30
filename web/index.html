@@ -75,6 +75,28 @@ body{
 @keyframes drift1{50%{transform:translate(120px,90px) scale(1.15)}}
 @keyframes drift2{50%{transform:translate(-90px,140px) scale(1.1)}}
 @keyframes drift3{50%{transform:translate(70px,-110px) scale(1.18)}}
+
+/* ── THE BLOOMS STOP DRIFTING ON A TOUCH DEVICE ──────────────────────────
+   Reported as "my phone went very hot". These are three fixed layers up to
+   700px across under filter:blur(90px), and the animation scales them — so
+   the blur cannot be rasterised once and reused, it is recomputed as the
+   layer resizes, every frame, on every page, forever. It is the single most
+   expensive thing this site does when it is apparently doing nothing.
+
+   They stay exactly where they are and look exactly as they look; they stop
+   moving. The motion was 120px over 26 seconds behind a 90px blur, which is
+   below the threshold of anybody noticing on a 390px screen, and it was
+   costing more than everything else on the page combined. */
+@media (max-width:900px){ .sky i:nth-child(n){animation:none} }
+
+/* ── A FINGER IS NOT A CURSOR ────────────────────────────────────────────
+   The one standalone control on this page that missed 44px. The inline link
+   in the hint under the field is deliberately left as it is: it lives inside
+   a sentence, and padding a text link out to 44px puts a hole in the
+   paragraph around it. */
+@media (max-width:620px){
+  .newhere{min-height:44px}
+}
 .grid-l{
   position:fixed;inset:0;z-index:0;pointer-events:none;
   background:

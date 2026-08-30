@@ -1534,8 +1534,33 @@ export async function boot() {
     cam.flyTo({ tx: keepTarget.x, tz: keepTarget.z, dist: keepDist }, 0);
   }
 
+  /* ── HALF THE FRAMES ON A PHONE ────────────────────────────────────────
+     Reported: "my phone went very hot after running the site". This page is
+     the only one with a 3-D scene in it, and it was asking for sixty frames
+     a second of it, indefinitely, on a device with no fan and a battery.
+
+     Sixty is the right number for a mouse-driven camera on a desktop, where
+     a drag has to feel attached to the hand. On a phone the camera is moved
+     in short flicks and the city's own motion is drifting agents and slow
+     traffic — none of it is fast enough for the difference between 30 and 60
+     to be visible, and the second thirty frames are pure heat.
+
+     Nothing is switched off and nothing behaves differently. The same scene
+     is updated with the same data by the same code; it is simply drawn half
+     as often, so `dt` arrives at ~33ms instead of ~16 and everything moves at
+     exactly the speed it did before. */
+  const FPS_CAP = phone() ? 30 : 0;
+  const FRAME_GAP = FPS_CAP ? 1000 / FPS_CAP - 3 : 0;
+  let drewAt = 0;
+
   const watcher = Q.makeWatcher({
-    target: 34,
+    /* THE WATCHER HAS TO BE TOLD ABOUT THE CAP, or it reads a deliberate 30
+       as a struggling 30 and downgrades the quality preset every two seconds
+       forever. Below the cap it still steps down, which is the safety net
+       that matters; it no longer steps up, because at a 30-frame ceiling
+       "comfortably fast" is always true and stepping up would spend the
+       headroom on heat rather than on anything anybody can see. */
+    target: FPS_CAP ? 24 : 34,
     onDown: () => {
       const i = Q.LEVELS.indexOf(level);
       if (i > 0) setLevel(Q.LEVELS[i - 1], true);
@@ -1701,6 +1726,10 @@ export async function boot() {
 
   function frame(now) {
     raf = requestAnimationFrame(frame);
+    /* See FPS_CAP. The rAF loop still runs at the display's rate — it is what
+       schedules us — and most of its callbacks now return immediately. */
+    if (FRAME_GAP && now - drewAt < FRAME_GAP) return;
+    drewAt = now;
     const dt = Math.min(0.05, (now - last) / 1000 || 0.016);
     last = now;
     watcher.tick(now);
@@ -1829,6 +1858,10 @@ export async function boot() {
     get room3d() { return room3d; }, get mode() { return mode; }, get roomCam() { return roomCam; },
     enterRoom, leaveRoom, flyToDistrict, flyToRoom, selectAgent, selectMessage, setLevel,
     fps: () => watcher.fps(),
+    /* Read-only, and published for the same reason everything else here is:
+       a frame cap cannot be proved from the outside on a machine that never
+       reaches it, and the test container's software renderer never does. */
+    get fpsCap() { return FPS_CAP; },
   };
 }
 

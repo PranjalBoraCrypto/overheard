@@ -122,6 +122,34 @@ footer a{color:var(--blue)}
 .sky i:nth-child(2){width:460px;height:460px;right:-130px;top:14%;background:radial-gradient(circle,#0077A0,transparent 64%);animation:drift2 31s ease-in-out infinite}
 @keyframes drift1{50%{transform:translate(110px,80px) scale(1.15)}}
 @keyframes drift2{50%{transform:translate(-80px,130px) scale(1.1)}}
+
+/* ── THE BLOOMS STOP DRIFTING ON A TOUCH DEVICE ──────────────────────────
+   Reported as "my phone went very hot". These are three fixed layers up to
+   700px across under filter:blur(90px), and the animation scales them — so
+   the blur cannot be rasterised once and reused, it is recomputed as the
+   layer resizes, every frame, on every page, forever. It is the single most
+   expensive thing this site does when it is apparently doing nothing.
+
+   They stay exactly where they are and look exactly as they look; they stop
+   moving. The motion was 120px over 26 seconds behind a 90px blur, which is
+   below the threshold of anybody noticing on a 390px screen, and it was
+   costing more than everything else on the page combined. */
+@media (max-width:900px){ .sky i:nth-child(n){animation:none} }
+
+/* ── A FINGER IS NOT A CURSOR ────────────────────────────────────────────
+   Measured across the whole site at 390px before changing anything: this
+   page carried controls between 30 and 43px tall. They are fine to click and
+   fiddly to tap — Apple asks for 44pt and Android for 48dp, and the ones
+   that miss are the ones people jab at twice.
+
+   Only the boxes grow. Nothing moves to a different place, nothing changes
+   what it does, and none of it exists above 620px. Links that live inside a
+   sentence are deliberately left alone: a text link is the height of its
+   line, and padding one out to 44px puts a hole in the paragraph. */
+@media (max-width:620px){
+  .go,.linky,#pasteIn{min-height:44px}
+  .linky{display:inline-flex;align-items:center;justify-content:center}
+}
 .spot{position:fixed;inset:0;z-index:0;pointer-events:none;
   background:radial-gradient(520px circle at var(--px,50%) var(--py,30%),rgba(0,180,215,.12),transparent 62%)}
 .shell{position:relative;z-index:2}
