@@ -130,6 +130,30 @@ async function open() {
   return { pg, ctx, errs };
 }
 
+
+/* A phone, for the sections that are about a phone. Same fixtures, 390x844,
+   and the one-time desktop note dismissed up front so it is not sitting over
+   the thing being measured. */
+async function openPhone() {
+  const ctx = await browser.newContext({ viewport: { width: 390, height: 844 },
+    isMobile: true, hasTouch: true });
+  await ctx.addInitScript(() => {
+    try { localStorage.setItem("overheard.city.quality", "performance"); } catch {}
+    try { localStorage.setItem("overheard.city.seen", "1"); } catch {}
+    try { localStorage.setItem("overheard.deskhint", "1"); } catch {}
+    try { localStorage.setItem("overheard.tabpeek", "1"); } catch {}
+  });
+  const pg = await ctx.newPage();
+  const errs = [];
+  pg.on("pageerror", (e) => errs.push(e.message));
+  await pg.goto("http://localhost:8977/city");
+  await pg.waitForFunction(
+    () => window.__city?.world?.life != null && (window.__city?.city?.roster?.length ?? 0) > 0,
+    null, { timeout: 25000 });
+  await pg.waitForFunction(() => !window.__city.cam.busy, null, { timeout: 20000 }).catch(() => {});
+  return { pg, ctx, errs };
+}
+
 /* ════════════════════════════════════════════════════════════════════════
    A. THE SITE'S BACKGROUND, NOT THE PAGE'S OWN
    ════════════════════════════════════════════════════════════════════ */
@@ -1028,5 +1052,111 @@ console.log("\n=== G. transmissions in the room, counts in the city");
 }
 
 console.log(bad ? `\n${bad} FAILURE(S)` : "\nall good");
+/* ════════════════════════════════════════════════════════════════════════
+   H. A PHONE HAS ROOM FOR ONE THING AT A TIME
+   ════════════════════════════════════════════════════════════════════════
+
+   Four faults, all the same fault: this page floats six independent cards
+   over a canvas, and at 1240px they have room while at 390px they do not.
+   Reported with screenshots, then measured:
+
+     · three transmission cards written through the room header, by up to
+       170x73 pixels, over "Back to Agent City" and the room's own name
+     · the room panel and the camera controls overlapping by 303x17
+     · the busiest-now rail across the bottom half with the controls on top
+       of it, and NO WAY TO CLOSE IT on any screen size — closeRail() existed
+       and nothing user-facing had ever called it
+     · message counts stacked on each other and through the room labels
+
+   The generic overlap check in test-mobile.mjs missed every one of these
+   because it only compared elements with class .hud. It now includes the
+   cards and the counts, which is the systemic half of this. What follows is
+   the behaviour: fewer things, further apart, and dismissible.
+   ════════════════════════════════════════════════════════════════════ */
+console.log("\n=== H. on a phone: one thing at a time");
+{
+  const { pg, ctx, errs } = await openPhone();
+  bump = 40;
+  await pg.waitForTimeout(9000);          // two readings, so rooms have rates
+
+  const railAt = () => pg.evaluate(() => {
+    const r = document.getElementById("rail");
+    if (!r || r.hidden) return { shown: false };
+    const b = r.getBoundingClientRect();
+    const c = document.querySelector(".hud.br").getBoundingClientRect();
+    const ox = Math.min(b.right, c.right) - Math.max(b.left, c.left);
+    const oy = Math.min(b.bottom, c.bottom) - Math.max(b.top, c.top);
+    const x = r.querySelector(".railx");
+    return { shown: true, open: r.classList.contains("open"),
+      h: Math.round(b.height),
+      rows: r.querySelectorAll(".railrow").length,
+      visible: [...r.querySelectorAll(".railrow")].filter((n) => n.getBoundingClientRect().height > 2).length,
+      x: !!x && getComputedStyle(x).display !== "none",
+      onControls: ox > 8 && oy > 8 ? Math.round(ox) + "x" + Math.round(oy) : null };
+  });
+
+  const a = await railAt();
+  check("the rail arrives as one line, not half the city", a.shown && !a.open && a.h < 70, `${a.h}px tall`);
+  check("with rooms behind it, waiting to be asked for", a.rows >= 3 && a.visible === 0,
+    `${a.rows} rows, ${a.visible} showing`);
+  check("and it is not sitting on the camera controls", !a.onControls, a.onControls || "clear");
+  check("there is a way to close it, which there never was", a.x);
+
+  await pg.evaluate(() => document.querySelector("#rail .railtop").click());
+  await pg.waitForTimeout(450);
+  const b2 = await railAt();
+  check("tapping it opens the rooms", b2.open && b2.visible >= 3, `${b2.visible} showing`);
+  check("and it still clears the controls", !b2.onControls, b2.onControls || "clear");
+
+  await pg.evaluate(() => document.querySelector("#rail .railx").click());
+  await pg.waitForTimeout(400);
+  check("the close button closes it", !(await railAt()).shown);
+  /* THE HALF THAT MATTERS. The rail is rebuilt on every reading, so a close
+     that is not remembered lasts until the next poll — four seconds. */
+  await pg.waitForTimeout(9000);
+  check("and it stays closed through the readings that follow", !(await railAt()).shown);
+
+  /* ── in a room ───────────────────────────────────────────────────────── */
+  await pg.evaluate(() => window.__city.enterRoom("lobby"));
+  await pg.waitForFunction(() => document.body.classList.contains("inroom"), null, { timeout: 20000 });
+  await pg.waitForTimeout(1200);
+
+  const panelClash = await pg.evaluate(() => {
+    const s2 = document.getElementById("side").getBoundingClientRect();
+    const c = document.querySelector(".hud.br").getBoundingClientRect();
+    const ox = Math.min(s2.right, c.right) - Math.max(s2.left, c.left);
+    const oy = Math.min(s2.bottom, c.bottom) - Math.max(s2.top, c.top);
+    return ox > 8 && oy > 8 ? Math.round(ox) + "x" + Math.round(oy) : null;
+  });
+  check("the room panel clears the controls", !panelClash, panelClash || "clear");
+
+  /* With the panel OPEN the cards stay away entirely: it covers what is left
+     of the scene and is already listing these same messages. */
+  await pg.waitForTimeout(6000);
+  const withPanel = await pg.evaluate(() =>
+    [...document.querySelectorAll(".tx")].filter((n) =>
+      getComputedStyle(n).display !== "none" && parseFloat(getComputedStyle(n).opacity) > 0.05).length);
+  check("with the panel open, no cards compete with it", withPanel === 0, `${withPanel} cards`);
+
+  await pg.evaluate(() => document.querySelector("#side .px").click());
+  await pg.waitForTimeout(9000);
+  const cards = await pg.evaluate(() => {
+    const head = document.querySelector(".hud.tl").getBoundingClientRect();
+    const live = [...document.querySelectorAll(".tx")].filter((n) =>
+      getComputedStyle(n).display !== "none" && parseFloat(getComputedStyle(n).opacity) > 0.05);
+    return { n: live.length, headBottom: Math.round(head.bottom),
+      tops: live.map((n) => Math.round(n.getBoundingClientRect().top)),
+      over: live.filter((n) => n.getBoundingClientRect().top < head.bottom).length };
+  });
+  check("with it closed, transmissions come back", cards.n >= 1, `${cards.n} card(s)`);
+  check("one at a time, not three stacked in 390px", cards.n === 1, `${cards.n}`);
+  check("and never over the header, which is the way out",
+    cards.over === 0, `tops ${cards.tops.join(",")} vs header bottom ${cards.headBottom}`);
+
+  check("no page errors", errs.length === 0, errs[0] || "");
+  bump = 0;
+  await ctx.close();
+}
+
 await browser.close(); srv.close();
 process.exit(bad ? 1 : 0);

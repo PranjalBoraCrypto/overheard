@@ -80,6 +80,24 @@ export function makeTransmit(overlay, cb, reduced = false) {
   overlay.appendChild(sky);
 
   const POOL = 3;
+
+  /* ── HOW MUCH ROOM THERE IS, WHICH IS NOT THE SAME AS THE VIEWPORT ───────
+     On a desktop these cards float over a mostly empty scene. On a 390px
+     phone the room header is 280px tall and the panel under it is another
+     370, so a card obeying only the viewport clamp lands squarely on top of
+     "Back to Agent City" — measured at up to 170x73 pixels of overlap, three
+     cards at once, which is what a visitor sent a screenshot of.
+
+     `guardTop` is the strip at the top that belongs to something else, set
+     by the caller from what is actually on screen rather than guessed at
+     here. `limit` is how many may be live at once, because three cards
+     stacking in 390px is its own kind of unreadable even when none of them
+     is covering the header. */
+  let guardTop = 0;
+  let limit = POOL;
+  const setGuard = (px) => { guardTop = Math.max(0, Math.round(px) || 0); };
+  const setLimit = (n) => { limit = Math.max(1, Math.min(POOL, Math.round(n) || POOL)); };
+
   const cards = [];
   for (let i = 0; i < POOL; i++) cards.push(makeCard(i));
 
@@ -164,6 +182,10 @@ export function makeTransmit(overlay, cb, reduced = false) {
    * @param m  { key, who, kindLabel, text, meta, agentId }
    */
   function send(m) {
+    /* The limit is enforced HERE rather than by refusing the message: the
+       newest arrival is the one worth seeing, so an older card makes way. */
+    let live = cards.filter((c) => c.live);
+    while (live.length >= limit) retire(live.shift());
     const c = claim();
     c.live = true; c.hold = false; c.born = performance.now(); c.age = 0; c.out = 0;
     c.key = m.key; c.agentId = m.agentId;
@@ -252,7 +274,8 @@ export function makeTransmit(overlay, cb, reduced = false) {
       const minX = c.side < 0 ? cw + 10 : 10;
       const maxX = c.side < 0 ? rect.width - 10 : rect.width - cw - 10;
       nodeX = Math.max(Math.min(nodeX, maxX), Math.min(minX, maxX));
-      nodeY = Math.max(ch + 12, Math.min(nodeY, rect.height - 12));
+      const ceiling = ch + 12 + guardTop;
+      nodeY = Math.max(ceiling, Math.min(nodeY, rect.height - 12));
 
       for (let guard = 0; guard < 4; guard++) {
         const x0 = nodeX + (c.side < 0 ? -cw : 0), y0 = nodeY - ch;
@@ -260,7 +283,7 @@ export function makeTransmit(overlay, cb, reduced = false) {
           x0 < q.x + q.w + 8 && x0 + cw + 8 > q.x && y0 < q.y + q.h + 8 && y0 + ch + 8 > q.y);
         if (!hit) break;
         nodeY = hit.y - 10;                    // sit above whatever is there
-        if (nodeY < ch + 12) { nodeY = ch + 12; break; }
+        if (nodeY < ceiling) { nodeY = ceiling; break; }
       }
 
       /* ── PHASES ────────────────────────────────────────────────────────
@@ -345,7 +368,7 @@ export function makeTransmit(overlay, cb, reduced = false) {
   function clear() { for (const c of cards) if (c.live) retire(c); }
   function dispose() { clear(); sky.remove(); for (const c of cards) c.root.remove(); }
 
-  return { sendFrom, step, resize, clear, dispose,
+  return { sendFrom, step, resize, clear, dispose, setGuard, setLimit,
     get shown() { return cards.filter((c) => c.live).length; },
     get cards() { return cards; } };
 }

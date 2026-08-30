@@ -331,6 +331,11 @@ body:not(.inroom) .tr{top:22px;max-height:calc(100% - 168px)}
   box-shadow:0 0 7px currentColor;animation:beat 2.4s var(--ease) infinite}
 .railtop .live.stale{color:var(--warn)}
 .railtop .live.stale::before{animation:none}
+/* THE RAIL'S OWN CONTROLS EXIST ONLY ON A PHONE. On a desktop this panel has
+   never been in anybody's way, and the desktop layout was to be left exactly
+   as it is, so both are display:none here and are switched on in the phone
+   block near the bottom of this file. */
+.railtog,.railx{display:none}
 
 /* THE ROW. Four columns of information at four weights, on two lines:
      glyph │ room ……… number
@@ -807,9 +812,51 @@ body:not(.inroom) .tr{top:22px;max-height:calc(100% - 168px)}
   .chips{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;padding-bottom:2px}
   .chips::-webkit-scrollbar{display:none}
   .chip{flex:none}
-  .tr{top:auto;bottom:104px;right:14px;left:14px;width:auto;max-height:48%}
+  /* CLEAR OF THE CONTROLS. Measured at 390x844: the control stack is 107px
+     tall and sits 14px off the bottom, so anything ending above 121px was
+     landing on it — the panel and the buttons were overlapping by 17px over
+     a 303px width, which is a row of the identity list you cannot tap. */
+  .tr{top:auto;bottom:140px;right:14px;left:14px;width:auto;max-height:44%}
   .bl{display:none}
   .br{bottom:14px;right:14px;top:auto}
+
+  /* ── THE BUSIEST-NOW RAIL, WHICH ARRIVES OUT OF THE WAY ────────────────
+     It used to open at full height over the bottom half of the city, with
+     the camera controls sitting on top of it and no way to dismiss it. Now
+     it is one line until it is asked for, it can be dismissed, and it never
+     reaches the controls. */
+  /* Above the controls, not under them. Both were bottom-anchored at 14px
+     and the control stack is 303px wide, so there was no sideways room to
+     share: the rail and the buttons were sitting on each other by 303x107. */
+  .bl2{bottom:140px;left:14px;right:14px;width:auto;max-height:40%;
+    display:flex;flex-direction:column;overflow:hidden}
+  /* And when a panel opens in the city, it sits above the folded rail. */
+  body:not(.inroom) .tr{top:auto;bottom:206px;max-height:38%}
+  .bl2 .railtop{padding-bottom:0;margin-bottom:0;border-bottom:0;cursor:pointer;
+    padding-right:2px;min-height:30px;align-items:center}
+  /* Collapsed is the resting state, so the rows are what appear rather than
+     what is taken away — nothing on this panel moves when it opens. */
+  .rail:not(.open) .railrow,
+  .rail:not(.open) .railmore{display:none}
+  .rail.open .railtop{padding-bottom:8px;margin-bottom:2px;
+    border-bottom:1px solid rgba(0,180,215,.10)}
+  .rail.open{overflow-y:auto;scrollbar-width:none}
+  .rail.open::-webkit-scrollbar{display:none}
+  /* The unit label belongs to a column that is not on screen when the rows
+     are not on screen. */
+  .rail:not(.open) .railtop .u{display:none}
+  .railtog,.railx{
+    display:grid;place-items:center;flex:none;width:30px;height:30px;margin:0;padding:0;
+    border-radius:9px;border:1px solid transparent;background:none;color:var(--dim);
+    cursor:pointer;transition:color .2s var(--ease),background .2s var(--ease)}
+  .railtog{margin-left:6px}
+  .railtog .i,.railx .i{width:15px;height:15px}
+  .railtog .i{transition:transform .28s var(--ease)}
+  .rail.open .railtog .i{transform:rotate(180deg)}
+  .railtog:active,.railx:active{color:var(--cy-hi);background:rgba(0,180,215,.12)}
+  .railx{border-color:rgba(0,180,215,.18)}
+  /* The live dot has said its piece by the time it is this small. */
+  .rail:not(.open) .railtop .live{margin-left:auto}
   .ctl{width:42px;height:42px}
   .seg button{padding:9px 12px}
 }

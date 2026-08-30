@@ -98,6 +98,7 @@ export async function boot() {
     room3d.resize(r.width, r.height);
     roomCam.setAspect?.(r.width / r.height);
     tx.resize(r.width, r.height);
+    fitTx();
     return room3d;
   }
 
@@ -129,6 +130,60 @@ export async function boot() {
      not because data moved. Walking into a room clears it, since a new room
      is a new question. */
   let roomShut = false;
+
+  /* THE RAIL, LIKE THE PANEL, STAYS CLOSED WHEN IT IS CLOSED. It is redrawn
+     on every reading, so without this the × would last until the next poll. */
+  let railShut = false;
+
+  /* ── HOW MUCH SCREEN THE TRANSMISSIONS MAY HAVE ────────────────────────
+     Measured from what is actually on the page rather than assumed, because
+     the answer is completely different on the two shapes of screen. On a
+     desktop the room header is a strip in the corner and the cards have the
+     whole scene. On a 390px phone the header is 280px tall, the room panel
+     under it is another 370, and the controls take the rest: a card obeying
+     only the viewport clamp lands on "Back to Agent City", which is what a
+     visitor sent a screenshot of.
+
+     Two rules, both phone-only:
+
+       THE HEADER IS NOT AVAILABLE. Its measured bottom becomes the ceiling
+       the cards may not rise above.
+
+       ONE AT A TIME. Three cards stacking in 390px is unreadable even when
+       none of them is over the header.
+
+     And a third that is not about pixels: while the room PANEL is open on a
+     phone it covers what is left of the scene, and it is already listing
+     these messages. Cards on top of it would be the same information twice,
+     once illegibly. So they wait. */
+  const phone = () => matchMedia("(max-width:900px)").matches;
+  /* Read once per frame rather than per label: matchMedia is cheap, but not
+     three-times-a-frame cheap, and the answer cannot change mid-frame. */
+  let spreadAt = 0, spreadOn = false;
+  const spread = () => {
+    const t = performance.now();
+    if (t - spreadAt > 500) { spreadAt = t; spreadOn = phone(); }
+    return spreadOn;
+  };
+
+  let guardAt = 0;
+  function fitTx(rect, now = 0) {
+    if (!tx) return;
+    if (!phone()) { tx.setGuard(0); tx.setLimit(3); guardAt = 0; return; }
+    tx.setLimit(1);
+    /* MEASURED AGAINST THE SAME RECT THE CARDS ARE PLACED IN, and measured
+       again as things change: the header is one height on the city and a
+       different one in a room, and it grows when the status chip wraps. A
+       guard computed once at startup is a guard that is wrong by the time it
+       matters. Every 400ms rather than every frame, because this reads back
+       layout and the header does not move sixty times a second. */
+    if (now && now - guardAt < 400) return;
+    guardAt = now;
+    const box = rect || els.stage?.getBoundingClientRect();
+    const head = document.querySelector(".hud.tl")?.getBoundingClientRect();
+    tx.setGuard(box && head ? Math.max(0, head.bottom - box.top + 10) : 0);
+  }
+  addEventListener("resize", () => { guardAt = 0; fitTx(); });
 
   /* WHAT THE SITE INTENDS, AS OPPOSED TO WHAT THE BROWSER HAS ALLOWED YET.
      The sound control paints from this; `S.enabled()` only becomes true once
@@ -181,11 +236,18 @@ export async function boot() {
     showRoom: () => { if (st.room) showRoomPanel(); },
     /* A closed panel leaves a way back where it was, but only while there is
        a room for it to describe. On the city there is nothing to reopen. */
+    railClosed: () => { railShut = true; },
     panelClosed: () => {
       if (st.room) roomShut = true;
       const b = $("reopen"); if (b) b.hidden = !st.room;
     },
-    panelOpened: () => { const b = $("reopen"); if (b) b.hidden = true; },
+    panelOpened: () => {
+      const b = $("reopen"); if (b) b.hidden = true;
+      /* ONE SHEET AT A TIME. Both of these are bottom-anchored cards on a
+         phone and there is room for one. The rail folds back to its single
+         line rather than closing, so it is still there when the panel goes. */
+      if (phone()) ui.collapseRail?.();
+    },
     flyToRoom: (room) => flyToRoom(room),
     toggleClean: () => setClean(!st.clean),
   });
@@ -515,7 +577,13 @@ export async function boot() {
      apart are one event as far as a person watching is concerned. */
   /* A set lives a little longer than the beat that replaces it, so a late
      beat leaves the last one fading rather than the screen going blank. */
-  const TALLY_MAX = 3, TALLY_LIFE = 2200;
+  /* TWO ON A PHONE, THREE ON A DESKTOP. Three counts placed over a 390px
+     skyline land on each other and on the room labels — the screenshot that
+     started this had "+3 MESSAGES FLOP-MARKET" written through "VALIDATORS"
+     and "41,523 more rooms". Fewer of them is half the fix; the other half
+     is positionTallies, which now moves them apart. */
+  const TALLY_MAX = matchMedia("(max-width:900px)").matches ? 2 : 3;   // three on a desktop, unchanged
+  const TALLY_LIFE = 2200;
   const tallies = [];
 
   function tally(room, delta, weight = 1) {
@@ -608,6 +676,14 @@ export async function boot() {
      roof as the camera moves; the throw happens in pixels above it. */
   const TALLY_RISE = 620;              // ms of flight before it settles
   function positionTallies(now, rect) {
+    /* WHERE ONE HAS ALREADY BEEN PUT THIS FRAME. Same idea as the
+       transmission cards, and for the same reason: two labels over
+       neighbouring buildings are two labels over the same forty pixels once
+       the city is drawn on a phone. A count that cannot find clear air is
+       lifted; if it still cannot, it stands down rather than being drawn
+       through the one underneath, because two numbers written over each
+       other are worth less than one number. */
+    const taken = spread() ? [] : null;
     for (const t of [...tallies]) {
       const age = now - t.born;
       if (age > TALLY_LIFE) { dropTally(t); continue; }
@@ -628,11 +704,32 @@ export async function boot() {
         k < 0.06 ? k / 0.06
         : k < fadeFrom ? 1
         : Math.max(0, 1 - (k - fadeFrom) / (1 - fadeFrom)));
+      /* Measured once and cached: a count's size only changes with its text,
+         and reading it back every frame is a forced layout per label. */
+      if (!t.w) { t.w = t.box.offsetWidth || 120; t.h = t.box.offsetHeight || 34; }
+      let y = s.y - lift;
+      /* PHONE ONLY, DELIBERATELY. On a desktop these counts have the width of
+         a city between them and this loop would almost never fire — but
+         "almost never" is a behaviour change to a view that was to be left
+         alone, and a rule that is only mostly kept is not a rule. */
+      for (let guard = 0; taken && guard < 4; guard++) {
+        const x0 = s.x - t.w / 2, y0 = y - t.h;
+        const hit = taken.find((q) =>
+          x0 < q.x + q.w + 6 && x0 + t.w + 6 > q.x && y0 < q.y + q.h + 6 && y0 + t.h + 6 > q.y);
+        if (!hit) break;
+        y = hit.y - 8;
+        if (y - t.h < 4) { y = null; break; }
+      }
+      if (y == null) { t.node.style.opacity = "0"; continue; }
+      if (taken) taken.push({ x: s.x - t.w / 2, y: y - t.h, w: t.w, h: t.h });
+
       t.node.style.transform =
-        `translate(${Math.round(s.x)}px,${Math.round(s.y - lift)}px) translate(-50%,-100%)`;
+        `translate(${Math.round(s.x)}px,${Math.round(y)}px) translate(-50%,-100%)`;
       /* The leader spans exactly the gap it flew, so it grows with the throw
-         and always lands on the roof rather than near it. */
-      t.lead.style.height = `${Math.round(lift)}px`;
+         and always lands on the roof rather than near it. Lifting a label
+         clear of another lengthens its leader by the same amount, so it is
+         still pointing at its own roof. */
+      t.lead.style.height = `${Math.round(s.y - y)}px`;
     }
   }
 
@@ -677,6 +774,7 @@ export async function boot() {
   let freshRooms = new Set();
 
   function refreshRail() {
+    if (railShut) return;
     if (!city || st.room || mode !== "city") { ui.closeRail(); return; }
     const ranked = city.roster
       .filter((r) => r.live && !r.landmark)
@@ -898,6 +996,7 @@ export async function boot() {
     if (st.room === name && mode === "room") return;
     st.room = name; st.agentId = null; st.msgKey = null; st.following = null;
     roomShut = false;          // a new room is a new question
+    railShut = false;          // and so is coming back out to the city
     clearBubbles();
     /* The counts belong to the city. Left up, they would hang in the room
        scene anchored to buildings that are no longer being drawn. */
@@ -1162,6 +1261,9 @@ export async function boot() {
      standing in the room, because it is anchored to that body. */
   function addBubble(m, agentId) {
     if (!tx || !agentId || !room3d || !room3d.agentAt(agentId)) return;
+    /* See fitTx: on a phone an open panel IS the screen, and it is already
+       showing these messages in a form you can actually read. */
+    if (phone() && !els.side.hidden) return;
     const c = m.c;
     /* A structured message shows its own declared fields rather than its
        pipes — the kind is already in the status line above, and spending
@@ -1187,6 +1289,7 @@ export async function boot() {
    *  makes the card stay on the agent through a drag, a zoom or a drift. */
   function layoutBubbles(rect, now) {
     if (!tx) return;
+    fitTx(rect, now);
     tx.step(now, rect, (agentId) => {
       if (mode !== "room" || !room3d) return null;
       const p = room3d.project(agentId, rect.width, rect.height);

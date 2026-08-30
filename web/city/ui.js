@@ -273,6 +273,46 @@ export function makeUI(els, cb) {
          fact four times in the place where there is least room for it. */
       head.append(icon("c-pulse"), el("span", "t", "Busiest now"),
                   el("span", "u", "msg/min"), el("span", "live"));
+
+      /* ── TWO CONTROLS, AND THEY ONLY EXIST ON A PHONE ──────────────────
+         Reported, and true on every screen size: this panel could not be
+         closed. closeRail() existed and nothing user-facing ever called it,
+         so on a 390px phone the busiest rooms sat over the bottom half of
+         the city with the camera controls on top of them and no way out.
+
+         The × dismisses it, and the caller remembers that, because the rail
+         is redrawn on every reading and a × that lasts four seconds is worse
+         than no × at all.
+
+         The chevron is the other half. On a phone the rail now ARRIVES
+         collapsed, as one compact line, and opens when you ask it to. The
+         city is the thing somebody came to look at; a list of rooms is what
+         they might want next, and "might want next" does not get half the
+         screen before it is asked for.
+
+         Both are hidden on a desktop, where the panel has never been in
+         anybody's way and the layout was to be left exactly as it is. */
+      const tog = el("button", "railtog");
+      tog.type = "button";
+      tog.setAttribute("aria-label", "Show or hide the busiest rooms");
+      tog.append(icon("c-caret"));
+      const x = el("button", "railx");
+      x.type = "button";
+      x.setAttribute("aria-label", "Hide the busiest rooms");
+      x.append(icon("c-x"));
+      x.addEventListener("click", (ev) => { ev.stopPropagation(); closeRail(); cb.railClosed?.(); });
+      const toggle = (ev) => {
+        ev.stopPropagation();
+        const open = box.classList.toggle("open");
+        tog.setAttribute("aria-expanded", open ? "true" : "false");
+      };
+      tog.addEventListener("click", toggle);
+      head.addEventListener("click", toggle);
+      head.append(tog, x);
+      /* Collapsed is the phone's starting state and the ONLY state a desktop
+         has: the class does nothing at all outside the phone stylesheet. */
+      box.classList.remove("open");
+      tog.setAttribute("aria-expanded", "false");
       box.replaceChildren(head);
     }
     const live = head.querySelector(".live");
@@ -385,6 +425,9 @@ export function makeUI(els, cb) {
   }
 
   function closeRail() { if (els.rail) { els.rail.hidden = true; els.rail.replaceChildren(); } }
+  /* Folded back to one line, not dismissed: the difference between "not now"
+     and "not at all", and only the visitor gets to say the second one. */
+  function collapseRail() { els.rail?.classList.remove("open"); }
 
   /* ── the feed lives IN the room panel ────────────────────────────────────
      It used to be a second drawer, full height, pinned to the opposite side
@@ -1148,7 +1191,7 @@ export function makeUI(els, cb) {
 
   return {
     chips, status, roomSummary, roomLive, agentPanel, messagePanel, closePanel, legend, didPanel,
-    rail, closeRail,
+    rail, closeRail, collapseRail,
     buildFeed, renderFeed, closeFeed, feedShown, feedState: feed,
     hover, hoverAgentCard, hoverRoomCard, hoverBlockCard, hits,
   };

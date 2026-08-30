@@ -117,8 +117,17 @@ for (const [w, h, tag] of [[390, 844, "iphone"], [360, 740, "android"]]) {
           wide.push(`${n.tagName.toLowerCase()}${n.id ? "#" + n.id : ""}${n.className && typeof n.className === "string" ? "." + n.className.trim().split(/\s+/).join(".") : ""} L${Math.round(b.left)} R${Math.round(b.right)}`);
         }
       }
-      /* HUD cards that sit on top of each other */
-      const huds = [...document.querySelectorAll(".hud")].filter((n) => !n.hidden && n.getBoundingClientRect().width);
+      /* FLOATING THINGS THAT SIT ON TOP OF EACH OTHER.
+         This used to be ".hud" alone, and that omission is why a phone could
+         show three message cards written through the room header while this
+         file reported everything fine. The transmission cards and the city's
+         message counts are positioned in the same space over the same canvas
+         and are exactly as capable of covering something that matters, so
+         they are in the list now. */
+      const huds = [...document.querySelectorAll(".hud, .tx, .tally")]
+        .filter((n) => !n.hidden && n.getBoundingClientRect().width
+          && getComputedStyle(n).display !== "none"
+          && parseFloat(getComputedStyle(n).opacity) > 0.05);
       const clash = [];
       for (let i = 0; i < huds.length; i++) for (let j = i + 1; j < huds.length; j++) {
         const a = huds[i].getBoundingClientRect(), c = huds[j].getBoundingClientRect();
