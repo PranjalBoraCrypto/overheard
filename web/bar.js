@@ -310,15 +310,29 @@ const CSS = `
   .glyph{width:30px;height:30px}
   .me{margin-left:auto;order:0}
   .tabs{
-    order:1;margin-left:0;width:100%;flex-wrap:nowrap;
+    order:1;margin-left:0;flex-wrap:nowrap;
     overflow-x:auto;overscroll-behavior-x:contain;
     scrollbar-width:none;-ms-overflow-style:none;
-    /* Bleed to the window edges so the row reads as scrollable rather than
-       as a row that happens to be cut off inside a margin. */
-    margin-left:-26px;margin-right:-26px;padding:0 26px 2px;
+    /* BLEED TO THE WINDOW EDGES, PROPERLY THIS TIME. The negative margins
+       were already here and the row still stopped 52px short of the right
+       edge, because width:100% resolves against the wrap CONTENT box, which
+       the padding has already narrowed. The margins only moved that box, so
+       the strip started at 0 and ended at 338 on a 390px phone. Fifty-two
+       pixels back is most of a tab: Verify is now whole and City breaks the
+       edge instead of being nowhere at all. */
+    margin-left:-26px;margin-right:-26px;
+    width:calc(100% + 52px);
+    padding:0 26px 2px;
+    /* The ends fade rather than being cut square, and the fade is driven by
+       where the strip actually is: nothing at an end you have reached, up to
+       30px at an end there is more beyond. A mask instead of a gradient
+       overlay because the bar sits on whatever the page is painting, and an
+       overlay would have to guess that colour on seven different pages. */
+    -webkit-mask-image:linear-gradient(90deg,transparent 0,#000 var(--fl,0px),#000 calc(100% - var(--fr,0px)),transparent 100%);
+    mask-image:linear-gradient(90deg,transparent 0,#000 var(--fl,0px),#000 calc(100% - var(--fr,0px)),transparent 100%);
   }
   .tabs::-webkit-scrollbar{display:none}
-  .tabs a{flex:none;padding:9px 12px;font-size:13px}
+  .tabs a{flex:none;padding:9px 11px;font-size:13px}
   .menu,.menu.wide{width:min(344px,calc(100vw - 52px))}
 }
 `;
@@ -386,6 +400,119 @@ function styleScrollbars() {
   document.head.appendChild(st);
 }
 
+
+/* ══════════════════════════════════════════════════════════════════════════
+   THE TAB STRIP HAS TO ADMIT THAT IT SCROLLS
+   ══════════════════════════════════════════════════════════════════════════
+
+   On a phone the six tabs need 472px and the row gets 308 to 390. Scrolling
+   is the right answer to that; the bug was that the row gave no sign of it.
+   Measured on the live site: at 360, 390, 412 and 430px the tabs on screen
+   were Card, Rooms, Play and Create, with Verify half off the edge and City
+   entirely past it. The first day of traffic came back in exactly that
+   order, ending with Agent City on 9% of arrivals.
+
+   Three things, in the order a visitor meets them.
+
+   1. AN END THAT FADES. A row cut square at the edge looks like a row that
+      ends there. A row that fades looks like a row that continues, and the
+      fade is proportional to how much is actually left, so it disappears
+      when you reach the end and tells no lie in either direction.
+
+   2. THE TAB YOU ARE ON IS ON SCREEN. Standing on /city and seeing no City
+      tab is disorienting in a way that is hard to name and easy to fix.
+
+   3. ONE PEEK, ONCE, EVER. A fade is a hint and hints get missed, so the
+      first time somebody opens this site on a phone the strip scrolls a
+      little way out and comes back. It is the difference between showing an
+      affordance and demonstrating it. Once, because a nav that fidgets on
+      every page load is a nav with a nervous tic; not at all if the visitor
+      asked for reduced motion, or if the strip does not overflow, or if the
+      current tab already had to be scrolled into view, since that visitor
+      has just watched it move for a better reason.
+
+   It aborts the moment a finger lands on the strip. An animation that keeps
+   running while somebody is trying to use the thing is a fight over the
+   scroll position, and they should win it. */
+const PEEK_KEY = "overheard.tabpeek";
+
+function wireStrip(nav) {
+  let raf = 0;
+  const paint = () => {
+    raf = 0;
+    const max = nav.scrollWidth - nav.clientWidth;
+    const l = max <= 2 ? 0 : Math.min(nav.scrollLeft, 30);
+    const r = max <= 2 ? 0 : Math.min(max - nav.scrollLeft, 30);
+    nav.style.setProperty("--fl", l.toFixed(1) + "px");
+    nav.style.setProperty("--fr", r.toFixed(1) + "px");
+  };
+  const queue = () => { if (!raf) raf = requestAnimationFrame(paint); };
+  nav.addEventListener("scroll", queue, { passive: true });
+  addEventListener("resize", queue);
+
+  requestAnimationFrame(() => {
+    paint();
+    const room = nav.scrollWidth - nav.clientWidth;
+    if (room <= 2) return;
+
+    /* 2. bring the current tab into view, instantly: this is where the strip
+          should already have been, not somewhere to travel to. */
+    let moved = false;
+    const cur = nav.querySelector('[aria-current="page"]');
+    if (cur) {
+      const nb = nav.getBoundingClientRect(), cb = cur.getBoundingClientRect();
+      if (cb.right > nb.right - 10 || cb.left < nb.left + 10) {
+        nav.scrollLeft = Math.max(0, Math.min(room,
+          cur.offsetLeft - (nav.clientWidth - cur.offsetWidth) / 2));
+        moved = true;
+        paint();
+      }
+    }
+
+    /* 3. the peek */
+    if (moved) return;
+    if (!matchMedia("(max-width:560px)").matches) return;
+    if (matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    try { if (localStorage.getItem(PEEK_KEY)) return; localStorage.setItem(PEEK_KEY, "1"); } catch { return; }
+    setTimeout(() => peekStrip(nav, room), 950);
+  });
+}
+
+/* Hand-rolled rather than scrollTo({behavior:"smooth"}), because the shape of
+   this movement is the whole message: out on an ease that accelerates, a beat
+   of stillness at the far end so the eye can register what was hidden there,
+   then back. The browser's smooth scroll is one flat curve with no pause in
+   it, which reads as a glitch rather than as a gesture. */
+function peekStrip(nav, room) {
+  const to = Math.min(room, 78);
+  const OUT = 620, HOLD = 360, BACK = 540;
+  const ease = (t) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
+  let live = true;
+  const stop = () => { live = false; };
+  for (const ev of ["pointerdown", "touchstart", "wheel", "keydown"]) {
+    nav.addEventListener(ev, stop, { once: true, passive: true });
+  }
+  const t0 = performance.now();
+  const out = (now) => {
+    if (!live) return;
+    const t = Math.min(1, (now - t0) / OUT);
+    nav.scrollLeft = to * ease(t);
+    if (t < 1) return requestAnimationFrame(out);
+    setTimeout(() => {
+      if (!live) return;
+      const t1 = performance.now();
+      const back = (n2) => {
+        if (!live) return;
+        const u = Math.min(1, (n2 - t1) / BACK);
+        nav.scrollLeft = to * (1 - ease(u));
+        if (u < 1) requestAnimationFrame(back);
+      };
+      requestAnimationFrame(back);
+    }, HOLD);
+  };
+  requestAnimationFrame(out);
+}
+
 /** Right-aligned tabs follow the viewport width, and the viewport width moves
  *  when a page is long enough to need a scrollbar. Reserve it always, so the
  *  bar cannot shift between a long page and a short one. */
@@ -451,6 +578,8 @@ class OverheardBar extends HTMLElement {
     bar.append(brand, nav, soon, me);
     wrap.appendChild(bar);
     root.append(style, wrap);
+
+    wireStrip(nav);
 
     this._paintMe = () => paintMe(me, root);
     this._paintMe();

@@ -186,6 +186,10 @@ console.log("\n=== the door to the city, on phones only");
   const probe = async (w, h) => {
     const ctx2 = await b.newContext({ viewport: { width: w, height: h }, deviceScaleFactor: 1,
       isMobile: w < 900, hasTouch: w < 900 });
+    /* AT REST. The strip demonstrates itself once on a first visit, and a
+       measurement taken mid-demonstration reports whatever the animation was
+       showing at that instant rather than what a visitor sits looking at. */
+    await ctx2.addInitScript(() => { try { localStorage.setItem("overheard.tabpeek", "1"); } catch {} });
     const pg = await ctx2.newPage();
     const errs = [];
     pg.on("pageerror", (e) => errs.push(e.message));
@@ -201,6 +205,8 @@ console.log("\n=== the door to the city, on phones only");
         if (a) {
           const sb = strip.getBoundingClientRect(), ab = a.getBoundingClientRect();
           tab = { inside: ab.right <= sb.right + 1 && ab.left >= sb.left - 1,
+            shows: Math.max(0, Math.round(Math.min(ab.right, sb.right) - Math.max(ab.left, sb.left))),
+            width: Math.round(ab.width),
             where: `${Math.round(ab.left)}..${Math.round(ab.right)} in strip ${Math.round(sb.left)}..${Math.round(sb.right)}` };
         }
       }
@@ -225,8 +231,17 @@ console.log("\n=== the door to the city, on phones only");
   };
 
   const phone = await probe(390, 844);
-  check("at 390px the City tab really is off the right edge",
-    phone.tab && !phone.tab.inside, phone.tab ? phone.tab.where : "no tab found");
+  /* WHY THIS ASSERTION IS WEAKER THAN IT WAS, AND SHOULD BE. It used to read
+     "the City tab is off the right edge", and it was, by 108px. Widening the
+     strip to the window edge pulled 52 of those back, so at rest a sliver of
+     City now breaks the fade. That is a better bar and it is not a reachable
+     tab: the thing still cannot be read or tapped without a deliberate
+     sideways scroll, which is the entire case for a door on the homepage. If
+     the day comes that the whole tab fits at rest, this fails, and somebody
+     should ask whether the door has outlived its reason. */
+  check("at 390px the City tab still cannot be read without scrolling",
+    phone.tab && !phone.tab.inside && phone.tab.shows < phone.tab.width * 0.6,
+    phone.tab ? `${phone.tab.shows} of ${phone.tab.width}px showing` : "no tab found");
   check("so the homepage carries a door to it",
     phone.door && phone.door.display !== "none", phone.door ? `${phone.door.w}x${phone.door.h}` : "absent");
   check("and it goes to the city", phone.door?.href === "/city", phone.door?.href || "");
@@ -235,7 +250,9 @@ console.log("\n=== the door to the city, on phones only");
   check("nothing thrown", phone.errs.length === 0, phone.errs[0] || "");
 
   const small = await probe(360, 800);
-  check("same on a 360dp Android", small.door && small.door.display !== "none" && !small.tab.inside);
+  check("same on a 360dp Android, where the tab is off the edge entirely",
+    small.door && small.door.display !== "none" && small.tab.shows === 0,
+    `${small.tab.shows} of ${small.tab.width}px showing`);
 
   /* WHERE IT MUST NOT BE. The rule for this change was that the desktop view
      does not move, and the door is only justified where the tab is hidden. */
@@ -245,6 +262,136 @@ console.log("\n=== the door to the city, on phones only");
   const desk = await probe(1280, 900);
   check("and on a desktop it is gone too", desk.door?.display === "none", desk.door?.display || "absent");
   check("where the tab was never hidden in the first place", desk.tab?.inside, desk.tab?.where || "");
+}
+
+
+/* ════════════════════════════════════════════════════════════════════════
+   THE TAB STRIP, WHICH HAS TO ADMIT THAT IT SCROLLS
+   ════════════════════════════════════════════════════════════════════════
+
+   Six tabs need 472px and a phone gives the row 308 to 390. Scrolling is the
+   right answer to that and was already the behaviour; what was missing was
+   any sign of it, so the two tabs past the edge were invisible in the sense
+   that matters — nobody knew to look.
+
+   Three separate promises, and they fail in different ways, so they are
+   checked separately:
+
+     THE ROW REACHES THE WINDOW. It used to stop 52px short because
+     width:100% resolves against a content box the padding had already
+     narrowed, so the negative margins moved the row without widening it.
+     Fifty-two pixels is most of a tab.
+
+     THE END FADES, AND ONLY THE END THERE IS MORE BEYOND. A fade at an end
+     you have already reached is a lie in the other direction.
+
+     THE TAB YOU ARE STANDING ON IS ON SCREEN, and the strip demonstrates
+     itself once, on the first phone visit only, and never again.
+   ════════════════════════════════════════════════════════════════════ */
+console.log("\n=== the tab strip says that it scrolls");
+{
+  const strip = (pg) => pg.evaluate(() => {
+    const root = document.querySelector("overheard-bar").shadowRoot;
+    const t = root.querySelector(".tabs");
+    const tb = t.getBoundingClientRect();
+    const cs = getComputedStyle(t);
+    const seen = [...t.querySelectorAll("a")].filter((a) => {
+      const r = a.getBoundingClientRect();
+      return r.left >= tb.left - 1 && r.right <= tb.right + 1;
+    }).map((a) => a.textContent.trim());
+    const city = [...t.querySelectorAll("a")].find((a) => /^city$/i.test(a.textContent.trim()));
+    const cr = city.getBoundingClientRect();
+    return {
+      left: Math.round(tb.left), right: Math.round(tb.right),
+      client: Math.round(t.clientWidth), scroll: Math.round(t.scrollWidth),
+      at: Math.round(t.scrollLeft), max: Math.round(t.scrollWidth - t.clientWidth),
+      fl: parseFloat(cs.getPropertyValue("--fl")) || 0,
+      fr: parseFloat(cs.getPropertyValue("--fr")) || 0,
+      masked: /linear-gradient/.test(cs.webkitMaskImage || cs.maskImage || ""),
+      seen, cityLeft: Math.round(cr.left), cityRight: Math.round(cr.right),
+      cityShows: cr.left < tb.right - 2,
+    };
+  });
+  const open = async (w, h, route, seenPeek) => {
+    const ctx2 = await b.newContext({ viewport: { width: w, height: h },
+      isMobile: w < 900, hasTouch: w < 900 });
+    if (seenPeek) await ctx2.addInitScript(() => { try { localStorage.setItem("overheard.tabpeek", "1"); } catch {} });
+    const pg = await ctx2.newPage();
+    await pg.goto("http://localhost:8995" + route);
+    return { ctx2, pg };
+  };
+
+  /* ── a first phone visit ─────────────────────────────────────────────── */
+  {
+    const { ctx2, pg } = await open(390, 844, "/", false);
+    /* sample across the whole peek, which starts about a second in */
+    const seenAt = [];
+    for (let i = 0; i < 42; i++) {
+      seenAt.push(await pg.evaluate(() =>
+        Math.round(document.querySelector("overheard-bar").shadowRoot.querySelector(".tabs").scrollLeft)));
+      await pg.waitForTimeout(110);
+    }
+    const s = await strip(pg);
+    check("the row reaches the right edge of the window", s.right >= 388, `${s.left}..${s.right} of 390`);
+    check("and it is masked rather than cut square", s.masked);
+    check("at rest the far end fades and the near end does not",
+      s.fr > 20 && s.fl === 0, `L${s.fl} R${s.fr}`);
+    check("the four that always fitted are still there",
+      ["Card", "Rooms", "Play", "Create"].every((n) => s.seen.includes(n)), s.seen.join(","));
+    check("Verify is now whole, which it was not before", s.seen.includes("Verify"), s.seen.join(","));
+    check("and the edge of City breaks the fade, so the row visibly continues",
+      s.cityShows, `City ${s.cityLeft}..${s.cityRight}, row ends ${s.right}`);
+    /* THE PEEK. It must happen, it must be big enough to reveal something,
+       and it must put the strip back exactly where it found it. */
+    const peak = Math.max(...seenAt);
+    check("the strip demonstrates itself once, on the first visit", peak > 40, `travelled ${peak}px`);
+    check("and returns to where it started", s.at === 0, `${s.at}px`);
+    await ctx2.close();
+  }
+
+  /* ── the second visit, and every one after it ────────────────────────── */
+  {
+    const { ctx2, pg } = await open(390, 844, "/", true);
+    const moves = [];
+    for (let i = 0; i < 30; i++) {
+      moves.push(await pg.evaluate(() =>
+        Math.round(document.querySelector("overheard-bar").shadowRoot.querySelector(".tabs").scrollLeft)));
+      await pg.waitForTimeout(110);
+    }
+    check("a nav that has already introduced itself stays still",
+      Math.max(...moves) === 0, `max ${Math.max(...moves)}px`);
+    await ctx2.close();
+  }
+
+  /* ── standing on the page whose tab is off the end ───────────────────── */
+  {
+    const { ctx2, pg } = await open(390, 844, "/city", true);
+    await pg.waitForTimeout(1400);
+    const s = await strip(pg);
+    check("standing in the city, the City tab is on screen",
+      s.cityLeft >= s.left - 1 && s.cityRight <= s.right + 1,
+      `City ${s.cityLeft}..${s.cityRight} in ${s.left}..${s.right}`);
+    check("and the near end fades now, because there is something behind you",
+      s.fl > 0, `L${s.fl} R${s.fr}`);
+    await ctx2.close();
+  }
+
+  /* ── where none of this should happen ────────────────────────────────── */
+  {
+    const { ctx2, pg } = await open(1280, 900, "/", false);
+    const moves = [];
+    for (let i = 0; i < 24; i++) {
+      moves.push(await pg.evaluate(() =>
+        Math.round(document.querySelector("overheard-bar").shadowRoot.querySelector(".tabs").scrollLeft)));
+      await pg.waitForTimeout(110);
+    }
+    const s = await strip(pg);
+    check("on a desktop the row fits, so nothing is masked", !s.masked, `scroll ${s.scroll} vs client ${s.client}`);
+    check("nothing fades", s.fr === 0 && s.fl === 0, `L${s.fl} R${s.fr}`);
+    check("and nothing moves on its own", Math.max(...moves) === 0);
+    check("every tab is simply visible", s.seen.length === 6, s.seen.join(","));
+    await ctx2.close();
+  }
 }
 
 await b.close(); srv.close();
