@@ -1204,7 +1204,11 @@ footer a:hover{color:var(--cy-hi)}
          the DID they would have pasted is one this page already knows, so
          asking them to paste it is asking them to do our typing. -->
     <div class="mine" id="mine" hidden></div>
-    <div class="hint"><b>Public DID only.</b>
+    <!-- Only for a browser with nobody in it. A signed-in visitor is being
+         told to go and make the thing they are already holding, directly
+         under a button offering to look up the very DID they have — so this
+         goes away by the same repaint that brings #mine in. -->
+    <div class="hint" id="pubhint"><b>Public DID only.</b>
       <a href="/create.html" style="color:var(--mint);font-weight:600;text-decoration:underline;text-underline-offset:3px">No DID yet? Make one →</a></div>
     <div class="err" id="err" role="status" aria-live="polite"></div>
   </div>
@@ -4471,6 +4475,10 @@ function paintMine(){
   const sess=getSession();
   box.replaceChildren();
   box.hidden=!sess;
+  /* Two halves of one statement: with a session the shortcut is present and
+     the "no DID yet?" line is not; without one, the reverse. */
+  const hint=$("pubhint");
+  if(hint) hint.hidden=!!sess;
   if(!sess) return;
 
   const b=document.createElement("button");

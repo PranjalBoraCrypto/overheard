@@ -135,6 +135,8 @@ await pg.waitForTimeout(1200);
     };
   });
   check("signed out, the bar offers a way in", b.signIn && !b.chip);
+  check("and the card page still tells a stranger where a DID comes from",
+    await pg.evaluate(() => document.getElementById("pubhint").hidden === false));
   check("Testnet says it is coming", /testnet/i.test(b.soonText) && /soon/i.test(b.soonText), b.soonText);
   check("and it is not a link anybody can follow", !b.soonIsLink && b.soonCursor === "default");
   check("the tabs come from the shared list", b.tabs.includes("/city") && b.tabs.includes("/play"), b.tabs.join(" "));
@@ -147,15 +149,62 @@ await pg.waitForTimeout(1200);
     const r = document.querySelector("overheard-bar").shadowRoot;
     const m = r.querySelector(".menu");
     return { open: !!m, pw: !!m?.querySelector('input[type="password"]'),
+      unlock: [...(m?.querySelectorAll("button") || [])].some((b) => /^unlock$/i.test(b.textContent.trim())),
+      seed: !!m?.querySelector(".seed textarea"),
+      seal: (m?.querySelector(".seal")?.textContent || ""),
+      info: !!m?.querySelector(".iq"),
+      noteHidden: m?.querySelector(".note")?.hidden !== false,
       file: !!m?.querySelector('input[type="file"]'),
       make: m?.querySelector('a.row')?.getAttribute("href") || "",
       text: m?.innerText || "" };
   });
-  check("it opens a passphrase, not a page", pop.open && pop.pw);
+  /* AN EMPTY BROWSER IS NOT A LOCKED ONE. There is no vault here, so there is
+     nothing an "enter your passphrase" box could unlock — it would fail on
+     every input a person could type. The seed is the question that has an
+     answer, and the passphrase beside it is one being set. */
+  check("it opens where it can actually succeed: the seed", pop.open && pop.seed);
+  check("and does not ask to unlock something that is not here", !pop.unlock);
+  check("the passphrase it wants is one being set", /encrypt/i.test(pop.seal), pop.seal);
   check("a backup file is the other way in", pop.file);
   check("and there is a route for somebody with neither", pop.make === "/create.html");
   check("it promises nothing leaves the device", /never sent anywhere/i.test(pop.text));
+  /* The mechanics behind an `i`, not spilled down the popover. */
+  check("the detail is there to open, and closed until it is", pop.info && pop.noteHidden);
+  const note = await pg.evaluate(() => {
+    const r = document.querySelector("overheard-bar").shadowRoot;
+    r.querySelector(".menu .iq").click();
+    const n = r.querySelector(".menu .note");
+    return { hidden: n.hidden, text: n.innerText };
+  });
+  check("and opening it says what actually happens", !note.hidden
+    && /seed is read in this tab/i.test(note.text)
+    && /nothing is uploaded/i.test(note.text));
   await pg.keyboard.press("Escape");
+}
+
+/* ── 2b. the same popover, with something to unlock ─────────────────────── */
+console.log("\n=== 2b. a browser that DOES hold a vault gets the passphrase");
+await pg.evaluate((did) => {
+  localStorage.setItem("overheard.identity", JSON.stringify({
+    v: 1, did, salt: "AAAA", iv: "BBBB", data: "CCCC" }));
+}, DID);
+await pg.reload();
+await pg.waitForTimeout(1200);
+{
+  await pg.evaluate(() => document.querySelector("overheard-bar").shadowRoot.querySelector(".me .in").click());
+  await pg.waitForTimeout(300);
+  const pop = await pg.evaluate(() => {
+    const r = document.querySelector("overheard-bar").shadowRoot;
+    const m = r.querySelector(".menu");
+    return { seed: !!m?.querySelector(".seed textarea"),
+      unlock: [...(m?.querySelectorAll("button") || [])].some((b) => /^unlock$/i.test(b.textContent.trim())),
+      did: m?.querySelector(".did")?.textContent || "" };
+  });
+  check("the passphrase is back, because now it can work", pop.unlock);
+  check("and the seed box is not in the way of it", !pop.seed);
+  check("it names the identity it is about to open", pop.did.startsWith("did:key:"), pop.did.slice(0, 20));
+  await pg.keyboard.press("Escape");
+  await pg.evaluate(() => localStorage.removeItem("overheard.identity"));
 }
 
 /* ── 3. signed in ───────────────────────────────────────────────────────── */
@@ -177,6 +226,11 @@ await pg.waitForTimeout(1500);
   const chip = await pg.evaluate(() =>
     !!document.querySelector("overheard-bar").shadowRoot.querySelector(".chip"));
   check("the bar shows the chip instead of the way in", chip);
+  /* AND IT STOPS ASKING FOR THE THING IT IS HOLDING. "No DID yet? Make one"
+     sat directly under a button offering to look up the DID this browser is
+     signed in as — an invitation to go and make what you already have. */
+  check("and it does not ask a signed-in visitor to make a DID",
+    await pg.evaluate(() => document.getElementById("pubhint").hidden === true));
 
   await pg.click("#mine button");
   await pg.waitForFunction(() => document.getElementById("did").value.length > 20, null, { timeout: 5000 });

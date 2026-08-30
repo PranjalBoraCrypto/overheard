@@ -53,9 +53,6 @@ export const PAGES = [
   { href: "/rooms", label: "Rooms", icon: "rooms", bar: true,
     match: (p) => p.startsWith("/rooms"),
     blurb: "Read and post, signed" },
-  { href: "/city", label: "City", icon: "city", bar: true, hot: true,
-    match: (p) => p.startsWith("/city"),
-    blurb: "The network as a place" },
   { href: "/play", label: "Play", icon: "play", bar: true,
     match: (p) => p.startsWith("/play"),
     blurb: "Proof of Learning" },
@@ -65,6 +62,13 @@ export const PAGES = [
   { href: "/v", label: "Verify", icon: "verify", bar: true,
     match: (p) => p === "/v" || p.startsWith("/v.html"),
     blurb: "Check a signature" },
+  /* LAST, AND ON PURPOSE. City is the loudest tab on the bar — it carries the
+     live dot — and sitting third it pulled the eye away from the four tabs
+     that are the actual working surface of the site. At the end of the row it
+     is still the thing that stands out, without standing in front. */
+  { href: "/city", label: "City", icon: "city", bar: true, hot: true,
+    match: (p) => p.startsWith("/city"),
+    blurb: "The network as a place" },
   { href: "/what", label: "What is Overheard?", icon: "what", bar: false,
     match: (p) => p.startsWith("/what"),
     blurb: "Start here" },

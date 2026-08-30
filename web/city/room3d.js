@@ -26,12 +26,14 @@
  * standing exactly as it was, so coming back is a restoration rather than a
  * rebuild.
  *
- * THE PLACE. A circular plaza under a dome, which is deliberately the
- * opposite of the city's open plate seen from above: enclosed rather than
- * surveyed, at eye level rather than from a helicopter. A slow ring of light
- * turns at the centre — the room's own hub, the thing every message passes
- * through — and the floor carries concentric etched rings that the
- * conversation lights up.
+ * THE PLACE. A circular plaza, open to the site's own sky: the opposite of
+ * the city's plate seen from above in scale and camera, not in ground. It is
+ * at eye level rather than from a helicopter, and it is small enough to be a
+ * room, but it does not put a background of its own between the visitor and
+ * the page — no dome, no shell, no veil. A slow ring of light turns at the
+ * centre — the room's own hub, the thing every message passes through — the
+ * floor carries concentric etched rings that the conversation lights up, and
+ * a bright rim draws the edge where the floor stops.
  *
  * ═════════════════════════════════════════════════════════════════════════
  * THE AGENTS, AND WHAT THEIR MOVEMENT IS ALLOWED TO MEAN
@@ -83,7 +85,14 @@ export const ROOM_LIMITS = {
 };
 
 /** How many figures are drawn individually before the rest become a count. */
-const CAP = { performance: 26, balanced: 44, high: 70 };
+/* HOW MANY ARE DRAWN AS AGENTS BEFORE THE REST BECOME A COUNT.
+   Raised from 26/44/70 with the orb rebuild: the figures are eight instanced
+   meshes and a far one costs nothing per frame, so the ceiling is memory and
+   fill rate rather than draw calls. Two hundred on the top tier, and the
+   weakest machine still draws sixty individually before folding anyone into
+   the crowd ring — background agents are given up before near ones lose
+   detail, which is the right way round. */
+const CAP = { performance: 60, balanced: 130, high: 200 };
 
 function hash01(i, salt = 0) {
   let h = ((i >>> 0) * 374761393 + salt * 668265263) >>> 0;
@@ -96,13 +105,13 @@ export function makeRoom(THREE, { renderer, preset, level = "balanced", reduced 
   const cap = CAP[level] || CAP.balanced;
   const scene = new THREE.Scene();
   scene.background = null;
-  /* Fog that starts close. The dome is a real surface a few units past the
-     furthest figure, and without fog the join between floor and wall reads
-     as a seam in a model rather than as distance. */
-  /* The site's own ground colour, not a colour of this scene's choosing. Now
-     that the dome lets the page's sky through, distance has to fade into the
-     same dark the rest of Overheard sits on, or the fade itself becomes the
-     seam the dome used to be. */
+  /* FOG, IN THE SITE'S OWN GROUND COLOUR — 0x00070a, which is what the page
+     behind this canvas is painted with, not a colour this scene chose.
+
+     With no dome, fog is the only thing standing between the far side of the
+     plaza and the page's sky, and it has one job: make distance dissolve into
+     exactly the dark the rest of Overheard sits on. Any other colour and the
+     fade itself becomes the seam the dome used to be. */
   if (preset.fog !== false) scene.fog = new THREE.Fog(0x00070a, 70, 210);
 
   const camera = new THREE.PerspectiveCamera(38, 1, 0.5, 900);
@@ -131,7 +140,7 @@ export function makeRoom(THREE, { renderer, preset, level = "balanced", reduced 
     color: 0x0d5f78, transparent: true, opacity: 0.55, side: THREE.DoubleSide,
   });
   const rings = [];
-  for (const r of [12, 20, 28, 36, R + 2]) {
+  for (const r of [12, 20, 28, 36]) {
     const m = new THREE.Mesh(new THREE.RingGeometry(r - 0.16, r + 0.16, 90), ringMat.clone());
     m.rotation.x = -Math.PI / 2;
     m.position.y = 0.04;
@@ -139,66 +148,60 @@ export function makeRoom(THREE, { renderer, preset, level = "balanced", reduced 
     rings.push(m);
   }
 
-  /* ── the dome ──────────────────────────────────────────────────────────
-     Seen from inside, so BackSide.
-
-     IT IS A VEIL, NOT A WALL. This was a solid shell, and solid was wrong for
-     one concrete reason: it covered the whole viewport, so walking into a
-     room replaced the site's background with a plate of its own and the page
-     changed grounds at the doorway. The city had exactly that fault and lost
-     it; a room should not reintroduce it one click later.
-
-     So the dome now fades out with height. Dense at the horizon, where its
-     whole job is to close off the floor's edge and say "you are inside
-     something"; gone by the zenith, where the same sky that is behind every
-     other page on this site is behind this one too. You are indoors and still
-     in the same world, which is the truth of the thing being drawn. */
-  const domeMat = new THREE.ShaderMaterial({
-    side: THREE.BackSide, transparent: true, depthWrite: false, fog: false,
-    uniforms: { uLow: { value: new THREE.Color(0x04161f) },
-                uHigh: { value: new THREE.Color(0x0a3448) },
-                uAlpha: { value: 0.86 } },
-    vertexShader: `
-      varying float vH;
-      void main(){
-        vH = clamp(position.y / ${(R + 34).toFixed(1)}, 0.0, 1.0);
-        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-      }`,
-    /* pow(1-h, 1.7) rather than a straight ramp: linear leaves a visible grey
-       wash across the top half of the screen, and the point is for the upper
-       dome to be genuinely absent rather than faintly there. */
-    fragmentShader: `
-      uniform vec3 uLow; uniform vec3 uHigh; uniform float uAlpha;
-      varying float vH;
-      void main(){
-        float a = uAlpha * pow(1.0 - vH, 1.7);
-        gl_FragColor = vec4(mix(uLow, uHigh, vH), a);
-      }`,
-  });
-  const dome = new THREE.Mesh(
-    new THREE.SphereGeometry(R + 34, 36, 18, 0, TAU, 0, Math.PI / 2), domeMat);
-  /* Drawn before everything else and writing no depth, so a transparent shell
-     never sorts itself in front of the figures standing inside it. */
-  dome.renderOrder = -1;
-  root.add(dome);
-
-  /* The horizon the dome used to provide by being opaque: a bright band where
-     the wall meets the floor. It is what stops the plaza from reading as a
-     disc floating in the sky now that you can see past the top of the room. */
-  const skirt = new THREE.Mesh(
-    new THREE.CylinderGeometry(R + 33.6, R + 33.6, 26, 48, 1, true),
-    new THREE.ShaderMaterial({
-      side: THREE.BackSide, transparent: true, depthWrite: false, fog: false,
-      uniforms: { uCol: { value: new THREE.Color(0x0e5b74) } },
-      vertexShader: `varying float vY; void main(){ vY = position.y / 13.0;
-        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
-      fragmentShader: `uniform vec3 uCol; varying float vY;
-        void main(){ gl_FragColor = vec4(uCol, 0.42 * pow(clamp(1.0 - (vY + 1.0) * 0.5, 0.0, 1.0), 1.4)); }`,
+  /* THE RIM. Not one of the etched rings — those are the room's inner
+     markings and they dim when the room is quiet. This is the plaza's edge,
+     and with the dome gone it is the only thing telling the eye where the
+     floor stops and the site's sky begins. So it is thicker, brighter, and
+     it never dims below a level you can find. */
+  const rim = new THREE.Mesh(
+    new THREE.RingGeometry(R + 1.4, R + 2.5, 128),
+    new THREE.MeshBasicMaterial({
+      color: 0x2b93b0, transparent: true, opacity: 0.42, side: THREE.DoubleSide,
+      blending: THREE.AdditiveBlending, depthWrite: false, fog: false,
     })
   );
-  skirt.position.y = 13;
-  skirt.renderOrder = -1;
-  root.add(skirt);
+  rim.rotation.x = -Math.PI / 2;
+  rim.position.y = 0.05;
+  root.add(rim);
+
+  /* And a short fall of light off that edge, so the disc has a thickness
+     rather than being a sticker. Fading downward into nothing, which is what
+     the page behind it already is. */
+  const lip = new THREE.Mesh(
+    new THREE.CylinderGeometry(R + 2.4, R + 2.4, 5.5, 96, 1, true),
+    new THREE.ShaderMaterial({
+      side: THREE.DoubleSide, transparent: true, depthWrite: false, fog: false,
+      uniforms: { uCol: { value: new THREE.Color(0x1c86a6) } },
+      vertexShader: `varying float vY; void main(){ vY = (position.y + 2.75) / 5.5;
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+      fragmentShader: `uniform vec3 uCol; varying float vY;
+        void main(){ gl_FragColor = vec4(uCol, 0.5 * pow(clamp(vY, 0.0, 1.0), 2.2)); }`,
+    })
+  );
+  lip.position.y = -2.75;
+  root.add(lip);
+
+  /* ── what used to be here: a dome ──────────────────────────────────────
+     THERE IS NO SHELL OVER THIS ROOM ANY MORE, AND THAT IS THE POINT.
+
+     It went through two versions. First an opaque hemisphere, which covered
+     the whole viewport, so walking into a room swapped the site's background
+     for a plate of its own and the page changed grounds at the doorway — the
+     exact fault the city page had and lost. Then a veil: the same shell faded
+     out with height, dense at the horizon, gone by the zenith.
+
+     The veil was still a plate. 0.86 alpha across the bottom of the frame is
+     not "a hint of a wall", it is a wall you can see a little through, and it
+     is what a visitor sees most of, because the camera sits low and looks
+     across the floor rather than up. Two versions of the same mistake is
+     enough: the room is now open to the same sky as every other page here,
+     and the background behind it is the site's, not this scene's.
+
+     WHAT KEEPS IT FROM READING AS A DISC IN SPACE. The fog above, which fades
+     distance into the page's own ground colour rather than into a colour this
+     scene invented; and the outermost etched ring, which draws the plaza's
+     edge as a line of light. An edge is enough to say "this is the floor of
+     somewhere". A ceiling was never doing that work. */
 
   /* ── the hub ───────────────────────────────────────────────────────────
      The room's own centre: a slow ring of light that everything is arranged
@@ -225,17 +228,117 @@ export function makeRoom(THREE, { renderer, preset, level = "balanced", reduced 
   hub.add(hubRing, hubRing2, hubCore);
   root.add(hub);
 
-  /* ── the figures ───────────────────────────────────────────────────────
-     Three instanced meshes and nothing per-agent in the scene graph, so the
-     cost of a busy room is the same as the cost of a quiet one. */
-  const bodyMat = new THREE.MeshStandardMaterial({ color: 0x1a4f63, roughness: 0.52, metalness: 0.28 });
-  const headMat = new THREE.MeshStandardMaterial({
-    color: 0x3597b3, roughness: 0.28, metalness: 0.34,
-    emissive: 0x0d4557, emissiveIntensity: 0.45,
+  /* ══════════════════════════════════════════════════════════════════════
+     THE AGENTS
+     ══════════════════════════════════════════════════════════════════════
+
+     A floating orb: a faceted navy shell, a black face screen with two cyan
+     eyes, a blade on top, two short side fins, and a thruster glow beneath.
+     No legs, no arms, no halo — it hovers, and everything about the shape
+     says so.
+
+     WHAT REPLACED WHAT, AND WHY. These were tapered columns with domes on
+     top, which is a chess pawn: at the size most of them are drawn, a
+     silhouette that narrows to a point reads as a game piece and nothing
+     else. An orb reads as a machine at any size, because the thing carrying
+     the identity is the FACE — a dark disc with two lights in it — and a
+     face survives being twenty pixels tall in a way that a body does not.
+
+     ── HOW IT STAYS CHEAP AT TWO HUNDRED ──────────────────────────────────
+     This is a WebGL scene, not DOM, so the usual advice translates rather
+     than applies:
+
+       ONE SURFACE, BATCHED. Every agent is drawn from eight InstancedMeshes
+       — shell, face, two eyes, top fin, two side fins, thruster — so the
+       room costs eight draw calls whether it holds three agents or three
+       hundred. There is no per-agent object in the scene graph, no per-agent
+       element, and no per-agent texture: geometry is shared by construction,
+       which is what a sprite atlas is for elsewhere.
+
+       ONE LOOP. The page already runs a single requestAnimationFrame; this
+       is stepped from it. Nothing here owns a timer, and no agent owns one.
+
+       PHASE, NOT STATE. Every animation is a function of the shared clock
+       plus a per-agent offset derived from that identity's own hash. Nobody
+       bobs in unison, nothing is stored per frame, and an agent looks the
+       same every time you come back to the room.
+
+       LEVEL OF DETAIL BY DISTANCE, measured per frame against the camera:
+       near agents get everything, mid-distance agents get hover and blink,
+       far agents are written once and then left alone — an instance matrix
+       persists, so "not animated" costs exactly nothing rather than costing
+       a cheaper animation. See `writeFigures`.
+
+       AND A FRAME STEP. The lowest tier updates transforms every other
+       frame. The eye cannot see 60Hz hover on a twenty-pixel orb, and the
+       matrices it does not write are the whole cost of this layer.
+
+     Reduced motion stops the hover, the blink and the lean; the agents stay
+     exactly where they are, lit or unlit, and everything the scene CLAIMS is
+     still visible. */
+
+  /* Navy, faceted, and lit rather than emissive — the facets are the design,
+     and they only exist if a light is catching them at different angles. */
+  /* SMOOTH, NOT FACETED. The first pass used a flat-shaded icosphere, and
+     the verdict was that it looked like a virus or a sea mine — which was
+     fair: hard facets plus spikes is the visual language of a pathogen, not
+     of something friendly. A smoothly shaded sphere with a soft specular
+     roll-off is round, and round is most of what makes a character read as
+     approachable rather than dangerous.
+
+     LOW METALNESS, AND THAT IS NOT A STYLE CHOICE. A metallic surface in
+     three.js is lit almost entirely by what it reflects, and this scene has
+     no environment map — at metalness 0.45 every orb rendered as a black
+     hole with a rim. */
+  const shellMat = new THREE.MeshStandardMaterial({
+    color: 0x22475f, roughness: 0.42, metalness: 0.1,
+    emissive: 0x0b1f2e, emissiveIntensity: 0.7,
   });
-  const lampMat = new THREE.MeshBasicMaterial({
-    color: 0x5fe4ff, transparent: true, opacity: 0.7,
-    blending: THREE.AdditiveBlending, depthWrite: false,
+  /* The screen. Unlit and nearly black, so it reads as glass with things
+     behind it rather than as a painted circle. */
+  const faceMat = new THREE.MeshBasicMaterial({ color: 0x02070c, toneMapped: false });
+  /* The thin cyan rim around the screen. It is what turns a black disc into
+     a lens, and at twenty-four pixels it is the ring that says "face". */
+  const rimMat = new THREE.MeshBasicMaterial({
+    color: 0x4fd8f5, transparent: true, opacity: 0.9, toneMapped: false,
+  });
+  /* Eyes and fins carry per-instance colour, so brightness is the agent's
+     state and the material is shared. Not additive: additive over a black
+     screen saturates to white and throws away the colour. */
+  const eyeMat = new THREE.MeshBasicMaterial({ toneMapped: false });
+  /* Fins are secondary. Pale and soft-shaded, so they read as trim on the
+     shell rather than as the silhouette — the complaint about spikes was
+     really that the fins were winning the silhouette. */
+  const finMat = new THREE.MeshStandardMaterial({
+    color: 0x86cfe4, roughness: 0.45, metalness: 0.05,
+    emissive: 0x1d5f76, emissiveIntensity: 0.55,
+  });
+  /* ── THE THRUSTER IS A GLOW, NOT A CONE ────────────────────────────────
+     A cone is a spike whichever way it points, and pointing it down made
+     every agent look like a mine. This is a billboarded quad with a radial
+     falloff painted into a 64px canvas once, shared by every agent: soft at
+     every distance, no blur filter, no particles, one texture upload for the
+     whole population. */
+  const glowTex = (() => {
+    const c = document.createElement("canvas");
+    c.width = c.height = 64;
+    const g = c.getContext("2d");
+    /* Hot core, quick falloff, gone by the edge — the shape of a jet seen
+       from the side rather than a soft round blob. */
+    const grad = g.createRadialGradient(32, 22, 1, 32, 32, 31);
+    grad.addColorStop(0.00, "rgba(255,255,255,1)");
+    grad.addColorStop(0.18, "rgba(150,240,255,0.85)");
+    grad.addColorStop(0.55, "rgba(60,190,235,0.28)");
+    grad.addColorStop(1.00, "rgba(30,150,210,0)");
+    g.fillStyle = grad;
+    g.fillRect(0, 0, 64, 64);
+    const t = new THREE.CanvasTexture(c);
+    t.colorSpace = THREE.SRGBColorSpace;
+    return t;
+  })();
+  const thrustMat = new THREE.MeshBasicMaterial({
+    map: glowTex, transparent: true, opacity: 0.9,
+    blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false,
   });
 
   const mkInst = (geo, mat, n) => {
@@ -250,67 +353,59 @@ export function makeRoom(THREE, { renderer, preset, level = "balanced", reduced 
     return m;
   };
 
-  /* ── WHAT AN AGENT LOOKS LIKE ────────────────────────────────────────────
-     A tapered cylinder with a sphere on it is a chess pawn, and fifty of them
-     is a chess set. These are meant to read as agents at a glance and as
-     DIFFERENT agents at a second glance, which took four pieces rather than
-     two:
-
-       CHASSIS  a six-sided tapered column. Hexagonal rather than round
-                because a flat face catches the key light and gives the
-                silhouette an edge to turn on; round read as moulded plastic.
-       DOME     a flattened head, wider than it is tall.
-       VISOR    a bright band across the front of the dome, turned with the
-                figure. This is the piece doing most of the work: a lit
-                horizontal slot is the single most legible "this is a machine
-                that is looking at something" cue there is, and because it
-                faces the way the figure faces, a room full of them turning
-                toward one speaker is instantly readable.
-       HALO     a thin ring above the dome, tilted and slowly turning at each
-                agent's own rate. It is what stops the room reading as a grid
-                of identical objects when nothing is happening.
-
-     Five instanced meshes for any number of figures. A room with three
-     hundred speakers costs the same as a room with three. */
-  /* NOT ADDITIVE. Additive over the lit dome saturated every visor to the
-     same white, which threw away the one per-agent signal that reads at a
-     glance. Plain blending keeps the hue; the glow comes from the colour
-     being bright rather than from the blend mode. */
-  const visorMat = new THREE.MeshBasicMaterial({ toneMapped: false });
-  const haloMat = new THREE.MeshBasicMaterial({
-    transparent: true, opacity: 0.5, blending: THREE.AdditiveBlending, depthWrite: false,
-  });
-
-  const G = {
-    body: new THREE.CylinderGeometry(0.5, 0.98, 2.7, 6),
-    head: new THREE.SphereGeometry(0.66, 12, 9),
-    visor: new THREE.BoxGeometry(0.86, 0.22, 0.16),
-    halo: new THREE.TorusGeometry(0.7, 0.045, 5, 22),
-    lamp: new THREE.RingGeometry(1.25, 1.95, 20),
+  /* A rounded rectangle, for the eyes. Sharp corners read as pixels; a
+     little radius reads as a display element. Built once as a shape. */
+  const roundRect = (w, h, r) => {
+    const sh = new THREE.Shape();
+    const x = -w / 2, y = -h / 2;
+    sh.moveTo(x + r, y);
+    sh.lineTo(x + w - r, y); sh.quadraticCurveTo(x + w, y, x + w, y + r);
+    sh.lineTo(x + w, y + h - r); sh.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+    sh.lineTo(x + r, y + h); sh.quadraticCurveTo(x, y + h, x, y + h - r);
+    sh.lineTo(x, y + r); sh.quadraticCurveTo(x, y, x + r, y);
+    return new THREE.ShapeGeometry(sh, 3);
   };
-  const bodies = mkInst(G.body, bodyMat, cap);
-  const heads = mkInst(G.head, headMat, cap);
-  const visors = mkInst(G.visor, visorMat, cap);
-  /* The lowest tier keeps the visor — it is information — and drops the
-     halo, which is character. */
-  const halos = level === "performance" ? null : mkInst(G.halo, haloMat, cap);
-  const lamps = mkInst(G.lamp, lampMat, cap);
-  lamps.instanceColor = null;
 
-  const visorCol = new THREE.InstancedBufferAttribute(new Float32Array(cap * 3), 3);
-  visors.instanceColor = visorCol;
-  let haloCol = null;
-  if (halos) {
-    haloCol = new THREE.InstancedBufferAttribute(new Float32Array(cap * 3), 3);
-    halos.instanceColor = haloCol;
-  }
+  /* R is the orb's radius and everything else is expressed against it, so
+     the whole character scales from one number. */
+  const ORB = 1.0;
+  const G = {
+    /* SMOOTH. 20×14 segments is round at every size this is drawn and still
+       only 500 triangles — and it is shared by the entire population, so the
+       count is paid once. */
+    shell: new THREE.SphereGeometry(ORB, 20, 14),
+    face:  new THREE.CircleGeometry(ORB * 0.62, 26),
+    rim:   new THREE.RingGeometry(ORB * 0.62, ORB * 0.68, 28),
+    eye:   roundRect(ORB * 0.24, ORB * 0.29, ORB * 0.075),
+    /* SOFT TRIM, NOT SPIKES. Flattened boxes with a slight taper — they sit
+       ON the shell instead of sticking out of it, which is the whole
+       difference between a fin and a spine. */
+    topFin: new THREE.BoxGeometry(ORB * 0.34, ORB * 0.07, ORB * 0.3),
+    sideFin: new THREE.BoxGeometry(ORB * 0.36, ORB * 0.07, ORB * 0.2),
+    thrust: new THREE.PlaneGeometry(ORB * 1.15, ORB * 1.15),
+  };
+  const shells = mkInst(G.shell, shellMat, cap);
+  const faces  = mkInst(G.face,  faceMat,  cap);
+  const rims   = mkInst(G.rim,   rimMat,   cap);
+  const eyesL  = mkInst(G.eye,   eyeMat,   cap);
+  const eyesR  = mkInst(G.eye,   eyeMat,   cap);
+  const thrust = mkInst(G.thrust, thrustMat, cap);
+  /* Fins are shape, not information. The lowest tier drops them: three draw
+     calls and three matrix writes per agent, for trim that is under a pixel
+     wide on most of the room. */
+  const fins = level === "performance" ? null : {
+    top: mkInst(G.topFin, finMat, cap),
+    l:   mkInst(G.sideFin, finMat, cap),
+    r:   mkInst(G.sideFin, finMat, cap),
+  };
 
-  /* Per-instance colour is how one figure lights up without a material per
-     agent. Allocated once at full capacity. */
-  const lampCol = new THREE.InstancedBufferAttribute(new Float32Array(cap * 3), 3);
-  lamps.instanceColor = lampCol;
-  const headCol = new THREE.InstancedBufferAttribute(new Float32Array(cap * 3), 3);
-  heads.instanceColor = headCol;
+  const col3 = () => new THREE.InstancedBufferAttribute(new Float32Array(cap * 3), 3);
+  const eyeLCol = col3(); eyesL.instanceColor = eyeLCol;
+  const eyeRCol = col3(); eyesR.instanceColor = eyeRCol;
+  const thrustCol = col3(); thrust.instanceColor = thrustCol;
+  const rimCol = col3(); rims.instanceColor = rimCol;
+  let finCol = null;
+  if (fins) { finCol = col3(); fins.top.instanceColor = finCol; }
 
   /* The overflow ring: a count, drawn as a band, never as people. */
   const crowd = new THREE.Mesh(
@@ -404,14 +499,32 @@ export function makeRoom(THREE, { renderer, preset, level = "balanced", reduced 
              sit at, and hue within a narrow band. Slightly different from
              each other, as asked — enough to tell apart at a glance, not so
              much that the room stops reading as one kind of thing. */
-          tall: 0.86 + hash01(hashId(a.id), 23) * 0.34,
-          wide: 0.88 + hash01(hashId(a.id), 29) * 0.26,
-          dome: 0.86 + hash01(hashId(a.id), 31) * 0.3,
-          tilt: (hash01(hashId(a.id), 37) - 0.5) * 0.5,
-          spin: 0.35 + hash01(hashId(a.id), 41) * 0.9,
+          /* ── WHAT MAKES THIS ONE THIS ONE ───────────────────────────────
+             All of it derived from the identity's own hash, so an agent
+             looks and moves the same every time you come back and two
+             visitors see the same room. None of it is a claim about the
+             agent; it is how a population stops being one icon repeated. */
+          size: 0.86 + hash01(hashId(a.id), 23) * 0.3,
+          /* Hover: its own rate as well as its own phase, or two hundred
+             orbs breathe together at slightly different offsets, which is
+             somehow more obviously mechanical than being in step. */
+          bobRate: 0.72 + hash01(hashId(a.id), 29) * 0.55,
+          bobAmp: 0.16 + hash01(hashId(a.id), 31) * 0.13,
+          /* Momentum: how hard this one leans, and how quickly it settles. */
+          swing: 0.7 + hash01(hashId(a.id), 37) * 0.7,
           /* 168–202: teal to cyan-blue. Narrow on purpose — the room has one
-             palette and a figure is not allowed to leave it. */
+             palette and an agent is not allowed to leave it. */
           hue: 168 + hash01(hashId(a.id), 43) * 34,
+          /* ── LIVE ANIMATION STATE ───────────────────────────────────────
+             Written by the frame loop, never allocated in it. */
+          blinkAt: clock + 1 + hash01(hashId(a.id), 47) * 6,   // next blink
+          blink: 0,          // 0 open, 1 shut
+          blinks: 0,         // how many are left in this burst (double blinks)
+          gaze: 0,           // -1..1, where the eyes are looking
+          gazeTo: 0,
+          lean: 0, leanV: 0, // momentum, in radians
+          px: s.x, pz: s.z,  // where it actually is, trailing its station
+          lod: 0, drawn: false, wasLit: -1,
         };
         byId.set(a.id, f);
       }
@@ -422,8 +535,13 @@ export function makeRoom(THREE, { renderer, preset, level = "balanced", reduced 
     for (const id of [...byId.keys()]) if (!seen.has(id)) byId.delete(id);
     figures = next;
     overflow = Math.max(0, list.length - figures.length);
-    bodies.count = heads.count = visors.count = lamps.count = figures.length;
-    if (halos) halos.count = figures.length;
+    shells.count = faces.count = rims.count = eyesL.count = eyesR.count =
+      thrust.count = figures.length;
+    if (fins) fins.top.count = fins.l.count = fins.r.count = figures.length;
+    /* Every agent is redrawn at least once after the roster changes, or one
+       that was far away last frame keeps a matrix belonging to whoever held
+       its slot before. */
+    for (const f of figures) f.drawn = false;
     crowd.material.opacity = overflow > 0 ? Math.min(0.32, 0.06 + Math.log10(1 + overflow) * 0.12) : 0;
   }
 
@@ -433,7 +551,29 @@ export function makeRoom(THREE, { renderer, preset, level = "balanced", reduced 
     const f = byId.get(id);
     if (!f) return false;
     f.lit = Math.min(1.6, f.lit + 0.7 + Math.min(1, weight) * 0.5);
+    /* AND THE ROOM NOTICES. A few of the nearest agents glance toward it and
+       drift back. It is the cheapest possible "something happened over
+       there" — three numbers on four agents — and it is bounded: only the
+       ones close enough for a gaze to be visible, only for a moment, and
+       never as a claim that they heard anything. */
+    if (!reduced) glanceAt(f, 4);
     return true;
+  }
+
+  /** A handful of the nearest agents look toward `at`. Nearest by plaza
+   *  distance, not by anything about the conversation — a glance is
+   *  atmosphere and is not allowed to imply a relationship. */
+  function glanceAt(at, n) {
+    let picked = 0;
+    for (const f of figures) {
+      if (f === at || picked >= n) continue;
+      const dx = at.x - f.x, dz = at.z - f.z;
+      if (dx * dx + dz * dz > 400) continue;              // 20 units
+      /* Which side of its own facing the event is on, as -1..1. */
+      const rel = Math.atan2(dx, dz) - f.yaw;
+      f.gazeTo = Math.max(-1, Math.min(1, Math.sin(rel) * 1.6));
+      picked++;
+    }
   }
 
   /** One identity addressed another, and the message said so. */
@@ -442,6 +582,11 @@ export function makeRoom(THREE, { renderer, preset, level = "balanced", reduced 
     if (!a || !b) return false;
     a.face = toId;                       // the sender turns to look
     b.lit = Math.max(b.lit, 0.55);       // the addressee reacts
+    /* And the addressee's eyes flick toward whoever spoke to it. */
+    if (!reduced) {
+      const rel = Math.atan2(a.x - b.x, a.z - b.z) - b.yaw;
+      b.gazeTo = Math.max(-1, Math.min(1, Math.sin(rel) * 1.6));
+    }
     const s = sparkPool[sparkAt];
     sparkAt = (sparkAt + 1) % sparkPool.length;
     s.live = true; s.born = clock; s.life = reduced ? 0.35 : 0.85;
@@ -451,6 +596,300 @@ export function makeRoom(THREE, { renderer, preset, level = "balanced", reduced 
 
   function setEnergy(v) { energy = Math.max(0, Math.min(1, v || 0)); }
   function setRoom(name) { roomName = name; }
+
+  /* ══════════════════════════════════════════════════════════════════════
+     WRITING THE AGENTS
+     ══════════════════════════════════════════════════════════════════════
+
+     One pass, and everything in it is a function of the shared clock and a
+     per-agent offset. Nothing here allocates, nothing here owns a timer, and
+     the amount of work is decided per agent by how far away it is.
+
+     THE LEVELS, measured against the camera every frame:
+
+       0  NEAR   hover, tilt, blink, gaze, lean, thruster, fins.
+       1  MID    hover and blink. No gaze, no lean, no fin writes — at this
+                 distance a fin is under a pixel and an eye shifting by a
+                 fifteenth of an orb is invisible.
+       2  FAR    written once and then left alone. An instance matrix
+                 persists, so a far agent costs LITERALLY nothing per frame
+                 rather than costing a cheaper animation. This is the whole
+                 reason two hundred is affordable.
+
+     `frameStep` skips the whole pass on alternate frames at the lowest
+     tier — a 30Hz hover on a twenty-pixel orb is indistinguishable from a
+     60Hz one, and the matrices not written are this layer's entire cost. */
+  /* TUNED TO THE PLAZA, NOT GUESSED. The room is 42 units across and the
+     camera sits at 92 by default, so distances to agents run from about 50
+     to 130 at rest — the first pass used 58/118 and put every agent in the
+     middle band at the default view, which switched off the gaze, the lean
+     and the fins for a room nobody had zoomed out of. 95 covers the plaza
+     from the home camera; past 160 an orb is a few pixels. */
+  const NEAR2 = 95 * 95, MID2 = 160 * 160;
+  const frameStep = level === "performance" ? 2 : 1;
+  let frameNo = 0;
+  const camPos = new THREE.Vector3();
+
+  function writeFigures(dt) {
+    frameNo++;
+    /* A skipped frame still ages the lit state and the blink clocks, or a
+       low-power machine blinks at half speed and holds its lights twice as
+       long — the animation would be correct and the READINGS would not. */
+    const draw = frameNo % frameStep === 0;
+    camera.getWorldPosition(camPos);
+
+    for (let i = 0; i < figures.length; i++) {
+      const f = figures[i];
+      /* THE LIGHT OUTLASTS NOTHING, AND UNDER-LASTS NOTHING EITHER.
+         At 0.75/s a speaker went dark in about a second and a half while
+         their speech bubble was still up for six — so the figure the bubble
+         belonged to was unlit by the time anybody looked for it, which
+         defeats the entire point of lighting it. 0.26/s puts the light at
+         roughly four seconds, inside the bubble's life, so following a
+         conversation is a matter of looking where the light is. */
+      if (f.lit > 0) f.lit = Math.max(0, f.lit - dt * 0.26);
+
+      /* ── where it is trying to be ─────────────────────────────────────
+         A closed drift around its own station, so an agent is always
+         findable where it was. */
+      let tx = f.x, tz = f.z;
+      if (f.walk && !reduced) {
+        const t = clock * 0.28 + f.phase;
+        tx += Math.sin(t) * f.walk * 2.4;
+        tz += Math.cos(t * 0.8) * f.walk * 2.0;
+      }
+
+      /* ── MOMENTUM ─────────────────────────────────────────────────────
+         It TRAILS the target rather than being placed on it, and the lag is
+         what the lean is computed from. A body that arrives instantly and
+         then tilts is a tilt animation; a body that is still catching up is
+         a thing with mass. */
+      const lagX = tx - f.px, lagZ = tz - f.pz;
+      if (reduced) { f.px = tx; f.pz = tz; }
+      else {
+        const k = Math.min(1, dt * 3.4);
+        f.px += lagX * k; f.pz += lagZ * k;
+      }
+      const x = f.px, z = f.pz;
+
+      const dist2 = (x - camPos.x) ** 2 + (camPos.y - 2.4) ** 2 + (z - camPos.z) ** 2;
+      const lod = dist2 < NEAR2 ? 0 : dist2 < MID2 ? 1 : 2;
+      /* A far agent is written once, and again whenever its level changes or
+         its light does — being far is not a reason to show a stale state. */
+      const still = lod === 2 && f.drawn && f.lod === 2 && f.lit === f.wasLit;
+      f.lod = lod; f.wasLit = f.lit;
+      if (still || !draw) continue;
+      f.drawn = true;
+
+      /* ── facing ───────────────────────────────────────────────────────
+         At whoever was addressed, otherwise at the hub. Eased: a snap reads
+         as a glitch, a turn reads as attention. */
+      /* ── IT ALWAYS FACES YOU. THIS IS A BILLBOARD. ─────────────────────
+         Two earlier versions rotated the whole agent in 3D — first toward
+         the hub, then toward whoever it was addressing — and both hid the
+         face, which is the entire character. A dark sphere seen from behind
+         is an unidentified object.
+
+         So the orb is billboarded: the face is always square to the camera,
+         and it is snapped rather than eased, because an eased billboard lags
+         the camera and the whole population appears to swim when you drag.
+
+         WHAT HAPPENS TO THE ADDRESSEE SIGNAL, which was real information and
+         is not being thrown away: it moves to the EYES. When a message names
+         somebody, the sender's gaze shifts toward them — a few pixels, in
+         the direction they actually are. Smaller than a turn, still true,
+         and it does not cost you the face. */
+      f.yaw = Math.atan2(camPos.x - x, camPos.z - z);
+      const target = f.face ? byId.get(f.face) : null;
+      if (target && lod === 0) {
+        const rel = Math.atan2(target.x - x, target.z - z) - f.yaw;
+        f.gazeTo = Math.max(-1, Math.min(1, Math.sin(rel) * 1.4));
+      }
+
+      /* ── hovering ─────────────────────────────────────────────────────
+         Its own rate as well as its own phase. Two hundred orbs on one rate
+         at different offsets still read as a wave going through a crowd,
+         which is more obviously mechanical than being in step. */
+      const bob = reduced ? 0 : Math.sin(clock * f.bobRate + f.phase) * f.bobAmp;
+      const y = 2.5 * f.size + bob;
+
+      /* ── lean ─────────────────────────────────────────────────────────
+         Toward the direction of travel, from the lag computed above, with a
+         spring back to upright. `leanV` is a real velocity, so it overshoots
+         slightly and settles rather than easing to a stop. */
+      /* CAPPED AT FIVE DEGREES. A lean is momentum, not acrobatics, and past
+         a few degrees a billboarded face starts to shear. 0.087rad is 5°. */
+      let roll = 0;
+      if (lod === 0 && !reduced) {
+        /* Only the component ACROSS the view matters for a billboard: moving
+           toward the camera cannot show as a lean, and pretending it does is
+           what makes a character wobble for no visible reason. */
+        const across = lagX * Math.cos(f.yaw) - lagZ * Math.sin(f.yaw);
+        const want = Math.max(-0.087, Math.min(0.087, across * 0.5 * f.swing));
+        f.leanV += (want - f.lean) * dt * 9 - f.leanV * dt * 5;
+        f.lean += f.leanV * dt;
+        /* And a hint of the hover in it, so it rocks as it rises rather than
+           sliding up and down like a lift. */
+        roll = f.lean + Math.sin(clock * f.bobRate + f.phase + 1.2) * 0.02;
+      }
+
+      const sc = f.size * (1 + f.lit * 0.05);
+      /* One orientation for every billboarded part: square to the camera,
+         rolled by the lean. Computed once and reused rather than rebuilt per
+         piece — this runs eight times an agent, two hundred agents a frame. */
+      const fwdX = Math.sin(f.yaw), fwdZ = Math.cos(f.yaw);
+      const rX = fwdZ, rZ = -fwdX;               // the camera-right vector
+
+      /* ── the shell ────────────────────────────────────────────────────── */
+      dummy.position.set(x, y, z);
+      dummy.rotation.set(0, f.yaw, roll);
+      dummy.scale.setScalar(sc);
+      dummy.updateMatrix();
+      shells.setMatrixAt(i, dummy.matrix);
+
+      /* ── the screen, and its rim ──────────────────────────────────────
+         Both sit outside the shell along the facing direction. The rim is a
+         hair further out than the screen so it never z-fights with it. */
+      dummy.position.set(x + fwdX * 1.002 * sc, y, z + fwdZ * 1.002 * sc);
+      dummy.rotation.set(0, f.yaw, roll);
+      dummy.scale.setScalar(sc);
+      dummy.updateMatrix();
+      faces.setMatrixAt(i, dummy.matrix);
+
+      dummy.position.set(x + fwdX * 1.006 * sc, y, z + fwdZ * 1.006 * sc);
+      dummy.updateMatrix();
+      rims.setMatrixAt(i, dummy.matrix);
+
+      /* ── BLINKING ─────────────────────────────────────────────────────
+         Randomised, every three to eight seconds, and about one in four is a
+         double. The eyes do not fade — they COMPRESS, which is what an eye
+         does and what a fading light does not. */
+      if (!reduced && clock >= f.blinkAt) {
+        if (f.blinks <= 0) {
+          f.blinks = hash01(hashId(f.id), (clock * 7) | 0) < 0.26 ? 2 : 1;
+        }
+        f.blink += dt * 13;
+        if (f.blink >= 2) {                       // shut and open again
+          f.blink = 0;
+          f.blinks--;
+          f.blinkAt = f.blinks > 0
+            ? clock + 0.14                        // the second of a double
+            : clock + 3 + Math.random() * 5;
+        }
+      }
+      /* 0→1→0 over the blink, as a lid closing and opening. */
+      const shut = f.blink <= 1 ? f.blink : 2 - f.blink;
+      const lidY = 1 - shut * 0.9;
+
+      /* ── GAZE ─────────────────────────────────────────────────────────
+         A small shift toward whatever is going on. It carries the addressee
+         signal that used to be a full body turn: it points where the data
+         says, and it costs nothing of the face. */
+      if (lod === 0) f.gaze += (f.gazeTo - f.gaze) * Math.min(1, dt * 4);
+      else f.gaze = 0;
+      if (f.gazeTo !== 0 && Math.abs(f.gaze - f.gazeTo) < 0.05) f.gazeTo = 0;
+
+      const eyeOut = 1.012 * sc;
+      const gx = f.gaze * 0.055 * sc;
+      for (const [mesh, side] of [[eyesL, -1], [eyesR, 1]]) {
+        const off = side * 0.23 * sc + gx;
+        dummy.position.set(
+          x + fwdX * eyeOut + rX * off,
+          y + 0.02 * sc,
+          z + fwdZ * eyeOut + rZ * off);
+        dummy.rotation.set(0, f.yaw, roll);
+        dummy.scale.set(sc, sc * lidY, sc);
+        dummy.updateMatrix();
+        mesh.setMatrixAt(i, dummy.matrix);
+      }
+
+      /* ── the fins ─────────────────────────────────────────────────────
+         Trim, sitting ON the shell rather than sticking out of it. Skipped
+         past the near band, where they are narrower than a pixel. */
+      if (fins && lod === 0) {
+        dummy.position.set(x - fwdX * 0.22 * sc, y + 0.93 * sc, z - fwdZ * 0.22 * sc);
+        dummy.rotation.set(-0.22, f.yaw, roll);
+        dummy.scale.setScalar(sc);
+        dummy.updateMatrix();
+        fins.top.setMatrixAt(i, dummy.matrix);
+
+        for (const [mesh, side] of [[fins.l, -1], [fins.r, 1]]) {
+          dummy.position.set(
+            x + rX * side * 0.95 * sc - fwdX * 0.1 * sc,
+            y - 0.04 * sc,
+            z + rZ * side * 0.95 * sc - fwdZ * 0.1 * sc);
+          dummy.rotation.set(0, f.yaw, roll);
+          dummy.scale.setScalar(sc);
+          dummy.updateMatrix();
+          mesh.setMatrixAt(i, dummy.matrix);
+        }
+      }
+
+      /* ── the thruster ─────────────────────────────────────────────────
+         A billboarded glow under the orb, brightening as it rises. It
+         breathes with the hover because it is what is CAUSING the hover —
+         the two being in phase is the only reason the hover reads as thrust
+         rather than as a float. */
+      const lift = f.bobAmp > 0 ? bob / f.bobAmp : 0;      // -1..1
+      dummy.position.set(x, y - 0.92 * sc, z);
+      dummy.rotation.set(0, f.yaw, 0);
+      dummy.scale.set(sc * (0.9 + lift * 0.08), sc * (0.92 + lift * 0.16), sc);
+      dummy.updateMatrix();
+      thrust.setMatrixAt(i, dummy.matrix);
+
+      /* ── colour ───────────────────────────────────────────────────────
+         THE HUE IS THE AGENT'S OWN and it is what makes two hundred agents
+         two hundred agents rather than one agent two hundred times. It stays
+         inside a 34-degree band, so the room still reads as one palette:
+         they differ the way people in the same uniform differ.
+
+         LIGHTNESS IS THE STATE, and that is the part that is a claim. An
+         unlit agent's eyes are on but dim; a speaking one's are the
+         brightest thing on the plaza. Hue never carries state. */
+      /* Capped below white. `lit` runs to 1.6, so an uncapped ramp put every
+         speaking agent's eyes at HSL lightness 1 — pure white, which throws
+         away the hue that tells two agents apart at exactly the moment you
+         are most likely to be looking at one of them. */
+      /* Held below the point where a saturated cyan washes to white at small
+         sizes. The eyes must read as CYAN — that is the character — and a
+         lightness that looks cyan on a 200px render looks white on a 30px
+         one, which is the size that matters. */
+      tmpCol.setHSL(f.hue / 360, 1.0, Math.min(0.62, 0.4 + f.lit * 0.15));
+      tmpCol.toArray(eyeLCol.array, i * 3);
+      tmpCol.toArray(eyeRCol.array, i * 3);
+
+      const th = 0.1 + (lift * 0.5 + 0.5) * 0.12 + f.lit * 0.4;
+      tmpCol.setRGB(th * 0.3, th, th * 1.25);
+      tmpCol.toArray(thrustCol.array, i * 3);
+
+      /* The rim, and the top fin, brighten with the agent. They are the two
+         pieces that read at a distance where the eyes are a couple of
+         pixels, so they carry the "this one just said something" signal
+         further out than the eyes can. */
+      tmpCol.setHSL(f.hue / 360, 0.95, Math.min(0.78, 0.36 + f.lit * 0.3));
+      tmpCol.toArray(rimCol.array, i * 3);
+      if (finCol) {
+        tmpCol.setRGB(0.55 + f.lit * 0.4, 0.8 + f.lit * 0.2, 0.95);
+        tmpCol.toArray(finCol.array, i * 3);
+      }
+    }
+
+    if (!draw) return;
+    shells.instanceMatrix.needsUpdate = true;
+    faces.instanceMatrix.needsUpdate = true;
+    eyesL.instanceMatrix.needsUpdate = true;
+    eyesR.instanceMatrix.needsUpdate = true;
+    rims.instanceMatrix.needsUpdate = true;
+    thrust.instanceMatrix.needsUpdate = true;
+    eyeLCol.needsUpdate = true; eyeRCol.needsUpdate = true;
+    thrustCol.needsUpdate = true; rimCol.needsUpdate = true;
+    if (fins) {
+      fins.top.instanceMatrix.needsUpdate = true;
+      fins.l.instanceMatrix.needsUpdate = true;
+      fins.r.instanceMatrix.needsUpdate = true;
+      finCol.needsUpdate = true;
+    }
+  }
 
   /* ── the frame ─────────────────────────────────────────────────────── */
   function update(dt) {
@@ -464,128 +903,13 @@ export function makeRoom(THREE, { renderer, preset, level = "balanced", reduced 
       rings[i].material.opacity = 0.28 + energy * 0.4 * (1 - i / rings.length)
         + (reduced ? 0 : Math.sin(clock * 0.9 - i * 0.6) * 0.05);
     }
+    /* The rim breathes with the room but never goes out: it is the edge of
+       the floor, and an edge that disappears in a quiet room leaves the
+       plaza floating in the page's sky. */
+    rim.material.opacity = 0.34 + energy * 0.26
+      + (reduced ? 0 : Math.sin(clock * 0.7) * 0.03);
 
-    for (let i = 0; i < figures.length; i++) {
-      const f = figures[i];
-      /* THE LIGHT OUTLASTS NOTHING, AND UNDER-LASTS NOTHING EITHER.
-         At 0.75/s a speaker went dark in about a second and a half while
-         their speech bubble was still up for six — so the figure the bubble
-         belonged to was unlit by the time anybody looked for it, which
-         defeats the entire point of lighting it. 0.26/s puts the light at
-         roughly four seconds, inside the bubble's life, so following a
-         conversation is a matter of looking where the light is. */
-      if (f.lit > 0) f.lit = Math.max(0, f.lit - dt * 0.26);
-
-      /* Drift, and come back. A closed path around its own station, so a
-         figure is always findable where it was. */
-      let x = f.x, z = f.z;
-      if (f.walk && !reduced) {
-        const t = clock * 0.28 + f.phase;
-        x += Math.sin(t) * f.walk * 2.4;
-        z += Math.cos(t * 0.8) * f.walk * 2.0;
-      }
-
-      /* Facing: at whoever was addressed, otherwise at the hub. Eased, so a
-         head does not snap round — a snap reads as a glitch, a turn reads as
-         attention. */
-      const target = f.face ? byId.get(f.face) : null;
-      const wantYaw = target ? Math.atan2(target.x - x, target.z - z) : Math.atan2(-x, -z);
-      let d = wantYaw - f.yaw;
-      while (d > Math.PI) d -= TAU;
-      while (d < -Math.PI) d += TAU;
-      f.yaw += d * Math.min(1, dt * 3.2);
-
-      const bob = reduced ? 0 : Math.sin(clock * 1.1 + f.phase) * 0.13;
-
-      /* Proportions are the agent's own and never change; only the bob and
-         the lit state move. `tall` also decides where the head sits, or a
-         short agent wears its dome in its chest. */
-      const bodyH = 2.7 * f.tall;
-      const headY = bodyH + 0.86 * f.dome + bob;
-
-      dummy.position.set(x, bodyH / 2 + bob, z);
-      dummy.rotation.set(0, f.yaw, 0);
-      dummy.scale.set(f.wide, f.tall, f.wide);
-      dummy.updateMatrix();
-      bodies.setMatrixAt(i, dummy.matrix);
-
-      /* Wider than tall. A sphere reads as a ball on a stick; a squashed one
-         reads as a housing with something inside it. */
-      const hs = f.dome * (1 + f.lit * 0.07);
-      dummy.position.set(x, headY, z);
-      dummy.scale.set(hs, hs * 0.82, hs);
-      dummy.updateMatrix();
-      heads.setMatrixAt(i, dummy.matrix);
-
-      /* The visor rides on the front of the dome and turns with the figure,
-         so "who is this one looking at" is answerable across the room. */
-      /* ON the dome's surface, not inside it. At 0.52 the band sat within
-         the head's own radius of 0.66 and was depth-rejected by it — the
-         visor was being drawn every frame and had never once been visible.
-         0.63 puts it just proud of the shell. */
-      dummy.position.set(
-        x + Math.sin(f.yaw) * 0.63 * f.dome,
-        headY + 0.02,
-        z + Math.cos(f.yaw) * 0.63 * f.dome);
-      dummy.rotation.set(0, f.yaw, 0);
-      dummy.scale.set(f.dome, f.dome * (1 + f.lit * 0.5), f.dome);
-      dummy.updateMatrix();
-      visors.setMatrixAt(i, dummy.matrix);
-
-      if (halos) {
-        /* Tilted at its own angle and turning at its own rate. Nothing about
-           the spin is a reading — it is the one piece here that is purely
-           character, and it is the reason a still room does not look like a
-           screenshot. */
-        dummy.position.set(x, headY + 0.92 * f.dome, z);
-        dummy.rotation.set(Math.PI / 2 + f.tilt, reduced ? 0 : clock * f.spin, 0);
-        const hl = f.dome * (1 + f.lit * 0.18);
-        dummy.scale.set(hl, hl, hl);
-        dummy.updateMatrix();
-        halos.setMatrixAt(i, dummy.matrix);
-      }
-
-      dummy.position.set(x, 0.09, z);
-      dummy.rotation.set(-Math.PI / 2, 0, 0);
-      dummy.scale.setScalar((1 + f.lit * 0.25) * f.wide);
-      dummy.updateMatrix();
-      lamps.setMatrixAt(i, dummy.matrix);
-
-      /* Lit is a claim, so the colour ramp is steep enough to be unmistakable
-         and the floor is dark enough that an unlit figure is plainly unlit. */
-      const g = 0.12 + f.lit * 0.7;
-      tmpCol.setRGB(g * 0.35, g, g * 1.15);
-      tmpCol.toArray(lampCol.array, i * 3);
-      tmpCol.setRGB(0.06 + f.lit * 0.5, 0.16 + f.lit * 0.75, 0.22 + f.lit * 0.8);
-      tmpCol.toArray(headCol.array, i * 3);
-
-      /* THE HUE IS THE AGENT'S OWN, and it is the thing that makes fifty
-         figures fifty figures rather than one figure fifty times. It stays
-         inside a 34-degree band, so the room still reads as one palette —
-         two agents are different the way two people in the same uniform are
-         different, not the way a fruit bowl is.
-
-         Lightness carries the state: an unlit visor is present but dim, a
-         lit one is the brightest thing on the plaza. That is the claim, and
-         hue is not part of it. */
-      /* Bright enough to be the thing you see first even unlit — it is the
-         piece that says "machine", and a visor you have to look for is a
-         visor that is not doing its job. */
-      tmpCol.setHSL(f.hue / 360, 0.95, 0.5 + f.lit * 0.36);
-      tmpCol.toArray(visorCol.array, i * 3);
-      if (haloCol) {
-        tmpCol.setHSL(f.hue / 360, 0.7, 0.2 + f.lit * 0.34);
-        tmpCol.toArray(haloCol.array, i * 3);
-      }
-    }
-    bodies.instanceMatrix.needsUpdate = true;
-    heads.instanceMatrix.needsUpdate = true;
-    visors.instanceMatrix.needsUpdate = true;
-    lamps.instanceMatrix.needsUpdate = true;
-    lampCol.needsUpdate = true;
-    headCol.needsUpdate = true;
-    visorCol.needsUpdate = true;
-    if (halos) { halos.instanceMatrix.needsUpdate = true; haloCol.needsUpdate = true; }
+    writeFigures(dt);
 
     for (let i = 0; i < sparkPool.length; i++) {
       const s = sparkPool[i];
@@ -617,7 +941,9 @@ export function makeRoom(THREE, { renderer, preset, level = "balanced", reduced 
   function project(id, w, h) {
     const f = byId.get(id);
     if (!f) return null;
-    v.set(f.x, 5.2, f.z).project(camera);
+    /* The orb's own height, not the old figure's head. A bubble anchored at
+       5.2 floated a body-length above an agent that now tops out under 4. */
+    v.set(f.px ?? f.x, 3.7 * f.size, f.pz ?? f.z).project(camera);
     if (v.z > 1) return null;
     return { x: (v.x * 0.5 + 0.5) * w, y: (-v.y * 0.5 + 0.5) * h };
   }
@@ -628,14 +954,19 @@ export function makeRoom(THREE, { renderer, preset, level = "balanced", reduced 
   function pick(nx, ny) {
     ndc.set(nx, ny);
     ray.setFromCamera(ndc, camera);
-    const hit = ray.intersectObject(bodies, false)[0] || ray.intersectObject(heads, false)[0];
+    /* The shell is the whole silhouette now — one test where there used to
+       be two, and it is the piece a pointer is actually over. */
+    const hit = ray.intersectObject(shells, false)[0];
     if (!hit || hit.instanceId == null) return null;
     return figures[hit.instanceId]?.id ?? null;
   }
 
   function agentAt(id) {
     const f = byId.get(id);
-    return f ? { x: f.x, z: f.z } : null;
+    /* Where it IS, not where its station is: an orb trails its target, and a
+       reply spark that leaves from the station rather than from the agent
+       starts a little way off it. */
+    return f ? { x: f.px ?? f.x, z: f.pz ?? f.z } : null;
   }
 
   function dispose() {

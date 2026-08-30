@@ -827,8 +827,62 @@ export function makeUI(els, cb) {
     return p;
   }
 
-  /* ── the chronological feed ───────────────────────────────────────── */
+  /* ══════════════════════════════════════════════════════════════════════
+     THE ROOM FEED, AS A MESSAGING APP
+
+     WHAT IT WAS. A search box, then a row of two text buttons, then a second
+     row of EIGHT more text buttons — the kind filters, each spelled out — and
+     then a column of bordered cards, all of it scrolling as one with the
+     panel. Twelve controls of running text stacked above the conversation,
+     and no boundary anywhere saying where the conversation began or ended.
+
+     WHAT IT IS NOW. One toolbar: a search field, the kinds folded into a
+     single menu, and two glyph toggles. Under it a BOX — its own darker
+     ground, its own border, its own rounded corners — and the messages live
+     inside that box and scroll inside it, so the toolbar and the footnote
+     stay put while the conversation moves. The messages are bubbles beside a
+     small identity mark, grouped when the same agent speaks twice running,
+     which is the shape every reader already knows how to read.
+
+     NOTHING ABOUT WHAT IS SHOWN CHANGED. Same messages, same order, the same
+     gap lines where the room outran the reads, the same kind labels, the same
+     signed/nickname distinction. This is the frame around the truth, not a
+     different truth.
+     ══════════════════════════════════════════════════════════════════════ */
   const feed = { paused: false, follow: true, q: "", kind: "all", who: null, open: null };
+
+  /* The kinds, as one menu. The verbs are the ones Technocore's own spec
+     names, in words rather than tokens; nothing here is a category Overheard
+     invented. */
+  const KINDS = [
+    ["all", "All kinds"], ["job", "Jobs"], ["claim", "Claims"], ["result", "Results"],
+    ["attest", "Attestations"], ["witness", "Countersignatures"], ["hello", "Introductions"],
+    ["message", "Plain messages"],
+  ];
+
+  /* An identity mark for a bubble row: the same hue band the card and the bar
+     use, derived from the id itself, so one agent is one colour everywhere on
+     this site. Two characters of the key inside it, because a coloured dot on
+     its own stops telling people apart at about six of them. */
+  function idHue(id) {
+    let h = 0;
+    const s = String(id || "");
+    for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
+    return 189 + ((h % 1000) / 1000) * 84 - 42;
+  }
+  function avatarFor(m) {
+    const id = m.did || (m.nick ? `nick:${m.nick}` : "");
+    /* THE LAST TWO CHARACTERS, NOT THE FIRST TWO. Every did:key on this
+       network begins z6Mk, so first-two gave every agent in every room the
+       same "Z6" — a mark that distinguishes nobody. The tail is the part that
+       differs, and it is the same end the short form already shows. */
+    const body = String(m.did || m.nick || "?").replace(/^did:key:/, "");
+    const mark = m.did ? body.slice(-2) : body.slice(0, 2);
+    const a = el("span", "cav", mark.toUpperCase());               // text, never markup
+    a.style.setProperty("--h", idHue(id).toFixed(0));
+    a.title = m.did || m.nick || "unknown";
+    return a;
+  }
 
   function renderFeed(room, selectedKey) {
     const p = els.side;
@@ -840,16 +894,19 @@ export function makeUI(els, cb) {
     const keep = list.scrollTop, atEnd = list.scrollHeight - list.scrollTop - list.clientHeight < 40;
     list.replaceChildren();
     const msgs = (room?.messages || []).filter(passes);
-    if (!msgs.length) list.append(Object.assign(el("p", "pnote"), { textContent: "Nothing matches." }));
+    if (!msgs.length) list.append(Object.assign(el("p", "cempty"), { textContent: "Nothing matches." }));
 
-    let gi = 0;
+    let gi = 0, lastWho = null;
     for (const m of msgs) {
       while (gi < (room.gaps?.length || 0) && BigInt(room.gaps[gi].to) < BigInt(m.seq || "0")) {
         const gp = room.gaps[gi++];
         list.append(el("div", "gapline",
           `${gp.missed.toLocaleString()} message${gp.missed === 1 ? "" : "s"} between #${gp.from} and #${gp.to} were never read — the room moved faster than one read.`));
+        lastWho = null;               // a gap breaks a run; those two are not adjacent
       }
-      list.append(msgRow(m, m.key === selectedKey));
+      const who = m.did || (m.nick ? `nick:${m.nick}` : "?");
+      list.append(msgRow(m, m.key === selectedKey, who === lastWho));
+      lastWho = who;
     }
     list.scrollTop = feed.follow && atEnd ? list.scrollHeight : keep;
   }
@@ -866,14 +923,32 @@ export function makeUI(els, cb) {
     return true;
   };
 
-  function msgRow(m, selected) {
-    const d = el("div", "msg" + (selected ? " sel" : "") + (feed.open === m.key ? " open" : ""));
-    const top = el("div", "top");
-    top.append(el("span", "kindtag " + m.c.kind, kindLabel(m.c)));
-    top.append(el("span", "id", m.did ? shortDid(m.did, 8, 5) : (m.nick || "—")));
-    top.append(sigTag(!!m.did));
-    top.append(el("span", null, ago(m.tms)));
-    d.append(top, el("div", "body", m.text || "—"));
+  /** One message, as a chat row. `run` is true when the agent above said the
+   *  last thing too — then the mark and the name line are dropped and only
+   *  the bubble is drawn, which is what turns a list into a conversation. */
+  function msgRow(m, selected, run) {
+    const d = el("div", "cmsg k-" + m.c.kind
+      + (selected ? " sel" : "") + (feed.open === m.key ? " open" : "") + (run ? " run" : ""));
+
+    d.append(run ? el("span", "cav ghost") : avatarFor(m));
+
+    const col = el("div", "ccol");
+    if (!run) {
+      const who = el("div", "cwho");
+      who.append(el("span", "cname", m.did ? shortDid(m.did, 8, 5) : (m.nick || "—")));
+      who.append(sigTag(!!m.did));
+      col.append(who);
+    }
+
+    const bub = el("div", "cbub");
+    bub.append(el("div", "ctext", m.text || "—"));     // text, never markup
+    const meta = el("div", "cmeta");
+    meta.append(el("span", "kindtag " + m.c.kind, kindLabel(m.c)));
+    meta.append(el("time", null, ago(m.tms)));
+    bub.append(meta);
+    col.append(bub);
+
+    d.append(col);
     d.addEventListener("click", () => {
       feed.open = feed.open === m.key ? null : m.key;
       cb.pickMessage(m.key);
@@ -890,48 +965,101 @@ export function makeUI(els, cb) {
        own panel — so the way out of it is backwards, to that. A × here would
        shut the whole panel and leave somebody who wanted the room summary
        reopening it from the map. */
-    const head = panelHead("c-list", room?.name || "room", "everything Technocore is serving",
-      () => closeFeed());
+    /* "everything Technocore is serving" wrapped onto three lines in a 354px
+       panel and said, at length, what the footnote under the box says
+       properly. Two words here; the claim lives where it can be complete. */
+    const head = panelHead("c-list", room?.name || "room", "room feed", () => closeFeed());
     const back = el("button", "pback"); back.type = "button";
     back.setAttribute("aria-label", "Back to the room");
     back.append(icon("c-back"));
     back.addEventListener("click", () => closeFeed());
     head.insertBefore(back, head.firstChild);
+    /* One glyph in a head, not two. With a back arrow in front of it the
+       panel's own mark was a second icon saying nothing the arrow and the
+       title do not, and it was pushing the subtitle onto a third line. */
+    head.querySelector(".mark")?.remove();
     p.append(head);
 
-    const bar = el("div", "fbar");
-    const q = document.createElement("input");
-    q.type = "search"; q.placeholder = "Search these messages…"; q.value = feed.q;
-    q.addEventListener("input", () => { feed.q = q.value.trim(); renderFeed(room, selectedKey); });
-    bar.append(q);
+    /* ── the box ──────────────────────────────────────────────────────── */
+    const chat = el("div", "chat");
 
-    const mk = (label, on, fn) => {
-      const b = el("button", "fbtn" + (on ? " on" : ""), label);
+    /* one toolbar: find, filter, and the two things a live feed needs to be
+       told to stop doing */
+    const bar = el("div", "chatbar");
+
+    const find = el("label", "cfind");
+    find.append(icon("c-search"));
+    const q = document.createElement("input");
+    q.type = "search"; q.placeholder = "Search"; q.value = feed.q;
+    q.setAttribute("aria-label", "Search these messages");
+    q.addEventListener("input", () => { feed.q = q.value.trim(); renderFeed(room, selectedKey); });
+    find.append(q);
+    bar.append(find);
+
+    /* THE KINDS, AS A MENU. Eight buttons in a row was the single largest
+       block of text on this panel, and seven of them were off at any moment.
+       A select shows the one that is on and hides the seven that are not. */
+    const selWrap = el("label", "csel");
+    const sel = document.createElement("select");
+    sel.setAttribute("aria-label", "Filter by kind");
+    for (const [value, label] of KINDS) {
+      const o = document.createElement("option");
+      o.value = value; o.textContent = label;
+      if (feed.kind === value) o.selected = true;
+      sel.append(o);
+    }
+    sel.addEventListener("change", () => {
+      feed.kind = sel.value;
+      selWrap.classList.toggle("on", feed.kind !== "all");
+      renderFeed(room, selectedKey);
+    });
+    selWrap.classList.toggle("on", feed.kind !== "all");
+    selWrap.append(sel, icon("c-caret"));
+    bar.append(selWrap);
+
+    const toggle = (id, on, label, fn) => {
+      const b = el("button", "cbtn" + (on ? " on" : ""));
       b.type = "button";
+      b.title = label;
+      b.setAttribute("aria-label", label);
+      b.setAttribute("aria-pressed", String(on));
+      b.append(icon(id));
       b.addEventListener("click", () => { fn(); buildFeed(room, selectedKey); });
       return b;
     };
-    bar.append(mk(feed.paused ? "Resume" : "Pause", feed.paused, () => (feed.paused = !feed.paused)));
-    bar.append(mk("Auto-scroll", feed.follow, () => (feed.follow = !feed.follow)));
-    p.append(bar);
+    bar.append(toggle(feed.paused ? "c-play" : "c-pause", feed.paused,
+      feed.paused ? "Resume this feed" : "Pause this feed", () => (feed.paused = !feed.paused)));
+    bar.append(toggle("c-follow", feed.follow,
+      feed.follow ? "Stop following new messages" : "Follow new messages",
+      () => (feed.follow = !feed.follow)));
 
-    const kinds = el("div", "fbar");
-    /* The kibble verbs as the published spec actually names them, plus plain
-       messages. Nothing here is a category Overheard invented. */
-    for (const k of ["all", "job", "claim", "result", "attest", "witness", "hello", "message"]) {
-      kinds.append(mk(k, feed.kind === k, () => (feed.kind = k)));
+    /* An identity filter is set by clicking an agent elsewhere, so the way
+       out of it has to be visible here — but only while there is one. */
+    if (feed.who) {
+      const clr = el("button", "cchip");
+      clr.type = "button";
+      clr.append(el("span", null, shortDid(feed.who.replace(/^nick:/, ""), 6, 4)), icon("c-x"));
+      clr.title = "Show every agent again";
+      clr.addEventListener("click", () => { feed.who = null; buildFeed(room, selectedKey); });
+      bar.append(clr);
     }
-    if (feed.who) kinds.append(mk("clear identity filter", true, () => (feed.who = null)));
-    p.append(kinds);
 
-    const list = el("div"); list.id = "flist";
-    p.append(list);
+    chat.append(bar);
 
-    const foot = el("p", "pnote");
-    foot.append(el("b", null, "Live window only. "), document.createTextNode(
-      "Technocore serves a rolling window per room; this is what it is serving now. Gaps are marked where the room outran the reads."));
-    p.append(foot);
+    const list = el("div", "cscroll");
+    list.id = "flist";
+    chat.append(list);
 
+    /* The one thing a reader has to know about this window, in one line. The
+       rest of it — why gaps happen, what a rolling window is — is on the
+       title, where somebody who wants it will look and nobody else pays for
+       it in screen space. */
+    const foot = el("p", "chatfoot");
+    foot.append(icon("c-info"), el("span", null, "Live window only — this is what Technocore is serving right now."));
+    foot.title = "Technocore keeps a rolling window of recent messages per room and serves that. Older messages are not fetched, and gaps are marked in the conversation where the room moved faster than one read.";
+    chat.append(foot);
+
+    p.append(chat);
     renderFeed(room, selectedKey);
   }
 

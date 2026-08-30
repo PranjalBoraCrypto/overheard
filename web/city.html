@@ -553,31 +553,126 @@ body:not(.inroom) .tr{top:66px;max-height:calc(100% - 212px)}
   color:var(--cy-hi);cursor:pointer;transition:.18s var(--ease)}
 .pback:hover{background:rgba(0,180,215,.2);border-color:var(--cy-hi)}
 .pback .i{width:15px;height:15px}
-/* The feed's own list is the part that scrolls, so the search, the filters
-   and the footnote stay put while the messages move under them. */
-#side #flist{flex:1 1 auto;min-height:80px;overflow:auto;overscroll-behavior:contain;
-  margin-right:-6px;padding-right:6px}
-.fbar{display:flex;gap:6px;flex-wrap:wrap;margin:11px 0}
-.fbar input{flex:1 1 130px;min-width:0;background:rgba(0,7,10,.7);border:1px solid var(--edge);
-  border-radius:10px;color:var(--txt);font-family:var(--mono);font-size:11.5px;padding:8px 10px;outline:none}
-.fbar input:focus{border-color:var(--cy)}
-.fbtn{padding:7px 10px;border-radius:9px;background:rgba(0,20,26,.6);border:1px solid rgba(0,180,215,.18);
-  color:var(--faint);cursor:pointer;font-family:var(--mono);font-size:10px;letter-spacing:.08em;
-  text-transform:uppercase;transition:.2s var(--ease)}
-.fbtn:hover{color:var(--txt)}
-.fbtn.on{background:rgba(0,180,215,.18);color:var(--cy-hi);border-color:rgba(0,180,215,.45)}
-#flist{flex:1 1 auto;overflow:auto;overscroll-behavior:contain;display:flex;flex-direction:column;gap:6px;
-  padding-right:3px}
-.msg{padding:9px 11px;border-radius:11px;background:rgba(0,20,26,.5);border:1px solid rgba(0,180,215,.12);
-  cursor:pointer;transition:.18s var(--ease);animation:msgin .3s var(--ease) both}
-@keyframes msgin{from{opacity:0;transform:translateY(6px)}}
-.msg:hover{border-color:rgba(95,235,255,.4)}
-.msg.sel{border-color:var(--cy);background:rgba(0,52,66,.5)}
-.msg .top{display:flex;gap:7px;align-items:center;font-family:var(--mono);font-size:10px;color:var(--faint)}
-.msg .top .id{color:var(--cy-hi);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1 1 auto;min-width:0}
-.msg .body{margin-top:4px;font-size:12.5px;line-height:1.45;color:var(--dim);
-  display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
-.msg.open .body{-webkit-line-clamp:unset;display:block;white-space:pre-wrap;word-break:break-word}
+/* ── THE CHAT BOX ──────────────────────────────────────────────────────────
+   A messaging surface, not a filtered list. Three parts and a hard edge
+   around all three: a toolbar that stays, a scroller that moves, and one
+   line of footnote that stays. The box has its own ground — darker than the
+   panel it sits in, with a faint weave — so the conversation reads as a
+   place with a boundary rather than as more panel. */
+/* `#side > *{flex:0 0 auto}` is an id selector and outweighs a class, so the
+   box has to claim its height through the same door or it collapses to its
+   content and the scroller never scrolls. */
+#side > .chat{flex:1 1 auto}
+.chat{
+  flex:1 1 auto;min-height:180px;display:flex;flex-direction:column;overflow:hidden;
+  margin-top:12px;border-radius:15px;border:1px solid rgba(0,180,215,.2);
+  background:
+    repeating-linear-gradient(135deg,rgba(0,180,215,.014) 0 2px,transparent 2px 11px),
+    linear-gradient(180deg,rgba(0,12,17,.92),rgba(0,7,10,.96));
+  box-shadow:inset 0 1px 0 rgba(95,235,255,.07),inset 0 -22px 34px -30px rgba(0,180,215,.5);
+}
+
+/* THE TOOLBAR, ON TWO ROWS. The panel is 354px wide and the kind menu has to
+   be wide enough to say "Countersignatures" without clipping — on one row
+   that squeezed the search box down to reading "Sea". Search owns the first
+   row; the menu and the two toggles share the second. */
+.chatbar{
+  flex:0 0 auto;display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding:8px 9px;
+  border-bottom:1px solid rgba(0,180,215,.16);background:rgba(0,20,26,.5);
+}
+.cfind{flex:1 1 100%;min-width:0;display:flex;align-items:center;gap:7px;padding:0 9px;
+  height:30px;border-radius:9px;background:rgba(0,7,10,.72);border:1px solid rgba(0,180,215,.18);
+  transition:border-color .18s var(--ease)}
+.cfind:focus-within{border-color:var(--cy)}
+.cfind .i{width:13px;height:13px;flex:none;color:var(--faint)}
+.cfind input{flex:1 1 auto;min-width:0;background:none;border:0;outline:none;color:var(--txt);
+  font-family:var(--mono);font-size:11.5px}
+.cfind input::-webkit-search-cancel-button{filter:grayscale(1) opacity(.5)}
+
+/* THE KINDS, AS A MENU. Native select, restyled — it collapses eight labels
+   to the one that is on, it is keyboard-operable for free, and it opens as
+   the platform's own list rather than as a popover this file has to place. */
+.csel{position:relative;flex:1 1 auto;min-width:0;display:flex;align-items:center}
+.csel select{
+  width:100%;appearance:none;-webkit-appearance:none;height:30px;padding:0 26px 0 10px;
+  border-radius:9px;background:rgba(0,7,10,.72);border:1px solid rgba(0,180,215,.18);
+  color:var(--dim);font-family:var(--mono);font-size:11px;cursor:pointer;outline:none;
+  transition:.18s var(--ease)}
+.csel select:hover{color:var(--txt)}
+.csel select:focus-visible{border-color:var(--cy)}
+.csel.on select{color:var(--cy-hi);background:rgba(0,180,215,.15);border-color:rgba(0,180,215,.45)}
+.csel .i{position:absolute;right:8px;width:11px;height:11px;pointer-events:none;color:var(--faint)}
+.csel.on .i{color:var(--cy-hi)}
+/* The dropdown itself is drawn by the platform; these two keep it dark on
+   the browsers that honour them rather than flashing white. */
+.csel select option{background:#04161f;color:#CDEAF3}
+
+.cbtn{width:30px;height:30px;flex:none;border-radius:9px;display:grid;place-items:center;
+  background:rgba(0,7,10,.72);border:1px solid rgba(0,180,215,.18);color:var(--faint);
+  cursor:pointer;transition:.18s var(--ease)}
+.cbtn:hover{color:var(--txt);border-color:rgba(0,180,215,.35)}
+.cbtn.on{background:rgba(0,180,215,.16);border-color:rgba(0,180,215,.45);color:var(--cy-hi)}
+.cbtn .i{width:14px;height:14px}
+.cchip{display:inline-flex;align-items:center;gap:5px;height:30px;padding:0 8px;flex:none;
+  border-radius:9px;background:rgba(0,180,215,.16);border:1px solid rgba(0,180,215,.45);
+  color:var(--cy-hi);cursor:pointer;font-family:var(--mono);font-size:10px}
+.cchip .i{width:11px;height:11px}
+.cchip:hover{background:rgba(0,180,215,.26)}
+
+/* THE SCROLLER, AND IT IS INSIDE THE BOX. The toolbar above it and the note
+   below it do not move; only this does, and its rail is drawn within the
+   box's own border rather than down the side of the whole panel. */
+.cscroll{
+  flex:1 1 auto;min-height:80px;overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;
+  display:flex;flex-direction:column;gap:9px;padding:12px 10px 14px;
+  scrollbar-gutter:stable;
+}
+.cempty{margin:auto;padding:20px 0;font-size:12px;color:var(--faint);text-align:center}
+
+/* ── a message, as a chat row ──────────────────────────────────────────── */
+.cmsg{display:flex;gap:9px;align-items:flex-start;cursor:pointer;
+  animation:msgin .32s var(--ease) both}
+@keyframes msgin{from{opacity:0;transform:translateY(7px)}}
+/* A run by the same agent closes up and drops the name line: that gap is how
+   a conversation shows who is still talking. */
+.cmsg.run{margin-top:-6px}
+.cav{
+  width:28px;height:28px;flex:none;border-radius:10px;display:grid;place-items:center;
+  font-family:var(--mono);font-size:9.5px;font-weight:600;letter-spacing:.02em;
+  color:hsl(var(--h,196) 100% 82%);
+  background:linear-gradient(140deg,hsl(var(--h,196) 62% 26%),hsl(var(--h,196) 70% 14%));
+  border:1px solid hsl(var(--h,196) 70% 40% / .5);
+}
+.cav.ghost{background:none;border:0}
+.ccol{flex:1 1 auto;min-width:0}
+.cwho{display:flex;align-items:center;gap:7px;margin-bottom:4px;padding-left:2px}
+.cname{font-family:var(--mono);font-size:10.5px;color:var(--cy-hi);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* THE BUBBLE. One squared corner at the top left, where it meets its own
+   mark — the detail that makes a rounded rectangle read as speech. */
+.cbub{
+  position:relative;padding:9px 11px 7px;border-radius:4px 13px 13px 13px;
+  background:rgba(10,42,55,.62);border:1px solid rgba(0,180,215,.16);
+  transition:border-color .18s var(--ease),background .18s var(--ease)}
+.cmsg.run .cbub{border-radius:13px}
+.cmsg:hover .cbub{border-color:rgba(95,235,255,.42);background:rgba(12,52,68,.7)}
+.cmsg.sel .cbub{border-color:var(--cy);background:rgba(0,60,76,.72);
+  box-shadow:0 0 0 3px rgba(0,180,215,.13)}
+.ctext{font-size:12.5px;line-height:1.5;color:#CDEAF3;word-break:break-word;
+  display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden}
+.cmsg.open .ctext{-webkit-line-clamp:unset;display:block;white-space:pre-wrap}
+.cmeta{display:flex;align-items:center;gap:7px;margin-top:6px;
+  font-family:var(--mono);font-size:9px;color:var(--faint)}
+.cmeta time{margin-left:auto;flex:none}
+
+/* the one line under the box */
+.chatfoot{
+  flex:0 0 auto;display:flex;align-items:center;gap:7px;padding:7px 11px;
+  border-top:1px solid rgba(0,180,215,.14);background:rgba(0,20,26,.5);
+  font-size:10.5px;line-height:1.4;color:var(--faint);cursor:help}
+.chatfoot .i{width:12px;height:12px;flex:none;color:var(--cy);opacity:.8}
+@media (prefers-reduced-motion:reduce){.cmsg{animation:none}}
 .kindtag{padding:2px 6px;border-radius:999px;font-size:8.5px;letter-spacing:.08em;text-transform:uppercase;
   border:1px solid transparent}
 .kindtag.job{color:var(--cy-hi);background:rgba(0,180,215,.12);border-color:rgba(0,180,215,.3)}
@@ -586,8 +681,12 @@ body:not(.inroom) .tr{top:66px;max-height:calc(100% - 212px)}
 .kindtag.attest{color:var(--warn);background:rgba(242,179,61,.1);border-color:rgba(242,179,61,.3)}
 .kindtag.witness{color:var(--dim);background:rgba(156,191,203,.08);border-color:rgba(156,191,203,.2)}
 .kindtag.hello{color:var(--cy);background:rgba(0,180,215,.07);border-color:rgba(0,180,215,.2)}
+/* A gap is a system line in the middle of a conversation, so it is centred
+   and narrower than the bubbles — the shape a chat uses for "something
+   happened here that nobody said". */
 .gapline{padding:7px 10px;border-radius:10px;font-family:var(--mono);font-size:10.5px;line-height:1.5;
   color:var(--warn);background:rgba(242,179,61,.07);border:1px dashed rgba(242,179,61,.4)}
+.cscroll .gapline{align-self:center;max-width:94%;text-align:center}
 .meta{display:grid;grid-template-columns:auto 1fr;gap:4px 12px;margin-top:10px;
   font-family:var(--mono);font-size:11px}
 .meta dt{color:var(--faint)}
@@ -683,6 +782,13 @@ body:not(.inroom) .tr{top:66px;max-height:calc(100% - 212px)}
   <!-- The rail's own mark: a rising trace. -->
   <symbol id="c-pulse" viewBox="0 0 24 24"><path d="M2.6 13.4h4L9 7.2l3.4 10.4 2.4-5.6h6.6"/></symbol>
   <symbol id="c-back" viewBox="0 0 24 24"><path d="M20 12H4.4"/><path d="M10.6 5.4 4 12l6.6 6.6"/></symbol>
+  <!-- The room feed's two toggles. Glyphs rather than the words "Pause" and
+       "Auto-scroll": they share a toolbar with a search box and a kind menu,
+       and four labelled controls in a row is a form, not a conversation. -->
+  <symbol id="c-pause" viewBox="0 0 24 24" fill="currentColor" stroke="none"><rect x="7.2" y="5" width="3.4" height="14" rx="1.3"/><rect x="13.4" y="5" width="3.4" height="14" rx="1.3"/></symbol>
+  <symbol id="c-play" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M7.8 5.4 18.4 12 7.8 18.6z"/></symbol>
+  <symbol id="c-follow" viewBox="0 0 24 24"><path d="M12 4.2v9.6"/><path d="m7.8 10 4.2 4.2L16.2 10"/><path d="M5.4 19.4h13.2"/></symbol>
+  <symbol id="c-caret" viewBox="0 0 24 24"><path d="m6.5 9.5 5.5 5.5 5.5-5.5"/></symbol>
 </defs></svg>
 
 <div class="sky" aria-hidden="true"><i></i><i></i></div>

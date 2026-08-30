@@ -22,7 +22,8 @@
  * the tabs; leaving that to each page to remember is how it broke last time.
  */
 
-import { getSession, getVault, signIn, signOut, onSession, shortDid, hueOf, openVault, saveVault } from "/session.js";
+import { getSession, getVault, signIn, signOut, onSession, shortDid, hueOf, openVault, saveVault,
+         readSeed, keyFromSeed, sealVault, PW_MIN } from "/session.js";
 import { PAGES, FONT_HREF, faceSVG } from "/nav.js";
 
 /* The tabs are the pages that asked to be tabs, from the one list the footer
@@ -126,7 +127,7 @@ const CSS = `
    an identity were buried inside two other pages. This is the one button that
    is always in the same place. */
 .in{
-  display:inline-flex;align-items:center;gap:8px;flex:none;margin-left:10px;
+  display:inline-flex;align-items:center;gap:11px;flex:none;margin-left:10px;
   padding:10px 15px;border-radius:11px;cursor:pointer;
   font-family:inherit;font-size:13.5px;font-weight:700;line-height:1;color:#001016;
   background:linear-gradient(120deg,#5FEBFF,#00B4D7 60%,#0093BC);border:0;
@@ -136,7 +137,9 @@ const CSS = `
 .in:hover{transform:translateY(-2px);box-shadow:0 18px 34px -16px rgba(0,180,215,1)}
 .in:active{transform:translateY(0)}
 .in:focus-visible{outline:2px solid #5FEBFF;outline-offset:3px}
-.in .i{width:15px;height:15px;flex:none;fill:none;stroke:currentColor;stroke-width:2;
+/* The label is 700; the glyph is weighted to match it. A 2px stroke beside
+   bold text reads as a lighter typeface sitting inside the same button. */
+.in .i{width:16px;height:16px;flex:none;fill:none;stroke:currentColor;stroke-width:2.5;
   stroke-linecap:round;stroke-linejoin:round}
 .inwrap{position:relative;flex:none}
 .pw{
@@ -159,6 +162,75 @@ const CSS = `
 .say{font-size:11.5px;line-height:1.5;color:#5F8593;margin-top:9px;min-height:1.2em}
 .say.err{color:#FF9B9B}
 .say.ok{color:#3BE3B0}
+
+/* ── the seed route, for a browser holding nothing ─────────────────────────
+   Reported, and correct: with no vault here the popover still opened on a
+   passphrase box. There was nothing for that passphrase to unlock — it could
+   not succeed on any input — and the only route that could was two clicks
+   further down, behind a file most people do not have. So an empty browser
+   now opens on the seed, which is the thing every Technocore identity has
+   however it was made, and the passphrase it asks for is one being SET. */
+.seed{margin-top:11px}
+.seed textarea{
+  display:block;width:100%;height:66px;resize:vertical;
+  font-family:"IBM Plex Mono",ui-monospace,Menlo,monospace;font-size:11px;line-height:1.55;
+  padding:10px 11px;border-radius:10px;color:#EDFAFE;
+  background:rgba(0,7,10,.75);border:1px solid rgba(0,180,215,.22);outline:none;
+  transition:border-color .2s,box-shadow .2s;
+}
+.seed textarea:focus{border-color:#00B4D7;box-shadow:0 0 0 4px rgba(0,180,215,.12)}
+/* The DID appears the moment the paste can produce one. It is the clearest
+   possible confirmation that the seed pasted is the seed meant, and it costs
+   nothing but arithmetic this browser was going to do anyway. */
+.sdid{
+  margin-top:7px;padding:7px 9px;border-radius:9px;
+  font-family:"IBM Plex Mono",ui-monospace,Menlo,monospace;font-size:9.5px;line-height:1.5;
+  color:#5FEBFF;word-break:break-all;background:rgba(0,180,215,.07);
+  border:1px solid rgba(0,180,215,.2);
+}
+.sdid:empty{display:none}
+.two{display:flex;gap:7px;margin-top:7px}
+.two input{
+  flex:1 1 0;min-width:0;font-family:"IBM Plex Mono",ui-monospace,Menlo,monospace;font-size:11.5px;
+  padding:10px 11px;border-radius:10px;color:#EDFAFE;
+  background:rgba(0,7,10,.75);border:1px solid rgba(0,180,215,.22);outline:none;
+  transition:border-color .2s,box-shadow .2s;
+}
+.two input:focus{border-color:#00B4D7;box-shadow:0 0 0 4px rgba(0,180,215,.12)}
+.seal{
+  width:100%;margin-top:8px;padding:11px 14px;border-radius:11px;border:0;cursor:pointer;
+  font-family:inherit;font-size:13px;font-weight:700;line-height:1;color:#001016;
+  background:linear-gradient(120deg,#5FEBFF,#00B4D7 60%,#0093BC);
+  box-shadow:0 12px 28px -16px rgba(0,180,215,1);
+  transition:transform .2s cubic-bezier(.22,.68,.24,1)}
+.seal:hover:not(:disabled){transform:translateY(-1px)}
+.seal:disabled{opacity:.55;cursor:default;transform:none}
+
+/* ── the i ─────────────────────────────────────────────────────────────────
+   A claim about where somebody's key goes is exactly the claim a fake of this
+   site would also make, so it is not enough to assert it in small grey type
+   and move on. It is a control you press, and what it opens says the specific
+   mechanical truth — what is read, what is derived, what is stored, what is
+   sent — rather than the word "secure". */
+.hrow{display:flex;align-items:center;gap:8px;margin-top:12px}
+.menu .hrow:first-child{margin-top:0}
+.hrow h3{margin:0}
+.iq{
+  width:19px;height:19px;flex:none;margin-left:auto;border-radius:50%;cursor:pointer;
+  display:grid;place-items:center;padding:0;
+  background:rgba(0,180,215,.12);border:1px solid rgba(0,180,215,.3);color:#5FEBFF;
+  transition:background .2s,border-color .2s}
+.iq:hover,.iq[aria-expanded="true"]{background:rgba(0,180,215,.26);border-color:#5FEBFF}
+.iq svg{width:11px;height:11px;fill:none;stroke:currentColor;stroke-width:2.6;
+  stroke-linecap:round;stroke-linejoin:round}
+.note{
+  margin-top:9px;padding:10px 11px;border-radius:11px;
+  font-size:11px;line-height:1.6;color:#9CBFCB;
+  background:rgba(0,180,215,.06);border:1px solid rgba(0,180,215,.18);
+}
+.note b{color:#CDEAF3;font-weight:600}
+.note ul{margin:6px 0 0;padding-left:15px}
+.note li{margin-top:3px}
 
 /* ── who you are, on every page ────────────────────────────────────────────
    The identity was legible on exactly one screen — the compose box of the
@@ -197,6 +269,9 @@ const CSS = `
   animation:pop .28s cubic-bezier(.2,.9,.3,1.2) both;
 }
 @keyframes pop{from{opacity:0;transform:scale(.92) translateY(-6px)}}
+/* The seed view carries a textarea and two side-by-side fields; 300 makes
+   "passphrase, 6+" and "again" both ellipsise. Only that view is wider. */
+.menu.wide{width:344px}
 .menu h3{
   font-family:"IBM Plex Mono",ui-monospace,Menlo,monospace;font-size:9.5px;font-weight:600;
   letter-spacing:.16em;text-transform:uppercase;color:#5F8593;margin-bottom:8px;
@@ -224,7 +299,7 @@ const CSS = `
   .tabs{margin-left:0;width:100%}
   .tabs a{padding:9px 12px;font-size:13px}
   .me{margin-left:0;order:-1}
-  .menu{width:min(300px,calc(100vw - 52px))}
+  .menu,.menu.wide{width:min(344px,calc(100vw - 52px))}
 }
 `;
 
@@ -244,6 +319,8 @@ const ICONS = {
   rooms: '<svg viewBox="0 0 24 24"><path d="M21 12a8 8 0 1 1-3.2-6.4"/><path d="M8 20l-4 1 1-4"/><path d="M9 11h6M9 15h4"/></svg>',
   out: '<svg viewBox="0 0 24 24"><path d="M15 17l5-5-5-5"/><path d="M20 12H9"/><path d="M12 4H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h6"/></svg>',
   caret: '<svg class="car" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>',
+  info: '<svg viewBox="0 0 24 24"><path d="M12 11v6"/><path d="M12 7.4v.1"/></svg>',
+  file: '<svg viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/></svg>',
   key: '<svg class="i" viewBox="0 0 24 24"><circle cx="8" cy="14.5" r="4"/><path d="M10.9 11.6 20 2.5"/><path d="M16.8 5.7 19 7.9M14.4 8.1l2.2 2.2"/></svg>',
   flask: '<svg class="i" viewBox="0 0 24 24"><path d="M9.5 3.5v6L4.9 17a2 2 0 0 0 1.7 3h10.8a2 2 0 0 0 1.7-3l-4.6-7.5v-6"/><path d="M8 3.5h8"/><path d="M7.2 14h9.6"/></svg>',
   spark: '<svg class="i" viewBox="0 0 24 24"><path d="M12 3.5v4M12 16.5v4M3.5 12h4M16.5 12h4"/><path d="M6.4 6.4 9 9M15 15l2.6 2.6M17.6 6.4 15 9M9 15l-2.6 2.6"/></svg>',
@@ -366,14 +443,26 @@ class OverheardBar extends HTMLElement {
 /* ── signed out ────────────────────────────────────────────────────────────
    One button, in the same place on every page, that does the whole job where
    the visitor is standing rather than sending them to a page that has a form
-   on it. Three states, in the order they are likely:
+   on it.
 
-     · this browser holds a vault  → a passphrase, and that is the whole flow
-     · it holds a backup file      → choose it, then its passphrase
-     · it holds nothing            → make an identity
+   TWO STATES, AND THEY ASK DIFFERENT QUESTIONS.
 
-   The key is decrypted here, on this device, by the same routine the create
-   page sealed it with. Nothing is sent anywhere. */
+     · this browser holds a vault → a passphrase that EXISTS, and unlocking it
+       is the whole flow.
+
+     · it holds nothing → a seed, and a passphrase being SET. There is nothing
+       here to unlock, so there is nothing for an "enter your passphrase" box
+       to do; it was shown anyway, and it could not succeed on any input a
+       person could type. That was the bug. The seed is the honest question
+       for an empty browser: every Technocore identity has one, however it was
+       made, while a backup file only exists if this site made the identity
+       and the person still has the download.
+
+   In both states the work happens here, in this tab. The seed is read here,
+   the key is derived here by the browser's own Ed25519, the vault is sealed
+   here under 310,000 PBKDF2 rounds, and none of the three ever crosses the
+   network. The `i` beside the heading says exactly that, in those terms,
+   because "secure" is a word a fake of this page would also use. */
 function paintSignIn(me) {
   const btn = document.createElement("button");
   btn.className = "in";
@@ -395,107 +484,247 @@ function paintSignIn(me) {
   const away = (e) => { if (!e.composedPath().includes(me)) close(); };
   const esc = (e) => { if (e.key === "Escape") { close(); btn.focus(); } };
 
+  /* The vault being unlocked. Null means there is nothing here to unlock and
+     the popover asks for a seed instead; a file chosen from the seed view
+     fills it in and swaps the popover over. It lives outside `open` so the
+     choice survives a re-render. */
+  let picked = null;
+  let noteOpen = false;
+
+  /* One shared file input. Kept out of the render so choosing a file does not
+     have to survive the element being rebuilt around it. */
+  const file = document.createElement("input");
+  file.type = "file";
+  file.accept = "application/json,.json";
+  file.hidden = true;
+
   const open = () => {
-    const vault = getVault();
+    picked = getVault();
     menu = document.createElement("div");
     menu.className = "menu";
     menu.setAttribute("role", "dialog");
     menu.setAttribute("aria-label", "Sign in");
+    me.appendChild(menu);
+    me.classList.add("open");
+    btn.setAttribute("aria-expanded", "true");
+    addEventListener("pointerdown", away, true);
+    addEventListener("keydown", esc, true);
+    render();
+  };
 
-    const h = document.createElement("h3");
-    h.textContent = vault ? "Welcome back" : "No identity here yet";
-    menu.append(h);
+  /** Both views, from one function, because "I have a backup file instead"
+   *  and "I do not have one after all" are the same popover changing its
+   *  mind rather than two dialogs. */
+  function render(focusOn) {
+    if (!menu) return;
+    menu.replaceChildren();
+    menu.classList.toggle("wide", !picked);
 
     const say = document.createElement("p");
     say.className = "say";
-    let picked = vault;                              // the vault being unlocked
 
-    if (vault) {
+    /* the heading, and the honest answer beside it */
+    const hrow = document.createElement("div");
+    hrow.className = "hrow";
+    const h = document.createElement("h3");
+    h.textContent = picked ? "Welcome back" : "No identity here yet";
+    const iq = document.createElement("button");
+    iq.className = "iq"; iq.type = "button";
+    iq.setAttribute("aria-label", "Where does this go?");
+    iq.setAttribute("aria-expanded", String(noteOpen));
+    iq.innerHTML = ICONS.info;                        // our own markup
+    hrow.append(h, iq);
+    menu.append(hrow);
+
+    const note = document.createElement("div");
+    note.className = "note";
+    note.hidden = !noteOpen;
+    /* Built as elements, not markup, and written as mechanics rather than
+       reassurance. Every line here is something a reader could check in the
+       network tab of their own browser. */
+    const nb = document.createElement("b");
+    nb.textContent = "Your data never leaves this browser.";
+    const ul = document.createElement("ul");
+    for (const t of picked ? [
+      "The encrypted backup is already in this browser's storage. Nothing is fetched to sign you in.",
+      "Your passphrase is turned into a decryption key here, by this tab, over 310,000 rounds.",
+      "The key is decrypted in memory on this device. It is never uploaded, and Overheard has no account to upload it to.",
+      "Messages you post are signed here; only the signature is sent.",
+    ] : [
+      "Your seed is read in this tab. It is not sent anywhere, and it is not kept after the key is derived.",
+      "The browser's own Ed25519 turns it into your key, so the DID below is worked out on this device.",
+      "Your passphrase encrypts that key here, over 310,000 rounds, before anything is written to storage.",
+      "Nothing is uploaded. Overheard has no account and no server that could hold a key.",
+    ]) {
+      ul.append(Object.assign(document.createElement("li"), { textContent: t }));
+    }
+    note.append(nb, ul);
+    menu.append(note);
+    iq.addEventListener("click", () => {
+      noteOpen = !noteOpen;
+      note.hidden = !noteOpen;
+      iq.setAttribute("aria-expanded", String(noteOpen));
+    });
+
+    /* ── there is something here to unlock ────────────────────────────── */
+    if (picked) {
       const did = document.createElement("div");
       did.className = "did";
-      did.textContent = vault.did;                   // text, never markup
+      did.textContent = picked.did;                  // text, never markup
       menu.append(did);
+
+      const row = document.createElement("div");
+      row.className = "pw";
+      const pw = document.createElement("input");
+      pw.type = "password";
+      pw.autocomplete = "current-password";
+      pw.placeholder = "passphrase";
+      const go = document.createElement("button");
+      go.type = "button";
+      go.textContent = "Unlock";
+      row.append(pw, go);
+
+      const tryIt = async () => {
+        if (!pw.value) { say.className = "say err"; say.textContent = "Enter your passphrase."; return; }
+        go.disabled = true;
+        say.className = "say"; say.textContent = "Decrypting on this device…";
+        try {
+          const jwk = await openVault(picked, pw.value);
+          saveVault(picked);
+          signIn(picked.did, jwk);                   // repaints this bar, and every page listening
+        } catch {
+          say.className = "say err";
+          say.textContent = "Wrong passphrase, or that file is not a backup from here.";
+          go.disabled = false;
+        }
+      };
+      go.addEventListener("click", tryIt);
+      pw.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); tryIt(); } });
+      menu.append(row, say);
+
+      menu.append(fileRow("Use a different backup file", say));
+      menu.append(makeRow("Make another identity"));
+      menu.append(fine("Decrypted here, on this device. Your key is never sent anywhere."));
+      if (focusOn !== "none") setTimeout(() => pw.focus(), 30);
+      return;
     }
 
-    /* the passphrase, present whenever there is something to unlock */
-    const row = document.createElement("div");
-    row.className = "pw";
-    const pw = document.createElement("input");
-    pw.type = "password";
-    pw.autocomplete = "current-password";
-    pw.placeholder = "passphrase";
-    const go = document.createElement("button");
-    go.type = "button";
-    go.textContent = "Unlock";
-    row.append(pw, go);
+    /* ── nothing here: the seed ───────────────────────────────────────── */
+    const box = document.createElement("div");
+    box.className = "seed";
+    const seed = document.createElement("textarea");
+    seed.spellcheck = false;
+    seed.autocapitalize = "off";
+    seed.setAttribute("aria-label", "Your seed");
+    seed.placeholder = "Paste your seed — 64 hex characters. The whole identity .txt works too.";
+    const sdid = document.createElement("div");
+    sdid.className = "sdid";
+    box.append(seed, sdid);
 
-    const tryIt = async () => {
-      if (!picked) { say.className = "say err"; say.textContent = "Choose your backup file first."; return; }
-      if (!pw.value) { say.className = "say err"; say.textContent = "Enter your passphrase."; return; }
-      go.disabled = true;
-      say.className = "say"; say.textContent = "Decrypting on this device…";
+    const two = document.createElement("div");
+    two.className = "two";
+    const p1 = document.createElement("input");
+    p1.type = "password"; p1.autocomplete = "new-password";
+    p1.placeholder = `passphrase, ${PW_MIN}+`;
+    const p2 = document.createElement("input");
+    p2.type = "password"; p2.autocomplete = "new-password";
+    p2.placeholder = "again";
+    two.append(p1, p2);
+
+    const seal = document.createElement("button");
+    seal.className = "seal"; seal.type = "button";
+    seal.textContent = "Encrypt it and sign in";
+
+    /* The DID the moment the paste can produce one. Debounced, because the
+       derivation is real work and a person pasting 64 characters generates a
+       lot of input events on the way. */
+    let t = 0;
+    seed.addEventListener("input", () => {
+      clearTimeout(t);
+      t = setTimeout(async () => {
+        const bytes = readSeed(seed.value);
+        if (!bytes) { sdid.textContent = ""; return; }
+        try { sdid.textContent = (await keyFromSeed(bytes)).did; }   // text, never markup
+        catch { sdid.textContent = ""; }
+      }, 250);
+    });
+
+    const bring = async () => {
+      const bytes = readSeed(seed.value);
+      if (!bytes) { say.className = "say err"; say.textContent = "That is not a seed yet — it is 64 hex characters."; return; }
+      if (p1.value.length < PW_MIN) { say.className = "say err"; say.textContent = `Choose a passphrase of at least ${PW_MIN} characters.`; return; }
+      if (p1.value !== p2.value) { say.className = "say err"; say.textContent = "The two passphrases do not match."; return; }
+      seal.disabled = true;
+      say.className = "say"; say.textContent = "Working out the identity, on this device…";
       try {
-        const jwk = await openVault(picked, pw.value);
-        saveVault(picked);
-        signIn(picked.did, jwk);                     // repaints this bar, and every page listening
-      } catch {
+        const { did, jwk } = await keyFromSeed(bytes);
+        say.textContent = "Encrypting it here…";
+        const vault = await sealVault(did, jwk, p1.value);
+        saveVault(vault);
+        seed.value = ""; p1.value = p2.value = "";
+        signIn(did, jwk);                            // repaints this bar, and every page listening
+      } catch (err) {
         say.className = "say err";
-        say.textContent = "Wrong passphrase, or that file is not a backup from here.";
-        go.disabled = false;
+        say.textContent = "That seed did not produce a key: " + (err?.message || err);
+        seal.disabled = false;
       }
     };
-    go.addEventListener("click", tryIt);
-    pw.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); tryIt(); } });
+    seal.addEventListener("click", bring);
+    p2.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); bring(); } });
 
-    /* a backup file, for a browser that holds nothing */
-    const file = document.createElement("input");
-    file.type = "file";
-    file.accept = "application/json,.json";
-    file.hidden = true;
+    menu.append(box, two, seal, say);
+    menu.append(fileRow("I have a backup file instead", say));
+    menu.append(makeRow("Make an identity"));
+    /* THE PROMISE STAYS VISIBLE. The `i` above carries the mechanics, but the
+       one sentence that matters is not allowed to be behind a control — a
+       claim somebody has to press for is a claim they will not read. */
+    menu.append(fine("Read, derived and encrypted in this tab. Your seed and your key are never sent anywhere."));
+    if (focusOn !== "none") setTimeout(() => seed.focus(), 30);
+  }
+
+  /** The backup-file route, from either view. Choosing a valid one fills
+   *  `picked` and re-renders as the unlock view, which is the same journey
+   *  the file was always taking, one step shorter. */
+  function fileRow(label, say) {
     const pick = document.createElement("button");
     pick.className = "row"; pick.type = "button";
-    pick.innerHTML = ICONS.copy;
-    const pickLabel = document.createElement("span");
-    pickLabel.textContent = vault ? "Use a different backup file" : "Choose a backup file";
-    pick.appendChild(pickLabel);
+    pick.innerHTML = ICONS.file;                      // our own markup
+    pick.append(Object.assign(document.createElement("span"), { textContent: label }));
     pick.addEventListener("click", () => file.click());
-    file.addEventListener("change", async () => {
+    file.onchange = async () => {
       const f = file.files?.[0];
       if (!f) return;
       try {
         const v = JSON.parse(await f.text());
         if (!v?.did || !v?.data || !v?.salt || !v?.iv) throw new Error("shape");
         picked = v;
-        pickLabel.textContent = f.name;
-        say.className = "say"; say.textContent = "Now its passphrase.";
-        pw.focus();
+        render();
       } catch {
         say.className = "say err";
         say.textContent = "That file is not an Overheard backup.";
       }
-    });
+      file.value = "";
+    };
+    const wrap = document.createDocumentFragment();
+    wrap.append(pick, file);
+    return wrap;
+  }
 
-    const make = document.createElement("a");
-    make.className = "row";
-    make.href = "/create.html";
-    make.innerHTML = ICONS.spark;
-    make.appendChild(Object.assign(document.createElement("span"),
-      { textContent: vault ? "Make another identity" : "Make an identity" }));
+  function makeRow(label) {
+    const a = document.createElement("a");
+    a.className = "row";
+    a.href = "/create.html";
+    a.innerHTML = ICONS.spark;                        // our own markup
+    a.append(Object.assign(document.createElement("span"), { textContent: label }));
+    return a;
+  }
 
-    menu.append(row, say, pick, file, make);
-
-    const fine = document.createElement("p");
-    fine.className = "fine";
-    fine.textContent = "Decrypted here, on this device. Your key is never sent anywhere.";
-    menu.append(fine);
-
-    me.appendChild(menu);
-    me.classList.add("open");
-    btn.setAttribute("aria-expanded", "true");
-    addEventListener("pointerdown", away, true);
-    addEventListener("keydown", esc, true);
-    setTimeout(() => pw.focus(), 30);
-  };
+  function fine(text) {
+    const p = document.createElement("p");
+    p.className = "fine";
+    p.textContent = text;
+    return p;
+  }
 
   btn.addEventListener("click", () => (menu ? close() : open()));
 }

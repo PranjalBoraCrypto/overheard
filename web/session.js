@@ -151,6 +151,83 @@ export async function openVault(vault, pass) {
   return jwk;
 }
 
+/* ══════════════════════════════════════════════════════════════════════════
+   THE SEED ROUTE, SHARED
+
+   These three used to exist only inside play.html and rooms.html, as page
+   locals, because only those two pages had a sign-in dialog. The bar has one
+   now — on every page — and it needs the same route, so they move here for
+   the same reason openVault did: a fourth copy of a key-derivation routine is
+   a fourth place for it to drift.
+
+   Nothing here talks to the network. A seed goes in as text, a key comes out,
+   and what is kept behind is the encrypted form. That is the whole of it, and
+   it is what the bar's info note is telling the truth about.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+const b64u = (buf) => btoa(String.fromCharCode(...new Uint8Array(buf)))
+  .replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+const fromB64u = (t) => {
+  const p = String(t).replace(/-/g, "+").replace(/_/g, "/");
+  const b = atob(p + "=".repeat((4 - (p.length % 4)) % 4));
+  return Uint8Array.from(b, (c) => c.charCodeAt(0));
+};
+const b58enc = (bytes) => {
+  let n = 0n;
+  for (const b of bytes) n = n * 256n + BigInt(b);
+  let out = "";
+  while (n > 0n) { out = B58[Number(n % 58n)] + out; n /= 58n; }
+  for (const b of bytes) { if (b === 0) out = "1" + out; else break; }
+  return out;
+};
+
+/** A seed is 32 bytes, written as hex by every Technocore tool and handed
+ *  over inside a text file with other lines around it — so the whole file is
+ *  a legitimate paste. Take the first 64-hex run in it. Null if there is
+ *  none, which is a different answer from "wrong seed" and is said so. */
+export function readSeed(text) {
+  const m = String(text).replace(/[^0-9a-fA-F]+/g, " ").match(/\b[0-9a-fA-F]{64}\b/);
+  if (!m) return null;
+  const hex = m[0].toLowerCase();
+  const b = new Uint8Array(32);
+  for (let i = 0; i < 32; i++) b[i] = parseInt(hex.slice(i * 2, i * 2 + 2), 16);
+  return b;
+}
+
+/** WebCrypto will not hand back a public key from a private one, and there is
+ *  no Ed25519 scalar multiply in it either. But it WILL import a PKCS#8 key
+ *  and export the JWK — which carries `x`, the public half — so wrapping the
+ *  32 seed bytes in the fixed PKCS#8 preamble derives the DID with nothing
+ *  but the platform's own arithmetic. */
+export async function keyFromSeed(seed) {
+  const pre = [0x30,0x2e,0x02,0x01,0x00,0x30,0x05,0x06,0x03,0x2b,0x65,0x70,0x04,0x22,0x04,0x20];
+  const key = await crypto.subtle.importKey(
+    "pkcs8", new Uint8Array([...pre, ...seed]), { name: "Ed25519" }, true, ["sign"]);
+  const jwk = await crypto.subtle.exportKey("jwk", key);
+  return { did: "did:key:z" + b58enc(new Uint8Array([0xed, 0x01, ...fromB64u(jwk.x)])), jwk };
+}
+
+/** The other half of openVault: the same 310,000 PBKDF2 rounds and AES-GCM,
+ *  in the direction that puts a key away. */
+export async function sealVault(did, jwk, pass) {
+  const enc = new TextEncoder();
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const base = await crypto.subtle.importKey("raw", enc.encode(pass), "PBKDF2", false, ["deriveKey"]);
+  const aes = await crypto.subtle.deriveKey(
+    { name: "PBKDF2", salt, iterations: 310000, hash: "SHA-256" },
+    base, { name: "AES-GCM", length: 256 }, false, ["encrypt"]);
+  const ct = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, aes, enc.encode(JSON.stringify(jwk)));
+  const h = await crypto.subtle.digest("SHA-256", enc.encode(did));
+  const fingerprint = [...new Uint8Array(h)].map((b) => b.toString(16).padStart(2, "0")).join("").slice(0, 16);
+  return { v: 1, did, fingerprint, salt: b64u(salt), iv: b64u(iv), data: b64u(ct),
+           created: new Date().toISOString() };
+}
+
+/** The floor for a passphrase, in ONE place. Four pages disagreed about this
+ *  three different ways once; they read it from here now. */
+export const PW_MIN = 6;
+
 /** did:key:z6Mkab…wxyz — enough of both ends to recognise, short enough for a
  *  chip. Cutting the middle and never an end is deliberate: both ends are the
  *  parts somebody might actually know by sight. */

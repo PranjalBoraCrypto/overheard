@@ -83,12 +83,14 @@ h1{font-weight:800;font-size:clamp(32px,5.4vw,48px);letter-spacing:-.035em;line-
 .go{border:0;cursor:pointer;padding:14px 24px;border-radius:13px;font-family:var(--display);font-weight:700;font-size:15px;
   background:linear-gradient(120deg,var(--cy-hi),var(--cy) 55%,#0093BC);color:#001016;
   box-shadow:0 14px 34px -18px rgba(0,180,215,.95);transition:.25s var(--ease);
-  text-decoration:none;display:inline-flex;align-items:center;gap:9px}
+  text-decoration:none;display:inline-flex;align-items:center;gap:11px}
 .go:hover:not(:disabled){transform:translateY(-2px)}
 .go:disabled{opacity:.45;cursor:not-allowed;transform:none}
 .go.ghost{background:rgba(7,34,48,.9);border:1px solid var(--edge);color:var(--dim);box-shadow:none;font-weight:600}
 .go.ghost:hover{color:var(--txt);border-color:var(--edge-lit)}
-.go .i{width:17px;height:17px;stroke-width:2.1}
+/* Weighted to the 700 label beside it: a hairline glyph next to bold text
+   reads as a different typeface rather than as part of the same button. */
+.go .i{width:17px;height:17px;stroke-width:2.5}
 /* The page is called Play. The thing it is for gets the size of the thing it
    is for, and the briefing sits beside it rather than in front of it. */
 /* Padding that gives ground before the row does. At 1280 the toy takes 540

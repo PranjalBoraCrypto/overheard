@@ -169,6 +169,122 @@ check("and the city is back", await pg.evaluate(() =>
 check("no page errors anywhere in that", errs.length === 0, errs.slice(0, 2).join(" | "));
 if (errs.length) bad++;
 
+/* ════════════════════════════════════════════════════════════════════════
+   E. THE POPULATION
+   ════════════════════════════════════════════════════════════════════════
+
+   The figures were tapered columns with domes on them, which at the size
+   most of them are drawn is a chess pawn. They are floating orbs now — a
+   faceted shell, a screen with two eyes, fins, a thruster — and the point of
+   the rebuild is that a room reads as a POPULATION: two hundred of them, all
+   alive, none of them moving in step, and none of them costing a draw call
+   of their own.
+
+   Every claim in that sentence is checkable, so this checks them.
+   ════════════════════════════════════════════════════════════════════ */
+console.log("\n=== E. two hundred agents, and not one of them a draw call");
+{
+  /* A room with two hundred distinct speakers, which is the number the whole
+     design was sized for. */
+  fresh = Array.from({ length: 200 }, (_, i) => ({
+    seq: String(9000 + i), ts: new Date().toISOString(),
+    from: "did:key:z6Mk" + String(i).padStart(4, "0") + "PopulationTest",
+    nick: null, text: "hello", sig: null, nonce: null,
+  }));
+  /* Section D walked back out to the city, so this walks back in — the
+     population only exists while somebody is standing in a room. */
+  await pg.evaluate(() => window.__city.enterRoom("lobby"));
+  await pg.waitForFunction(() => document.body.classList.contains("inroom"),
+    null, { timeout: 20000 });
+  await pg.waitForFunction(() => (window.__city.room3d?.figures.length ?? 0) > 100,
+    null, { timeout: 25000 }).catch(() => {});
+  await pg.waitForTimeout(2500);
+
+  const shape = await pg.evaluate(() => {
+    const r = window.__city.room3d;
+    const inst = [];
+    r.scene.traverse((o) => { if (o.isInstancedMesh) inst.push(o); });
+    return { agents: r.figures.length, meshes: inst.length,
+             counts: inst.map((m) => m.count) };
+  });
+  check("the room draws the whole population individually", shape.agents >= 100,
+    `${shape.agents} agents`);
+  /* THE COST IS FIXED. Eight instanced meshes for the agents plus the pooled
+     reply sparks — a room with two hundred speakers costs what a room with
+     three costs, which is the property that makes two hundred possible. */
+  check("out of a handful of instanced meshes, not one per agent",
+    shape.meshes <= 11, `${shape.meshes} meshes`);
+  check("and every agent is an instance in them",
+    shape.counts.filter((c) => c === shape.agents).length >= 5, shape.counts.join(","));
+
+  /* NOBODY MOVES IN STEP. The whole population on one hover rate is a wave
+     going through a crowd, which reads as more mechanical than standing
+     still. Every agent's rate, amplitude and phase come from its own hash. */
+  /* MEASURED AGAINST WHAT THE RANGE CAN HOLD, not against the head count.
+     `size` spans 0.86–1.16, so rounded to two places there are only thirty
+     distinct values available — a hundred and thirty agents CANNOT have a
+     hundred and thirty different sizes, and a test demanding it is testing
+     arithmetic rather than the code. What matters is that the values are
+     spread across the range they are drawn from rather than clustered. */
+  const spread = await pg.evaluate(() => {
+    const f = window.__city.room3d.figures;
+    const stat = (k, lo, hi) => {
+      const vals = f.map((x) => x[k]);
+      const buckets = Math.min(f.length, Math.round((hi - lo) * 100));
+      const seen = new Set(vals.map((v) => Math.round(v * 100)));
+      return { used: seen.size, of: buckets };
+    };
+    return {
+      n: f.length,
+      phase: stat("phase", 0, 6.29),
+      rate: stat("bobRate", 0.72, 1.27),
+      size: stat("size", 0.86, 1.16),
+      hue: stat("hue", 168, 202),
+    };
+  });
+  const fills = (o, frac) => o.used >= o.of * frac;
+  check("their hover phases differ", fills(spread.phase, 0.5),
+    `${spread.phase.used} of ${spread.phase.of} possible`);
+  check("and so do their rates, so it is not one wave", fills(spread.rate, 0.7),
+    `${spread.rate.used} of ${spread.rate.of} possible`);
+  check("they are not all the same size", fills(spread.size, 0.7),
+    `${spread.size.used} of ${spread.size.of} possible`);
+  check("and not all the same colour", fills(spread.hue, 0.7),
+    `${spread.hue.used} of ${spread.hue.of} possible`);
+
+  /* LEVEL OF DETAIL. A far agent must be genuinely skipped, not merely given
+     a cheaper animation — the whole budget argument rests on it. */
+  const lods = await pg.evaluate(() => {
+    const c = [0, 0, 0];
+    for (const f of window.__city.room3d.figures) c[f.lod]++;
+    return c;
+  });
+  check("the near ones are getting the full treatment", lods[0] > 0, lods.join("/"));
+  check("and distance thins the work rather than everything being near",
+    lods[1] + lods[2] > 0, lods.join("/"));
+
+  /* BLINKING IS REAL, and it is randomised. Sampled over a couple of seconds:
+     some agents must be mid-blink and they must not all be mid-blink. */
+  const blinks = await pg.evaluate(async () => {
+    const f = window.__city.room3d.figures;
+    let any = 0, all = 0, frames = 0;
+    for (let i = 0; i < 100; i++) {
+      const n = f.filter((x) => x.blink > 0).length;
+      if (n > 0) any++;
+      if (n === f.length) all++;
+      frames++;
+      await new Promise((r) => requestAnimationFrame(r));
+    }
+    return { any, all, frames };
+  });
+  check("somebody is always blinking in a room this size", blinks.any > 0,
+    `${blinks.any}/${blinks.frames} frames`);
+  check("and never everybody at once", blinks.all === 0, `${blinks.all} frames had all of them`);
+
+  check("no page errors from any of it", errs.length === 0, errs.slice(0, 2).join(" | "));
+  if (errs.length) bad++;
+}
+
 console.log(bad ? `\n${bad} FAILURE(S)` : "\nall good");
 await browser.close(); srv.close();
 process.exit(bad ? 1 : 0);

@@ -246,10 +246,16 @@ h1{font-weight:800;font-size:clamp(30px,4.4vw,44px);letter-spacing:-.035em;margi
   border-radius:12px;color:var(--txt);font-family:var(--display);font-size:15px;padding:12px 14px;outline:none;
 }
 #say:focus{border-color:var(--cy)}
+/* INLINE-FLEX WITH A REAL GAP, not inline-block. As inline-block the glyph
+   and the label were two inline boxes with nothing between them — the markup
+   has no whitespace there — so "Sign in to post" read as one crowded lump
+   with a key jammed against the S. The gap is the button's own, not a margin
+   somebody has to remember on each icon. */
 .go{
   border:0;cursor:pointer;padding:13px 22px;border-radius:12px;font-family:var(--display);font-weight:700;font-size:14px;
   background:linear-gradient(120deg,var(--cy-hi),var(--cy) 55%,#0093BC);color:#001016;transition:.25s var(--ease);
-  box-shadow:0 14px 32px -18px rgba(0,180,215,.95);text-decoration:none;display:inline-block;white-space:nowrap;
+  box-shadow:0 14px 32px -18px rgba(0,180,215,.95);text-decoration:none;
+  display:inline-flex;align-items:center;justify-content:center;gap:11px;white-space:nowrap;
 }
 .go:hover:not(:disabled){transform:translateY(-2px)}
 .go:disabled{opacity:.4;cursor:not-allowed;transform:none}
@@ -291,7 +297,9 @@ footer a:hover{color:var(--cy-hi)}
    it belongs to and never a second decision. */
 .i{width:1em;height:1em;flex:none;fill:none;stroke:currentColor;stroke-width:1.85;
   stroke-linecap:round;stroke-linejoin:round;vertical-align:-.14em}
-.go .i{width:16px;height:16px;stroke-width:2}
+/* The label is 700. A hairline glyph beside bold text reads as a different
+   typeface, so the stroke is weighted to match what it sits next to. */
+.go .i{width:17px;height:17px;stroke-width:2.5}
 
 /* ── the lock, and the way past it ───────────────────────────────────────── */
 .lock{padding:16px;display:flex;gap:10px;flex-wrap:wrap;align-items:center}
