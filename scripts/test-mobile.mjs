@@ -66,7 +66,8 @@ const srv = http.createServer((req, res) => {
   if (p.startsWith("/api/") || p.startsWith("/data/")) return J({});
   const f = path.join(ROOT, p);
   if (fs.existsSync(f) && fs.statSync(f).isFile()) {
-    const type = p.endsWith(".js") ? "text/javascript" : p.endsWith(".png") ? "image/png" : "text/html";
+    const type = p.endsWith(".js") ? "text/javascript" : p.endsWith(".png") ? "image/png"
+      : p.endsWith(".webp") ? "image/webp" : p.endsWith(".svg") ? "image/svg+xml" : "text/html";
     res.writeHead(200, { "content-type": type });
     return res.end(fs.readFileSync(f));
   }
@@ -162,6 +163,90 @@ for (const [w, h, tag] of [[390, 844, "iphone"], [360, 740, "android"]]) {
   }
   await ctx.close();
 }
+
+/* ════════════════════════════════════════════════════════════════════════
+   THE DOOR TO THE CITY
+   ════════════════════════════════════════════════════════════════════════
+
+   The bar's tab strip scrolls sideways on a phone, which is what stopped it
+   wrapping onto two lines, and it overflows: the tabs you can see are Card,
+   Rooms, Play and Create, while Verify and City sit past the right edge with
+   nothing to say they are there. The first day of real traffic read exactly
+   like that list, ending with Agent City on 9% of arrivals — the best page
+   on the site, losing on position rather than on merit.
+
+   So the homepage carries a door to it, on phones only. Both halves are
+   asserted here, because each is worthless without the other: that the tab
+   really is off screen at phone widths (if it ever stops being, this door
+   is redundant and somebody should be told), and that the door exists there
+   and NOWHERE ELSE, since the desktop layout was to be left alone.
+   ════════════════════════════════════════════════════════════════════ */
+console.log("\n=== the door to the city, on phones only");
+{
+  const probe = async (w, h) => {
+    const ctx2 = await b.newContext({ viewport: { width: w, height: h }, deviceScaleFactor: 1,
+      isMobile: w < 900, hasTouch: w < 900 });
+    const pg = await ctx2.newPage();
+    const errs = [];
+    pg.on("pageerror", (e) => errs.push(e.message));
+    await pg.goto("http://localhost:8995/");
+    await pg.waitForTimeout(1400);
+    const out = await pg.evaluate(async () => {
+      /* where the City tab actually sits, inside the bar's shadow root */
+      const root = document.querySelector("overheard-bar")?.shadowRoot;
+      const strip = root?.querySelector(".tabs");
+      let tab = null;
+      if (strip) {
+        const a = [...strip.querySelectorAll("a")].find((n) => /^city$/i.test(n.textContent.trim()));
+        if (a) {
+          const sb = strip.getBoundingClientRect(), ab = a.getBoundingClientRect();
+          tab = { inside: ab.right <= sb.right + 1 && ab.left >= sb.left - 1,
+            where: `${Math.round(ab.left)}..${Math.round(ab.right)} in strip ${Math.round(sb.left)}..${Math.round(sb.right)}` };
+        }
+      }
+      const d = document.querySelector(".citydoor");
+      if (!d) return { tab, door: null };
+      const shown = getComputedStyle(d).display !== "none";
+      const img = d.querySelector("img");
+      /* ONLY WAIT WHEN IT IS ON SCREEN. The picture is loading="lazy" inside a
+         block that is display:none above 520px, and a lazy image in a hidden
+         box never fires load OR error, because it is never fetched at all.
+         Waiting on it at desktop width hangs this probe forever, which is how
+         this comment came to exist. That it is never fetched is the good news:
+         a phone-only picture costs a desktop visitor nothing. */
+      if (shown && img && !img.complete) await new Promise((r) => { img.onload = r; img.onerror = r; });
+      const bb = d.getBoundingClientRect();
+      return { tab, door: { display: getComputedStyle(d).display, href: d.getAttribute("href"),
+        w: Math.round(bb.width), h: Math.round(bb.height),
+        img: img ? img.naturalWidth : 0, alt: img ? img.alt.length : 0 } };
+    });
+    await ctx2.close();
+    return { ...out, errs };
+  };
+
+  const phone = await probe(390, 844);
+  check("at 390px the City tab really is off the right edge",
+    phone.tab && !phone.tab.inside, phone.tab ? phone.tab.where : "no tab found");
+  check("so the homepage carries a door to it",
+    phone.door && phone.door.display !== "none", phone.door ? `${phone.door.w}x${phone.door.h}` : "absent");
+  check("and it goes to the city", phone.door?.href === "/city", phone.door?.href || "");
+  check("with a picture that actually loads", (phone.door?.img || 0) > 0, `${phone.door?.img}px wide`);
+  check("and alt text, because it is a link and not decoration", (phone.door?.alt || 0) > 20);
+  check("nothing thrown", phone.errs.length === 0, phone.errs[0] || "");
+
+  const small = await probe(360, 800);
+  check("same on a 360dp Android", small.door && small.door.display !== "none" && !small.tab.inside);
+
+  /* WHERE IT MUST NOT BE. The rule for this change was that the desktop view
+     does not move, and the door is only justified where the tab is hidden. */
+  const wide = await probe(560, 900);
+  check("at 560px, where the tab is back on screen, the door is gone",
+    wide.door?.display === "none" && wide.tab?.inside, `door ${wide.door?.display}, tab inside ${wide.tab?.inside}`);
+  const desk = await probe(1280, 900);
+  check("and on a desktop it is gone too", desk.door?.display === "none", desk.door?.display || "absent");
+  check("where the tab was never hidden in the first place", desk.tab?.inside, desk.tab?.where || "");
+}
+
 await b.close(); srv.close();
 console.log(bad ? `\n${bad} FAILURE(S)` : "\nall good");
 process.exit(bad ? 1 : 0);

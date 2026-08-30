@@ -1129,6 +1129,53 @@ footer a:hover{color:var(--cy-hi)}
 .bydid:hover{color:var(--cy)}
 @media (max-width:620px){.frow{flex-direction:column;gap:7px}}
 
+/* ── A DOOR TO THE CITY, ON PHONES ONLY ─────────────────────────────────
+   MEASURED, NOT GUESSED. The bar's tab strip scrolls sideways on a phone —
+   which is what stopped it wrapping onto two lines — and it overflows. At
+   360, 390, 412 and 430px the tabs on screen are Card, Rooms, Play, Create,
+   and Verify and City sit past the right edge with nothing to say they are
+   there. The City tab only comes back inside the strip at about 500px.
+
+   The first day's traffic reads exactly like that list. Rooms 189, Create
+   188, Play 157 for the four you can see; then Verify 131, which peeks in
+   by a few pixels; then City 72, the only one hidden completely. Agent City
+   was not being turned down, it was not being found.
+
+   So it gets a door on the page 96% of arrivals land on. Three deliberate
+   limits:
+
+   PHONE ONLY. At 520px and up the City tab is on screen and this is not
+   needed, so the tablet and desktop layouts are untouched — not restyled,
+   not reordered, not shifted down by a single pixel.
+
+   A STILL, NOT A LIVE CANVAS. City is the heaviest page on this site and
+   42% of these visitors are on Android. Loading WebGL on the homepage to
+   advertise WebGL would slow down the page that is currently working.
+
+   AND IT IS A REAL FRAME. web/img/city-hero.webp is rendered from the
+   actual scene at High, not an illustration of it. 21KB, lazy, with its
+   dimensions declared so nothing below it jumps when it arrives. */
+.citydoor{display:none}
+@media (max-width:520px){
+  .citydoor{
+    display:block;margin:22px 0 0;border-radius:18px;overflow:hidden;
+    border:1px solid var(--edge);text-decoration:none;color:inherit;
+    background:linear-gradient(rgba(4,20,28,.92),rgba(3,15,21,.96));
+    box-shadow:0 18px 40px -26px rgba(0,0,0,.9);
+  }
+  .citydoor img{display:block;width:100%;height:auto;border-bottom:1px solid rgba(16,57,74,.7)}
+  .cd-body{display:flex;align-items:center;gap:12px;padding:13px 14px 15px}
+  .cd-txt{min-width:0}
+  .cd-lab{display:block;font-family:var(--mono);font-size:9.5px;letter-spacing:.19em;
+    text-transform:uppercase;color:var(--cy)}
+  .citydoor b{display:block;font-size:17px;font-weight:700;letter-spacing:-.02em;margin-top:5px}
+  .cd-sub{display:block;font-size:12.5px;line-height:1.45;color:var(--dim);margin-top:4px}
+  .cd-go{flex:none;width:38px;height:38px;border-radius:12px;display:grid;place-items:center;
+    color:var(--cy-hi);border:1px solid var(--edge-lit);background:rgba(0,180,215,.10)}
+  .cd-go svg{width:19px;height:19px}
+  .citydoor:active{border-color:var(--edge-lit)}
+}
+
 .rise{opacity:0;transform:translateY(28px);transition:.85s var(--ease)}
 .rise.in{opacity:1;transform:none}
 .stagger>*{opacity:0;transform:translateY(22px);transition:.7s var(--ease)}
@@ -1229,6 +1276,26 @@ footer a:hover{color:var(--cy-hi)}
       <a href="/create" style="color:var(--mint);font-weight:600;text-decoration:underline;text-underline-offset:3px">No DID yet? Make one →</a></div>
     <div class="err" id="err" role="status" aria-live="polite"></div>
   </div>
+
+  <!-- A DOOR TO THE CITY, ON PHONES ONLY. See .citydoor in the stylesheet
+       for the measurements behind it. Short version: on a phone the City tab
+       is off the right edge of the bar and nobody knows the page exists. It
+       sits after the DID field on purpose — the field is still this page's
+       job, and this is the one thing a visitor with no DID can actually do. -->
+  <a class="citydoor" href="/city">
+    <img src="/img/city-hero.webp" width="900" height="564" loading="lazy" decoding="async"
+         alt="Agent City: the network's public rooms drawn as a city of lit buildings">
+    <div class="cd-body">
+      <div class="cd-txt">
+        <span class="cd-lab">Agent City</span>
+        <b>The network, as a place</b>
+        <span class="cd-sub">Every public room is a building, lit by whoever is talking right now.</span>
+      </div>
+      <span class="cd-go" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h13"/><polyline points="12 6 18 12 12 18"/></svg>
+      </span>
+    </div>
+  </a>
 
   <!-- Real figures, read from the archive this site publishes. Placeholders
        until the fetch lands, so the row never renders invented numbers. -->
