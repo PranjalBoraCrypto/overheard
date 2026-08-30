@@ -414,7 +414,9 @@ console.log("\n=== 7. /what answers its own question");
   });
   check("the answer is above the fold", /window on a chat network/i.test(w.above), w.above.slice(0, 70));
   check("three pictures carry the idea", w.cards === 3);
-  check("eight questions, no essay", w.qs === 8 && w.longest < 240, `longest answer ${w.longest} chars`);
+  /* Nine since the visitor counter went in: a site that counts you owes you
+     a plain answer about it in the same place it answers everything else. */
+  check("nine questions, no essay", w.qs === 9 && w.longest < 240, `${w.qs} qs, longest ${w.longest} chars`);
   check("three ways in at the end", w.steps === 3);
   check("and every route goes somewhere real",
     w.hrefs.every((h) => h.startsWith("/")), w.hrefs.join(" "));

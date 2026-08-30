@@ -130,6 +130,13 @@ export async function boot() {
      is a new question. */
   let roomShut = false;
 
+  /* WHAT THE SITE INTENDS, AS OPPOSED TO WHAT THE BROWSER HAS ALLOWED YET.
+     The sound control paints from this; `S.enabled()` only becomes true once
+     a gesture has let the audio context start. Keeping the two apart is the
+     whole fix for a speaker icon that said "off" to somebody who had never
+     turned anything off. */
+  let soundWanted = !Q.muted();
+
   let firstVisit = false;
   try {
     firstVisit = !localStorage.getItem("overheard.city.seen");
@@ -1040,44 +1047,106 @@ export async function boot() {
        not seen — the archive that filled the feed on entry never passes
        through here, which is what stops a saved conversation being replayed
        as if it were happening. */
+    /* The roster and the room's overall energy are STATE and land at once.
+       What each individual message does — a pod lighting, a card, a note —
+       is an EVENT, and events are spaced out by release() below so that one
+       arrival is one moment rather than three arriving on the same frame. */
     if (mode === "room" && room3d) {
       room3d.setAgents(r?.agents || []);
       const per = r?.rate ?? null;
       room3d.setEnergy(per == null ? Math.min(1, added.length / 8) : Math.min(1, per / 25));
-      for (const m of live) {
-        const from = m.did || (m.nick ? `nick:${m.nick}` : null);
-        if (!from) continue;
-        room3d.speak(from, 1);
-        const to = D.addressee(m, r.agents);
-        /* A signal between two figures is a claim that one addressed the
-           other, so it is drawn only when the message itself said so. */
-        if (to && to !== from) room3d.reply(from, to);
-      }
     }
     /* A burst is grouped rather than staged one effect per message: forty
        messages in a second is forty pulses nobody can see, and the data layer
        has already kept every one of them regardless of what is drawn. */
     const budget = Math.min(live.length, 6);
     const step = Math.max(1, Math.floor(live.length / budget)) || 1;
-    for (let i = 0; i < live.length; i += step) {
-      const m = live[i];
-      const from = m.did || (m.nick ? `nick:${m.nick}` : null);
-      const a = from ? world.agentAt(from) : null;
-      if (a) {
-        world.lightAgent(from, 1);
-        world.pulse(a.x, a.z, { y: 2.4, r1: 7 });
-        const to = D.addressee(m, r.agents);
-        if (to && world.agentAt(to)) world.beam(from, to, 1500);
-      }
-      S.tick(m.seq, m.c.kind, r.name);
-      if (!st.clean) addBubble(m, from);
-    }
+    for (let i = 0; i < live.length; i += step) queueRelease(live[i], r);
     if (st.following) {
       const mine = added.filter((m) => (m.did || `nick:${m.nick}`) === st.following);
       if (mine.length) { world.lightAgent(st.following, 1); if (!st.msgKey) selectAgent(st.following); }
     }
     paintStrip(r);
   });
+
+  /* ── ONE MESSAGE, ONE MOMENT ───────────────────────────────────────────
+     Reported from inside a room: the cards pop up and nothing is heard.
+
+     They were not silent — they were simultaneous. A poll returns three or
+     six messages at once and this used to spend all of them inside a single
+     synchronous loop, so three cards appeared on the same frame and three
+     ticks were asked for within the same millisecond. sound.js refuses a
+     second strike within 45ms, and rightly: it is what stops a burst of
+     forty from becoming a burst of forty. The effect in a room, where every
+     poll IS a small burst, was that three arrivals made one quiet tick, and
+     one tick under three cards reads as no sound at all.
+
+     Spacing them fixes both halves at once. Each message now gets its own
+     moment — its own card, its own light, its own note — which is also the
+     pacing asked for on the city: something to read rather than a lump.
+
+     The queue is bounded. A room that dumps two hundred messages after a
+     network stall must not spend the next minute playing them out; the tail
+     is dropped, because the feed has all of them and the scene is not a
+     transcript. */
+  const RELEASE_GAP = 240;     // ms between released messages
+  const RELEASE_MAX = 10;      // most that can be waiting at once
+  let relQ = [], relTimer = 0, relLast = 0;
+
+  function queueRelease(m, r) {
+    relQ.push({ m, r });
+    /* Newest kept, oldest dropped: what is on screen should be what just
+       happened, not the front of a backlog. */
+    if (relQ.length > RELEASE_MAX) relQ.splice(0, relQ.length - RELEASE_MAX);
+    pump();
+  }
+
+  /* THE SPACING LIVES HERE, NOT IN THE CALLER — and this is the second
+     attempt. The first drained the queue from inside queueRelease, so three
+     pushes in one synchronous loop released all three immediately, one per
+     push: the queue never held more than a single item and the whole
+     exercise achieved nothing. Measured, it was three messages and one
+     audible tick, which is exactly the symptom it was meant to cure.
+     The gap is measured from the last RELEASE, not the last push, so a burst
+     is spread out and a lone arrival after a quiet minute is still prompt. */
+  function pump() {
+    if (relTimer || !relQ.length) return;
+    const since = performance.now() - relLast;
+    relTimer = setTimeout(release, Math.max(0, RELEASE_GAP - since));
+  }
+
+  function release() {
+    relTimer = 0;
+    const job = relQ.shift();
+    if (!job) return;
+    relLast = performance.now();
+    const { m, r } = job;
+    const from = m.did || (m.nick ? `nick:${m.nick}` : null);
+
+    /* IN A ROOM the body that sent it answers: the pod's bottom panel lights
+       and, if the message named an addressee, a signal crosses to them. This
+       is the half that used to fire three-at-once in the handler above. */
+    if (mode === "room" && room3d && from) {
+      room3d.speak(from, 1);
+      const to = D.addressee(m, r?.agents || []);
+      /* A signal between two figures is a claim that one addressed the
+         other, so it is drawn only when the message itself said so. */
+      if (to && to !== from) room3d.reply(from, to);
+    }
+
+    const a = from ? world.agentAt(from) : null;
+    if (a) {
+      world.lightAgent(from, 1);
+      world.pulse(a.x, a.z, { y: 2.4, r1: 7 });
+      const to = D.addressee(m, r.agents);
+      if (to && world.agentAt(to)) world.beam(from, to, 1500);
+    }
+    S.tick(m.seq, m.c.kind, r.name);
+    if (!st.clean) addBubble(m, from);
+    pump();
+  }
+
+  function clearReleases() { relQ = []; clearTimeout(relTimer); relTimer = 0; }
 
   /* ── transmissions ───────────────────────────────────────────────────── */
 
@@ -1108,7 +1177,10 @@ export async function boot() {
       meta: `#${m.seq}${m.did ? " · signed" : ""}`,
     });
   }
-  function clearBubbles() { tx?.clear(); }
+  /* Leaving or entering a room drops whatever was still waiting to be
+     released with it — a queue drained into a room you are no longer in is
+     lights and notes for somewhere else. */
+  function clearBubbles() { tx?.clear(); clearReleases(); }
 
   /** Stepped from the overlay tick. The anchor is a point in the scene just
    *  above the agent's top fin, projected fresh every time — which is what
@@ -1268,7 +1340,8 @@ export async function boot() {
   $("reset").onclick = () => { if (st.room) leaveRoom(); else cam.home(reduced ? 0 : 1000); };
   $("cleanview").onclick = () => setClean(!st.clean);
   $("mute").onclick = () => {
-    const nowOn = !S.enabled();
+    const nowOn = !soundWanted;
+    soundWanted = nowOn;
     S.setEnabled(nowOn);
     Q.setMuted(!nowOn);
     paintMute();
@@ -1282,8 +1355,16 @@ export async function boot() {
   $("legend").onclick = () => { st.agentId = null; st.msgKey = null; ui.legend(city); };
   $("reopen").onclick = () => { if (st.room) showRoomPanel(); };
 
+  /* THE BUTTON SHOWS THE SETTING, NOT THE AUDIO CONTEXT.
+     It used to read `S.enabled()`, which is false until the browser has seen
+     a gesture — every browser refuses to start an audio context before one.
+     So a first-time visitor arriving with sound ON was shown a crossed-out
+     speaker saying "Sound off", which is both wrong and the exact thing that
+     makes somebody give up on a feature: it looks like a preference they did
+     not set and cannot see the reason for. It now shows what the site will
+     do, and says so when the browser is still waiting to be allowed. */
   function paintMute() {
-    const b = $("mute"), on = S.enabled();
+    const b = $("mute"), on = soundWanted, live = S.enabled();
     b.classList.toggle("on", on);
     b.replaceChildren();
     const s = document.createElementNS("http://www.w3.org/2000/svg", "svg");
@@ -1291,7 +1372,10 @@ export async function boot() {
     const u = document.createElementNS("http://www.w3.org/2000/svg", "use");
     u.setAttribute("href", on ? "#c-sound" : "#c-mute");
     s.appendChild(u); b.appendChild(s);
-    b.title = on ? "Sound on" : "Sound off";
+    b.setAttribute("aria-pressed", on ? "true" : "false");
+    b.title = !on ? "Sound off"
+      : live ? "Sound on"
+      : "Sound on — your browser starts it the moment you touch the page";
   }
   paintMute();
 
@@ -1586,7 +1670,7 @@ export async function boot() {
 
   addEventListener("pagehide", () => {
     cancelAnimationFrame(raf); raf = 0;
-    clearInterval(stripTimer); clearInterval(peekTimer);
+    clearInterval(stripTimer); clearInterval(peekTimer); clearReleases();
     D.stop(); S.dispose(); cam.dispose(); world.dispose(true);
   });
 
@@ -1604,18 +1688,28 @@ export async function boot() {
   /* ── go ──────────────────────────────────────────────────────────────── */
   S.setEnabled(false);
 
-  /* A saved "sound on" is honoured, but only from the first real gesture —
-     every browser refuses to start an audio context before one, and a page
-     that tries is a page that logs a warning and stays silent anyway. */
-  if (!Q.muted()) {
+  /* A "sound on" setting — which is the default, and is what a first-time
+     visitor gets — is honoured from the first real gesture. Every browser
+     refuses to start an audio context before one, and a page that tries is a
+     page that logs a warning and stays silent anyway. The button already
+     says "on", so the only thing waiting is the browser's permission.
+
+     THE LIST IS LONG ON PURPOSE. It used to be `pointerdown` and `keydown`,
+     which misses a tap that begins on the canvas and is swallowed by the
+     camera's own handlers, and misses `touchend` — the event that actually
+     grants activation on iOS. Anything a person can do to this page counts,
+     and `once` on every one of them plus the removals means the context is
+     started exactly once whichever arrives first. */
+  if (soundWanted) {
+    const WAKERS = ["pointerdown", "pointerup", "touchend", "keydown", "click"];
     const wake = () => {
-      removeEventListener("pointerdown", wake);
-      removeEventListener("keydown", wake);
+      for (const w of WAKERS) removeEventListener(w, wake, true);
       S.setEnabled(true);
       paintMute();
     };
-    addEventListener("pointerdown", wake, { once: true });
-    addEventListener("keydown", wake, { once: true });
+    /* Capture phase: a handler that calls stopPropagation on the canvas
+       cannot stop this from hearing the gesture. */
+    for (const w of WAKERS) addEventListener(w, wake, { capture: true, once: true });
   }
   D.start();
   raf = requestAnimationFrame(frame);

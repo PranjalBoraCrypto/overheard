@@ -450,9 +450,14 @@ console.log("\n=== E. the sound is data, and an idle city is silent");
     await pg.evaluate(() => window.__city.sound.musicOn === undefined
       && window.__city.sound.musicPlaying === undefined));
 
-  await pg.click("#mute");                                   // a real gesture
+  /* ANY GESTURE, NOT THE MUTE BUTTON. Sound is on by default now, so
+     clicking #mute would turn it OFF — the button reflects the setting, and
+     the setting already says on. What the page is waiting for is the
+     browser's permission, which any real gesture grants. */
+  await pg.keyboard.press("Shift");
   await pg.waitForTimeout(400);
-  check("sound switches on", await pg.evaluate(() => window.__city.sound.enabled()));
+  check("sound starts at the first gesture, without being asked for",
+    await pg.evaluate(() => window.__city.sound.enabled()));
 
   /* THE NEGATIVE TEST, AND THE IMPORTANT ONE. Nothing has moved: bump is 0,
      every room reads the same sequence number it did last time. A page with
@@ -550,7 +555,7 @@ console.log("\n=== E2. every sound ends by itself");
       return o;
     };
   });
-  await pg.click("#mute");
+  await pg.keyboard.press("Shift");     // sound is on; this only unlocks it
   await pg.waitForTimeout(400);
 
   bump = 44;
@@ -629,6 +634,115 @@ console.log("\n=== E3. arriving from the archive is not a burst of activity");
 
   check("no page errors", errs.length === 0, errs[0] || "");
   bump = 0;
+  await ctx.close();
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   E4. SOUND IS ON, THE CONTROL SAYS SO, AND EVERY ARRIVAL IS AUDIBLE
+   ════════════════════════════════════════════════════════════════════════
+
+   Two reports, one root each.
+
+   "I still see sound is muted on the city page." It was not muted — the
+   button was reading `sound.enabled()`, which is false until the browser has
+   seen a gesture, because every browser refuses to start an audio context
+   before one. So a first-time visitor arriving with sound ON was shown a
+   crossed-out speaker labelled "Sound off": a preference they never set,
+   with no visible cause. The control now paints the SETTING and says that
+   the browser is what is waiting.
+
+   "Inside a room I can't hear anything when a message pops up." Also not
+   silence — simultaneity. A poll returns three messages at once, and all
+   three used to be spent inside one synchronous loop: three cards on one
+   frame, three ticks in one millisecond, and sound.js correctly refusing the
+   second and third (45ms minimum, which is what stops forty arrivals
+   becoming forty strikes). Three arrivals made one quiet tick. They are
+   spaced now, so one message is one moment.
+
+   The second check below is the one with teeth: it is not "a sound
+   happened", it is "they did not all happen at once".
+   ════════════════════════════════════════════════════════════════════ */
+console.log("\n=== E4. sound on, and one message is one sound");
+{
+  const { pg, ctx, errs } = await open();
+
+  /* BEFORE ANY GESTURE AT ALL. This is exactly the state that was reported,
+     so it is read before the test touches the page in any way. */
+  const cold = await pg.evaluate(() => {
+    const b = document.getElementById("mute");
+    return { on: b.classList.contains("on"), pressed: b.getAttribute("aria-pressed"),
+      title: b.title, icon: b.querySelector("use")?.getAttribute("href"),
+      running: window.__city.sound.enabled() };
+  });
+  check("a first-time visitor's control says sound is on", cold.on && cold.pressed === "true",
+    `${cold.pressed} / on=${cold.on}`);
+  check("with the speaker icon, not the crossed-out one", cold.icon === "#c-sound", cold.icon);
+  check("and it explains that the browser is what is waiting",
+    /sound on/i.test(cold.title) && /touch|gesture/i.test(cold.title), cold.title);
+  check("the context itself is honestly not running yet", cold.running === false);
+
+  await pg.keyboard.press("Shift");
+  await pg.waitForTimeout(300);
+  check("one gesture starts it", await pg.evaluate(() => window.__city.sound.enabled()));
+  check("and the label drops the explanation once it has",
+    await pg.evaluate(() => document.getElementById("mute").title === "Sound on"),
+    await pg.evaluate(() => document.getElementById("mute").title));
+
+  /* AND THE BUTTON STILL MUTES. A default of on is only defensible if the
+     way out is one click. */
+  await pg.click("#mute");
+  await pg.waitForTimeout(200);
+  const off = await pg.evaluate(() => ({
+    on: document.getElementById("mute").classList.contains("on"),
+    running: window.__city.sound.enabled(),
+    saved: localStorage.getItem("overheard.city.muted"),
+  }));
+  check("clicking it mutes, rather than turning on what is already on",
+    !off.on && !off.running, `on=${off.on} running=${off.running}`);
+  check("and the choice is remembered", off.saved === "1", off.saved);
+  await pg.click("#mute");
+  await pg.waitForTimeout(200);
+
+  /* ── one message, one sound ──────────────────────────────────────────── */
+  await pg.evaluate(() => {
+    window.__at = [];
+    const orig = AudioContext.prototype.createOscillator;
+    AudioContext.prototype.createOscillator = function () {
+      window.__at.push(performance.now()); return orig.call(this);
+    };
+  });
+
+  await pg.evaluate(() => window.__city.enterRoom("lobby"));
+  await pg.waitForFunction(() => document.body.classList.contains("inroom"), null, { timeout: 20000 });
+  await pg.waitForTimeout(1500);
+  await pg.evaluate(() => { window.__at = []; });     // past the arrival chord
+  await pg.waitForTimeout(9000);
+
+  /* Each strike builds two oscillators (fundamental and partial) within the
+     same millisecond, so the STARTS are what count — collapse anything
+     within 40ms of its predecessor into one. */
+  const strikes = await pg.evaluate(() => {
+    const out = [];
+    for (const t of window.__at) if (!out.length || t - out[out.length - 1] > 40) out.push(t);
+    return out.map((t) => Math.round(t));
+  });
+  const gaps = strikes.slice(1).map((t, i) => Math.round(t - strikes[i]));
+
+  check("a room with messages in it makes more than one sound",
+    strikes.length >= 3, `${strikes.length} strikes`);
+  /* THE REGRESSION GUARD. Before the fix a poll's three messages produced
+     exactly one strike and the next was a whole poll away — every gap was
+     seconds. Now most gaps are the release spacing, which is what "one
+     message, one moment" sounds like. */
+  const close = gaps.filter((g) => g < 900).length;
+  check("and they are spread out rather than one per poll",
+    close >= 2, `gaps ${gaps.join(",")}`);
+  check("but never two in the same instant",
+    gaps.every((g) => g > 120), `gaps ${gaps.join(",")}`);
+
+  await pg.evaluate(() => window.__city.leaveRoom());
+  await pg.waitForFunction(() => !document.body.classList.contains("inroom"), null, { timeout: 20000 });
+  check("no page errors", errs.length === 0, errs[0] || "");
   await ctx.close();
 }
 

@@ -62,6 +62,36 @@ The policy in `vercel.json` is what stops them getting the result anywhere:
 `Referrer-Policy: no-referrer` keeps a DID in a URL out of other people's
 logs. `Permissions-Policy` denies every device API the site does not use.
 
+## Why the visitor counter did not cost anything
+
+Traffic is counted by Vercel Web Analytics, wired up in `web/visits.js`. The
+alternative on the table was Google Analytics 4, and it was declined on this
+page's terms rather than on taste:
+
+- GA4 requires `https://www.googletagmanager.com` in `script-src`, and
+  `https://*.google-analytics.com`, `https://*.analytics.google.com` and
+  others in `connect-src`. That is a foreign script with full DOM access on
+  the same pages that hold the signing key, **plus** the outbound channel that
+  `connect-src 'self'` currently denies — the two mitigations in this document
+  that do the most work, given up together.
+- Vercel's counter is served from this origin (`/_vercel/insights/script.js`,
+  posting to `/_vercel/insights/*`). `script-src 'self'` and `connect-src
+  'self'` already permit it. **The policy above is unchanged, character for
+  character.** That was the deciding argument.
+
+`visits.js` strips the URL before anything is sent: the fragment is dropped
+whole (`/v` carries a did, a room, a message and a signature in it) and query
+parameters are filtered against an allowlist of exactly one — `room` — so
+`?did=…` never leaves the browser. It also honours Global Privacy Control and
+`localStorage["overheard.novisits"]`, and an opt-out is checked *before* the
+script tag is inserted, so opting out means no request rather than a request
+that is discarded at the far end.
+
+Residual: an analytics vendor is still a party that learns a path, a coarse
+location and a browser string. That is the price of knowing whether anybody
+is reading the site, it is stated in plain words on `/what`, and it buys no
+access to anything else.
+
 ## Deliberate residual risks
 
 Written down because a risk nobody named is a risk nobody watches.

@@ -247,6 +247,7 @@ a.step{text-decoration:none;color:inherit;display:block}
 </style>
 <script src="/bar.js" type="module"></script>
 <script src="/foot.js" type="module"></script>
+<script src="/visits.js" type="module"></script>
 </head>
 <body>
 
@@ -365,7 +366,15 @@ const QS = [
     a: "Twelve questions about how any of this works, and a card at the end that says how you did — signed by your key, if you have one.",
     go: ["Take the run", "/play"] },
   { icon: "w-free", q: "Who pays for it?",
-    a: "Nobody. There is no account, no tracking, no advertising and no token. One person builds it because the network is worth watching.",
+    a: "Nobody. There is no account, no advertising and no token. One person builds it because the network is worth watching.",
+    go: null },
+  /* THIS ANSWER IS WHY visits.js LOOKS THE WAY IT DOES. The site used to say
+     "no tracking" in the line above, and a visitor counter — even a cookieless
+     one — makes that sentence not quite true. Rather than leave it standing,
+     the claim moved here and became specific: what is counted, what is not,
+     and how to stop it. Every word of it is enforced in visits.js. */
+  { icon: "w-eye", q: "Are you counting me?",
+    a: "Visits, yes — a page and a country, so I know if any of this is read. No cookies, nothing kept in your browser, and any did:key is stripped from the address first, so nobody learns who you looked up.",
     go: null },
 ];
 
