@@ -843,6 +843,15 @@ canvas.confetti{position:fixed;inset:0;width:100%;height:100%;pointer-events:non
 .hmid b{display:block;font-size:14.5px;font-weight:700;letter-spacing:-.01em}
 .hwhen{display:block;font-family:var(--mono);font-size:11px;color:var(--faint);margin-top:3px;
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* AND ON A PHONE IT WRAPS INSTEAD OF BEING CUT OFF. Found while measuring
+   where the attempt number could go: at 390 this line gets 180px and at 360
+   it gets 150, against text that needs well over 300 — so the points and the
+   streak have been invisible in this drawer on every phone since it was
+   written, and the ellipsis was hiding the fact rather than reporting it.
+   Two lines of 11px mono is cheaper than a row that says nothing. */
+@media (max-width:620px){
+  .hwhen{white-space:normal;overflow:visible;text-overflow:clip;line-height:1.45}
+}
 .hpips{display:flex;gap:3px;margin-top:7px}
 .hpips i{width:13px;height:5px;border-radius:99px;background:rgba(255,107,107,.4);
   transition:transform .2s var(--ease)}
@@ -1898,11 +1907,23 @@ async function finish(){
      "unsigned" and then unlocks their key is still on THIS run — the id is
      what lets the row be written once and rewritten in place. */
   runId=Date.now().toString(36)+Math.random().toString(36).slice(2,7);
+  /* WHICH GO THIS WAS. Stamped here, with the id, and for the same reason:
+     somebody who finishes, sees "unsigned" and then unlocks their key is
+     still on THIS run, and recomputing the count at save time would move the
+     number under them. Counted from the runs this identity has recorded in
+     this browser, plus this one — signed out, there is nothing to count and
+     nothing is claimed. */
+  runNo=attemptNow();
   $("run").hidden=true; $("end").hidden=false;
   const r=rank();
   $("rankWord").textContent="Rank";
   $("endTitle").textContent=r.word;
-  $("tally").textContent=`${correct} of ${GATES.length} · ${score.toLocaleString()} points · best streak ${best}`;
+  /* The card is a 1200x630 image and renders as a 295px thumbnail on a
+     phone, so this line — not the card — is where a phone reads its result.
+     Measured at 390 and 360: it already wraps to two lines, and the attempt
+     costs no extra height. */
+  $("tally").textContent=`${correct} of ${GATES.length} · ${score.toLocaleString()} points · best streak ${best}`
+    + (runNo>0 ? ` · ${ordinal(runNo)} attempt` : "");
   $("endBlurb").textContent=r.blurb;
 
   /* The run at a glance, before a word about it: twelve marks, one per gate. */
@@ -2057,7 +2078,13 @@ async function sign(){
 
   try{
     const room="proof-of-learning";
-    const text=`Proof of Learning: ${correct}/${GATES.length}, ${score} points, rank ${rank().word}.`;
+    /* IN THE SIGNED TEXT, not only on the picture. The paragraph under this
+       card promises the score cannot be edited into a better one; a second
+       number painted on the same card and covered by nothing would quietly
+       break that promise. The Verify page reads whatever text it is given,
+       so it shows the attempt alongside the score with no change of its own. */
+    const att=runNo>0 ? `, attempt ${runNo}` : "";
+    const text=`Proof of Learning: ${correct}/${GATES.length}, ${score} points, rank ${rank().word}${att}.`;
     const nonce=(BigInt(Date.now())*1000000n+BigInt(Math.floor(Math.random()*1e6))).toString();
     /* Through the key store: this page never sees the key material, and
        there is none in the session record to see. */
@@ -2065,8 +2092,9 @@ async function sign(){
     PROOF={did:s.did,link:`${location.origin}/v#b=${b64u(enc.encode(JSON.stringify({v:1,kind:"msg",did:s.did,room,nonce,sig,text})))}`};
     body.innerHTML=`<b>Signed by ${shortDid(s.did,10,6)}.</b> The card carries a proof link, so the score cannot be `
       + `edited into a better one — anyone can check it on the Verify page.`
-      + `<details><summary>What a signature proves here</summary><span>That <em>this key</em> claimed this score. `
-      + `The questions run in your browser, so it is an honesty badge, not an invigilator.</span></details>`;
+      + `<details><summary>What a signature proves here</summary><span>That <em>this key</em> claimed this score `
+      + `on this attempt. The questions run in your browser and the attempt is counted in this browser, so it is `
+      + `an honesty badge, not an invigilator.</span></details>`;
     /* A link nobody can carry away is a link nobody uses: the whole point of
        this one is that it goes into a post. */
     const row=el("div","linkrow");
@@ -2372,7 +2400,7 @@ function drawSeal(x,cx,cy,R,skin,run){
  *  that just finished — and it is why the history keeps numbers rather than a
  *  PNG per run. */
 function snapshot(){
-  return { correct, total:GATES.length, score, best,
+  return { correct, total:GATES.length, score, best, attempt:runNo,
            marks:Array.from({length:GATES.length},(_,i)=>marks[i]===true),
            rank:rank().word, proof:PROOF?PROOF.link:null, did:PROOF?PROOF.did:null };
 }
@@ -2433,6 +2461,13 @@ function drawCard(c=$("card"), run=snapshot()){
      that says one was would be a lie in the most screenshotted place we have. */
   stat("POINTS", run.score.toLocaleString(), 72);
   stat("BEST STREAK", String(run.best), 300);
+  /* ATTEMPT, at the same weight as the other two rather than in the small
+     print. A twelve out of twelve on the first go and a twelve out of twelve
+     on the ninth are different results, and the one place this card must not
+     be coy is the place people screenshot. Absent when signed out, because
+     there is nothing to count and a "1st" that only means "no history here"
+     would be the card's one dishonest number. */
+  if(run.attempt>0) stat("ATTEMPT", ordinal(run.attempt), 528);
 
   x.fillStyle="rgba(255,255,255,.55)"; x.font="500 24px Outfit,sans-serif";
   x.fillText("What Flop is, in twelve gates. Three minutes.", 72, 452);
@@ -2580,7 +2615,29 @@ $("missed").addEventListener("pointermove",(e)=>{
    run carries an id from the moment it finishes and the row is written or
    rewritten under that id. */
 const HKEY="overheard.pol.runs", HMAX=40;
-let runId=null, page=0;
+let runId=null, runNo=0, page=0;
+/* THE COUNT IS THIS BROWSER'S, AND THE CARD SAYS SO RATHER THAN PRETENDING
+   OTHERWISE. Runs are kept per identity in localStorage here; clear the
+   storage or open another browser and the next run is the first one again.
+
+   That is exactly as strong as the score beside it — the questions run in
+   your browser too, which is why the signature line has always called itself
+   an honesty badge and not an invigilator. What matters is that the attempt
+   number is inside the SIGNED text rather than only painted on the picture,
+   because a card that says a score cannot be edited into a better one must
+   not carry a second number that can be. */
+function attemptNow(){
+  const s=getSession();
+  if(!s) return 0;
+  const list=runsFor(s.did);
+  const i=runId ? list.findIndex(r=>r.id===runId) : -1;
+  return i>=0 ? list.length-i : list.length+1;   // already saved: keep its place
+}
+const ordinal=(n)=>{
+  const t=n%100;
+  if(t>=11&&t<=13) return n+"th";
+  return n+({1:"st",2:"nd",3:"rd"}[n%10]||"th");
+};
 const PER=10;
 
 const allRuns=()=>{ try{ const r=JSON.parse(localStorage.getItem(HKEY)||"{}");
@@ -2643,8 +2700,16 @@ function historyBody(list,s){
     g.append(document.createTextNode(String(r.correct)), el("em",null,`of ${r.total}`));
     const mid=el("div","hmid");
     mid.append(el("b",null,r.rank));
+    /* AT THE FRONT, WHERE TRUNCATION CANNOT REACH IT. This line is clipped
+       on a phone — measured, the box is 180px at 390 and 150px at 360 while
+       the text is far wider — so anything appended to the end is invisible
+       on exactly the screen most people read it on. A run recorded before
+       attempts were counted has no number and simply does not get one,
+       because inventing one would be the sort of thing the card beside it
+       refuses to do. */
+    const no = r.attempt>0 ? `#${r.attempt} · ` : "";
     mid.append(el("span","hwhen",
-      `${when(r.at)} · ${r.score.toLocaleString()} points · streak ${r.best}`));
+      `${no}${when(r.at)} · ${r.score.toLocaleString()} points · streak ${r.best}`));
     const pips=el("div","hpips");
     r.marks.forEach(m=>{ const p=el("i"); if(m) p.className="hit"; pips.append(p); });
     mid.append(pips);

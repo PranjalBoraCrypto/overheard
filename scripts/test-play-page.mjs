@@ -643,6 +643,27 @@ await play(true);
 await pg.waitForSelector('#end:not([hidden])', { timeout: 10000 });
 const link = await pg.evaluate(() => document.querySelector('#signedBox a')?.href || '');
 check('the card carries a proof link', /\/v#b=/.test(link), link.slice(0, 48) + '…');
+
+/* ── WHICH GO THIS WAS, AND WHY IT IS IN THE SIGNATURE ────────────────────
+   Twelve out of twelve on the first attempt and twelve out of twelve on the
+   ninth are different results, so the card names the attempt. The paragraph
+   under it promises the score cannot be edited into a better one — which
+   means a second number on the same card cannot be paint. It goes in the
+   SIGNED text, or the promise above it stops being true. */
+const claim = (() => {
+  try {
+    const b = decodeURIComponent(link.split('#b=')[1] || '');
+    const j = Buffer.from(b.replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString('utf8');
+    return JSON.parse(j).text || '';
+  } catch { return ''; }
+})();
+check('the signed words name the attempt, not just the picture',
+  /attempt 1\b/.test(claim), claim);
+check('and still carry the score they always did',
+  /12\/12/.test(claim) && /points/.test(claim), claim);
+const tallyNow = await pg.evaluate(() => document.getElementById('tally').textContent);
+check('the line under the card says it too, which is what a phone reads',
+  /1st attempt/.test(tallyNow), tallyNow);
 /* The proof link is one unbroken 700-character string. It broke out of its
    panel and gave the whole page a sideways scrollbar, because a flex item is
    as wide as its content unless it is told min-width:0. */
@@ -1124,6 +1145,86 @@ console.log('\n=== M. the slam carries how hard it was pulled');
 
   const rest = await pg.evaluate(() => Math.round(Math.hypot(window.__toy.HEAD.dx, window.__toy.HEAD.dy)));
   check('the head still comes to rest afterwards', rest < 3, `${rest}px off centre`);
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   N. THE RUNS DRAWER, AND A LINE THAT HAS BEEN CUT OFF ON PHONES ALL ALONG
+   ════════════════════════════════════════════════════════════════════════
+
+   The attempt number belongs in the list of past runs too. Working out where
+   turned up something else: the detail line on each row is nowrap with an
+   ellipsis, and on a phone it gets 180px at 390 and 150px at 360 against
+   text that needs well over 300. The points and the streak have been
+   invisible in this drawer on every phone since it was written — the
+   ellipsis was hiding the fact rather than reporting it.
+
+   So the number goes at the FRONT, where truncation cannot reach it, and
+   below 620px the line wraps instead of being cut.
+   ════════════════════════════════════════════════════════════════════ */
+console.log('\n=== N. the runs drawer');
+{
+  const DID = 'did:key:z6MkngD8RZKCgJQCkJvHfGyYoCcNCG5rz9Tc7yRmWrMZExaz';
+  const runs = [21, 11, 3, 2, 1].map((n, i) => ({
+    correct: 7 + (n % 5), total: 12, score: 900 + n * 30, best: 3 + (n % 4), attempt: n,
+    marks: Array.from({ length: 12 }, (_, k) => k % 3 !== 2),
+    rank: n % 2 ? 'Miner' : 'Validator', proof: 'x', did: DID,
+    id: 'r' + n, at: new Date(Date.now() - i * 86400000).toISOString(),
+  }));
+  /* One row from before this existed, to prove nothing is invented for it. */
+  const old = { ...runs[4], id: 'rold', attempt: undefined };
+  delete old.attempt;
+
+  const look = async (w) => {
+    const c = await ctx.newPage();
+    await c.addInitScript(([did, list]) => {
+      try {
+        localStorage.setItem('overheard.session', JSON.stringify({ did, at: new Date().toISOString() }));
+        localStorage.setItem('overheard.pol.runs', JSON.stringify({ [did]: list }));
+      } catch {}
+    }, [DID, [...runs, old]]);
+    await c.setViewportSize({ width: w, height: 900 });
+    await c.goto('http://localhost:8909/play');
+    await c.waitForTimeout(1200);
+    /* ONE PANEL, NOT BOTH. The drawer is rendered twice — once above the
+       start button and once under a finished run — so an unscoped query
+       returns every row twice and any count against it is wrong. */
+    await c.evaluate(() => {
+      const one = document.getElementById('histIntro');
+      one.hidden = false;
+      one.querySelector('.histpanel')?.classList.add('open');
+    });
+    await c.waitForTimeout(400);
+    const r = await c.evaluate(() => {
+      const rows = [...document.querySelectorAll('#histIntro .hrow .hwhen')];
+      return {
+        n: rows.length,
+        texts: rows.map((x) => x.textContent.trim()),
+        clipped: rows.some((x) => x.scrollWidth > x.clientWidth + 1),
+        over: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+      };
+    });
+    await c.close();
+    return r;
+  };
+
+  const wide = await look(1280);
+  check('every counted run is numbered', wide.texts.filter((t) => /^#\d+ · /.test(t)).length === 5,
+    wide.texts[0]);
+  check('and the ordinals are right at the awkward ones',
+    wide.texts.some((t) => t.startsWith('#21 · ')) && wide.texts.some((t) => t.startsWith('#11 · ')),
+    wide.texts.slice(0, 2).join(' | '));
+  /* A run recorded before attempts were counted gets no number rather than a
+     guessed one — the same rule the card follows when signed out. */
+  check('a run from before this existed is not given a number',
+    wide.texts.some((t) => !/^#/.test(t)), `${wide.texts.filter((t) => !/^#/.test(t)).length} unnumbered`);
+
+  for (const [w, label] of [[390, 'iPhone'], [360, 'Android']]) {
+    const r = await look(w);
+    check(`${label}: the number survives, because it is at the front`,
+      r.texts.filter((t) => /^#\d+ · /.test(t)).length === 5, r.texts[0]);
+    check(`${label}: and the line is no longer cut off mid-sentence`, !r.clipped);
+    check(`${label}: without pushing the page sideways`, r.over <= 0, `${r.over}px`);
+  }
 }
 
 console.log('\nerrors:', errs);
