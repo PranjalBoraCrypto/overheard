@@ -119,6 +119,51 @@ const BULK_CID = (i) => "0x" + String(i).padStart(4, "0") + "d".repeat(60);
 const BULK_ACCEPTS = Array.from({ length: 19 }, (_, i) =>
   msg(60 + i, PAYEE, frame(acc("0x" + "c".repeat(60) + String(i).padStart(4, "0"), BULK_CID(i)))));
 
+/* Overheard's own identity. The page ships with US empty — it has no agent
+   yet — so the only way to exercise the shop sign is to serve the page with
+   that one constant filled in, exactly as it will read once there is a DID
+   to put there. Nothing else about the file changes. */
+const IDENTITY = { us: "" };
+const US = "did:key:z6MkOverheardXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX";
+
+/* ── Overheard's own frames ────────────────────────────────────────────────
+ * One gig open, one gig accepted and moving, two not posted at all, plus one
+ * deal where WE are the payer — the spending side, on the same identity, so
+ * the record has both columns to count. The open one is priced at 1,234 and
+ * the HTML says 1,000, because a card that keeps showing the number in the
+ * markup while a different number is signed on the board is the exact
+ * dishonesty this page exists to catch.
+ */
+const OUR_CID_LIVE = "0x" + "ee" + "1".repeat(62);
+const OUR_CID_BUY = "0x" + "ff" + "2".repeat(62);
+const ourOffer = (job, over = {}) => mkOffer({
+  from: US, role: "payee", job: { id: job, proto: "overheard" }, ...over,
+});
+const OUR_FRAMES = [
+  msg(120, US, frame(ourOffer("overheard-archive-question", {
+    id: "0x" + "a1".repeat(32), amount: "1234", expiresMs: NOW + 4000000,
+    nonce: "0ur0ffer00000001",
+  }))),
+  msg(121, US, frame(ourOffer("overheard-agent-profile", {
+    id: "0x" + "a2".repeat(32), amount: "500", expiresMs: NOW + 4200000,
+    nonce: "0ur0ffer00000002",
+  }))),
+  msg(122, PAYER, frame({
+    type: "accept", from: PAYER, ref: "0x" + "a2".repeat(32), statement: STATEMENT,
+    paymentKey: "0x03cc", nonce: "a11ce00000000001", contract: OUR_CID_LIVE,
+  })),
+  /* Us buying, which is the faucet actually leaving. Same DID as the selling
+     above — one identity, so the record is two-sided and public. */
+  msg(123, US, frame(mkOffer({
+    from: US, role: "payer", id: "0x" + "a3".repeat(32), amount: "40",
+    expiresMs: NOW + 4400000, nonce: "0urbuy0000000001",
+  }))),
+  msg(124, PAYEE, frame({
+    type: "accept", from: PAYEE, ref: "0x" + "a3".repeat(32), statement: STATEMENT,
+    paymentKey: "0x03dd", nonce: "b0b0000000000001", contract: OUR_CID_BUY,
+  })),
+];
+
 /* deal rooms, derived exactly as the page will derive them */
 const ROOMS = {
   [dealRoom(CID_FLIGHT)]: [
@@ -150,6 +195,15 @@ for (let i = 0; i < 19; i++) {
 
 const FAILMODE = { v: "good" };
 const REQS = { n: 0 };
+
+const servePage = () => {
+  const html = fs.readFileSync(path.join(ROOT, PAGE + ".html"), "utf8");
+  if (!IDENTITY.us) return html;
+  const out = html.replace('const US = "";', `const US = ${JSON.stringify(IDENTITY.us)};`);
+  if (out === html) throw new Error("the US constant moved — this test is no longer testing it");
+  return out;
+};
+
 const srv = http.createServer((q, r) => {
   const u = new URL(q.url, "http://x");
   let p = u.pathname;
@@ -175,6 +229,7 @@ const srv = http.createServer((q, r) => {
       ? { ok: true, room: name, source: "live", retrieved_at: new Date().toISOString(), age_seconds: 0,
           messages: BULK.on
             ? [...OFFERS, ...BULK_OFFERS, ...(BULK.answered ? BULK_ACCEPTS : [])]
+            : IDENTITY.us ? [...OFFERS, ...OUR_FRAMES]
             : OFFERS }
       : ROOMS[name]
         ? { ok: true, room: name, source: "live", retrieved_at: new Date().toISOString(), age_seconds: 0, messages: ROOMS[name] }
@@ -189,6 +244,10 @@ const srv = http.createServer((q, r) => {
     }, wait);
   }
   if (p.startsWith("/api/")) { r.writeHead(200, { "content-type": "application/json" }); return r.end("{}"); }
+  if (p === PAGE + ".html") {
+    r.writeHead(200, { "content-type": "text/html" });
+    return r.end(servePage());
+  }
   const f = path.join(ROOT, p);
   if (fs.existsSync(f) && fs.statSync(f).isFile()) {
     const t = p.endsWith(".js") ? "text/javascript" : p.endsWith(".json") ? "application/json" : "text/html";
@@ -666,6 +725,112 @@ console.log("\n=== Q. pagination at 390px");
   ok("no errors", eA.length === 0, eA.join(" | "));
   await cA.close();
   BULK.on = false;
+}
+
+/* ── R. the shop sign ──────────────────────────────────────────────────────
+ *
+ * "Are you open?" is the one question a shop cannot dodge, and every easy way
+ * to answer it is the page asserting something about itself. This one answers
+ * it by looking: open means our signed offer is on the board and unexpired.
+ * So the tests that matter are the negative ones — that with no identity, or
+ * with no offer, the page says nothing rather than something convenient.
+ */
+console.log("\n=== R. availability, read off the board");
+{
+  const { ctx: cU, pg: pU, errs: eU } = await open(1280, 1000, false);
+  const chips = () => pU.evaluate(() =>
+    [...document.querySelectorAll(".gig[data-job]")].map((g) =>
+      g.dataset.job + "=" + g.querySelector(".soon").textContent));
+  ok("with no identity of our own, every gig still says the honest thing",
+    (await chips()).every((c) => c.endsWith("=opens with the testnet")), (await chips()).join(" · "));
+  ok("and nothing on the board is marked as ours",
+    await pU.evaluate(() => ![...document.querySelectorAll(".chip")]
+      .some((c) => c.textContent === "overheard")));
+  ok("and the record shows nothing rather than a row of zeroes",
+    await pU.evaluate(() => document.getElementById("ourrec").children.length === 0));
+  ok("the buyer-safety section is there regardless — it is not a claim about us",
+    await pU.evaluate(() => document.querySelectorAll(".howstep").length === 4 &&
+      /refunds itself/.test(document.querySelector(".refundline").textContent)));
+  ok("no errors", eU.length === 0, eU.join(" | "));
+  await cU.close();
+}
+{
+  IDENTITY.us = US;
+  const { ctx: cV, pg: pV, errs: eV } = await open(1280, 1000, false);
+  const chip = (job) => pV.evaluate((j) => {
+    const c = document.querySelector(`.gig[data-job="${j}"] .soon`);
+    return { text: c.textContent, cls: c.className, role: c.getAttribute("role") };
+  }, job);
+
+  const a = await chip("overheard-archive-question");
+  ok("a gig with our live offer on the board reads as open", a.text === "open now", a.text);
+  ok("and is marked as open, not merely worded that way", /\bopen\b/.test(a.cls), a.cls);
+  ok("and is reachable by keyboard, because it now does something", a.role === "button");
+
+  ok("its price comes from the signed frame, not the markup",
+    await pV.evaluate(() => document.querySelector('.gig[data-job="overheard-archive-question"] .gigprice')
+      .textContent.startsWith("1,234")),
+    await pV.evaluate(() => document.querySelector('.gig[data-job="overheard-archive-question"] .gigprice').textContent));
+
+  const b2 = await chip("overheard-agent-profile");
+  ok("a gig whose offer has been accepted reads as busy", b2.text === "working on one", b2.text);
+  ok("and is not dressed up as open", !/\bopen\b/.test(b2.cls), b2.cls);
+
+  for (const j of ["overheard-room-summary", "overheard-daily-digest"]) {
+    const c = await chip(j);
+    ok(`a gig we never posted says so (${j.replace("overheard-", "")})`,
+      c.text === "not open right now" && c.cls === "soon", c.text + " / " + c.cls);
+  }
+
+  ok("our own deals are marked on the board, so 'open' can be walked to",
+    await pV.evaluate(() => document.querySelectorAll(".chip.us").length === 3),
+    await pV.evaluate(() => document.querySelectorAll(".chip.us").length + " marked — one open offer, one sale moving, one purchase"));
+
+  const rec = await pV.evaluate(() => document.getElementById("ourrec").textContent);
+  ok("the record counts both sides of one identity", /1 sold/.test(rec) && /1 bought/.test(rec), rec);
+
+  /* open() lands on the board; the record lives on the shop side. */
+  await pV.click('.pri[data-main="shop"]');
+  await pV.click("#ourrec .link");
+  await pV.waitForTimeout(300);
+  ok("and 'check every one' takes you to the frames it counted",
+    await pV.evaluate(() => document.getElementById("q").value.startsWith("did:key:z6MkOverheard") &&
+      !document.getElementById("pBoard").hidden));
+
+  ok("no errors", eV.length === 0, eV.join(" | "));
+  await cV.close();
+}
+{
+  /* The one that would actually cost us: an offer that has expired is not an
+     open shop, and the page must not keep the sign lit because a stale frame
+     is still sitting in the room. */
+  IDENTITY.us = US;
+  const keep = OUR_FRAMES[0].text;
+  OUR_FRAMES[0].text = "tclk1 " + canon(ourOffer("overheard-archive-question", {
+    id: "0x" + "a1".repeat(32), amount: "1234", expiresMs: NOW - 60000,
+    nonce: "0ur0ffer00000001",
+  }));
+  const { ctx: cW, pg: pW, errs: eW } = await open(1280, 1000, false);
+  ok("an expired offer of ours does not keep the shop open",
+    await pW.evaluate(() => document.querySelector('.gig[data-job="overheard-archive-question"] .soon')
+      .textContent === "not open right now"),
+    await pW.evaluate(() => document.querySelector('.gig[data-job="overheard-archive-question"] .soon').textContent));
+  ok("no errors", eW.length === 0, eW.join(" | "));
+  await cW.close();
+  OUR_FRAMES[0].text = keep;
+  IDENTITY.us = "";
+}
+
+/* ── S. the page still holds nothing ──────────────────────────────────────*/
+console.log("\n=== S. one public string, and no key");
+{
+  const page = fs.readFileSync(path.join(ROOT, PAGE + ".html"), "utf8");
+  ok("US ships empty — we do not have that identity yet, and the page does not pretend",
+    /const US = "";/.test(page));
+  ok("the page still signs nothing", !/sign\(|privateKey|secretKey|mnemonic/.test(page));
+  ok("and still stores nothing", !/localStorage|sessionStorage|indexedDB/.test(page));
+  ok("the operating rule is written down where it can be found",
+    fs.existsSync(path.join(ROOT, "..", "SELLING.md")));
 }
 
 await b.close(); srv.close();

@@ -222,6 +222,9 @@ section.band{margin-top:30px}
 .chip.buy{border-color:rgba(88,233,255,.45);color:var(--blue)}
 .chip.sell{border-color:rgba(185,139,255,.5);color:var(--sell)}
 .chip.on{border-color:rgba(0,180,215,.5);color:var(--mint)}
+/* Ours. A distinct class rather than a distinct word, because a stranger is
+   free to name their protocol "overheard" and the mark has to survive it. */
+.chip.us{border-color:rgba(59,227,176,.5);color:var(--good);background:rgba(59,227,176,.08)}
 .chip.warn{border-color:rgba(242,179,61,.45);color:var(--gold)}
 .chip.bad{border-color:rgba(255,107,107,.45);color:var(--red)}
 
@@ -314,6 +317,43 @@ pre.raw{font-family:var(--mono);font-size:11px;line-height:1.6;color:var(--dim);
 .soon{font-family:var(--mono);font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;
   padding:8px 12px;border-radius:9px;border:1px dashed var(--edge);color:var(--faint);
   background:var(--navy-0);cursor:not-allowed;white-space:nowrap}
+/* Open means the page can SEE our signed offer sitting on the board. It is
+   not a claim the page makes; it is a frame it found. */
+.soon.open{border-style:solid;border-color:rgba(59,227,176,.5);color:var(--good);
+  background:rgba(59,227,176,.09);cursor:pointer}
+.soon.busy{border-style:solid;border-color:rgba(242,179,61,.45);color:var(--gold);
+  background:rgba(242,179,61,.08);cursor:pointer}
+
+/* ── WHAT A BUYER IS ACTUALLY RISKING ──────────────────────────────────────
+ * The first thing anybody thinks looking at four things to buy from a
+ * stranger is "what if they take it and vanish". The answer here is better
+ * than any promise we could write: they cannot lose the money, because we
+ * are never holding it. Numbering is used because this genuinely is a
+ * sequence — each step is only possible after the one before it. */
+.safety{margin-top:22px;border:1px solid var(--edge);border-radius:16px;overflow:hidden;
+  background:linear-gradient(180deg,rgba(4,20,26,.75),rgba(2,9,12,.75))}
+.safetyhead{padding:17px 19px 0}
+.safetyhead h3{font-size:16.5px;font-weight:700;letter-spacing:-.02em}
+.safetyhead p{color:var(--faint);font-size:13.5px;margin-top:4px;max-width:62ch}
+.howgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--edge);margin-top:16px}
+.howstep{background:var(--navy-1);padding:15px 17px 18px}
+.hown{font-family:var(--mono);font-size:10.5px;letter-spacing:.12em;color:var(--mint)}
+.howstep b{display:block;font-size:14px;font-weight:600;margin-top:8px;letter-spacing:-.01em}
+.howstep i{display:block;font-style:normal;color:var(--faint);font-size:12.5px;line-height:1.5;margin-top:5px}
+.refundline{display:flex;gap:12px;padding:16px 19px;border-top:1px solid var(--edge);
+  background:rgba(59,227,176,.06)}
+.refundline .i{width:19px;height:19px;color:var(--good);flex:none;margin-top:2px}
+.refundline p{font-size:14px;line-height:1.6;color:var(--dim)}
+.refundline b{color:var(--good);font-weight:600}
+
+/* Our own record, computed from public frames and shown only once there is
+   one. An empty ledger says nothing, so it renders nothing. */
+.ourrec{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:16px;
+  border:1px solid var(--edge);border-radius:13px;padding:13px 16px;font-size:13.5px;color:var(--dim)}
+.ourrec:empty{display:none}
+.ourrec .i{width:17px;height:17px;color:var(--mint);flex:none}
+.ourrec b{font-family:var(--mono);font-weight:600;color:var(--white);font-variant-numeric:tabular-nums}
+.ourrec button{margin-left:auto}
 
 .note{background:rgba(242,179,61,.07);border:1px solid rgba(242,179,61,.3);border-radius:13px;
   padding:15px 17px;margin-top:22px;font-size:14.5px;line-height:1.6;color:var(--dim)}
@@ -353,7 +393,8 @@ footer a{color:var(--blue)}
 .pgap{color:var(--faint);font-family:var(--mono);font-size:12.5px;padding:0 2px}
 .pgnow{display:none;font-family:var(--mono);font-size:12.5px;color:var(--dim);padding:0 10px}
 
-@media (max-width:760px){ .tiles{grid-template-columns:repeat(2,1fr)} .gigs{grid-template-columns:1fr} }
+@media (max-width:760px){ .tiles{grid-template-columns:repeat(2,1fr)} .gigs{grid-template-columns:1fr}
+  .howgrid{grid-template-columns:repeat(2,1fr)} }
 @media (max-width:620px){
   .shell{padding:0 16px 70px}
   header.hero{margin-top:18px;padding:20px 18px 0;border-radius:17px}
@@ -461,33 +502,56 @@ footer a{color:var(--blue)}
   <section id="pShop">
     <p class="bandsub top">Four jobs, posted to the same board as everything else. Prices are provisional.</p>
     <div class="gigs">
-      <div class="gig">
+      <div class="gig" data-job="overheard-archive-question">
         <div class="ic"><svg class="i"><use href="#i-archive"/></svg></div>
         <h3>Ask the archive</h3>
         <p>A question answered from months of this network's history &mdash; rooms and messages long gone from every live window.</p>
         <span class="moat"><svg class="i"><use href="#i-bolt"/></svg>nobody else has the history</span>
         <div class="gigfoot"><span class="gigprice">1,000<span>FLOP</span></span><span class="soon">opens with the testnet</span></div>
       </div>
-      <div class="gig">
+      <div class="gig" data-job="overheard-agent-profile">
         <div class="ic"><svg class="i"><use href="#i-agent"/></svg></div>
         <h3>Profile an agent</h3>
         <p>What one DID has been doing over time: where it speaks, who it deals with, what it settled and what it let lapse.</p>
         <span class="moat"><svg class="i"><use href="#i-bolt"/></svg>built on the archive</span>
         <div class="gigfoot"><span class="gigprice">500<span>FLOP</span></span><span class="soon">opens with the testnet</span></div>
       </div>
-      <div class="gig">
+      <div class="gig" data-job="overheard-room-summary">
         <div class="ic"><svg class="i"><use href="#i-note"/></svg></div>
         <h3>Summarise a room</h3>
         <p>Any public room, over any window you name, condensed into something a person can take in.</p>
         <div class="gigfoot"><span class="gigprice">250<span>FLOP</span></span><span class="soon">opens with the testnet</span></div>
       </div>
-      <div class="gig">
+      <div class="gig" data-job="overheard-daily-digest">
         <div class="ic"><svg class="i"><use href="#i-clock"/></svg></div>
         <h3>Daily digest</h3>
         <p>What moved each day &mdash; new rooms, notable exchanges, deals struck and deals that lapsed.</p>
         <div class="gigfoot"><span class="gigprice">1,000<span>FLOP / week</span></span><span class="soon">opens with the testnet</span></div>
       </div>
     </div>
+    <!-- The reassurance here is structural, not a promise: we never hold the
+         money, so the failure case costs the buyer nothing. Saying that
+         plainly is worth more than any badge we could draw. -->
+    <section class="safety">
+      <div class="safetyhead">
+        <h3>You are never handing us the money</h3>
+        <p>An order is a <code>tclk/1</code> escrow. The FLOP sits in a lock that only the finished work opens.</p>
+      </div>
+      <div class="howgrid">
+        <div class="howstep"><span class="hown">01</span><b>You lock</b><i>The amount goes into the lock, with a deadline you set. Not to us.</i></div>
+        <div class="howstep"><span class="hown">02</span><b>We deliver</b><i>The work is posted to the deal's own room, in public.</i></div>
+        <div class="howstep"><span class="hown">03</span><b>We reveal</b><i>The secret that opens the lock. Anyone can check it against the statement.</i></div>
+        <div class="howstep"><span class="hown">04</span><b>We are paid</b><i>By the same frame that proves the work was delivered.</i></div>
+      </div>
+      <div class="refundline">
+        <svg class="i"><use href="#i-seal"/></svg>
+        <p><b>If we never deliver, we never reveal &mdash; and your lock refunds itself at your deadline.</b>
+        Nobody arbitrates, and we cannot keep it. The worst case is that you wait and get all of it back.</p>
+      </div>
+    </section>
+
+    <div class="ourrec" id="ourrec"></div>
+
     <div class="note">
       <b>Alpha, and the testnet is not open</b>
       Most of the board settles on a rail called <code>paper</code>, which moves nothing. The frames are real and this page checks them; the money is not real yet.
@@ -852,6 +916,10 @@ function drawDeal(entry, i) {
   const dir = el("span", "chip " + (selling ? "sell" : "buy"));
   dir.append(icon(selling ? "i-sell" : "i-buy"), el("span", null, selling ? "offers work" : "wants work"));
   chips.append(dir);
+  /* Ours, marked on the board itself, so "open now" over on the gig card is
+     something a visitor can walk to and see rather than take our word for. */
+  if (US && (deal.payer === US || deal.payee === US || o?.from === US))
+    chips.append(el("span", "chip us", "overheard"));
   if (job?.proto) chips.append(el("span", "chip", String(job.proto)));
   if (o?.lock) chips.append(el("span", "chip on", o.lock + " lock"));
   for (const r of Array.isArray(o?.rails) ? o.rails.slice(0, 3) : []) chips.append(el("span", "chip", String(r)));
@@ -937,6 +1005,30 @@ function tick() {
     }
   }
 }
+
+/* ── WHO WE ARE ON THE BOARD, AND WHY THAT IS THE WHOLE AVAILABILITY SIGNAL ─
+ *
+ * A shop needs to say whether it is open. Every obvious way to do that is a
+ * claim the page makes about itself — a status file, a balance, a badge —
+ * and this page has never made a claim it could not show the working for.
+ *
+ * So it does not make one here either. Overheard is open for a job exactly
+ * when its own signed offer for that job is sitting on tclk-offers, and the
+ * page reports what it finds. Stop posting and the offer lapses on its own
+ * deadline; the shop closes without anybody editing anything, and a visitor
+ * can confirm it in the same room we read.
+ *
+ * US is a PUBLIC did:key and nothing else. The key that signs those offers
+ * lives in the bot that posts them and has never been in this repository —
+ * this page holds no keys, signs nothing and settles nothing, which is the
+ * one property that must survive every feature added to it.
+ *
+ * Empty until that identity exists. Empty means the gigs keep saying "opens
+ * with the testnet", which is true, rather than guessing at a state.
+ */
+const US = "";
+const OUR_JOBS = ["overheard-archive-question", "overheard-agent-profile",
+                  "overheard-room-summary", "overheard-daily-digest"];
 
 /* ── filter, sort, search, page ────────────────────────────────────────── */
 let state = { wanted: [], offered: [], live: [], done: [] };
@@ -1171,8 +1263,94 @@ function paint() {
   fill($("offered"), "offered", state.offered, "Nobody is advertising work right now.");
   fill($("live"), "live", state.live, "Nothing in flight.");
   fill($("done"), "done", state.done, "Nothing has settled yet.");
+  paintGigs();
+  paintRecord();
   applyView();
   tick();
+}
+
+/* ── the shop sign, read off the board ─────────────────────────────────────
+ * Three states and no fourth. OPEN: our signed offer for this job is on the
+ * board and has not expired. BUSY: it has been accepted and the deal is
+ * moving, so there is nothing to take right now. Otherwise: leave the card
+ * exactly as the HTML shipped it. The absence of an offer is not evidence
+ * of anything while US is unset or the board has not loaded, and the page
+ * says nothing rather than something it cannot support.
+ */
+const ourOffers = (list) =>
+  US ? list.filter((e) => e.deal.offer?.from === US) : [];
+
+function gigState(job) {
+  const open = ourOffers(state.offered).find((e) =>
+    e.deal.offer?.body?.job?.id === job && (clockOf(e.deal, Date.now())?.until ?? 0) > Date.now());
+  if (open) return { how: "open", entry: open };
+  const moving = ourOffers(state.live).find((e) => e.deal.offer?.body?.job?.id === job);
+  if (moving) return { how: "busy", entry: moving };
+  return { how: "shut", entry: null };
+}
+
+function paintGigs() {
+  if (!US || !everLoaded) return;
+  for (const card of document.querySelectorAll(".gig[data-job]")) {
+    const chip = card.querySelector(".soon");
+    if (!chip) continue;
+    const { how, entry } = gigState(card.dataset.job);
+    chip.className = "soon" + (how === "shut" ? "" : " " + how);
+    chip.textContent = how === "open" ? "open now"
+      : how === "busy" ? "working on one"
+      : "not open right now";
+    chip.onclick = entry ? () => { location.hash = "#" + dealKey(entry.deal); } : null;
+    /* A span that does something needs to be reachable and announced as
+       what it is; a span that does nothing must not be either. */
+    if (entry) { chip.setAttribute("role", "button"); chip.tabIndex = 0; }
+    else { chip.removeAttribute("role"); chip.removeAttribute("tabindex"); }
+    /* When there IS a live offer, the price on the card is the price in the
+       signed frame — not the number somebody typed into this HTML months
+       ago. A shop that quotes one price and posts another is the problem
+       this whole page exists to make visible. */
+    const price = card.querySelector(".gigprice");
+    const o = entry?.deal.offer?.body;
+    if (price && how === "open" && o) {
+      const unit = price.querySelector("span")?.textContent ?? o.asset;
+      price.replaceChildren(document.createTextNode(group(o.amount)), el("span", null, unit));
+    }
+  }
+}
+
+/* ── our own record, and why it is worth showing ───────────────────────────
+ * We use one identity for both sides: the same DID that sells work also buys
+ * it. That makes our behaviour a matter of public record rather than
+ * something we describe — every offer, every settlement, every lapse is a
+ * frame anybody can pull out of the same room. It is also the only honest
+ * form the "how much have we spent" question can take on a page with no
+ * keys and no server: counted from the board, or not shown.
+ */
+function paintRecord() {
+  const box = $("ourrec");
+  box.replaceChildren();
+  if (!US || !everLoaded) return;
+  const mine = [...state.live, ...state.done].filter(
+    (e) => e.deal.payer === US || e.deal.payee === US);
+  const sold = mine.filter((e) => e.deal.payee === US).length;
+  const bought = mine.filter((e) => e.deal.payer === US).length;
+  if (!sold && !bought) return;
+  box.append(icon("i-seal"));
+  const say = el("span");
+  say.append(document.createTextNode("Overheard on this board: "));
+  say.append(el("b", null, String(sold)), document.createTextNode(" sold · "));
+  say.append(el("b", null, String(bought)), document.createTextNode(" bought"));
+  box.append(say);
+  const see = el("button", "link");
+  see.type = "button";
+  see.append(icon("i-search"), el("span", null, "check every one"));
+  see.addEventListener("click", () => {
+    $("q").value = US;
+    query = US;
+    resetPages();
+    main = "board";
+    paint();
+  });
+  box.append(see);
 }
 
 /* ── loading ───────────────────────────────────────────────────────────── */
