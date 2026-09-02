@@ -227,10 +227,15 @@ await pg.waitForTimeout(1200);
     const m = r.querySelector(".menu");
     return { seed: !!m?.querySelector(".seed textarea"),
       unlock: [...(m?.querySelectorAll("button") || [])].some((b) => /^unlock$/i.test(b.textContent.trim())),
+      alt: m?.querySelector(".altbtn")?.getAttribute("aria-expanded") ?? null,
       did: m?.querySelector(".did")?.textContent || "" };
   });
   check("the passphrase is back, because now it can work", pop.unlock);
   check("and the seed box is not in the way of it", !pop.seed);
+  /* It IS reachable now, which it was not: the seed used to be offered on the
+     Rooms page and nowhere else, so a forgotten passphrase had no way back in
+     from here. Offered and closed, in that order of importance. */
+  check("but the seed is offered below it, closed", pop.alt === "false", String(pop.alt));
   check("it names the identity it is about to open", pop.did.startsWith("did:key:"), pop.did.slice(0, 20));
   await pg.keyboard.press("Escape");
   await pg.evaluate(() => localStorage.removeItem("overheard.identity"));

@@ -163,6 +163,47 @@ const CSS = `
 .say.err{color:#FF9B9B}
 .say.ok{color:#3BE3B0}
 
+/* ── the seed, offered rather than opened ──────────────────────────────────
+   Below the passphrase, closed, because the passphrase is the route that
+   works for everybody who remembers it. The row and its info button are one line so
+   that opening the explanation never moves the thing it explains. */
+.alt{display:flex;align-items:center;gap:8px;margin-top:10px}
+.altbtn{
+  flex:1 1 auto;min-width:0;text-align:left;padding:9px 11px;border-radius:10px;cursor:pointer;
+  font-family:inherit;font-size:12px;font-weight:600;line-height:1.3;color:#9CBFCB;
+  background:rgba(0,180,215,.05);border:1px solid rgba(0,180,215,.18);
+  transition:background .2s,border-color .2s,color .2s;
+}
+.altbtn:hover{background:rgba(0,180,215,.11);border-color:rgba(0,180,215,.34);color:#CDEAF3}
+.altbtn:focus-visible{outline:2px solid #5FEBFF;outline-offset:2px}
+/* The circle matches the one in the header so the two read as the same
+   control; the button around it is bigger, because 19px is a fine target for
+   a cursor and a poor one for a thumb. */
+.tipq{
+  flex:none;width:34px;height:34px;padding:0;border:0;background:none;cursor:pointer;
+  display:grid;place-items:center;
+}
+.tipq::before{
+  content:"i";
+  width:19px;height:19px;border-radius:50%;display:grid;place-items:center;
+  font-family:"IBM Plex Mono",ui-monospace,Menlo,monospace;font-size:11px;font-weight:600;
+  color:#5FEBFF;background:rgba(0,180,215,.12);border:1px solid rgba(0,180,215,.3);
+  transition:background .2s,border-color .2s;
+}
+.tipq:hover::before,.tipq[aria-expanded="true"]::before{background:rgba(0,180,215,.26);border-color:#5FEBFF}
+.tipq:focus-visible{outline:2px solid #5FEBFF;outline-offset:2px}
+/* A phone has no hover, so the tip has to be readable when it is TAPPED —
+   which means it is a block in the flow, not a floating bubble that would
+   need somewhere to float to inside a 300px card. */
+.tip{
+  margin-top:8px;padding:10px 12px;border-radius:11px;
+  font-size:11px;line-height:1.6;color:#9CBFCB;
+  background:rgba(0,180,215,.06);border:1px solid rgba(0,180,215,.18);
+}
+.tip b{display:block;color:#CDEAF3;font-weight:600}
+.tip ul{margin:6px 0 0;padding-left:15px}
+.tip li{margin-top:4px}
+
 /* ── the seed route, for a browser holding nothing ─────────────────────────
    Reported, and correct: with no vault here the popover still opened on a
    passphrase box. There was nothing for that passphrase to unlock — it could
@@ -261,6 +302,11 @@ const CSS = `
 .me.open .chip .car{transform:rotate(180deg)}
 .menu{
   position:absolute;top:calc(100% + 10px);right:0;width:300px;z-index:60;
+  /* 344 is wider than the gap beside a 360px phone's edges, and the card is
+     anchored right, so without this the left edge goes off-screen and the
+     seed textarea with it. Cap first, then let .wide ask for more. */
+  max-width:calc(100vw - 24px);
+  max-height:calc(100vh - 96px);overflow-y:auto;overscroll-behavior:contain;
   padding:15px;border-radius:16px;
   background:linear-gradient(rgba(5,24,33,.98),rgba(3,15,21,.98));
   border:1px solid rgba(0,180,215,.30);
@@ -756,6 +802,91 @@ function paintSignIn(me) {
       pw.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); tryIt(); } });
       menu.append(row, say);
 
+      /* ── AND THE SEED, FOR THE PASSPHRASE NOBODY REMEMBERS ─────────────
+         This popover used to end here for anybody holding a vault: three
+         routes, all of which assume you still know the passphrase or still
+         have the file. The seed is the one thing every Technocore identity
+         has however it was made, and it was offered on the Rooms page and
+         nowhere else, which is a strange place to keep the only way back in.
+         It sits BELOW the passphrase and starts closed, because the
+         passphrase is what works for everybody who remembers it, and a
+         textarea above it would push the common case down the card to serve
+         the rare one. */
+      const alt = document.createElement("div");
+      alt.className = "alt";
+      const altBtn = document.createElement("button");
+      altBtn.type = "button";
+      altBtn.className = "altbtn";
+      altBtn.setAttribute("aria-expanded", "false");
+      altBtn.append(Object.assign(document.createElement("span"), {
+        textContent: "Forgotten it? Use your seed" }));
+      const tipBtn = document.createElement("button");
+      tipBtn.type = "button";
+      tipBtn.className = "tipq";
+      tipBtn.setAttribute("aria-label", "Why pasting your seed here is safe");
+      const tip = document.createElement("div");
+      tip.className = "tip";
+      tip.hidden = true;
+      /* Plain words, and every line is something the person could verify in
+         their own network tab. No reassurance that is not a mechanism. */
+      const tipList = document.createElement("ul");
+      for (const t of [
+        "Your seed is read here, inside this tab. It is not sent anywhere.",
+        "This browser turns it into your key, so the identity is worked out on your own device.",
+        "The key is then locked with the passphrase you choose, right here.",
+        "The locked file is downloaded to your phone or computer straight away, so you are never shut out again.",
+        "There is no account here, and no server that could hold your key even if it wanted to.",
+      ]) tipList.append(Object.assign(document.createElement("li"), { textContent: t }));
+      tip.append(Object.assign(document.createElement("b"), {
+        textContent: "Nothing you paste here leaves your device." }), tipList);
+      alt.append(altBtn, tipBtn);
+
+      /* Hover for a mouse, focus for a keyboard, click for a finger. A tip
+         that only answers to hover is a tip that does not exist on a phone. */
+      /* TWO INPUTS, ONE STATE, AND THEY WERE FIGHTING. A tap on a phone
+         synthesises mouseenter before it delivers the click, so "hover opens,
+         click toggles" opened the tip and then immediately shut it: the
+         explanation was unreachable on exactly the devices that cannot hover.
+         Hovering and pinning are separate facts now, and the tip is open if
+         either is true. A keyboard reaches it the ordinary way, because it is
+         a real button and Enter is a click. */
+      let sticky = false, hovering = false;
+      const sync = () => {
+        const on = sticky || hovering;
+        tip.hidden = !on;
+        tipBtn.setAttribute("aria-expanded", String(on));
+      };
+      tipBtn.addEventListener("mouseenter", () => { hovering = true; sync(); });
+      tipBtn.addEventListener("mouseleave", () => { hovering = false; sync(); });
+      tipBtn.addEventListener("blur", () => { sticky = false; sync(); });
+      tipBtn.addEventListener("click", (e) => { e.preventDefault(); sticky = !sticky; sync(); });
+      tipBtn.addEventListener("keydown", (e) => {
+        if (e.key === "Escape" && sticky) { e.stopPropagation(); sticky = false; sync(); }
+      });
+
+      const hold = document.createElement("div");
+      hold.hidden = true;
+      let seedBuilt = null;
+      altBtn.addEventListener("click", () => {
+        const open = hold.hidden;
+        hold.hidden = !open;
+        altBtn.setAttribute("aria-expanded", String(open));
+        /* Wider only once there is something wide in it. */
+        menu.classList.toggle("wide", open);
+        if (open && !seedBuilt) {
+          seedBuilt = buildSeed(say);
+          hold.append(seedBuilt.frag);
+        }
+        /* And the status line moves with it. There is one `say` for both
+           routes, and leaving it above meant an error about the seed appeared
+           a whole section away from the button that caused it — read as being
+           about the passphrase, if it was read at all. */
+        if (open) hold.append(say);
+        else row.after(say);
+        if (open) setTimeout(() => seedBuilt.focus(), 30);
+      });
+      menu.append(alt, tip, hold);
+
       menu.append(fileRow("Use a different backup file", say));
       menu.append(makeRow("Make another identity"));
       menu.append(fine("Decrypted here, on this device. Your key is never sent anywhere."));
@@ -764,15 +895,35 @@ function paintSignIn(me) {
     }
 
     /* ── nothing here: the seed ───────────────────────────────────────── */
+    const built = buildSeed(say);
+    menu.append(built.frag, say);
+    menu.append(fileRow("I have a backup file instead", say));
+    menu.append(makeRow("Make an identity"));
+    /* THE PROMISE STAYS VISIBLE. The `i` above carries the mechanics, but the
+       one sentence that matters is not allowed to be behind a control — a
+       claim somebody has to press for is a claim they will not read. */
+    menu.append(fine("Read, derived and encrypted in this tab. Your seed and your key are never sent anywhere."));
+    if (focusOn !== "none") setTimeout(() => built.focus(), 30);
+  }
+
+  /** THE SEED ROUTE, BUILT ONCE.
+   *
+   * It is reached two ways now: a browser holding nothing opens on it, and a
+   * browser holding a vault can ask for it when the passphrase is the thing
+   * that has been forgotten. Those are the same job, so they are the same
+   * code — a second copy would have drifted, and the copy that drifts is
+   * always the one handling somebody's master secret.
+   */
+  function buildSeed(say) {
     const box = document.createElement("div");
     box.className = "seed";
     const seed = document.createElement("textarea");
     /* NOT SPELL-CHECKED, NOT AUTOFILLED, NOT REMEMBERED.
-       A seed is the master secret. Chrome's enhanced spell check sends the
-       contents of a field to Google to check them, which is a plaintext key
-       leaving the device by a route nobody would ever think to look at; and a
-       password manager offering to save "the thing you typed" is a copy of
-       the key in a second place the user did not choose. Both are off. */
+     A seed is the master secret. Chrome's enhanced spell check sends the
+     contents of a field to Google to check them, which is a plaintext key
+     leaving the device by a route nobody would ever think to look at; and a
+     password manager offering to save "the thing you typed" is a copy of
+     the key in a second place the user did not choose. Both are off. */
     seed.spellcheck = false;
     seed.autocapitalize = "off";
     seed.autocomplete = "off";
@@ -800,50 +951,52 @@ function paintSignIn(me) {
     seal.textContent = "Encrypt it and sign in";
 
     /* The DID the moment the paste can produce one. Debounced, because the
-       derivation is real work and a person pasting 64 characters generates a
-       lot of input events on the way. */
+     derivation is real work and a person pasting 64 characters generates a
+     lot of input events on the way. */
     let t = 0;
     seed.addEventListener("input", () => {
-      clearTimeout(t);
-      t = setTimeout(async () => {
-        const bytes = readSeed(seed.value);
-        if (!bytes) { sdid.textContent = ""; return; }
-        try { sdid.textContent = (await keyFromSeed(bytes)).did; }   // text, never markup
-        catch { sdid.textContent = ""; }
-      }, 250);
-    });
+    clearTimeout(t);
+    t = setTimeout(async () => {
+      const bytes = readSeed(seed.value);
+      if (!bytes) { sdid.textContent = ""; return; }
+      try { sdid.textContent = (await keyFromSeed(bytes)).did; }   // text, never markup
+      catch { sdid.textContent = ""; }
+    }, 250);
+  });
 
     const bring = async () => {
-      const bytes = readSeed(seed.value);
-      if (!bytes) { say.className = "say err"; say.textContent = "That is not a seed yet — it is 64 hex characters."; return; }
-      if (p1.value.length < PW_MIN) { say.className = "say err"; say.textContent = `Choose a passphrase of at least ${PW_MIN} characters.`; return; }
-      if (p1.value !== p2.value) { say.className = "say err"; say.textContent = "The two passphrases do not match."; return; }
-      seal.disabled = true;
-      say.className = "say"; say.textContent = "Working out the identity, on this device…";
-      try {
-        const { did, jwk } = await keyFromSeed(bytes);
-        say.textContent = "Encrypting it here…";
-        const vault = await sealVault(did, jwk, p1.value);
-        saveVault(vault);
-        seed.value = ""; p1.value = p2.value = "";
-        signIn(did, jwk);                            // repaints this bar, and every page listening
-      } catch (err) {
-        say.className = "say err";
-        say.textContent = "That seed did not produce a key: " + (err?.message || err);
-        seal.disabled = false;
-      }
-    };
+    const bytes = readSeed(seed.value);
+    if (!bytes) { say.className = "say err"; say.textContent = "That is not a seed yet — it is 64 hex characters."; return; }
+    if (p1.value.length < PW_MIN) { say.className = "say err"; say.textContent = `Choose a passphrase of at least ${PW_MIN} characters.`; return; }
+    if (p1.value !== p2.value) { say.className = "say err"; say.textContent = "The two passphrases do not match."; return; }
+    seal.disabled = true;
+    say.className = "say"; say.textContent = "Working out the identity, on this device…";
+    try {
+      const { did, jwk } = await keyFromSeed(bytes);
+      say.textContent = "Encrypting it here…";
+      const vault = await sealVault(did, jwk, p1.value);
+      saveVault(vault);
+      /* AND ONTO THEIR OWN DEVICE, NOW, NOT AS A CHORE FOR LATER.
+         A vault that exists only in this browser's storage is one cleared
+         cache away from a locked-out identity, and the moment somebody has
+         just proved they hold the seed is the cheapest moment to hand them
+         the backup. It is the ENCRYPTED file, so it is worth nothing without
+         the passphrase they just chose.
+         Wrapped: a browser that blocks the download must not also block the
+         sign-in. Being signed in is the thing they asked for. */
+      try { saveBackup(vault); } catch { /* a blocked download is not a failed sign-in */ }
+      seed.value = ""; p1.value = p2.value = "";
+      signIn(did, jwk);                            // repaints this bar, and every page listening
+    } catch (err) {
+      say.className = "say err";
+      say.textContent = "That seed did not produce a key: " + (err?.message || err);
+      seal.disabled = false;
+    }
+  };
     seal.addEventListener("click", bring);
     p2.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); bring(); } });
 
-    menu.append(box, two, seal, say);
-    menu.append(fileRow("I have a backup file instead", say));
-    menu.append(makeRow("Make an identity"));
-    /* THE PROMISE STAYS VISIBLE. The `i` above carries the mechanics, but the
-       one sentence that matters is not allowed to be behind a control — a
-       claim somebody has to press for is a claim they will not read. */
-    menu.append(fine("Read, derived and encrypted in this tab. Your seed and your key are never sent anywhere."));
-    if (focusOn !== "none") setTimeout(() => seed.focus(), 30);
+    return { frag: (() => { const f = document.createDocumentFragment(); f.append(box, two, seal); return f; })(), focus: () => seed.focus() };
   }
 
   /** The backup-file route, from either view. Choosing a valid one fills
@@ -881,6 +1034,24 @@ function paintSignIn(me) {
     a.innerHTML = ICONS.spark;                        // our own markup
     a.append(Object.assign(document.createElement("span"), { textContent: label }));
     return a;
+  }
+
+  /** The encrypted vault, handed to the person as a file. Same shape and the
+   *  same name the create page uses, so one backup is one backup wherever it
+   *  came from, and either page can open the other's. */
+  function saveBackup(vault) {
+    const a = document.createElement("a");
+    const url = URL.createObjectURL(new Blob([JSON.stringify(vault, null, 2)], { type: "application/json" }));
+    a.href = url;
+    a.download = `overheard-identity-${String(vault.did || "").slice(-8)}.json`;
+    /* IN THE DOCUMENT, not floating. Chrome ignores `download` on an anchor
+       that was never in the tree, so the click did nothing at all and the
+       promise in the tip would have been a lie. Body rather than this shadow
+       root, because that is where a temporary anchor belongs. */
+    a.style.display = "none";
+    document.body.append(a);
+    a.click();
+    setTimeout(() => { a.remove(); URL.revokeObjectURL(url); }, 4000);
   }
 
   function fine(text) {
