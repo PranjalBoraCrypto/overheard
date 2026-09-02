@@ -1,0 +1,59 @@
+name: runner
+
+# The shop, on a timer.
+#
+# WHAT THIS DOES TODAY: nothing to the network. It runs the decision loop
+# against the live board and prints what it would do. Going live needs three
+# things it does not have — the --live flag, the seed in a secret, and a work
+# side that can actually answer a job — and runner.mjs refuses on any one of
+# them. See RUNNER.md.
+#
+# WHY HOURLY IS ENOUGH, given what archive.yml measured on this same repo:
+# cron here is a request, not a promise, and the gaps between firings ran
+# 144, 91, 52, 49, 78, 56, 58, 58, 51, 55, 86, 60 and 141 minutes over one
+# day. A shop whose deadlines were minutes wide would miss them constantly.
+# So the deadlines are not minutes wide. Offers stand for twelve hours and
+# claim windows are twelve hours, which swallows the worst gap ever measured
+# here four times over. The schedule is allowed to be unreliable because
+# nothing depends on it being otherwise.
+
+on:
+  schedule:
+    - cron: "17 * * * *"     # not :00 — everyone's cron is at :00
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: runner
+  cancel-in-progress: false
+
+jobs:
+  wake:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      # The seed reaches the process as an environment variable and by no
+      # other route. Not an argument — arguments show up in `ps` and in any
+      # log that echoes the command. Not a file — a file has to be deleted,
+      # and deletion is a step that can be skipped.
+      #
+      # It is empty today. When it is not, this is still the only line that
+      # needs to change, and the runner will verify the key it derives really
+      # is this shop's before it will sign anything with it.
+      - name: wake
+        env:
+          OVERHEARD_SEED: ${{ secrets.OVERHEARD_SEED }}
+        run: node scripts/runner.mjs
+
+      # Runs on the same wake so a change that would leak the key fails here
+      # rather than in production. It needs no secret of its own.
+      - name: the key is still nowhere it should not be
+        run: node scripts/test-runner.mjs
