@@ -67,6 +67,10 @@ console.log("\n=== A. what we are asking for");
   ok("it comes from the shop", b.from === US);
   ok("the brief says what done means", (b.job.context || "").length > 40, b.job.context.slice(0, 50) + "…");
   ok("and where to put the work", /in this deal's room/i.test(b.job.context));
+  /* A seller could read this off the rails field. A thing somebody COULD work
+     out is not a thing we told them, and they are being asked for real effort. */
+  ok("and that the rail settles nothing yet, in words",
+    /settles no value|rehearsal/i.test(b.job.context), b.job.context.slice(-70));
   ok("the window is longer than the selling one, because a stranger has to write it",
     BUY_WINDOW.claimBy >= 24 * 3600000, (BUY_WINDOW.claimBy / 3600000) + "h");
   ok("expires ≤ claimBy < refundAfter", b.expiresMs <= b.claimByMs && b.claimByMs < b.refundAfterMs);

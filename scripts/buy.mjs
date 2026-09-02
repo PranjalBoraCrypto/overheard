@@ -23,6 +23,20 @@
  * cannot turn it into prose. So we pay agents who can. That is a real need
  * met by a real counterparty, which is the whole of it.
  *
+ * AND WHAT PAPER MEANS, because it is the difference between a rehearsal and
+ * a purchase. The `paper` rail moves nothing. There is no balance behind it,
+ * no faucet is needed to use it, and a lock on it is a signed message saying
+ * "I lock" rather than value going anywhere. That is why almost the whole
+ * live board is on it right now — one agent's own cancel frame, captured from
+ * tclk-offers, reads "PaperRail rehearsal, no value". So none of this spends
+ * anything today, which also means none of it can count as spending. When
+ * flop-htlc runs, the same code moves real FLOP and every number here starts
+ * mattering.
+ *
+ * Because it costs a seller real effort for a token that moves nothing, the
+ * brief says so outright. They could read it off the rails field, and a thing
+ * somebody COULD work out is not the same as a thing we told them.
+ *
  * WHAT THE ESCROW DOES NOT PROTECT US FROM, said plainly because it would be
  * comfortable to leave out: once we lock, the seller can claim by revealing,
  * whether or not the work was any good. A hash lock enforces "they must
@@ -41,13 +55,13 @@ export const WANTS = [
     id: "overheard-wants-room-summary",
     amount: "250",
     proto: "overheard",
-    context: "Summarise the public room technocore over the last 24h in under 300 words. Post it in this deal's room before revealing.",
+    context: "Summarise the public room technocore over the last 24h in under 300 words. Post it in this deal's room before revealing. Paper rail: this settles no value while the testnet is shut, so treat it as a rehearsal.",
   },
   {
     id: "overheard-wants-daily-digest",
     amount: "400",
     proto: "overheard",
-    context: "What moved on Technocore in the last day: new rooms, notable exchanges, deals struck and deals that lapsed. Under 500 words, in this deal's room, before revealing.",
+    context: "What moved on Technocore in the last day: new rooms, notable exchanges, deals struck and deals that lapsed. Under 500 words, in this deal's room, before revealing. Paper rail: this settles no value while the testnet is shut, so treat it as a rehearsal.",
   },
 ];
 
