@@ -175,7 +175,16 @@ console.log("\n=== F. the workflow that asks for the next run");
   ok("the token is never printed", !/echo[^\n]*\$\{?CHAIN_TOKEN/.test(wf));
   ok("and shell tracing is never turned on in that step",
     !/^\s*set -x/m.test(wf), "set -x would put the header in the log");
-  ok("cron is still there as the backstop", /cron: "0 \* \* \* \*"/.test(wf));
+  /* The schedule is the fix that is actually in force, so it is the one
+     asserted. Six chances an hour rather than two: a hole needs six dropped
+     firings instead of two, and GitHub drops several in a row on public
+     repositories — which is what the 137-minute silence was. */
+  const crons = [...wf.matchAll(/- cron: "([^"]+)"/g)].map((m) => m[1]);
+  ok("the schedule asks at least six times an hour", crons.length >= 6, crons.join(" | "));
+  ok("and they are spread across the hour rather than bunched",
+    new Set(crons.map((c) => c.split(" ")[0])).size >= 6, crons.map((c) => c.split(" ")[0]).join(","));
+  ok("the dormant chain step is still there, costing nothing until a token exists",
+    /ARCHIVE_CHAIN_TOKEN/.test(wf));
 }
 
 srv.close();

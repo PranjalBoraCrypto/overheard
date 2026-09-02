@@ -33,12 +33,32 @@ name: archive
 
 on:
   schedule:
-    # Two entries, not one. They are not two schedules so much as two chances:
-    # concurrency below means a firing that lands while a run is going becomes
-    # at most one pending run, never a pile-up, so asking twice costs nothing
-    # and misses less.
+    # SIX CHANCES AN HOUR, NOT TWO. These are not six schedules; they are six
+    # chances at the same thing. Concurrency below turns a firing that lands
+    # during a run into at most ONE pending run — never a pile-up — so the only
+    # effect of asking more often is that the successor is more likely to
+    # already be waiting the moment this run ends.
+    #
+    # WHY IT WENT UP. Measured on this repository on 2 September: silences of
+    # 137, 134, 65, 58 and 48 minutes with nothing collecting, and one of them
+    # cost 935,407 messages in the lobby alone — 99% of everything that room
+    # has ever lost. Asking twice an hour means two firings have to be dropped
+    # to open a hole; GitHub deprioritises scheduled jobs on public
+    # repositories and evidently drops several in a row. Six makes that
+    # markedly less likely for nothing: a dropped firing costs us nothing, and
+    # a firing that lands mid-run costs one queued job that was going to be
+    # queued anyway.
+    #
+    # This is a probability improvement, not a guarantee. The archive now
+    # labels dead air as "collector was not running" rather than filing it
+    # under poll interval, so whether this actually worked is a thing we can
+    # read off the data in a few days rather than argue about.
     - cron: "0 * * * *"
+    - cron: "10 * * * *"
+    - cron: "20 * * * *"
     - cron: "30 * * * *"
+    - cron: "40 * * * *"
+    - cron: "50 * * * *"
   workflow_dispatch: {} # run it by hand any time from the Actions tab
 
 concurrency:
@@ -213,12 +233,16 @@ jobs:
       # drops scheduled jobs on public repositories and there is nothing to be
       # done about that from inside a cron entry.
       #
-      # So this run asks for the next one itself, rather than hoping. GitHub
-      # will not let GITHUB_TOKEN start another workflow — that is a
-      # deliberate loop-guard — so it needs a token of its own. WITHOUT ONE
-      # THIS STEP DOES NOTHING AND THE CHAIN BEHAVES EXACTLY AS IT DOES NOW,
-      # which is the property that makes it safe to merge before the secret
-      # exists.
+      # So this run can also ask for the next one itself. GitHub will not let
+      # GITHUB_TOKEN start another workflow — a deliberate loop-guard — so
+      # that needs a token of its own, and THERE IS NO TOKEN. This step is
+      # therefore inert: it prints one line and exits.
+      #
+      # It is kept rather than deleted because it costs nothing while dormant
+      # and it is the only thing that would make the chain a guarantee instead
+      # of a probability. If a secret named ARCHIVE_CHAIN_TOKEN ever appears,
+      # this starts working with no other change. The schedule above is the
+      # fix that is actually in force.
       #
       # always(), because a run that CRASHED is the one that most needs a
       # successor. And a floor on the elapsed time, because a job that fails
