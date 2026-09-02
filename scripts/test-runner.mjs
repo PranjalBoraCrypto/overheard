@@ -17,6 +17,7 @@
  */
 import fs from "fs";
 import path from "path";
+import { fileURLToPath } from "node:url";
 import { createPublicKey, verify as edVerify, randomBytes } from "node:crypto";
 import { agentFromSeed, sweep, nextNonce, say } from "./agent.mjs";
 import {
@@ -24,7 +25,13 @@ import {
 } from "./runner.mjs";
 import { canon, offerId, lintOffer, readFrame, runDeal } from "../web/tclk.js";
 
-const ROOT = "/tmp/oh";
+/* The repository, found from this file rather than from a path typed into it.
+   The absolute one was /tmp/oh — the sandbox this was written in — so on any
+   other machine section G happily read a directory that was not the tree under
+   test, or did not exist at all. A guard that checks somewhere else is worse
+   than no guard, because it reports green. */
+const HERE = path.dirname(fileURLToPath(import.meta.url));
+const ROOT = path.resolve(HERE, "..");
 let pass = 0, fail = 0;
 const ok = (n, c, note = "") => {
   if (c) { pass++; console.log(`  ok    ${n}${note ? "   " + note : ""}`); }
@@ -36,6 +43,9 @@ const ok = (n, c, note = "") => {
 const SEED = randomBytes(32).toString("hex");
 const me = agentFromSeed(SEED);
 const OTHER = "did:key:z6MkStrangerZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZ";
+
+if (!fs.existsSync(path.join(ROOT, "scripts/runner.mjs")))
+  throw new Error(`ROOT does not look like the repository: ${ROOT}`);
 
 /* ── A. the key ──────────────────────────────────────────────────────────── */
 console.log("\n=== A. seed in, DID out");

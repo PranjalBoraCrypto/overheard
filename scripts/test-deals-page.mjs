@@ -16,10 +16,17 @@ import { chromium } from "playwright";
 import http from "http";
 import fs from "fs";
 import path from "path";
+import { fileURLToPath } from "node:url";
 import { createHash } from "node:crypto";
 import { canon, dealRoom } from "../web/tclk.js";
 
-const ROOT = "/tmp/oh/web";
+/* The repository, found from this file rather than from a path typed into it.
+   The absolute one was /tmp/oh — the sandbox this was written in — so on any
+   other machine section G happily read a directory that was not the tree under
+   test, or did not exist at all. A guard that checks somewhere else is worse
+   than no guard, because it reports green. */
+const HERE = path.dirname(fileURLToPath(import.meta.url));
+const ROOT = path.resolve(HERE, "../web");
 const PAGE = "/deals-preview-78cb4a1be923c6b4";
 const sha = (s) => createHash("sha256").update(s, "utf8").digest("hex");
 

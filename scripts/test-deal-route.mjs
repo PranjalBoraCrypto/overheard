@@ -10,7 +10,14 @@
  */
 import { chromium } from "playwright";
 import http from "http"; import fs from "fs"; import path from "path";
-const ROOT="/tmp/oh/web", PAGE="/deals-preview-78cb4a1be923c6b4";
+import { fileURLToPath } from "node:url";
+/* The repository, found from this file rather than from a path typed into it.
+   The absolute one was /tmp/oh — the sandbox this was written in — so on any
+   other machine section G happily read a directory that was not the tree under
+   test, or did not exist at all. A guard that checks somewhere else is worse
+   than no guard, because it reports green. */
+const HERE = path.dirname(fileURLToPath(import.meta.url));
+const ROOT = path.resolve(HERE, "../web"), PAGE = "/deals-preview-78cb4a1be923c6b4";
 const FONTCSS = fs.existsSync("/tmp/fonts.css") ? fs.readFileSync("/tmp/fonts.css", "utf8") : "";
 const real = JSON.parse(fs.readFileSync(new URL("./fixtures-live-frames.json", import.meta.url), "utf8"));
 const NOW=Date.now();
