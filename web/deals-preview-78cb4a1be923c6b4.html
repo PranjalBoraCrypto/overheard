@@ -540,31 +540,33 @@ async function readRoom(name, limit) {
   }
 }
 
-/* SHRINK AND RETRY.
+/* ── ASKING FOR LESS, BUT NOT WHEN THE ANSWER WAS "TOO MUCH ALREADY" ───────
  *
- * tclk-offers is the heaviest room on this network by a distance — two
- * hundred messages of JSON frames rather than two hundred short lines of
- * chat, tens of kilobytes against a few — and the proxy gives an upstream
- * read six seconds before it gives up. A room too big to fetch inside that
- * window does not fail sometimes, it fails every time, and from outside that
- * looks exactly like a room with nothing in it.
+ * The first version of this retried a failed read at 200, then 120, then 60,
+ * on the theory that tclk-offers was too heavy to fetch in the proxy's
+ * six-second budget. That theory was WRONG — the endpoint answers
+ * source:"live" with all two hundred messages in it, every time.
  *
- * So a failed read is retried smaller before it is believed. Two thirds of
- * the board is worth having; none of it is not. When a smaller read wins,
- * the page says how much it settled for rather than quietly showing less.
+ * The real cause was this page. One load cost thirteen upstream reads: the
+ * board plus a room for each answered offer, and this board has dozens. Ten
+ * refreshes in a minute is a hundred and thirty reads against an allowance of
+ * six hundred shared with the archiver and every other visitor. The board
+ * came back empty because the page had spent the budget on itself.
+ *
+ * And the retry made it worse in exactly the wrong place: the response to
+ * being rate limited was to send three requests instead of one. A smaller
+ * read is worth trying when the answer was slow. It is never worth trying
+ * when the answer was "you are asking too often".
  */
-const LIMITS = [200, 120, 60];
+const RATE_LIMITED = /rate limit|429|too many/i;
+
 async function room(name, limit) {
   if (limit) return readRoom(name, limit);
-  let last = null;
-  for (const n of LIMITS) {
-    last = await readRoom(name, n);
-    if (!last.failed) {
-      if (n !== LIMITS[0]) last.trimmed = n;
-      return last;
-    }
-  }
-  return last;
+  const first = await readRoom(name, 200);
+  if (!first.failed || RATE_LIMITED.test(first.why || "")) return first;
+  const smaller = await readRoom(name, 80);
+  if (!smaller.failed) { smaller.trimmed = 80; return smaller; }
+  return first;
 }
 
 function framesIn(payload) {
@@ -1012,7 +1014,7 @@ function paint() {
    600-reads-a-minute allowance with the archiver and every other visitor, so
    a page that fans out without a ceiling takes the network down for everyone
    reading it. */
-const MAX_DEALS = 12;
+const MAX_DEALS = 4;
 const dealCache = new Map();
 
 function skeletons() {
@@ -1034,11 +1036,70 @@ const ago = (t) => {
   return s < 90 ? s + "s ago" : Math.round(s / 60) + "m ago";
 };
 
+/* ── PAINT FIRST, ENRICH AFTER ─────────────────────────────────────────────
+ *
+ * Reported as "it says nothing to show, then minutes later everything appears".
+ * Exactly what the code did: it read the board, then fetched a deal room for
+ * every answered offer — sequentially, one network round trip each — and only
+ * called paint() when the last one came back. On a busy board that is a dozen
+ * round trips before a single card is drawn.
+ *
+ * The offers room already contains every offer, every accept, and on this
+ * board even cancels and receipts. That is enough to draw the whole thing.
+ * The deal rooms only ADD the frames a deal picked up after it left the board
+ * — a lock, a reveal — so they are an enrichment, not a prerequisite.
+ *
+ * So the board is drawn from one read, immediately, and the deal rooms arrive
+ * afterwards and repaint the few cards they change. Nothing waits on anything
+ * it does not need.
+ */
+function assemble(frames, enrich) {
+  const byId = new Map();
+  for (const f of frames) {
+    if (!f.ok || f.type !== "offer") continue;
+    const id = f.body.id;
+    if (id && !byId.has(id)) byId.set(id, f);
+  }
+  const accepts = frames.filter((f) => f.ok && f.type === "accept");
+
+  /* Later frames collected by contract: a deal can finish without ever
+     leaving the offers room, and two on this board did exactly that. */
+  const byContract = new Map();
+  for (const f of frames) {
+    if (!f.ok || !f.contract) continue;
+    if (!["lock", "reveal", "refund", "cancel", "receipt"].includes(f.type)) continue;
+    if (!byContract.has(f.contract)) byContract.set(f.contract, []);
+    byContract.get(f.contract).push(f);
+  }
+
+  const wanted = [], offered = [], flight = [], done = [];
+  const answered = new Set();
+
+  for (const a of accepts) {
+    const o = byId.get(a.ref);
+    if (!o) continue;
+    answered.add(a.ref);
+    const cid = a.contract;
+    const name = dealRoom(cid);
+    const extra = [...(byContract.get(cid) ?? []), ...(enrich.get(name) ?? [])];
+    const seen = new Set([o.raw, a.raw]);
+    const rest = extra.filter((f) => !seen.has(f.raw)).sort((x, y) => (x.at ?? 0) - (y.at ?? 0));
+    const deal = runDeal([o, a, ...rest]);
+    (deal.terminal ? done : flight).push({ deal, room: name, cid });
+  }
+  for (const [id, f] of byId) {
+    if (answered.has(id)) continue;
+    const deal = runDeal([f]);
+    (deal.selling ? offered : wanted).push({ deal, room: null, cid: null });
+  }
+  return { wanted, offered, live: flight, done };
+}
+
+let lastFrames = [];
+
 async function load() {
   const offers = await room(OFFERS_ROOM);
 
-  /* Nothing below this point runs on a failed read. The board stays as it
-     was, and the strip says so rather than pretending. */
   if (offers.failed) {
     $("src").className = "srcline " + (everLoaded ? "snapshot" : "none");
     $("srctext").textContent = everLoaded
@@ -1054,81 +1115,38 @@ async function load() {
     : offers.source === "snapshot" ? "from this site's archive — not live"
     : "the offers room is empty";
 
-  const frames = framesIn(offers);
-  const byId = new Map();
-  for (const f of frames.filter((f) => f.ok && f.type === "offer")) {
-    const id = f.body.id ?? (f.exact ? await offerId(f.body) : null);
-    if (id && !byId.has(id)) byId.set(id, f);
-  }
-  const accepts = frames.filter((f) => f.ok && f.type === "accept");
-
-  /* A deal can finish without ever leaving the offers room — there is a
-     cancel and a receipt sitting in the live board right now. Later frames
-     are collected by contract so those deals resolve instead of appearing
-     stuck at "accepted" forever. */
-  const byContract = new Map();
-  for (const f of frames) {
-    if (!f.ok || !f.contract) continue;
-    if (!["lock", "reveal", "refund", "cancel", "receipt"].includes(f.type)) continue;
-    if (!byContract.has(f.contract)) byContract.set(f.contract, []);
-    byContract.get(f.contract).push(f);
-  }
-
-  const wanted = [], offered = [], flight = [], done = [];
-  const answered = new Set();
-  let fetched = 0;
-
-  for (const a of accepts) {
-    const o = byId.get(a.ref);
-    if (!o) continue;
-    answered.add(a.ref);
-    let cid = a.contract;
-    if (!cid && o.exact) { try { cid = await contractId(o.body, a.body); } catch {} }
-    const name = dealRoom(cid);
-    const here = byContract.get(cid) ?? [];
-    let dealFrames = [o, a, ...here];
-    /* Deal rooms are cached across refreshes and a settled one is never read
-       again. Without this, every visitor spent thirteen upstream reads every
-       twenty seconds against an allowance of six hundred a minute shared with
-       the archiver and everybody else — the page rate-limiting itself, which
-       is how the board came back empty in the first place. */
-    if (name && (dealCache.has(name) || fetched < MAX_DEALS)) {
-      let got = dealCache.get(name);
-      if (!got) {
-        fetched++;
-        const payload = await room(name);
-        got = payload.failed ? null : framesIn(payload);
-        if (got) dealCache.set(name, got);
-      }
-      if (got && got.length) {
-        const seen = new Set(dealFrames.map((f) => f.raw));
-        dealFrames = [...dealFrames, ...got.filter((f) => !seen.has(f.raw))];
-      }
-    }
-    /* The offer and the accept are definitionally first and stay pinned.
-       Only what follows is sorted, and by wall clock rather than seq —
-       frames arriving from two different rooms have independent sequence
-       numbers, so comparing them would order a deal by which room happened
-       to be busier, and a lock could sort ahead of the accept it answers. */
-    const rest = dealFrames.slice(2).sort((x, y) => (x.at ?? 0) - (y.at ?? 0));
-    const deal = runDeal([o, a, ...rest]);
-    (deal.terminal ? done : flight).push({ deal, room: name });
-  }
-
-  for (const [id, f] of byId) {
-    if (answered.has(id)) continue;
-    const deal = runDeal([f]);
-    (deal.selling ? offered : wanted).push({ deal, room: null });
-  }
-
-  state = { wanted, offered, live: flight, done };
-  record = buildRecord([...flight, ...done]);
+  lastFrames = framesIn(offers);
+  state = assemble(lastFrames, dealCache);
+  record = buildRecord([...state.live, ...state.done]);
   lastGood = Date.now();
   everLoaded = true;
-  /* A settled deal will not change again, so its room is never re-read. */
-  for (const d of done) if (d.room) dealCache.set(d.room, dealCache.get(d.room) ?? []);
+  paint();                       /* ← the board is on the screen HERE */
+
+  enrich().catch(() => {});      /* ← and the rest happens behind it */
+}
+
+/* The rooms worth reading are the ones for deals still moving. A settled deal
+   cannot change, so its room is read once and never again. */
+async function enrich() {
+  const live = state.live.filter((e) => e.room && !dealCache.has(e.room)).slice(0, MAX_DEALS);
+  if (!live.length) return;
+  let changed = false;
+  for (const e of live) {
+    const payload = await room(e.room);
+    if (payload.failed) return;  /* stop pushing on a network that is pushing back */
+    dealCache.set(e.room, framesIn(payload));
+    changed = true;
+  }
+  for (const e of state.done) if (e.room && !dealCache.has(e.room)) dealCache.set(e.room, []);
+  if (!changed || document.querySelector(".deal.open")) return;
+  state = assemble(lastFrames, dealCache);
+  record = buildRecord([...state.live, ...state.done]);
   paint();
 }
+
+/* Same shape as window.__city on the city page: a read-only handle for
+   testing and for anybody debugging this from a console. */
+window.__deals = { load, enrich, state: () => state, reads: () => dealCache.size };
 
 $("tabs").addEventListener("click", (e) => {
   const t = e.target.closest(".tab");
@@ -1141,7 +1159,33 @@ $("q").addEventListener("input", (e) => { query = e.target.value; clearTimeout(q
 $("sort").addEventListener("change", (e) => { order = e.target.value; paint(); });
 
 setInterval(tick, 1000);
-setInterval(() => { if (!document.querySelector(".deal.open")) load().catch(() => {}); }, 20000);
+
+/* ── POLLING THAT KNOWS WHEN TO STOP ───────────────────────────────────────
+ * Twenty seconds was chosen when this page cost one read. It costs several,
+ * and several open tabs multiply it, and a tab nobody is looking at costs
+ * exactly as much as one somebody is. So: a minute between reads, nothing at
+ * all while the tab is hidden, and a doubling back-off after a failure up to
+ * eight minutes. Backing off is the only polite answer to being throttled,
+ * and the only one that lets the allowance recover. */
+const BASE_POLL = 60000, MAX_POLL = 480000;
+let pollWait = BASE_POLL, pollTimer = null;
+
+function schedule(ms) {
+  clearTimeout(pollTimer);
+  pollTimer = setTimeout(poll, ms);
+}
+async function poll() {
+  if (document.hidden || document.querySelector(".deal.open")) return schedule(BASE_POLL);
+  const before = lastGood;
+  try { await load(); } catch {}
+  /* lastGood only moves on a read that actually succeeded. */
+  pollWait = lastGood > before ? BASE_POLL : Math.min(MAX_POLL, pollWait * 2);
+  schedule(pollWait);
+}
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden && Date.now() - lastGood > BASE_POLL) schedule(500);
+});
+schedule(BASE_POLL);
 
 window.addEventListener("hashchange", () => { readHash(); applyView(); });
 readHash();

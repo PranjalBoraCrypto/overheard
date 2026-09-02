@@ -115,16 +115,18 @@ const ROOMS = {
 };
 
 const FAILMODE = { v: "good" };
+const REQS = { n: 0 };
 const srv = http.createServer((q, r) => {
   const u = new URL(q.url, "http://x");
   let p = u.pathname;
   if (p === PAGE) p = PAGE + ".html";
   if (p === "/api/room") {
+    REQS.n++;
     if (FAILMODE.v === "429") {
       r.writeHead(429, { "content-type": "application/json" });
       return r.end(JSON.stringify({ error: "rate limited upstream", retry: true, source: "none" }));
     }
-    if (FAILMODE.v === "toobig" && Number(u.searchParams.get("limit")) > 120) {
+    if (FAILMODE.v === "toobig" && Number(u.searchParams.get("limit")) > 80) {
       /* What a room too heavy to fetch inside the proxy's six-second budget
          looks like from here: it fails, every time, at the full size. */
       r.writeHead(200, { "content-type": "application/json" });
@@ -140,8 +142,14 @@ const srv = http.createServer((q, r) => {
       : ROOMS[name]
         ? { ok: true, room: name, source: "live", retrieved_at: new Date().toISOString(), age_seconds: 0, messages: ROOMS[name] }
         : { room: name, source: "none", messages: [] };
-    r.writeHead(200, { "content-type": "application/json" });
-    return r.end(JSON.stringify(body));
+    /* A deal room is a real network round trip. Answering instantly hides the
+       very thing being measured — whether the board waits for these before it
+       draws anything, which is what it used to do. */
+    const wait = name === "tclk-offers" ? 0 : 250;
+    return setTimeout(() => {
+      r.writeHead(200, { "content-type": "application/json" });
+      r.end(JSON.stringify(body));
+    }, wait);
   }
   if (p.startsWith("/api/")) { r.writeHead(200, { "content-type": "application/json" }); return r.end("{}"); }
   const f = path.join(ROOT, p);
@@ -405,39 +413,81 @@ console.log("\n=== M. a hiccup upstream must not empty the board");
 
   for (const mode of ["429", "none"]) {
     FAILMODE.v = mode;
-    await p6.evaluate(() => fetch("/api/room?room=tclk-offers").catch(() => {}));
-    await p6.waitForTimeout(21000);
+    await p6.evaluate(() => window.__deals.load());
+    await p6.waitForTimeout(400);
     ok(`a '${mode}' refresh leaves the deals alone`, (await deals()) === before, await deals() + " deals");
     ok(`and says it is showing an older read`, /could not refresh/.test(await strip()), await strip());
     FAILMODE.v = "good";
-    await p6.waitForTimeout(21000);
-    ok(`it recovers by itself`, (await deals()) === before && /live/.test(await strip()));
+    await p6.evaluate(() => window.__deals.load());
+    await p6.waitForTimeout(400);
+    ok(`it recovers on the next good read`, (await deals()) === before && /live/.test(await strip()));
   }
   ok("no errors through any of it", e6.length === 0, e6.join(" | "));
   await c6.close();
 }
 
 
-/* ── N. a room too big to fetch is not a room with nothing in it ──────────
+/* ── N. a smaller read is a fallback, not a reflex ─────────────────────────
  *
- * tclk-offers carries JSON frames rather than chat lines and is the heaviest
- * room on the network; the proxy gives an upstream read six seconds. At full
- * size that read can fail every single time, which from outside is
- * indistinguishable from an empty board — and was being reported as one.
+ * The retry existed on a theory that turned out to be wrong: the endpoint was
+ * never too big, the page was simply asking too often. So the retry survives
+ * only for the case it was actually good for — a read that failed for some
+ * other reason — and is switched OFF for a rate limit, where sending more
+ * requests is the one response guaranteed to make things worse.
  */
-console.log("\n=== N. asking for less rather than giving up");
+console.log("\n=== N. asking for less, and knowing when not to");
 {
   FAILMODE.v = "toobig";
   const { ctx: c7, pg: p7, errs: e7 } = await open(1280, 1000, false);
   const n = await p7.evaluate(() => document.querySelectorAll(".deal").length);
-  ok("the board still loads when the full read fails", n > 0, n + " deals");
+  ok("a slow full read falls back to a smaller one", n > 0, n + " deals");
   const strip = await p7.evaluate(() => document.getElementById("srctext").textContent);
-  ok("and it is live, not a failure", /^live/.test(strip), strip);
-  ok("it says it settled for less rather than quietly showing less",
-    /only the last 120 messages fit/.test(strip));
+  ok("and says it settled for less", /only the last 80 messages fit/.test(strip), strip);
   ok("no errors", e7.length === 0, e7.join(" | "));
   await c7.close();
   FAILMODE.v = "good";
+}
+{
+  const { ctx: c8, pg: p8 } = await open(1280, 1000, false);
+  await p8.waitForTimeout(600);
+  REQS.n = 0;
+  FAILMODE.v = "429";
+  await p8.evaluate(() => window.__deals.load());
+  await p8.waitForTimeout(400);
+  ok("a rate limit is NOT retried smaller", REQS.n === 1,
+    REQS.n + " upstream read — retrying a throttle is how a page throttles itself");
+  await c8.close();
+  FAILMODE.v = "good";
+}
+
+/* ── O. the page must not be the reason the board is empty ────────────────*/
+console.log("\n=== O. how much this page costs to open");
+{
+  REQS.n = 0;
+  const ctxA = await b.newContext({ viewport: { width: 1280, height: 1000 } });
+  const pA = await ctxA.newPage();
+  await pA.goto("http://localhost:9101" + PAGE);
+  /* The board must be drawn from the FIRST read, before any deal room is
+     fetched — that wait was the "nothing to show, then minutes later
+     everything" the page was reported for. */
+  /* Counting requests measures the wrong thing: enrichment is dispatched in
+     the same tick as the paint, so the counter has already moved by the time
+     an observer notices the card. TIME is the property that was actually
+     broken. Each deal room takes 250ms here and there are four of them, so a
+     board that waits for them cannot appear before a second. */
+  const t0 = Date.now();
+  await pA.waitForFunction(() => document.querySelectorAll("#wanted .deal").length > 0,
+    null, { timeout: 8000 });
+  const drawnIn = Date.now() - t0;
+  ok("the board appears without waiting for a single deal room", drawnIn < 250,
+    drawnIn + "ms — it used to be one round trip per answered offer, in series");
+  await pA.waitForTimeout(1500);
+  ok("enrichment happens afterwards and is capped", REQS.n <= 1 + 4,
+    REQS.n + " reads in total");
+  ok("and it does not poll again straight away",
+    await (async () => { const a = REQS.n; await pA.waitForTimeout(3000); return REQS.n === a; })(),
+    "twenty-second polling is what spent the allowance");
+  await ctxA.close();
 }
 
 await b.close(); srv.close();
