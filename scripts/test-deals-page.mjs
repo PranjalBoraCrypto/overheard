@@ -91,6 +91,34 @@ const OFFERS = [
   msg(11, PAYEE, frame(acc(liarOffer.id, CID_LIAR))),
 ];
 
+/* Nineteen more unanswered offers, served only for section P. Eight fit on a
+   page, so the board has to reach three pages before pagination means
+   anything — and each carries a distinct amount and expiry, so a page
+   showing the wrong slice cannot look like one showing the right slice. */
+const BULK = { on: false, answered: false };
+const BULK_OFFERS = Array.from({ length: 19 }, (_, i) =>
+  msg(20 + i, PAYER, frame(mkOffer({
+    /* Not a repeated digit: "11".repeat(32) is "1".repeat(64), which is
+       openOffer's id, and two offers sharing an id are one offer. */
+    id: "0x" + "c".repeat(60) + String(i).padStart(4, "0"),
+    amount: String((i + 1) * 1000),
+    expiresMs: NOW + 2000000 + i * 60000,
+    nonce: "bu1k" + String(i).padStart(12, "0"),
+  }))));
+
+/* The same offers, answered. The page only enriches MAX_DEALS rooms on load,
+   so past the first page these deals have rooms nobody has read yet — which
+   is the case the pagination skeleton exists for, and the only way to prove
+   it is not a decorative pause. Each has a real room carrying the offer and
+   the accept and nothing further — a deal that has been answered and is
+   waiting on its lock, which is what most of a live board looks like. */
+/* The index goes at the FRONT: a deal room is named from the first 16 hex
+   of the contract id, so nineteen ids differing only in their last digits
+   are nineteen deals sharing one room. */
+const BULK_CID = (i) => "0x" + String(i).padStart(4, "0") + "d".repeat(60);
+const BULK_ACCEPTS = Array.from({ length: 19 }, (_, i) =>
+  msg(60 + i, PAYEE, frame(acc("0x" + "c".repeat(60) + String(i).padStart(4, "0"), BULK_CID(i)))));
+
 /* deal rooms, derived exactly as the page will derive them */
 const ROOMS = {
   [dealRoom(CID_FLIGHT)]: [
@@ -113,6 +141,12 @@ const ROOMS = {
       frame({ type: "lock", from: PAYER, contract: CID_LIAR, rail: "flop-htlc", ref: "r3" })),
   ],
 };
+for (let i = 0; i < 19; i++) {
+  ROOMS[dealRoom(BULK_CID(i))] = [
+    dmsg(1, PAYER, BULK_OFFERS[i].text),
+    dmsg(2, PAYEE, BULK_ACCEPTS[i].text),
+  ];
+}
 
 const FAILMODE = { v: "good" };
 const REQS = { n: 0 };
@@ -138,7 +172,10 @@ const srv = http.createServer((q, r) => {
     }
     const name = u.searchParams.get("room");
     const body = name === "tclk-offers"
-      ? { ok: true, room: name, source: "live", retrieved_at: new Date().toISOString(), age_seconds: 0, messages: OFFERS }
+      ? { ok: true, room: name, source: "live", retrieved_at: new Date().toISOString(), age_seconds: 0,
+          messages: BULK.on
+            ? [...OFFERS, ...BULK_OFFERS, ...(BULK.answered ? BULK_ACCEPTS : [])]
+            : OFFERS }
       : ROOMS[name]
         ? { ok: true, room: name, source: "live", retrieved_at: new Date().toISOString(), age_seconds: 0, messages: ROOMS[name] }
         : { room: name, source: "none", messages: [] };
@@ -170,6 +207,10 @@ async function open(width, height, mobile) {
   const errs = [];
   pg.on("pageerror", (e) => errs.push(e.message));
   await pg.goto("http://localhost:9101" + PAGE);
+  /* The page opens on "Order from Overheard" now — deliberately, so our own
+     offer is the first thing anybody sees. The board is one tap away. */
+  await pg.waitForSelector('.pri[data-main="board"]');
+  await pg.click('.pri[data-main="board"]');
   await pg.waitForFunction(() => document.querySelectorAll("#wanted .deal, #wanted .empty, #offered .deal, #offered .empty").length > 0, null, { timeout: 20000 });
   await pg.waitForTimeout(900);
   return { ctx, pg, errs };
@@ -262,8 +303,13 @@ ok("an open card is not repainted out from under a reader",
 /* ── G. honesty ────────────────────────────────────────────────────────── */
 console.log("\n=== G. it says where the data came from");
 ok("the source strip reports live", await pg.evaluate(() => document.getElementById("src").className.includes("live")));
-ok("the alpha notice is present",
-  await pg.evaluate(() => document.body.textContent.includes("the testnet is not open yet")));
+/* The notice lives with the gigs now, which is where somebody about to
+   order needs to read it. */
+ok("the alpha notice is present, and sits with the offer it qualifies",
+  await pg.evaluate(() => {
+    const note = document.querySelector("#pShop .note");
+    return !!note && /testnet is not open/.test(note.textContent);
+  }));
 await ctx.close();
 
 /* an empty network must read as empty, never as broken and never as busy */
@@ -302,9 +348,14 @@ for (const w of [390, 360]) {
     return bad;
   });
   ok(`nothing overlaps at ${w}`, overlap === 0, `${overlap} pairs`);
-  const tap = await p3.evaluate(() =>
-    [...document.querySelectorAll(".more")].every((n) => n.getBoundingClientRect().height >= 44));
-  ok(`the disclosure control is tappable at ${w}`, tap);
+  const tap = await p3.evaluate(() => {
+    const h = [...document.querySelectorAll(".more")].map((n) => n.getBoundingClientRect().height);
+    /* Half a pixel of slack: a 44px box laid out at a fractional offset
+       measures 43.996 here, which is 44 on any real screen. Asserting the
+       exact number made this fail on where the card happened to land. */
+    return { ok: h.length > 0 && h.every((v) => v >= 43.5), h: h.map((v) => v.toFixed(2)) };
+  });
+  ok(`the disclosure control is tappable at ${w}`, tap.ok, tap.h.join(","));
   ok(`no errors at ${w}`, e3.length === 0, e3.join(" | "));
   await c3.close();
 }
@@ -467,6 +518,7 @@ console.log("\n=== O. how much this page costs to open");
   const ctxA = await b.newContext({ viewport: { width: 1280, height: 1000 } });
   const pA = await ctxA.newPage();
   await pA.goto("http://localhost:9101" + PAGE);
+  await pA.click('.pri[data-main="board"]');
   /* The board must be drawn from the FIRST read, before any deal room is
      fetched — that wait was the "nothing to show, then minutes later
      everything" the page was reported for. */
@@ -488,6 +540,132 @@ console.log("\n=== O. how much this page costs to open");
     await (async () => { const a = REQS.n; await pA.waitForTimeout(3000); return REQS.n === a; })(),
     "twenty-second polling is what spent the allowance");
   await ctxA.close();
+}
+
+/* ── P. pagination ────────────────────────────────────────────────────────
+ *
+ * Twenty-two open offers in one column is a scroll, not a board. Eight to a
+ * page, with the caveat that a page turn is not free theatre: turning also
+ * fetches the deal rooms for the deals on that page, so the skeleton stands
+ * for a real wait. When there is nothing to fetch — as here, where every
+ * bulk offer is unanswered — the next page has to appear immediately with no
+ * staged pause at all.
+ */
+console.log("\n=== P. pagination");
+{
+  BULK.on = true;
+  const { ctx: c9, pg: p9, errs: e9 } = await open(1280, 1000, false);
+
+  const shown = () => p9.evaluate(() =>
+    [...document.querySelectorAll("#wanted .deal .price")].map((n) => n.firstChild.textContent));
+  const pagerNums = () => p9.evaluate(() =>
+    [...document.querySelectorAll("#pgWanted .pg.num")].map((n) => n.textContent));
+  const current = () => p9.evaluate(() =>
+    document.querySelector("#pgWanted .pg[aria-current='true']")?.textContent ?? null);
+
+  ok("the whole board is still counted, not just the page",
+    await p9.evaluate(() => document.getElementById("tWanted").textContent === "22"),
+    await p9.evaluate(() => document.getElementById("tWanted").textContent));
+
+  const page1 = await shown();
+  ok("a page holds eight", page1.length === 8, page1.length + " cards");
+  ok("the band heading counts all of them, not the page",
+    await p9.evaluate(() => document.querySelector("#bWanted .count").textContent === "22"));
+  ok("three pages for twenty-two", JSON.stringify(await pagerNums()) === '["1","2","3"]',
+    (await pagerNums()).join(","));
+  ok("page one is marked as the current one", (await current()) === "1");
+
+  /* A page turn with nothing to fetch must not stage a fake wait. */
+  await p9.click('#pgWanted .pg[aria-label="Page 2"]');
+  const skeletonAt = await p9.evaluate(() => document.querySelectorAll("#wanted .skel").length);
+  ok("no skeleton when there is nothing to wait for", skeletonAt === 0,
+    skeletonAt + " skeletons — a staged pause for work that is not happening");
+
+  const page2 = await shown();
+  ok("page two is a different slice", JSON.stringify(page1) !== JSON.stringify(page2),
+    page1[0] + " → " + page2[0]);
+  ok("and shares nothing with page one",
+    page2.every((v) => !page1.includes(v)), page2.join(" · "));
+  ok("page two is marked current", (await current()) === "2");
+  ok("the last page holds the remainder", await (async () => {
+    await p9.click('#pgWanted .pg[aria-label="Page 3"]');
+    return (await shown()).length === 6;
+  })(), "22 − 16");
+  ok("next is disabled on the last page",
+    await p9.evaluate(() => document.querySelector('#pgWanted .pg[aria-label="Next page"]').disabled));
+
+  /* A filter that shrinks the list under a page must not leave the reader
+     stranded on a page that no longer exists. */
+  await p9.fill("#q", "9000");
+  await p9.waitForTimeout(300);
+  ok("filtering drops back to page one, not an empty page three",
+    (await shown()).length > 0, (await shown()).join(" · "));
+  ok("and the pager disappears when one page is enough",
+    await p9.evaluate(() => document.getElementById("pgWanted").children.length === 0));
+  await p9.fill("#q", "");
+  await p9.waitForTimeout(300);
+  ok("clearing the filter restores page one, not page three",
+    JSON.stringify(await shown()) === JSON.stringify(page1));
+
+  await p9.click('#pgWanted .pg[aria-label="Page 2"]');
+  await p9.selectOption("#sort", "big");
+  await p9.waitForTimeout(250);
+  ok("re-sorting returns to the top of the new order", (await current()) === "1");
+
+  ok("every pager control has a name a screen reader can read",
+    await p9.evaluate(() => [...document.querySelectorAll("#pgWanted .pg")]
+      .every((n) => (n.getAttribute("aria-label") || "").length > 0)));
+  ok("no errors through any of it", e9.length === 0, e9.join(" | "));
+  await c9.close();
+}
+
+/* ── P2. and when the wait is real, it is shown ───────────────────────────*/
+console.log("\n=== P2. the skeleton stands for a real read");
+{
+  BULK.answered = true;
+  const { ctx: cS, pg: pS, errs: eS } = await open(1280, 1000, false);
+  await pS.waitForTimeout(1200);            /* let the first four rooms land */
+  const before = await pS.evaluate(() => window.__deals.reads());
+  await pS.click('#pgLive .pg[aria-label="Page 2"]');
+  const skel = await pS.evaluate(() => document.querySelectorAll("#live .skel").length);
+  ok("turning onto unread deals shows a skeleton", skel > 0, skel + " placeholders");
+  await pS.waitForFunction(() => document.querySelectorAll("#live .deal").length > 0,
+    null, { timeout: 8000 });
+  ok("and the skeleton is replaced by the deals it stood for",
+    await pS.evaluate(() => document.querySelectorAll("#live .skel").length === 0 &&
+                            document.querySelectorAll("#live .deal").length > 0));
+  ok("the turn actually read something", await pS.evaluate(() => window.__deals.reads()) > before,
+    before + " → " + (await pS.evaluate(() => window.__deals.reads())));
+  ok("no errors", eS.length === 0, eS.join(" | "));
+  await cS.close();
+  BULK.answered = false;
+}
+
+/* ── Q. the pager on a phone ──────────────────────────────────────────────*/
+console.log("\n=== Q. pagination at 390px");
+{
+  const { ctx: cA, pg: pA2, errs: eA } = await open(390, 780, true);
+  await pA2.click('#pgWanted .pg[aria-label="Next page"]');
+  await pA2.waitForTimeout(200);
+  ok("numbered buttons give way to a position",
+    await pA2.evaluate(() => {
+      const vis = (n) => getComputedStyle(n).display !== "none";
+      const nums = [...document.querySelectorAll("#pgWanted .pg.num")];
+      const now = document.querySelector("#pgWanted .pgnow");
+      return nums.length > 0 && nums.every((n) => !vis(n)) && now && vis(now);
+    }));
+  ok("and the position is honest about where it is",
+    await pA2.evaluate(() => document.querySelector("#pgWanted .pgnow").textContent.trim() === "2 / 3"),
+    await pA2.evaluate(() => document.querySelector("#pgWanted .pgnow")?.textContent));
+  ok("the arrows stay at a tappable size", await pA2.evaluate(() => {
+    const r = document.querySelector('#pgWanted .pg[aria-label="Next page"]').getBoundingClientRect();
+    return r.width >= 44 && r.height >= 44;
+  }));
+  const scroll = await pA2.evaluate(() => [document.documentElement.scrollWidth, window.innerWidth]);
+  ok("no sideways scroll with a pager on the page", scroll[0] <= scroll[1] + 1, scroll.join("/"));
+  ok("no errors", eA.length === 0, eA.join(" | "));
+  await cA.close();
+  BULK.on = false;
 }
 
 await b.close(); srv.close();

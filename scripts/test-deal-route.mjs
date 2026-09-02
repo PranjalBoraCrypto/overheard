@@ -32,6 +32,8 @@ const pg=await ctx.newPage(); const errs=[]; pg.on("pageerror",e=>errs.push(e.me
 await pg.goto("http://localhost:9151"+PAGE);
 await pg.addStyleTag({content:FONTCSS}); await pg.evaluate(()=>document.fonts.ready);
 await pg.waitForTimeout(1600);
+await pg.click('.pri[data-main="board"]');
+await pg.waitForTimeout(600);
 
 console.log("\n=== the job disclosure");
 ok("cards with a job offer a 'what they want' toggle",
@@ -51,9 +53,11 @@ await pg.click("#wanted .deal .link");
 await pg.waitForTimeout(700);
 const hash = await pg.evaluate(()=>location.hash);
 ok("clicking through sets a deep link", /^#\/deal\/0x[0-9a-f]{8,}$/.test(hash), hash);
-ok("the board is replaced by the one deal",
+ok("the board, the gigs and the chooser all give way to the one deal",
   await pg.evaluate(()=>!document.getElementById("one").hidden &&
-    document.getElementById("bWanted").hidden && document.querySelector(".controls").hidden));
+    document.getElementById("pBoard").hidden &&
+    document.getElementById("pShop").hidden &&
+    document.getElementById("primary").hidden));
 ok("it shows the full brief and the ids",
   await pg.evaluate(()=>{const t=document.getElementById("one").textContent;
     return /offer id/.test(t) && /payer/.test(t);}));
@@ -70,8 +74,9 @@ ok("an unknown deal says so rather than showing nothing",
   await p2.evaluate(()=>/not in the current window/.test(document.getElementById("one").textContent)));
 await p2.evaluate(()=>{location.hash="";});
 await p2.waitForTimeout(400);
-ok("clearing the hash returns to the board",
-  await p2.evaluate(()=>document.getElementById("one").hidden && !document.getElementById("bWanted").hidden));
+ok("clearing the hash returns to the page, on the gigs by default",
+  await p2.evaluate(()=>document.getElementById("one").hidden &&
+    !document.getElementById("pShop").hidden && !document.getElementById("primary").hidden));
 
 ok("no page errors", errs.length===0, errs.join(" | "));
 console.log(`\n${pass} passed, ${fail} failed`);
