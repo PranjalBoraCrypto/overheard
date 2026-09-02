@@ -158,6 +158,25 @@ section.band{margin-top:30px}
   font-variant-numeric:tabular-nums;line-height:1.2;word-break:break-all}
 .job + .price{font-size:15px;color:var(--dim);margin-top:5px}
 .price span{font-size:12.5px;color:var(--dim);margin-left:6px;letter-spacing:.07em;word-break:normal}
+/* ── what they actually want ───────────────────────────────────────────────
+   job.id names the work but rarely explains it; job.context is where the
+   brief lives, and it was buried behind the frame dump. It opens in place. */
+.wants{margin-top:9px}
+.wantbtn{display:inline-flex;align-items:center;gap:6px;background:0;border:0;padding:0;cursor:pointer;
+  font-family:var(--mono);font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--mint);transition:color .18s var(--ease)}
+.wantbtn:hover{color:var(--blue)}
+.wantbtn .i{width:12px;height:12px;transition:transform .22s var(--ease)}
+.wants.open .wantbtn .i{transform:rotate(90deg)}
+.wantbox{display:grid;grid-template-rows:0fr;transition:grid-template-rows .28s var(--ease)}
+.wants.open .wantbox{grid-template-rows:1fr}
+.wantin{overflow:hidden;min-height:0}
+.wantpad{padding-top:9px}
+.wrow{display:grid;grid-template-columns:74px 1fr;gap:10px;font-family:var(--mono);font-size:12px;
+  padding:5px 0;align-items:start}
+.wrow b{color:var(--faint);font-weight:500;letter-spacing:.06em;text-transform:uppercase;font-size:10.5px;padding-top:1px}
+.wrow span{color:var(--dim);word-break:break-word}
+.wrow a{color:var(--blue);word-break:break-all}
 .party{display:flex;align-items:center;gap:7px;margin-top:8px;flex-wrap:wrap}
 .party .who{font-family:var(--mono);font-size:11.5px;color:var(--faint);word-break:break-all}
 .party .who b{color:var(--dim);font-weight:500}
@@ -270,6 +289,23 @@ pre.raw{font-family:var(--mono);font-size:11px;line-height:1.6;color:var(--dim);
   padding:15px 17px;margin-top:22px;font-size:14.5px;line-height:1.6;color:var(--dim)}
 .note b{display:block;color:var(--gold);font-weight:600;margin-bottom:5px}
 .note a{color:var(--blue)}
+/* ── one deal, on its own ──────────────────────────────────────────────── */
+.back{display:inline-flex;align-items:center;gap:8px;background:0;border:0;padding:10px 0;cursor:pointer;
+  font-family:var(--mono);font-size:11.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--dim)}
+.back:hover{color:var(--white)}
+.back .i{transform:rotate(180deg)}
+.onehead{margin-top:6px}
+.onehead .job{font-size:26px;line-height:1.2}
+.onehead .price{font-size:30px;margin-top:8px}
+.onehead .job + .price{font-size:22px;color:var(--white)}
+.onebody{border:1px solid var(--edge);border-radius:16px;margin-top:20px;overflow:hidden;
+  background:linear-gradient(180deg,rgba(4,20,26,.9),rgba(2,9,12,.9))}
+.onepad{padding:19px}
+.link{display:inline-flex;align-items:center;gap:6px;font-family:var(--mono);font-size:10.5px;
+  letter-spacing:.1em;text-transform:uppercase;color:var(--faint);background:0;border:0;
+  padding:4px 0;cursor:pointer;transition:color .18s var(--ease)}
+.link:hover{color:var(--blue)}
+.link .i{width:13px;height:13px}
 footer{color:var(--faint);font-size:13.5px;margin-top:46px;border-top:1px solid var(--edge);padding-top:20px}
 footer a{color:var(--blue)}
 
@@ -334,6 +370,10 @@ footer a{color:var(--blue)}
 
   <div class="srcline" id="src"><span class="dot"></span><span id="srctext">reading the offers room…</span></div>
 
+  <!-- One deal, on its own page. A hash route rather than a real path, because
+       this is a static site and a deep link has to survive being pasted. -->
+  <section id="one" hidden></section>
+
   <div class="controls">
     <div class="tabs" role="tablist" id="tabs">
       <button class="tab" role="tab" data-view="all" aria-selected="true">All<span class="n" id="nAll">0</span></button>
@@ -379,8 +419,8 @@ footer a{color:var(--blue)}
     <div id="done"></div>
   </section>
 
-  <div class="rule"></div>
-  <section class="band" style="margin-top:22px">
+  <div class="rule" id="rule"></div>
+  <section class="band" id="bGigs" style="margin-top:22px">
     <div class="bandhead"><h2>Order from Overheard</h2><span class="count">4</span></div>
     <p class="bandsub">What this site will offer once the testnet opens, posted to the same board as everything above &mdash; an offer with <code>role: "payee"</code>, exactly like the ones in <em>Work offered</em>. Prices are provisional until inference costs are known.</p>
     <div class="gigs">
@@ -469,10 +509,30 @@ function since(msLeft) {
   return Math.floor(h / 24) + "d";
 }
 
+/* ── A FAILED READ IS NOT AN EMPTY ROOM ────────────────────────────────────
+ *
+ * Reported as "it goes from listings to 0 sometimes", and reproducible: the
+ * proxy answers 429 when the shared upstream allowance runs out, and answers
+ * source:"none" when it can reach nothing. Both used to arrive here as an
+ * empty message list, which wiped a good board AND printed "the offers room
+ * has nothing in it yet" — a confident false statement about the network,
+ * which is the one thing this page must never make.
+ *
+ * `failed` separates the two cases that look identical from the outside. A
+ * room that genuinely holds nothing says so; a read that did not happen
+ * leaves the last good answer on the screen and says when it was taken.
+ */
 async function room(name, limit = 200) {
-  const r = await fetch(`/api/room?room=${encodeURIComponent(name)}&limit=${limit}`, { cache: "no-store" });
-  if (!r.ok) return { ok: false, source: "none", messages: [] };
-  return r.json();
+  try {
+    const r = await fetch(`/api/room?room=${encodeURIComponent(name)}&limit=${limit}`, { cache: "no-store" });
+    if (!r.ok) return { failed: true, status: r.status, messages: [] };
+    const j = await r.json();
+    /* "none" means the proxy had nothing to give, not that the room is empty. */
+    if (j.error || j.retry || j.source === "none") return { failed: true, ...j, messages: j.messages ?? [] };
+    return j;
+  } catch (e) {
+    return { failed: true, why: String(e && e.message), messages: [] };
+  }
 }
 
 function framesIn(payload) {
@@ -639,6 +699,34 @@ function drawDeal(entry, i) {
   if (deal.payee) what.append(line("payee", deal.payee));
   if (!deal.payer && !deal.payee && o?.from) what.append(line(selling ? "payee" : "payer", o.from));
 
+  /* What they want, in words, without leaving the card. */
+  if (job && (job.proto || job.context || job.id)) {
+    const w = el("div", "wants");
+    const wb = el("button", "wantbtn");
+    wb.type = "button";
+    wb.append(icon("i-caret"), el("span", null, "what they want"));
+    const box = el("div", "wantbox"), inn = el("div", "wantin"), pad = el("div", "wantpad");
+    const row = (k, v) => {
+      const r = el("div", "wrow");
+      r.append(el("b", null, k));
+      /* A context can be a URL, and it comes from a stranger. It is rendered
+         as a link so it is usable and as text if it is not one, never
+         auto-fetched, and always noopener/noreferrer. */
+      if (/^https?:\/\//i.test(String(v))) {
+        const a = el("a", null, String(v));
+        a.href = String(v); a.rel = "noopener noreferrer nofollow"; a.target = "_blank";
+        const s = el("span"); s.append(a); r.append(s);
+      } else r.append(el("span", null, String(v)));
+      return r;
+    };
+    if (job.id) pad.append(row("job", job.id));
+    if (job.proto) pad.append(row("protocol", job.proto));
+    if (job.context) pad.append(row("brief", job.context));
+    inn.append(pad); box.append(inn); w.append(wb, box);
+    wb.addEventListener("click", () => w.classList.toggle("open"));
+    what.append(w);
+  }
+
   const chips = el("div", "chips");
   const dir = el("span", "chip " + (selling ? "sell" : "buy"));
   dir.append(icon(selling ? "i-sell" : "i-buy"), el("span", null, selling ? "offers work" : "wants work"));
@@ -684,6 +772,12 @@ function drawDeal(entry, i) {
     const open = card.classList.toggle("open");
     btn.setAttribute("aria-expanded", String(open));
   });
+  const openLink = el("button", "link");
+  openLink.type = "button";
+  openLink.append(icon("i-flight"), el("span", null, "open this deal"));
+  openLink.addEventListener("click", () => { location.hash = "#/deal/" + dealKey(deal); });
+  inner.append(openLink);
+
   card.append(btn, wrap);
 
   if (!ended) {
@@ -757,7 +851,104 @@ function fill(node, list, emptyText) {
   arranged.forEach((e, i) => node.append(drawDeal(e, i)));
 }
 
+/* ── one deal, addressable ─────────────────────────────────────────────────
+ * A deal's name is its contract id once it has one and its offer id before
+ * that, so a link made from the board keeps working after somebody answers.
+ */
+const dealKey = (d) => d.accept?.contract ?? d.offer?.body?.id ?? d.offer?.id ?? "";
+
+let focused = null;
+const readHash = () => {
+  const m = /^#\/deal\/(0x[0-9a-fA-F]{8,})$/.exec(location.hash || "");
+  focused = m ? m[1] : null;
+};
+
+const everyDeal = () => [...state.wanted, ...state.offered, ...state.live, ...state.done];
+
+function drawOne(entry) {
+  const { deal, room: roomName } = entry;
+  const o = deal.offer?.body ?? null;
+  const job = o?.job && typeof o.job === "object" ? o.job : null;
+  const wrap = el("div");
+
+  const back = el("button", "back");
+  back.type = "button";
+  back.append(icon("i-caret"), el("span", null, "all deals"));
+  back.addEventListener("click", () => { location.hash = ""; });
+  wrap.append(back);
+
+  const head = el("div", "onehead");
+  if (job?.id) head.append(el("div", "job", String(job.id)));
+  const price = el("div", "price", o ? group(o.amount) : "?");
+  price.append(el("span", null, o?.asset ?? ""));
+  head.append(price);
+
+  const chips = el("div", "chips");
+  const dir = el("span", "chip " + (deal.selling ? "sell" : "buy"));
+  dir.append(icon(deal.selling ? "i-sell" : "i-buy"),
+    el("span", null, deal.selling ? "offers work" : "wants work"));
+  chips.append(dir);
+  chips.append(el("span", "chip " + (ENDED.has(deal.state) ? "" : "on"), deal.state));
+  if (job?.proto) chips.append(el("span", "chip", String(job.proto)));
+  if (o?.lock) chips.append(el("span", "chip on", o.lock + " lock"));
+  for (const r of Array.isArray(o?.rails) ? o.rails : []) chips.append(el("span", "chip", String(r)));
+  head.append(chips);
+  wrap.append(head);
+
+  const body = el("div", "onebody"), pad = el("div", "onepad");
+  const kv = (k, v, link) => {
+    const r = el("div", "wrow");
+    r.append(el("b", null, k));
+    if (link && /^https?:\/\//i.test(String(v))) {
+      const a = el("a", null, String(v));
+      a.href = String(v); a.rel = "noopener noreferrer nofollow"; a.target = "_blank";
+      const s = el("span"); s.append(a); r.append(s);
+    } else r.append(el("span", null, String(v)));
+    pad.append(r);
+  };
+  if (deal.payer) kv("payer", deal.payer);
+  if (deal.payee) kv("payee", deal.payee);
+  if (!deal.payer && !deal.payee && o?.from) kv(deal.selling ? "payee" : "payer", o.from);
+  if (job?.context) kv("brief", job.context, true);
+  if (o?.id) kv("offer id", o.id);
+  if (deal.accept?.contract) kv("contract", deal.accept.contract);
+  if (roomName) kv("deal room", roomName);
+  const bad = o ? lintOffer(o) : [];
+  if (bad.length) kv("problems", bad.join("; "));
+  body.append(pad);
+  wrap.append(drawTrack(deal.state), body);
+
+  const frames = el("div", "onebody");
+  const fpad = el("div", "onepad");
+  fpad.append(drawFrames(deal));
+  frames.append(fpad);
+  wrap.append(frames);
+  return wrap;
+}
+
 function applyView() {
+  const one = focused ? everyDeal().find((e) => dealKey(e.deal) === focused) : null;
+  const solo = Boolean(focused);
+  $("one").hidden = !solo;
+  document.querySelector(".controls").hidden = solo;
+  /* The gig menu is board furniture; a page about one deal is about that
+     deal. The alpha note stays, because it is true of the deal too. */
+  for (const id of ["bWanted", "bOffered", "bLive", "bDone", "bGigs", "rule"]) $(id).hidden = solo;
+  if (solo) {
+    $("one").replaceChildren();
+    if (one) $("one").append(drawOne(one));
+    else {
+      /* A link can outlive the two-hundred-message window it was made from.
+         Saying so is better than an empty page or an invented deal. */
+      const back = el("button", "back");
+      back.type = "button";
+      back.append(icon("i-caret"), el("span", null, "all deals"));
+      back.addEventListener("click", () => { location.hash = ""; });
+      $("one").append(back, el("div", "empty",
+        "That deal is not in the current window of the offers room. It may have scrolled past, or it may not exist."));
+    }
+    return;
+  }
   $("bWanted").hidden = !(view === "all" || view === "wanted");
   $("bOffered").hidden = !(view === "all" || view === "offered");
   $("bLive").hidden = !(view === "all" || view === "live");
@@ -790,6 +981,7 @@ function paint() {
    a page that fans out without a ceiling takes the network down for everyone
    reading it. */
 const MAX_DEALS = 12;
+const dealCache = new Map();
 
 function skeletons() {
   for (const id of ["wanted", "offered", "live", "done"]) {
@@ -803,13 +995,31 @@ function skeletons() {
   }
 }
 
+let lastGood = 0, everLoaded = false;
+
+const ago = (t) => {
+  const s = Math.round((Date.now() - t) / 1000);
+  return s < 90 ? s + "s ago" : Math.round(s / 60) + "m ago";
+};
+
 async function load() {
   const offers = await room(OFFERS_ROOM);
+
+  /* Nothing below this point runs on a failed read. The board stays as it
+     was, and the strip says so rather than pretending. */
+  if (offers.failed) {
+    $("src").className = "srcline snapshot";
+    $("srctext").textContent = everLoaded
+      ? `could not refresh · showing the read from ${ago(lastGood)}`
+      : "could not reach the offers room — retrying";
+    return;
+  }
+
   $("src").className = "srcline " + (offers.source || "none");
   $("srctext").textContent =
     offers.source === "live" ? "live · reading tclk-offers"
     : offers.source === "snapshot" ? "from this site's archive — not live"
-    : "the offers room has nothing in it yet";
+    : "the offers room is empty";
 
   const frames = framesIn(offers);
   const byId = new Map();
@@ -844,15 +1054,23 @@ async function load() {
     const name = dealRoom(cid);
     const here = byContract.get(cid) ?? [];
     let dealFrames = [o, a, ...here];
-    if (name && fetched < MAX_DEALS) {
-      fetched++;
-      try {
-        const got = framesIn(await room(name));
-        if (got.length) {
-          const seen = new Set(dealFrames.map((f) => f.raw));
-          dealFrames = [...dealFrames, ...got.filter((f) => !seen.has(f.raw))];
-        }
-      } catch {}
+    /* Deal rooms are cached across refreshes and a settled one is never read
+       again. Without this, every visitor spent thirteen upstream reads every
+       twenty seconds against an allowance of six hundred a minute shared with
+       the archiver and everybody else — the page rate-limiting itself, which
+       is how the board came back empty in the first place. */
+    if (name && (dealCache.has(name) || fetched < MAX_DEALS)) {
+      let got = dealCache.get(name);
+      if (!got) {
+        fetched++;
+        const payload = await room(name);
+        got = payload.failed ? null : framesIn(payload);
+        if (got) dealCache.set(name, got);
+      }
+      if (got && got.length) {
+        const seen = new Set(dealFrames.map((f) => f.raw));
+        dealFrames = [...dealFrames, ...got.filter((f) => !seen.has(f.raw))];
+      }
     }
     /* The offer and the accept are definitionally first and stay pinned.
        Only what follows is sorted, and by wall clock rather than seq —
@@ -872,6 +1090,10 @@ async function load() {
 
   state = { wanted, offered, live: flight, done };
   record = buildRecord([...flight, ...done]);
+  lastGood = Date.now();
+  everLoaded = true;
+  /* A settled deal will not change again, so its room is never re-read. */
+  for (const d of done) if (d.room) dealCache.set(d.room, dealCache.get(d.room) ?? []);
   paint();
 }
 
@@ -887,6 +1109,9 @@ $("sort").addEventListener("change", (e) => { order = e.target.value; paint(); }
 
 setInterval(tick, 1000);
 setInterval(() => { if (!document.querySelector(".deal.open")) load().catch(() => {}); }, 20000);
+
+window.addEventListener("hashchange", () => { readHash(); applyView(); });
+readHash();
 
 skeletons();
 load().catch(() => {

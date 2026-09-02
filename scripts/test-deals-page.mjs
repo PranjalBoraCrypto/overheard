@@ -114,11 +114,20 @@ const ROOMS = {
   ],
 };
 
+const FAILMODE = { v: "good" };
 const srv = http.createServer((q, r) => {
   const u = new URL(q.url, "http://x");
   let p = u.pathname;
   if (p === PAGE) p = PAGE + ".html";
   if (p === "/api/room") {
+    if (FAILMODE.v === "429") {
+      r.writeHead(429, { "content-type": "application/json" });
+      return r.end(JSON.stringify({ error: "rate limited upstream", retry: true, source: "none" }));
+    }
+    if (FAILMODE.v === "none") {
+      r.writeHead(200, { "content-type": "application/json" });
+      return r.end(JSON.stringify({ room: "tclk-offers", source: "none", why: "unreachable", messages: [] }));
+    }
     const name = u.searchParams.get("room");
     const body = name === "tclk-offers"
       ? { ok: true, room: name, source: "live", retrieved_at: new Date().toISOString(), age_seconds: 0, messages: OFFERS }
@@ -369,6 +378,37 @@ console.log("\n=== L. track record");
     await p5.evaluate(() => document.querySelectorAll(".rep").length === 0),
     "a badge minted from one deal reads as diligence and is not");
   await c5.close();
+}
+
+
+/* ── M. a failed read is not an empty room ─────────────────────────────────
+ *
+ * Reported as "it goes from listings to 0 sometimes". The proxy answers 429
+ * when the shared upstream allowance runs out and source:"none" when it can
+ * reach nothing; both used to arrive as an empty list, wiping a good board
+ * and printing "the offers room has nothing in it yet" — a confident false
+ * statement about the network.
+ */
+console.log("\n=== M. a hiccup upstream must not empty the board");
+{
+  const { ctx: c6, pg: p6, errs: e6 } = await open(1280, 1000, false);
+  const deals = () => p6.evaluate(() => document.querySelectorAll(".deal").length);
+  const strip = () => p6.evaluate(() => document.getElementById("srctext").textContent);
+  const before = await deals();
+  ok("the board loaded to begin with", before > 0, before + " deals");
+
+  for (const mode of ["429", "none"]) {
+    FAILMODE.v = mode;
+    await p6.evaluate(() => fetch("/api/room?room=tclk-offers").catch(() => {}));
+    await p6.waitForTimeout(21000);
+    ok(`a '${mode}' refresh leaves the deals alone`, (await deals()) === before, await deals() + " deals");
+    ok(`and says it is showing an older read`, /could not refresh/.test(await strip()), await strip());
+    FAILMODE.v = "good";
+    await p6.waitForTimeout(21000);
+    ok(`it recovers by itself`, (await deals()) === before && /live/.test(await strip()));
+  }
+  ok("no errors through any of it", e6.length === 0, e6.join(" | "));
+  await c6.close();
 }
 
 await b.close(); srv.close();
