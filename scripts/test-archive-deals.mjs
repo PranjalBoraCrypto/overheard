@@ -78,6 +78,15 @@ const srv = http.createServer((req, res) => {
   if (room === "tclk-offers") {
     return j({ room, messages: MESSAGES, first_seq: 1, last_seq: MESSAGES.length });
   }
+  /* A room the archiver already has a cursor for, whose first_seq has run far
+     ahead of it — what a restart after dead air looks like from here. */
+  if (room === "gapper") {
+    return j({ room, first_seq: 900, last_seq: 902, messages: [
+      { seq: 900, ts: "2026-09-02T20:02:00Z", from: A, text: "one" },
+      { seq: 901, ts: "2026-09-02T20:02:01Z", from: A, text: "two" },
+      { seq: 902, ts: "2026-09-02T20:02:02Z", from: A, text: "three" },
+    ] });
+  }
   if (room === ROOM) {
     return j({ room, first_seq: 1, last_seq: 1, messages: [
       { seq: 1, ts: "2026-09-02T20:01:00Z", from: A,
@@ -88,10 +97,13 @@ const srv = http.createServer((req, res) => {
 }).listen(9251);
 
 const OUT = fs.mkdtempSync(path.join(os.tmpdir(), "arch-"));
+/* A cursor left behind by an earlier run. The next read of this room is a
+   resume, and everything between is time nothing was collecting. */
+fs.writeFileSync(path.join(OUT, "cursors.json"), JSON.stringify({ gapper: 100 }));
 await new Promise((done) => {
   const p = spawn(process.execPath, [path.join(ROOT, "scripts/archive.mjs")], {
     env: { ...process.env, OUT_DIR: OUT, TECHNOCORE_BASE: "http://localhost:9251",
-           ROOMS: "tclk-offers",
+           ROOMS: "tclk-offers,gapper",
            RUN_SECONDS: "8", FLUSH_SECONDS: "3", ROSTER_SECONDS: "600" },
     stdio: ["ignore", "pipe", "pipe"],
   });
@@ -128,11 +140,43 @@ ok("an offer did not create a room — a deal has none until it is answered",
   names.length === 1);
 ok("and the unparseable frame was simply ignored", true, "no crash, no entry");
 
+console.log("\n=== E. a gap says which kind of gap it was");
+{
+  const m = path.join(OUT, "gapper", "_meta.json");
+  const meta = fs.existsSync(m) ? JSON.parse(fs.readFileSync(m, "utf8")) : null;
+  const gaps = meta?.gaps ?? [];
+  ok("the gap is recorded at all", gaps.length > 0, JSON.stringify(gaps));
+  ok("with the right number missing", gaps[0]?.missed === 799, String(gaps[0]?.missed));
+  /* The distinction the whole fix is about: reading faster would not have
+     saved these, and calling it a poll interval said it would. */
+  ok("and named as time nothing was collecting, not as a slow poll",
+    gaps[0]?.cause === "collector was not running", String(gaps[0]?.cause));
+}
+
 console.log("\n=== D. the archiver still did its actual job");
 ok("it recorded the offers room too", fs.existsSync(path.join(OUT, "tclk-offers")));
 ok("cursors were written", fs.existsSync(path.join(OUT, "cursors.json")));
 ok("it did not fall over", !/UnhandledPromiseRejection|TypeError|ReferenceError/.test(globalThis.__log || ""),
   (globalThis.__log || "").split("\n").find((l) => /Error/.test(l)) || "clean");
+
+/* ── F. the chain, and the ways it must not misfire ──────────────────────── */
+console.log("\n=== F. the workflow that asks for the next run");
+{
+  const wf = fs.readFileSync(path.join(ROOT, ".github/workflows/archive.yml"), "utf8");
+  ok("the workflow can be dispatched, which is what the chain does",
+    /workflow_dispatch/.test(wf));
+  ok("the chain step runs even when the collection failed",
+    /ask for the next run[\s\S]{0,200}always\(\)/.test(wf),
+    "a crashed run is the one that most needs a successor");
+  ok("it does nothing at all without a token, so this is safe to merge now",
+    /no ARCHIVE_CHAIN_TOKEN/.test(wf) && /exit 0/.test(wf));
+  ok("a run too short to be real does not ask for another",
+    /ELAPSED.*-lt 300|too short to chain/.test(wf), "otherwise a fast failure is a hot loop");
+  ok("the token is never printed", !/echo[^\n]*\$\{?CHAIN_TOKEN/.test(wf));
+  ok("and shell tracing is never turned on in that step",
+    !/^\s*set -x/m.test(wf), "set -x would put the header in the log");
+  ok("cron is still there as the backstop", /cron: "0 \* \* \* \*"/.test(wf));
+}
 
 srv.close();
 fs.rmSync(OUT, { recursive: true, force: true });

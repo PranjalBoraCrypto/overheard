@@ -64,6 +64,11 @@ jobs:
         with:
           node-version: "22"
 
+      # Stamped before anything long starts, so the chain step below can tell
+      # a real collection window from a job that fell over in ten seconds.
+      - name: mark the start
+        run: echo "RUN_STARTED=$(date +%s)" >> "$GITHUB_ENV"
+
       - name: Collect continuously, commit on a timer
         env:
           # PRIORITY rooms, not the whole list. The archiver reads GET /rooms
@@ -193,3 +198,59 @@ jobs:
 
           wait $ARCH || echo "collector exited non-zero"
           echo "collection window complete"
+
+      # ── THE CHAIN, WHICH IS THE WHOLE COVERAGE PROBLEM ────────────────────
+      #
+      # MEASURED, on this repository, on 2 September: silences of 137, 134,
+      # 65, 58 and 48 minutes with nothing collecting. One of those cost
+      # 935,407 messages in the lobby alone — 99% of everything that room has
+      # ever lost, in a single hole. The routine poll-interval losses across
+      # fifty other incidents came to 11,544. The archive was not reading too
+      # slowly; it was not running.
+      #
+      # The schedule above is already two chances an hour with a queue behind
+      # it, and it still leaves multi-hour holes, because GitHub delays and
+      # drops scheduled jobs on public repositories and there is nothing to be
+      # done about that from inside a cron entry.
+      #
+      # So this run asks for the next one itself, rather than hoping. GitHub
+      # will not let GITHUB_TOKEN start another workflow — that is a
+      # deliberate loop-guard — so it needs a token of its own. WITHOUT ONE
+      # THIS STEP DOES NOTHING AND THE CHAIN BEHAVES EXACTLY AS IT DOES NOW,
+      # which is the property that makes it safe to merge before the secret
+      # exists.
+      #
+      # always(), because a run that CRASHED is the one that most needs a
+      # successor. And a floor on the elapsed time, because a job that fails
+      # in ten seconds and immediately asks for another is a hot loop.
+      - name: ask for the next run
+        if: ${{ always() }}
+        env:
+          CHAIN_TOKEN: ${{ secrets.ARCHIVE_CHAIN_TOKEN }}
+        run: |
+          set -e
+          if [ -z "${CHAIN_TOKEN:-}" ]; then
+            echo "no ARCHIVE_CHAIN_TOKEN — the next run waits for cron, as before"
+            exit 0
+          fi
+          ELAPSED=$(( $(date +%s) - ${RUN_STARTED:-0} ))
+          if [ "${RUN_STARTED:-0}" -eq 0 ] || [ "$ELAPSED" -lt 300 ]; then
+            echo "this run lasted ${ELAPSED}s — too short to chain from, leaving it to cron"
+            exit 0
+          fi
+          echo "requesting the next run after ${ELAPSED}s of collection"
+          # The token is only ever an Authorization header read from the
+          # environment. No set -x anywhere in this step, and the response
+          # body is printed but a dispatch returns none.
+          code=$(curl -sS -o /tmp/dispatch.out -w '%{http_code}' -X POST \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer $CHAIN_TOKEN" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/${{ github.repository }}/actions/workflows/archive.yml/dispatches" \
+            -d '{"ref":"main"}') || true
+          if [ "$code" = "204" ]; then
+            echo "next run queued"
+          else
+            echo "could not queue the next run (HTTP $code) — cron remains the backstop"
+            head -c 400 /tmp/dispatch.out || true
+          fi

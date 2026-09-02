@@ -461,7 +461,20 @@ async function readRoom(state, e) {
     if (typeof data.first_seq === "number" && cursor > 0 && data.first_seq > cursor + 1) {
       const missed = data.first_seq - cursor - 1;
       e.lost += missed;
-      p.gaps.push({ after: cursor, resumed_at: data.first_seq, missed, cause: "poll interval", noticed: new Date().toISOString() });
+      /* WHICH KIND OF GAP THIS IS, AND WHY IT WAS WORTH SEPARATING.
+         From inside the process a restart after hours of dead air looks
+         exactly like one very slow poll, so both were recorded as "poll
+         interval" — and the label was wrong about 99% of the volume. On this
+         repository on 2 September, lobby lost 935,407 messages in a single
+         gap noticed at the end of a 137-minute silence, against 11,544 across
+         the fifty genuine poll-interval gaps put together. Reading faster
+         would have saved almost none of it; being alive would have saved all
+         of it, and the archive could not say so.
+         A gap seen on a room's FIRST read of this process is time when this
+         process did not exist. That is a different fact and it gets a
+         different name. */
+      const cause = e.reads === 1 ? "collector was not running" : "poll interval";
+      p.gaps.push({ after: cursor, resumed_at: data.first_seq, missed, cause, noticed: new Date().toISOString() });
     }
 
     const tpl = state.templates.texts;
