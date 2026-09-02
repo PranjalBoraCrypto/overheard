@@ -339,6 +339,74 @@ const CSS = `
 .menu .row.out{color:#9CBFCB;margin-top:9px;border-top:1px solid rgba(0,180,215,.14);border-radius:0 0 11px 11px;padding-top:12px}
 .menu .row.out:hover{background:rgba(255,107,107,.10);color:#FF9B9B}
 .menu .fine{font-size:11px;line-height:1.5;color:#5F8593;margin-top:10px}
+
+/* ── ON A PHONE THIS IS NOT A DROPDOWN, IT IS A SHEET ──────────────────────
+ *
+ * REPORTED, and correct: the card was the desktop object made narrow enough
+ * to fit. Fitting is not designing. A menu hanging off the button you clicked
+ * is right for a cursor and wrong for a thumb — it pins itself to the TOP
+ * RIGHT corner, which is the furthest point on a phone from where a hand
+ * actually is, and the moment a field takes focus the keyboard rises and
+ * covers the form being filled in.
+ *
+ * So on a phone it comes up from the bottom edge instead: full width, thumb
+ * where the controls are, and the keyboard pushes it up rather than burying
+ * it. Same markup, same behaviour, same colours — one object presented two
+ * ways. Nothing in the JS knows this exists, which is the point: two layouts
+ * that share no code are two layouts that drift.
+ */
+@media (max-width:560px){
+  .menu{
+    position:fixed;
+    /* 100vw rather than left:0;right:0. The bar's own wrapper is a containing
+       block for this, so stretching between two insets gives the wrapper's
+       338px content width on a 390px phone rather than the screen. A viewport
+       unit does not care what the containing block is. */
+    left:0; right:auto; bottom:0; top:auto;
+    width:100vw; max-width:100vw; margin:0;
+    max-height:min(86vh,720px);
+    /* Room for the home indicator on the phones that have one, and none on
+       the ones that do not. */
+    padding:20px 18px calc(20px + env(safe-area-inset-bottom,0px));
+    border-radius:22px 22px 0 0;
+    border-bottom:0;
+    transform-origin:bottom center;
+    animation:sheet .3s cubic-bezier(.2,.9,.3,1.2) both;
+    box-shadow:0 -20px 60px -20px rgba(0,0,0,.95),0 0 0 1px rgba(0,0,0,.4);
+  }
+  .menu.wide{width:100vw;max-width:100vw}
+  /* The page behind it, dimmed. A pseudo-element rather than a real one so no
+     JS has to create or remove anything — and pointer-events:none so a tap on
+     the dimmed area passes through to the document, where the existing
+     click-away handler closes this. Making it clickable would have put the
+     scrim INSIDE .me, where that handler treats it as a tap on the menu. */
+  .menu::before{
+    content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;
+    background:rgba(0,6,10,.55);
+    animation:scrim .3s ease both;
+  }
+  /* The grab bar. It is the one thing that says "this came from the bottom
+     and goes back there", and it costs one pseudo-element. */
+  .menu::after{
+    content:"";position:absolute;top:8px;left:50%;transform:translateX(-50%);
+    width:38px;height:4px;border-radius:2px;background:rgba(154,200,214,.34);
+  }
+  .menu h3{margin-top:6px}
+  /* Comfortable rather than compact: this is a sheet with a whole screen
+     width to spend, not a 300px card rationing it. */
+  .pw{gap:9px;margin-top:14px}
+  .pw input,.two input{font-size:16px;padding:14px 14px}
+  .pw button{padding:0 18px}
+  .seed textarea{height:88px;font-size:12.5px;padding:13px 14px}
+  .seal{padding:15px;font-size:14.5px}
+  .menu button.row,.menu a.row{padding:14px 12px;font-size:14px}
+  .alt{margin-top:14px}
+  .altbtn{padding:13px 14px;font-size:13px}
+  .did{font-size:11px;padding:11px 12px}
+}
+@keyframes sheet{from{transform:translateY(24px);opacity:0}}
+@keyframes scrim{from{opacity:0}}
+
 @media (prefers-reduced-motion:reduce){.glyph::after{animation:none}.menu{animation:none}}
 /* ── the phone ─────────────────────────────────────────────────────────────
    THE ORDER WAS WRONG, AND ON EVERY PAGE. An order:-1 on .me put the sign-in
@@ -379,7 +447,11 @@ const CSS = `
   }
   .tabs::-webkit-scrollbar{display:none}
   .tabs a{flex:none;padding:9px 11px;font-size:13px}
-  .menu,.menu.wide{width:min(344px,calc(100vw - 52px))}
+  /* The width cap that used to keep the DROPDOWN on screen here is gone: on a
+     phone this is a sheet now, sized to the viewport by the block above. This
+     rule outlived it and, being later in the file, quietly won — which is how
+     a 390px screen ended up with a 338px sheet and a 52px strip of nothing
+     down one side. */
   /* The wordmark's halo is a blurred conic gradient rotating forever, on
      every page of the site. It is small, so it is not the biggest cost on a
      phone, but it is a continuous one that buys a shimmer nobody came for.
@@ -856,8 +928,20 @@ function paintSignIn(me) {
         tip.hidden = !on;
         tipBtn.setAttribute("aria-expanded", String(on));
       };
-      tipBtn.addEventListener("mouseenter", () => { hovering = true; sync(); });
-      tipBtn.addEventListener("mouseleave", () => { hovering = false; sync(); });
+      /* HOVER ONLY WHERE HOVERING IS A THING, and it is not only a tidiness
+         point. The sheet is anchored to the BOTTOM, so opening the tip grows
+         the card upwards — which can carry the button out from under the very
+         cursor that opened it. mouseleave then closes it, the card shrinks,
+         the button slides back under the cursor, mouseenter fires, and it
+         oscillates forever. Caught by a test that sat waiting thirty seconds
+         for the row to hold still.
+         A pointer that cannot hover cannot start that loop, and a device that
+         can hover has the popover, which grows downwards and never moves the
+         button at all. */
+      if (matchMedia("(hover: hover)").matches) {
+        tipBtn.addEventListener("mouseenter", () => { hovering = true; sync(); });
+        tipBtn.addEventListener("mouseleave", () => { hovering = false; sync(); });
+      }
       tipBtn.addEventListener("blur", () => { sticky = false; sync(); });
       tipBtn.addEventListener("click", (e) => { e.preventDefault(); sticky = !sticky; sync(); });
       tipBtn.addEventListener("keydown", (e) => {

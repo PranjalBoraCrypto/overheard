@@ -67,7 +67,8 @@ const b = await chromium.launch({ executablePath: "/opt/pw-browsers/chromium",
 const R = () => `document.querySelector("overheard-bar").shadowRoot`;
 async function openBar(pg) {
   await pg.evaluate(() => document.querySelector("overheard-bar").shadowRoot.querySelector(".me .in").click());
-  await pg.waitForTimeout(250);
+  /* Long enough for the desktop pop and the phone's sheet to finish moving. */
+  await pg.waitForTimeout(450);
 }
 async function withVault(width = 1280, height = 900, mobile = false) {
   const ctx = await b.newContext({ viewport: { width, height }, isMobile: mobile, hasTouch: mobile,
@@ -318,34 +319,76 @@ console.log("\n=== F. what it will not accept");
   await ctx.close();
 }
 
-/* ── G. a phone ──────────────────────────────────────────────────────────── */
-console.log("\n=== G. on a 360px screen");
-for (const w of [390, 360]) {
-  const { ctx, pg, errs } = await withVault(w, 780, true);
-  const fits = () => pg.evaluate(() => {
+/* ── G. folded into I ─────────────────────────────────────────────────────
+ * This section measured the popover on a phone: does it fit, does nothing
+ * break out of the card, are the controls tappable. On a phone there is no
+ * popover any more, so "does the dropdown fit" is not a question about this
+ * page. What it was really protecting — no sideways scroll, nothing outside
+ * the card, targets big enough for a thumb — moved into I, where it is asked
+ * of the thing that actually renders.
+ */
+
+/* ── I. on a phone it is a sheet, not a shrunken dropdown ────────────────── */
+console.log("\n=== I. the phone gets its own object");
+{
+  const { ctx, pg, errs } = await withVault(390, 780, true);
+  const box = () => pg.evaluate(() => {
     const r = document.querySelector("overheard-bar").shadowRoot;
-    const m = r.querySelector(".menu").getBoundingClientRect();
-    return { left: Math.round(m.left), right: Math.round(m.right), w: Math.round(m.width),
-      vw: window.innerWidth, scroll: document.documentElement.scrollWidth };
+    const m = r.querySelector(".menu");
+    const b = m.getBoundingClientRect();
+    const cs = getComputedStyle(m);
+    return { left: Math.round(b.left), right: Math.round(b.right), bottom: Math.round(b.bottom),
+      pos: cs.position, radius: cs.borderTopLeftRadius + "/" + cs.borderBottomLeftRadius,
+      vw: window.innerWidth, vh: window.innerHeight };
   });
-  const closed = await fits();
-  ok(`closed, the card is inside the screen at ${w}`,
-    closed.left >= -1 && closed.right <= closed.vw + 1, JSON.stringify(closed));
-
-  await pg.click("overheard-bar .tipq");
-  await pg.waitForTimeout(150);
-  ok(`the tip opens on a tap at ${w}`,
-    await pg.evaluate(() => !document.querySelector("overheard-bar").shadowRoot.querySelector(".tip").hidden));
-
-  await pg.click("overheard-bar .altbtn");
+  const b = await box();
+  ok("it is pinned to the viewport, not hung off the button", b.pos === "fixed", b.pos);
+  ok("it spans the full width", b.left <= 1 && b.right >= b.vw - 1, `${b.left}..${b.right} of ${b.vw}`);
+  ok("and sits on the bottom edge, where a thumb is",
+    Math.abs(b.bottom - b.vh) <= 1, `bottom ${b.bottom} vs ${b.vh}`);
+  ok("rounded at the top only, so it reads as having come from below",
+    b.radius.startsWith("22px") && b.radius.endsWith("0px"), b.radius);
+  ok("there is a grab handle", await pg.evaluate(() => {
+    const m = document.querySelector("overheard-bar").shadowRoot.querySelector(".menu");
+    return getComputedStyle(m, "::after").content !== "none";
+  }));
+  ok("the page behind is dimmed", await pg.evaluate(() => {
+    const m = document.querySelector("overheard-bar").shadowRoot.querySelector(".menu");
+    const cs = getComputedStyle(m, "::before");
+    return cs.position === "fixed" && /rgba?\(/.test(cs.backgroundColor);
+  }));
+  /* The dimmed area must not swallow the tap that closes it: the scrim is a
+     child of .menu, and the click-away handler treats anything inside .me as
+     a tap on the menu itself. */
+  ok("but the dimmed area lets a tap through, so tapping away still closes",
+    await pg.evaluate(() => {
+      const m = document.querySelector("overheard-bar").shadowRoot.querySelector(".menu");
+      return getComputedStyle(m, "::before").pointerEvents === "none";
+    }));
+  await pg.mouse.click(20, 60);
   await pg.waitForTimeout(250);
-  const open = await fits();
-  ok(`opened, the card is still inside the screen at ${w}`,
-    open.left >= -1 && open.right <= open.vw + 1, JSON.stringify(open));
-  ok(`the page never scrolls sideways at ${w}`, open.scroll <= open.vw + 1,
-    `${open.scroll} vs ${open.vw}`);
+  ok("and it does close", await pg.evaluate(() =>
+    !document.querySelector("overheard-bar").shadowRoot.querySelector(".menu")));
 
-  const boxes = await pg.evaluate(() => {
+  /* Typing into a phone form means a 16px field, or iOS zooms the page. */
+  await openBar(pg);
+  /* The sheet rises over 300ms; clicking mid-animation is clicking a moving
+     target and Playwright rightly refuses. */
+  await pg.waitForTimeout(500);
+  await pg.click("overheard-bar .altbtn");
+  await pg.waitForTimeout(400);
+  const fonts = await pg.evaluate(() => {
+    const r = document.querySelector("overheard-bar").shadowRoot;
+    return [...r.querySelectorAll(".pw input, .two input")]
+      .map((i) => parseFloat(getComputedStyle(i).fontSize));
+  });
+  ok("every field is at least 16px, so iOS does not zoom on focus",
+    fonts.length > 0 && fonts.every((f) => f >= 16), fonts.join(","));
+  const after = await box();
+  ok("opened, it is still inside the screen", after.left >= -1 && after.right <= after.vw + 1);
+
+  /* What the old popover section was really protecting, asked of the sheet. */
+  const fit = await pg.evaluate(() => {
     const r = document.querySelector("overheard-bar").shadowRoot;
     const m = r.querySelector(".menu").getBoundingClientRect();
     const inside = (el) => { const b = el.getBoundingClientRect(); return b.left >= m.left - 1 && b.right <= m.right + 1; };
@@ -355,12 +398,30 @@ for (const w of [390, 360]) {
       seal: inside(r.querySelector(".seal")),
       tap: Math.min(r.querySelector(".altbtn").getBoundingClientRect().height,
                     r.querySelector(".tipq").getBoundingClientRect().height),
+      scroll: document.documentElement.scrollWidth, vw: window.innerWidth,
     };
   });
-  ok(`nothing breaks out of the card at ${w}`, boxes.ta && boxes.two && boxes.seal,
-    JSON.stringify(boxes));
-  ok(`the controls are big enough to hit at ${w}`, boxes.tap >= 24, boxes.tap + "px");
-  ok(`no page errors at ${w}`, errs.length === 0, errs.join(" | "));
+  ok("nothing breaks out of the sheet", fit.ta && fit.two && fit.seal, JSON.stringify(fit));
+  ok("the controls are big enough to hit", fit.tap >= 32, fit.tap + "px");
+  ok("and the page never scrolls sideways", fit.scroll <= fit.vw + 1, `${fit.scroll} vs ${fit.vw}`);
+  ok("no page errors", errs.length === 0, errs.join(" | "));
+  await ctx.close();
+}
+
+/* ── J. the laptop keeps the dropdown ────────────────────────────────────── */
+console.log("\n=== J. and the desktop is left alone");
+{
+  const { ctx, pg, errs } = await withVault(1280, 900, false);
+  const b = await pg.evaluate(() => {
+    const m = document.querySelector("overheard-bar").shadowRoot.querySelector(".menu");
+    const r = m.getBoundingClientRect();
+    return { pos: getComputedStyle(m).position, w: Math.round(r.width),
+      top: Math.round(r.top), vh: window.innerHeight };
+  });
+  ok("still hangs off the button it came from", b.pos === "absolute", b.pos);
+  ok("still a card, not the width of the screen", b.w <= 400, b.w + "px");
+  ok("and near the top, where the button is", b.top < b.vh / 2, `top ${b.top}`);
+  ok("no page errors", errs.length === 0, errs.join(" | "));
   await ctx.close();
 }
 
