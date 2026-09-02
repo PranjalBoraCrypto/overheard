@@ -522,17 +522,49 @@ function since(msLeft) {
  * room that genuinely holds nothing says so; a read that did not happen
  * leaves the last good answer on the screen and says when it was taken.
  */
-async function room(name, limit = 200) {
+async function readRoom(name, limit) {
   try {
     const r = await fetch(`/api/room?room=${encodeURIComponent(name)}&limit=${limit}`, { cache: "no-store" });
-    if (!r.ok) return { failed: true, status: r.status, messages: [] };
+    if (!r.ok) return { failed: true, why: `the proxy answered ${r.status}`, messages: [] };
     const j = await r.json();
-    /* "none" means the proxy had nothing to give, not that the room is empty. */
-    if (j.error || j.retry || j.source === "none") return { failed: true, ...j, messages: j.messages ?? [] };
+    /* "none" means the proxy had nothing to give, not that the room is empty.
+       It carries a `why` naming the branch that fired, and that is worth
+       putting on the screen: a page that says only "something went wrong"
+       cannot be diagnosed by anybody who cannot read the logs, which is
+       everybody looking at this one. */
+    if (j.error || j.retry || j.source === "none")
+      return { failed: true, why: j.why || j.error || "the proxy had nothing to give", messages: [] };
     return j;
   } catch (e) {
-    return { failed: true, why: String(e && e.message), messages: [] };
+    return { failed: true, why: String((e && e.message) || e), messages: [] };
   }
+}
+
+/* SHRINK AND RETRY.
+ *
+ * tclk-offers is the heaviest room on this network by a distance — two
+ * hundred messages of JSON frames rather than two hundred short lines of
+ * chat, tens of kilobytes against a few — and the proxy gives an upstream
+ * read six seconds before it gives up. A room too big to fetch inside that
+ * window does not fail sometimes, it fails every time, and from outside that
+ * looks exactly like a room with nothing in it.
+ *
+ * So a failed read is retried smaller before it is believed. Two thirds of
+ * the board is worth having; none of it is not. When a smaller read wins,
+ * the page says how much it settled for rather than quietly showing less.
+ */
+const LIMITS = [200, 120, 60];
+async function room(name, limit) {
+  if (limit) return readRoom(name, limit);
+  let last = null;
+  for (const n of LIMITS) {
+    last = await readRoom(name, n);
+    if (!last.failed) {
+      if (n !== LIMITS[0]) last.trimmed = n;
+      return last;
+    }
+  }
+  return last;
 }
 
 function framesIn(payload) {
@@ -1008,16 +1040,17 @@ async function load() {
   /* Nothing below this point runs on a failed read. The board stays as it
      was, and the strip says so rather than pretending. */
   if (offers.failed) {
-    $("src").className = "srcline snapshot";
+    $("src").className = "srcline " + (everLoaded ? "snapshot" : "none");
     $("srctext").textContent = everLoaded
-      ? `could not refresh · showing the read from ${ago(lastGood)}`
-      : "could not reach the offers room — retrying";
+      ? `could not refresh · showing the read from ${ago(lastGood)} · ${offers.why}`
+      : `could not read tclk-offers · ${offers.why} · retrying`;
     return;
   }
 
   $("src").className = "srcline " + (offers.source || "none");
+  const trimmed = offers.trimmed ? ` · only the last ${offers.trimmed} messages fit` : "";
   $("srctext").textContent =
-    offers.source === "live" ? "live · reading tclk-offers"
+    offers.source === "live" ? "live · reading tclk-offers" + trimmed
     : offers.source === "snapshot" ? "from this site's archive — not live"
     : "the offers room is empty";
 

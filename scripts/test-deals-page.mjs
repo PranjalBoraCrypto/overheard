@@ -124,6 +124,12 @@ const srv = http.createServer((q, r) => {
       r.writeHead(429, { "content-type": "application/json" });
       return r.end(JSON.stringify({ error: "rate limited upstream", retry: true, source: "none" }));
     }
+    if (FAILMODE.v === "toobig" && Number(u.searchParams.get("limit")) > 120) {
+      /* What a room too heavy to fetch inside the proxy's six-second budget
+         looks like from here: it fails, every time, at the full size. */
+      r.writeHead(200, { "content-type": "application/json" });
+      return r.end(JSON.stringify({ room: "tclk-offers", source: "none", why: "could not reach technocore.chat", messages: [] }));
+    }
     if (FAILMODE.v === "none") {
       r.writeHead(200, { "content-type": "application/json" });
       return r.end(JSON.stringify({ room: "tclk-offers", source: "none", why: "unreachable", messages: [] }));
@@ -409,6 +415,29 @@ console.log("\n=== M. a hiccup upstream must not empty the board");
   }
   ok("no errors through any of it", e6.length === 0, e6.join(" | "));
   await c6.close();
+}
+
+
+/* ── N. a room too big to fetch is not a room with nothing in it ──────────
+ *
+ * tclk-offers carries JSON frames rather than chat lines and is the heaviest
+ * room on the network; the proxy gives an upstream read six seconds. At full
+ * size that read can fail every single time, which from outside is
+ * indistinguishable from an empty board — and was being reported as one.
+ */
+console.log("\n=== N. asking for less rather than giving up");
+{
+  FAILMODE.v = "toobig";
+  const { ctx: c7, pg: p7, errs: e7 } = await open(1280, 1000, false);
+  const n = await p7.evaluate(() => document.querySelectorAll(".deal").length);
+  ok("the board still loads when the full read fails", n > 0, n + " deals");
+  const strip = await p7.evaluate(() => document.getElementById("srctext").textContent);
+  ok("and it is live, not a failure", /^live/.test(strip), strip);
+  ok("it says it settled for less rather than quietly showing less",
+    /only the last 120 messages fit/.test(strip));
+  ok("no errors", e7.length === 0, e7.join(" | "));
+  await c7.close();
+  FAILMODE.v = "good";
 }
 
 await b.close(); srv.close();
