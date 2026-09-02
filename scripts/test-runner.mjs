@@ -24,6 +24,7 @@ import {
   US, JOBS, WINDOW, MAX_OPEN_DEALS, buildOffer, plan, refusals, framesFrom, ourDeals, wake,
 } from "./runner.mjs";
 import { canon, offerId, lintOffer, readFrame, runDeal } from "../web/tclk.js";
+import { CAN_DO } from "./work.mjs";
 
 /* The repository, found from this file rather than from a path typed into it.
    The absolute one was /tmp/oh — the sandbox this was written in — so on any
@@ -129,20 +130,35 @@ const frameOf = async (job, over = {}) => {
   return "tclk1 " + canon({ ...o, id: await offerId(o) });
 };
 {
-  ok("an empty board means post all four", plan(framesFrom([]), NOW).post.length === 4);
+  const empty = plan(framesFrom([]), NOW);
+  ok("an empty board means post only what can be delivered",
+    empty.post.length === 1 && empty.post[0].id === "overheard-agent-profile",
+    empty.post.map((j) => j.id).join(",") || "nothing");
+  ok("and the rest are named as unbuilt rather than silently dropped",
+    empty.unbuilt.length === 3 && !empty.unbuilt.includes("overheard-agent-profile"),
+    empty.unbuilt.join(","));
 
-  const one = await frameOf(JOBS[0]);
+  const BUILT = JOBS.find((j) => j.id === "overheard-agent-profile");
+  const one = await frameOf(BUILT);
   const p = plan(framesFrom([msg(1, US, one)]), NOW);
   ok("a job we already have standing is not posted twice",
-    p.post.length === 3 && !p.post.some((j) => j.id === JOBS[0].id), p.post.map((j) => j.id).join(","));
+    p.post.length === 0, p.post.map((j) => j.id).join(",") || "nothing");
 
-  const stale = await frameOf(JOBS[0], { expiresMs: NOW - 1000 });
+  const stale = await frameOf(BUILT, { expiresMs: NOW - 1000 });
   ok("an EXPIRED offer of ours is restocked, not counted as standing",
-    plan(framesFrom([msg(1, US, stale)]), NOW).post.length === 4);
+    plan(framesFrom([msg(1, US, stale)]), NOW).post.length === 1);
 
-  const theirs = await frameOf(JOBS[0]);
+  const theirs = await frameOf(BUILT);
   ok("somebody else's offer for the same job does not stock our shelf",
-    plan(framesFrom([msg(1, OTHER, theirs)]), NOW).post.length === 4);
+    plan(framesFrom([msg(1, OTHER, theirs)]), NOW).post.length === 1);
+
+  /* The guard that matters: a job with no handler is never advertised, no
+     matter how empty the board is or how much the shelf says it should be. */
+  const unbuilt = await frameOf(JOBS.find((j) => j.id === "overheard-archive-question"));
+  ok("a job with no handler is not posted even with nothing standing",
+    !plan(framesFrom([]), NOW).post.some((j) => !CAN_DO.has(j.id)));
+  ok("and a standing offer for one would not make it postable either",
+    !plan(framesFrom([msg(1, US, unbuilt)]), NOW).post.some((j) => !CAN_DO.has(j.id)));
 }
 {
   /* Capacity: three accepted deals and the shelf stops being restocked. */
@@ -177,14 +193,15 @@ console.log("\n=== E. the shop stays shut");
   /* An agent whose DID IS the shop's: refusals only cares about the string,
      and the real seed is not available to a test and never should be. */
   const asShop = { did: US };
-  const full = { live: true, agent: asShop, work: true };
+  const full = { live: true, agent: asShop };
   ok("with everything in place there is nothing holding it", refusals(full).length === 0);
   ok("no --live holds it", refusals({ ...full, live: false }).length === 1);
   ok("no seed holds it", refusals({ ...full, agent: null }).some((r) => /no seed/.test(r)));
   ok("the WRONG seed holds it — a key that is not this shop must not post as it",
     refusals({ ...full, agent: { did: OTHER } }).some((r) => /not this shop/.test(r)));
-  ok("and no work side holds it, which is the one that matters today",
-    refusals({ ...full, work: false }).some((r) => /work side/.test(r)));
+  /* Capability left refusals(): it is not a fact about the run, it is a fact
+     about each job, and plan() drops the ones nothing can deliver. Asserted
+     where it now lives, below. */
 }
 
 /* ── F. a whole wake, against a stub ─────────────────────────────────────── */
@@ -197,7 +214,7 @@ console.log("\n=== F. a wake writes nothing");
   };
   const lines = [];
   const r = await wake({ fetch: stub, base: "http://stub", log: (s) => lines.push(s), now: NOW, seed: SEED });
-  ok("it decided to post four offers", r.plan.post.length === 4);
+  ok("it decided to post only the deliverable one", r.plan.post.length === 1);
   ok("and posted none of them", posted === 0, posted + " writes");
   ok("it says why it is holding", r.refusals.length > 0 && lines.some((l) => /^hold:/.test(l)));
   ok("it noticed the key is not this shop's", lines.some((l) => /NOT THIS SHOP/.test(l)));

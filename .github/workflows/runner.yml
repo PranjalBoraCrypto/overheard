@@ -57,3 +57,9 @@ jobs:
       # rather than in production. It needs no secret of its own.
       - name: the key is still nowhere it should not be
         run: node scripts/test-runner.mjs
+
+      # A profile is made of true counts, which is exactly what makes an
+      # overstated one dangerous. This suite is the check that it still says
+      # the unflattering thing when the unflattering thing is what is true.
+      - name: the work still tells the truth
+        run: node scripts/test-work.mjs

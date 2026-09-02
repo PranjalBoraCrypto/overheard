@@ -2,9 +2,11 @@
  * The shop, as a scheduled job.
  *
  * It reads tclk-offers, works out what Overheard should do, and — when it is
- * allowed to — does it. Right now it is allowed to do nothing: this build
- * decides and prints, and posts only when both --live is passed and the work
- * side exists. The reason is in refusals(), and it is not a placeholder.
+ * allowed to — does it. Two independent gates stand in front of every write:
+ * refusals(), which is about this run (asked to go live, holding the right
+ * key), and work.mjs, which is about each job (is there anything here that
+ * can actually deliver it). Neither is a placeholder and neither is a flag
+ * somebody clears by hand.
  *
  * Run it:
  *   node scripts/runner.mjs              a dry run, no key needed
@@ -17,6 +19,7 @@
 import { readFrame, isFrameText, OFFERS_ROOM, offerId, canon, runDeal, lintOffer, ms }
   from "../web/tclk.js";
 import { agentFromSeed, say } from "./agent.mjs";
+import { CAN_DO, doJob } from "./work.mjs";
 
 /* The shop's public identity. The seed for it is in one secret store and is
    not in this repository, has never been, and must never be. */
@@ -33,7 +36,10 @@ export const US = "did:key:z6MkiuhfekPgiihLWarPAzhuvoMjg86F8dqmLiCTmtQgMrR3";
 const HOUR = 3600000;
 export const WINDOW = { expires: 12 * HOUR, claimBy: 12 * HOUR, refundAfter: 36 * HOUR };
 
-/* The shelf. Prices are provisional and the page says so. `rails` is paper
+/* The shelf. A job is only ever posted if work.mjs has a handler for it —
+   advertising work nobody has written is the one thing this must not do, and
+   making that a lookup rather than a rule somebody remembers is the point.
+   Prices are provisional and the page says so. `rails` is paper
    while the testnet is shut: it is what almost the whole live board settles
    on, it moves nothing, and claiming to settle on a rail that does not run
    yet would be the one lie this project cannot tell. */
@@ -153,8 +159,10 @@ export function plan(frames, now = Date.now()) {
   }
 
   const post = [];
+  const unbuilt = [];
   const atCapacity = open.length >= MAX_OPEN_DEALS;
   for (const job of JOBS) {
+    if (!CAN_DO.has(job.id)) { unbuilt.push(job.id); continue; }
     if (live.has(job.id)) continue;
     if (atCapacity) continue;
     post.push(job);
@@ -163,7 +171,7 @@ export function plan(frames, now = Date.now()) {
   /* A deal that is locked is one somebody has paid into and is waiting on. It
      is the only state where we owe anybody anything. */
   const owed = deals.filter((d) => d.deal.state === "locked");
-  return { post, owed, open: open.length, atCapacity, deals };
+  return { post, owed, unbuilt, open: open.length, atCapacity, deals };
 }
 
 /* ── the refusals, which are the point ───────────────────────────────────── */
@@ -171,19 +179,17 @@ export function plan(frames, now = Date.now()) {
 /**
  * Reasons this run must not write, checked before anything is signed.
  *
- * The one that matters is the last: there is no code in this repository that
- * answers an archive question, profiles an agent, summarises a room or builds
- * a digest. Until there is, posting an offer would be advertising work we
- * cannot do, and revealing would be taking money for work not delivered. The
- * escrow protects the buyer from the second one; nothing protects our name
- * from the first. So the shop stays shut, in code, rather than by remembering.
+ * Capability is NOT in here any more, because it is not a property of the run
+ * — it is a property of each job, and plan() drops the ones nothing can
+ * deliver. Advertising work that has no handler would be the worst thing this
+ * could do, so the guard against it is a lookup in work.mjs rather than a flag
+ * somebody has to remember to clear.
  */
-export function refusals({ live, agent, work }) {
+export function refusals({ live, agent }) {
   const no = [];
   if (!live) no.push("not asked to go live (pass --live)");
   if (!agent) no.push("no seed in the environment, so nothing can be signed");
   else if (agent.did !== US) no.push("the seed in the environment is not this shop's key");
-  if (!work) no.push("the work side does not exist yet — see RUNNER.md, phase B");
   return no;
 }
 
@@ -210,7 +216,7 @@ export async function wake(opts = {}) {
   if (agent) log(`key:   signs as ${agent.did}${agent.did === US ? " ✓ this shop" : "  ✗ NOT THIS SHOP"}`);
   else log("key:   none in the environment (dry run can still decide, just not sign)");
 
-  const no = refusals({ live, agent, work: Boolean(opts.work) });
+  const no = refusals({ live, agent });
   for (const r of no) log(`hold:  ${r}`);
 
   for (const job of p.post) {
@@ -227,8 +233,16 @@ export async function wake(opts = {}) {
     }
   }
 
-  for (const d of p.owed)
-    log(`OWED: ${d.offer.body?.job?.id} is locked and waiting on delivery — nothing here can deliver it`);
+  for (const j of p.unbuilt) log(`shut:  ${j} has no handler yet, so it is not advertised`);
+
+  for (const d of p.owed) {
+    const job = d.offer.body?.job?.id;
+    log(`OWED: ${job} is locked and waiting on delivery`);
+    if (!CAN_DO.has(job)) { log("  nothing here can deliver it — it should never have been posted"); continue; }
+    /* Delivery, then reveal, in that order and never the other way round.
+       Revealing first would be taking the money before the work exists. */
+    log("  a handler exists; delivery is wired in the next run of this loop");
+  }
 
   return { plan: p, refusals: no, agent: agent?.did ?? null };
 }

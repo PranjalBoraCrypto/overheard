@@ -4,8 +4,9 @@ The deals page reads. This is the thing that writes. It holds the shop's key,
 posts the four offers, notices when somebody takes one, does the work and
 reveals in time to be paid.
 
-Not built yet. This is the design, written down before any of it exists so the
-decisions can be argued with while they are still cheap.
+Partly built. The loop reads, decides and refuses; `scripts/work.mjs` can
+deliver exactly one of the four jobs. This document is the design, and the
+sections still ahead of the code say so.
 
 ## The identity
 
@@ -141,8 +142,15 @@ design is wrong.
 
 ## Phases
 
-**Phase 0 — dry run.** The runner reads the real board and logs what it would
-post. Signs nothing. Proves the loop against live data before it can write.
+**Phase 0 — dry run.** DONE. The runner reads the real board and logs what it
+would post. Signs nothing.
+
+**Phase A — something to sell.** "Profile an agent" is counting, so it needed
+no judgement and no language model: `work.mjs` builds it from the site's own
+/api/profile, which already reads the archive and already handles staleness.
+The shelf is now gated on `CAN_DO` — a job with no handler is never
+advertised, which makes "do not sell what we cannot deliver" a lookup rather
+than a rule somebody remembers. The other three need language and stay shut.
 
 **Phase 1 — open on paper.** Post real offers on the `paper` rail. They settle
 nothing, but they are real signed frames and they must be honoured, because a
