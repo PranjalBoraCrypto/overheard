@@ -86,6 +86,9 @@
  */
 
 import { readFile, writeFile, rename, mkdir, readdir } from "node:fs/promises";
+/* The deal-room name comes from the protocol module the site already uses, so
+   the archiver and the page can never disagree about which room a deal is in. */
+import { readFrame, isFrameText, dealRoom, OFFERS_ROOM } from "../web/tclk.js";
 import { existsSync } from "node:fs";
 import { createHash } from "node:crypto";
 import path from "node:path";
@@ -103,6 +106,24 @@ const UA = "overheard-archiver/4.0 (+https://github.com/PranjalBoraCrypto/overhe
    the thing we sell is being the only people who kept the history. */
 const CORE = (process.env.ROOMS ?? "lobby,technocore,nano,meta,tclk-offers")
   .split(",").map((s) => s.trim()).filter(Boolean);
+
+/* ── FOLLOWING DEALS INTO THEIR OWN ROOMS ──────────────────────────────────
+ *
+ * A tclk deal leaves the public board the moment it is accepted: the offer and
+ * the accept are in tclk-offers, and everything that decides the outcome — the
+ * lock, the reveal, the refund — happens in mb-p-tclk-<16 hex>, a room derived
+ * from the contract id. Those rooms are world-readable and UNLISTED, so the
+ * roster will never mention one and nothing else on the network is recording
+ * them. They are also a ring buffer like every other room.
+ *
+ * So the settlements, which are the only part that says whether agentic
+ * commerce actually worked, are being lost continuously. This follows them.
+ *
+ * The name is derived from a frame a stranger wrote, so it is capped and
+ * checked rather than trusted: a board full of accepts naming thousands of
+ * contracts must not be able to spend the whole read allowance. */
+const DEAL_ROOM_RE = /^mb-p-tclk-[0-9a-f]{16}$/;
+const MAX_DEAL_ROOMS = Number(process.env.MAX_DEAL_ROOMS ?? 120);
 
 const RUN_MS = Number(process.env.RUN_SECONDS ?? 270) * 1000;
 const FLUSH_MS = Number(process.env.FLUSH_SECONDS ?? 55) * 1000;
@@ -255,6 +276,10 @@ async function loadState() {
     // room|day -> { text, seqs, n }. Held in memory so a day shard is
     // APPENDED to rather than rebuilt, which is what lets git delta it.
     shards: new Map(),
+    /* Deal rooms found in accepts. Persisted because an accept scrolls past
+       and is never read again — without this, a restart forgets every deal it
+       was following and the room goes dark mid-settlement. */
+    deals: await readJson(path.join(OUT, "tclk-deals.json"), { updated: null, rooms: {} }),
   };
 }
 
@@ -388,6 +413,33 @@ function track(sched, room, opts = {}) {
  * `last_seq - cursor` and is exact even when the server only handed back the
  * newest 200 of them. That number is the whole basis of the schedule.
  */
+/** An accept names a contract, and a contract names a room. Anything that is
+ *  not a well-formed accept is ignored in silence — this is a stranger's text
+ *  and most of it will not be a frame at all. */
+function noteDeal(state, m, text) {
+  if (!isFrameText(text)) return;
+  let f;
+  try { f = readFrame(text); } catch { return; }
+  if (!f?.ok || f.type !== "accept") return;
+  const contract = f.body?.contract;
+  if (typeof contract !== "string") return;
+  let name;
+  try { name = dealRoom(contract); } catch { return; }
+  if (!DEAL_ROOM_RE.test(name)) return;
+  if (state.deals.rooms[name]) return;
+  if (Object.keys(state.deals.rooms).length >= MAX_DEAL_ROOMS) return;
+  state.deals.rooms[name] = {
+    contract,
+    /* Who ANSWERED, from the transport rather than the body — the same rule
+       the page follows, for the same reason. */
+    accepted_by: m.from ?? null,
+    seen: m.ts ?? new Date().toISOString(),
+  };
+  state.dealsDirty = true;
+  if (state.sched) track(state.sched, name);
+  console.log(`  deal room: ${name} (${Object.keys(state.deals.rooms).length} followed)`);
+}
+
 async function readRoom(state, e) {
   const cursor = state.cursors[e.room] ?? 0;
   const startedAt = Date.now();
@@ -424,6 +476,8 @@ async function readRoom(state, e) {
 
       const who = m.from ?? "anon";
       if (t.posters.length < MAX_POSTERS && !t.posters.includes(who)) t.posters.push(who);
+
+      if (e.room === OFFERS_ROOM) noteDeal(state, m, text);
 
       const isTemplate = t.n > REPEAT_LIMIT;
       // COUNTING IS NEVER CAPPED. Whatever happens to the bodies below, every
@@ -583,6 +637,15 @@ async function flush(state, rows, total, standings = false) {
   }
 
   await writeAtomic(path.join(OUT, "cursors.json"), JSON.stringify(state.cursors) + "\n");
+
+  /* The index of deal rooms is itself worth publishing: it is the only list
+     anywhere of where tclk settlements are happening, and it is what lets the
+     next run pick up the deals this one was following. */
+  if (state.dealsDirty) {
+    state.deals.updated = new Date().toISOString();
+    await writeAtomic(path.join(OUT, "tclk-deals.json"), JSON.stringify(state.deals, null, 1) + "\n");
+    state.dealsDirty = false;
+  }
 
   // The strip on the homepage and this run's own coverage report are cheap
   // and wanted often.
@@ -941,6 +1004,9 @@ async function main() {
   // cost more than the whole read allowance to learn that they are quiet.
   // The roster is the live answer to "which rooms are worth following".
   for (const name of CORE) track(sched, name);
+  /* Deals found by earlier runs. Unlike the ~8,000 rooms in cursors.json these
+     are few, unlisted, and the only place their settlements exist. */
+  for (const name of Object.keys(state.deals?.rooms ?? {})) track(sched, name);
   await refreshRoster();
 
   const started = Date.now();
