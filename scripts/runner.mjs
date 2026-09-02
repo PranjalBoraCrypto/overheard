@@ -20,6 +20,7 @@ import { readFrame, isFrameText, OFFERS_ROOM, offerId, canon, runDeal, lintOffer
   from "../web/tclk.js";
 import { agentFromSeed, say } from "./agent.mjs";
 import { CAN_DO, doJob } from "./work.mjs";
+import { WANTS, planBuys, wantFrame, lockFrame, refundFrame, wire } from "./buy.mjs";
 
 /* The shop's public identity. The seed for it is in one secret store and is
    not in this repository, has never been, and must never be. */
@@ -58,6 +59,16 @@ const RAILS = ["paper"];
 export const MAX_OPEN_DEALS = 3;
 
 /* ── reading ─────────────────────────────────────────────────────────────── */
+
+/** Any room, by name. Deal rooms are read the same way the offers room is. */
+export async function readAnyRoom(name, opts = {}) {
+  const fetchImpl = opts.fetch ?? fetch;
+  const base = opts.base ?? "https://technocore.chat";
+  const res = await fetchImpl(`${base}/r/${name}?format=json&limit=200`);
+  if (!res.ok) return [];
+  const body = await res.json().catch(() => ({}));
+  return Array.isArray(body?.messages) ? body.messages : [];
+}
 
 export async function readOffers(opts = {}) {
   const fetchImpl = opts.fetch ?? fetch;
@@ -235,6 +246,45 @@ export async function wake(opts = {}) {
 
   for (const j of p.unbuilt) log(`shut:  ${j} has no handler yet, so it is not advertised`);
 
+  /* ── the side we are not blocked on ───────────────────────────────────
+     Selling waits on a protocol question. Buying does not, so it runs on
+     every wake regardless — and it is the direction that actually spends the
+     faucet, which is what the airdrop is said to reward. */
+  const openRooms = new Map();
+  const pre = planBuys(frames, openRooms, US, now);
+  for (const b of [...pre.lock, ...pre.waiting].slice(0, MAX_OPEN_DEALS)) {
+    if (b.room) openRooms.set(b.room, framesFrom(await readAnyRoom(b.room, opts)));
+  }
+  const buys = planBuys(frames, openRooms, US, now);
+  log(`buys:  ${buys.open} open${buys.atCapacity ? " · AT CAPACITY" : ""} · ` +
+      `${buys.want.length} to offer · ${buys.lock.length} to fund · ${buys.refund.length} to refund`);
+
+  for (const w of buys.want) {
+    const { text } = await wantFrame(w, US, now);
+    log(`would offer to buy ${w.id} · ${w.amount} FLOP · ${text.length} chars`);
+    if (!no.length) {
+      const r = await say(agent, OFFERS_ROOM, text, { ...opts, exact: true });
+      log(`  posted: ${r.ok ? "ok" : "FAILED · " + (r.why ?? r.status)}`);
+    }
+  }
+  for (const b of buys.lock) {
+    const text = wire(lockFrame(US, b.accept.contract));
+    log(`would fund ${b.offer.body?.job?.id} in ${b.room}`);
+    if (!no.length) {
+      const r = await say(agent, b.room, text, { ...opts, exact: true });
+      log(`  locked: ${r.ok ? "ok" : "FAILED · " + (r.why ?? r.status)}`);
+    }
+  }
+  for (const b of buys.refund) {
+    const text = wire(refundFrame(US, b.accept.contract));
+    log(`would refund ${b.offer.body?.job?.id} — nobody revealed before the deadline`);
+    if (!no.length) {
+      const r = await say(agent, b.room, text, { ...opts, exact: true });
+      log(`  refunded: ${r.ok ? "ok" : "FAILED · " + (r.why ?? r.status)}`);
+    }
+  }
+  for (const b of buys.waiting) log(`waiting on ${b.offer.body?.job?.id} — funded, not yet delivered`);
+
   for (const d of p.owed) {
     const job = d.offer.body?.job?.id;
     log(`OWED: ${job} is locked and waiting on delivery`);
@@ -244,7 +294,7 @@ export async function wake(opts = {}) {
     log("  a handler exists; delivery is wired in the next run of this loop");
   }
 
-  return { plan: p, refusals: no, agent: agent?.did ?? null };
+  return { plan: p, buys, refusals: no, agent: agent?.did ?? null };
 }
 
 /* Only when run directly, so importing this in a test never touches a wire.

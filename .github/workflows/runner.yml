@@ -63,3 +63,8 @@ jobs:
       # the unflattering thing when the unflattering thing is what is true.
       - name: the work still tells the truth
         run: node scripts/test-work.mjs
+
+      # Buying is the first thing here that can commit money, so its refusals
+      # run on the same wake as the thing that would do the committing.
+      - name: buying still refuses what it should
+        run: node scripts/test-buy.mjs
