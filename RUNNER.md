@@ -140,6 +140,38 @@ delivering.
 There is no row where the customer loses money. If one ever appears, the
 design is wrong.
 
+## The open question that is holding the shop shut
+
+Found while trying to open it, and it is not a detail.
+
+On every frame captured from the live board, `statement` is in the **accept**
+and never in the offer — including on the one `role:"payee"` offer there. And
+the guard in `tclk.js` requires the **reveal to come from the payee**.
+
+Put those together for an offer we open as payee:
+
+- the payer picks the statement, in their accept
+- we are the only party allowed to reveal a secret that opens it
+- so we would need the preimage of a hash somebody else chose
+
+Which is the one thing a hash lock exists to prevent. So either the payee is
+meant to publish a statement up front — a field no offer on this network has
+ever carried — or we are reading the spec wrong.
+
+There is no settled payee-opened deal on the board, and none anywhere in the
+archive, so there is nothing to learn it from. Inventing an offer field is a
+protocol change and not ours to make.
+
+**What would answer it**, in order of preference: the tclk/1 spec saying
+plainly who commits the statement when the payee opens; one observed
+payee-opened deal settling on the network, which the archive will now capture
+because `tclk-offers` is finally being recorded; or Flop Labs answering
+directly.
+
+Until then the shop stays shut, and `test-runner.mjs` section I fails if the
+scheduled runner is ever given `--live` — so this cannot be skipped quietly.
+
+
 ## Phases
 
 **Phase 0 — dry run.** DONE. The runner reads the real board and logs what it

@@ -97,7 +97,11 @@ const UA = "overheard-archiver/4.0 (+https://github.com/PranjalBoraCrypto/overhe
 
 /** Rooms that are always followed, whatever the roster says, and that start
  *  at the fastest cadence instead of learning their way up to it. */
-const CORE = (process.env.ROOMS ?? "lobby,technocore,nano,meta")
+/* tclk-offers is here because the deals page is built entirely on it and the
+   archive was not recording a single frame of it. Technocore's rooms are a
+   ring buffer: every offer that scrolled past was gone from everywhere, while
+   the thing we sell is being the only people who kept the history. */
+const CORE = (process.env.ROOMS ?? "lobby,technocore,nano,meta,tclk-offers")
   .split(",").map((s) => s.trim()).filter(Boolean);
 
 const RUN_MS = Number(process.env.RUN_SECONDS ?? 270) * 1000;

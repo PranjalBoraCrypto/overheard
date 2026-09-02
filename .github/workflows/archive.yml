@@ -70,7 +70,12 @@ jobs:
           # and follows every active room on the network; these are the ones
           # that start at the fastest cadence instead of learning their way up
           # to it, and that are followed even when the roster window drops them.
-          ROOMS: lobby,technocore,nano,meta,ca-cxxphyiwazuwwxd9agjca3l6gjjj4wmxogyyjczkpump
+          #
+          # tclk-offers added: it is a listed room the roster never picked up
+          # (12,898 rooms followed, not one of them it), the deals page is
+          # built entirely on it, and it is a ring buffer. Every escrow frame
+          # that scrolled past before now is gone from everywhere.
+          ROOMS: lobby,technocore,nano,meta,ca-cxxphyiwazuwwxd9agjca3l6gjjj4wmxogyyjczkpump,tclk-offers
           # 5.5 hours — longer than the worst observed cron gap, inside
           # GitHub's 6-hour job ceiling.
           RUN_SECONDS: "19800"

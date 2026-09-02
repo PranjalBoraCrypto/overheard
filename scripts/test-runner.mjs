@@ -285,5 +285,60 @@ console.log("\n=== H. when the board cannot be read");
     "a job that emails a red cross for somebody else's bad minute teaches you to ignore red crosses");
 }
 
+/* ── I. the settlement path nobody can demonstrate yet ────────────────────
+ *
+ * Found while trying to open the shop, and it is the reason it is still shut.
+ *
+ * On every real frame captured from the board, `statement` appears in the
+ * ACCEPT and never in the offer — including on the one role:"payee" offer
+ * there. And tclk.js's guard, which matches the spec as we read it, requires
+ * the REVEAL to come from the payee.
+ *
+ * Put those together for an offer we open as payee: the payer picks the
+ * statement in their accept, and we are the only party allowed to reveal a
+ * secret that opens it. We would have to know the preimage of a hash somebody
+ * else chose, which is the one thing a hash lock exists to prevent.
+ *
+ * So either the payee is meant to publish a statement up front — a field no
+ * offer on the network has ever carried — or we are reading it wrong. There
+ * is no settled payee-opened deal on the board or anywhere in the archive to
+ * learn from, and inventing a field is a protocol change, not an
+ * implementation detail.
+ *
+ * This section exists so that going live cannot quietly happen before the
+ * question is answered.
+ */
+console.log("\n=== I. why the shop is still shut");
+{
+  const o = buildOffer(JOBS.find((j) => j.id === "overheard-agent-profile"), NOW);
+  ok("our offer carries no statement, exactly like every real offer on the board",
+    o.statement === undefined,
+    "the accept is where every captured frame puts it");
+
+  /* The deal as it would really run, with the payer choosing the statement. */
+  const theirStatement = "0x" + "5c".repeat(32);
+  const id = await offerId(o);
+  const frames = framesFrom([
+    msg(1, US, "tclk1 " + canon({ ...o, id })),
+    msg(2, OTHER, "tclk1 " + canon({ type: "accept", from: OTHER, ref: id,
+      statement: theirStatement, nonce: "0000000000000001",
+      contract: "0x" + "ab".repeat(32) })),
+  ]);
+  const d = runDeal(frames);
+  ok("the deal accepts and we are the payee", d.state === "accepted" && d.payee === US);
+  ok("so the reveal would have to come from us", d.payer === OTHER);
+  ok("against a statement we never chose and cannot open",
+    d.accept?.body?.statement === theirStatement,
+    "knowing that preimage is the thing the lock exists to prevent");
+
+  /* The enforceable half: nothing flips this on by accident. */
+  const wf = fs.readFileSync(path.join(ROOT, ".github/workflows/runner.yml"), "utf8");
+  ok("the scheduled runner does not pass --live",
+    !/runner\.mjs[^\n]*--live/.test(wf),
+    "when this fails, make sure the question above was answered and not just skipped");
+  ok("and the open question is written down where the next person will find it",
+    /statement/i.test(fs.readFileSync(path.join(ROOT, "RUNNER.md"), "utf8")));
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
