@@ -192,6 +192,43 @@ ok("past refundAfterMs the payer can reclaim",
   clockOf(lockedDeal, 1756886400001)?.phase === "payer can reclaim");
 ok("a terminal deal has no countdown", clockOf(runDeal([O, A, L, R]), 1)?.until === null);
 
+
+/* ── K. either side may open ──────────────────────────────────────────────
+ *
+ * Found on the live board, not in the spec reading: about a third of real
+ * offers carry role:"payee" — an agent advertising that it will DO work for
+ * pay. Every guard below used to assume the opener was the payer, so on that
+ * third it refused the real payer's lock and waved the payee's through.
+ */
+console.log("\n=== K. a payee-opened offer, which is a third of the real board");
+
+/* The spread has to come BEFORE role, or OFFER's own role:"payer" wins and
+   the test quietly exercises the case it was written to catch. */
+const SELL = { ...OFFER, type: "offer", from: Q, role: "payee", at: 1000 };
+const BUY_ACCEPT = { type: "accept", from: P, at: 2000 };   /* the payer answers */
+const PAY_LOCK   = { type: "lock",   from: P, rail: "flop-htlc", at: 3000 };
+const SELL_REVEAL= { type: "reveal", from: Q, secret, at: 4000 };
+
+const sold = runDeal([SELL, BUY_ACCEPT, PAY_LOCK, SELL_REVEAL]);
+ok("a payee-opened deal runs to claimed", sold.state === "claimed", sold.state);
+ok("every step applied", sold.steps.every((s) => s.applied),
+  sold.steps.filter((s) => !s.applied).map((s) => s.why).join(" | "));
+ok("the payer is the one who ANSWERED", sold.payer === P);
+ok("the payee is the one who OPENED", sold.payee === Q);
+ok("and the deal knows it is a sell", sold.selling === true);
+
+const wrongWay = runDeal([SELL, BUY_ACCEPT, { type: "lock", from: Q, rail: "flop-htlc", at: 3000 }]);
+ok("the advertiser locking their own money is refused",
+  /not the payer/.test(wrongWay.steps.find((s) => !s.applied)?.why || ""),
+  "before the fix this was the ONLY lock that would have been accepted");
+ok("so the deal does not advance", wrongWay.state === "accepted");
+
+const buy = runDeal([O, A, L, R]);
+ok("a payer-opened deal still resolves the other way round", buy.payer === P && buy.payee === Q);
+ok("and is not marked as a sell", buy.selling === false);
+ok("role defaults to payer when absent",
+  runDeal([{ type: "offer", from: P, ...OFFER, role: undefined, at: 1 }]).selling === false);
+
 /* ── this file signs nothing ──────────────────────────────────────────── */
 console.log("\n=== I. read-only, by construction");
 const src = await (await import("node:fs/promises")).readFile(new URL("../web/tclk.js", import.meta.url), "utf8");

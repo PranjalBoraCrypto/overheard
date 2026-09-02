@@ -226,28 +226,49 @@ export async function checkReveal(lock, statement, secret) {
 export const STATES = ["proposed", "accepted", "locked", "claimed", "refunded", "cancelled"];
 export const TERMINAL = new Set(["claimed", "refunded", "cancelled"]);
 
+/* ── WHO IS PAYING, WHICH IS NOT WHO OPENED ────────────────────────────────
+ *
+ * "Either side may open. `role` says which side the *sender* takes."
+ *
+ * This file first assumed the offer's sender was always the payer, and the
+ * live board says otherwise: about a third of the offers on it carry
+ * `role: "payee"` — an agent advertising that it will DO work for pay, which
+ * is the sell side of the same market. Under that assumption every guard was
+ * asking the wrong party. A lock from the real payer would have been refused
+ * as coming from a stranger, and a lock from the payee would have been waved
+ * through. Both directions wrong, silently, on a third of the board.
+ *
+ * `role` is missing on plenty of frames and defaults to "payer", matching the
+ * spec's own default of the sender being the one who pays.
+ */
+export const payerOf = (ctx) =>
+  ctx.offer?.role === "payee" ? (ctx.accept?.from ?? null) : (ctx.offer?.from ?? null);
+export const payeeOf = (ctx) =>
+  ctx.offer?.role === "payee" ? (ctx.offer?.from ?? null) : (ctx.accept?.from ?? null);
+
 function guard(state, f, ctx) {
   const at = ms(f.at);
   const refundAfter = ms(ctx.offer?.refundAfterMs);
+  const payer = payerOf(ctx), payee = payeeOf(ctx);
   switch (f.type) {
     case "accept":
       if (state !== "proposed") return "an accept after the offer was already answered";
-      if (ctx.offer && f.from === ctx.offer.from) return "the payer cannot accept their own offer";
+      if (ctx.offer && f.from === ctx.offer.from) return "nobody can accept their own offer";
       return null;
     case "lock":
       if (state !== "accepted") return "a lock before an accept";
-      if (ctx.offer && f.from !== ctx.offer.from) return "a lock from someone who is not the payer";
+      if (payer && f.from !== payer) return "a lock from someone who is not the payer";
       if (ctx.offer && Array.isArray(ctx.offer.rails) && f.rail !== undefined && !ctx.offer.rails.includes(f.rail))
         return `a lock on ${JSON.stringify(f.rail)}, a rail the offer never named`;
       return null;
     case "reveal":
       if (state !== "locked") return "a reveal before the money was locked";
-      if (ctx.accept && f.from !== ctx.accept.from) return "a reveal from someone who is not the payee";
+      if (payee && f.from !== payee) return "a reveal from someone who is not the payee";
       if (at !== null && refundAfter !== null && at >= refundAfter) return "a reveal after the refund window opened";
       return null;
     case "refund":
       if (state !== "locked") return "a refund with nothing locked";
-      if (ctx.offer && f.from !== ctx.offer.from) return "a refund to someone who is not the payer";
+      if (payer && f.from !== payer) return "a refund to someone who is not the payer";
       if (at !== null && refundAfter !== null && at < refundAfter) return "a refund before refundAfterMs";
       return null;
     case "cancel":
@@ -285,7 +306,14 @@ export function runDeal(frames) {
     if (NEXT[f.type]) state = NEXT[f.type];
     steps.push({ frame: f, applied: true, state });
   }
-  return { state, steps, offer: ctx.offer, accept: ctx.accept, terminal: TERMINAL.has(state) };
+  /* payer/payee are RESOLVED here rather than left for each caller to work
+     out from `role`, because working it out is exactly what went wrong. */
+  return {
+    state, steps, offer: ctx.offer, accept: ctx.accept,
+    payer: payerOf(ctx), payee: payeeOf(ctx),
+    selling: ctx.offer?.role === "payee",
+    terminal: TERMINAL.has(state),
+  };
 }
 
 /* ── deadlines, as a viewer sees them ──────────────────────────────────────

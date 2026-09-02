@@ -71,6 +71,11 @@ const msg = (i, from, text, extra = {}) => ({
   seq: String(i), ts: new Date(NOW - (200 - i) * 1000).toISOString(),
   from, nick: null, text, sig: "s", nonce: null, ...extra,
 });
+/* A deal room's frames happen AFTER the accept that created the room. The
+   first fixture numbered them from 1 with earlier timestamps, which put a
+   lock ahead of its own accept — impossible on the wire, and it hid a real
+   ordering question behind a fake one. */
+const dmsg = (i, from, text) => msg(100 + i, from, text);
 
 const OFFERS = [
   msg(1, PAYER, frame(openOffer)),
@@ -89,22 +94,22 @@ const OFFERS = [
 /* deal rooms, derived exactly as the page will derive them */
 const ROOMS = {
   [dealRoom(CID_FLIGHT)]: [
-    msg(1, PAYER, frame(flightOffer)),
-    msg(2, PAYEE, frame(acc(flightOffer.id, CID_FLIGHT))),
-    msg(3, PAYER, frame({ type: "lock", from: PAYER, contract: CID_FLIGHT, rail: "flop-htlc", ref: "r1" })),
+    dmsg(1, PAYER, frame(flightOffer)),
+    dmsg(2, PAYEE, frame(acc(flightOffer.id, CID_FLIGHT))),
+    dmsg(3, PAYER, frame({ type: "lock", from: PAYER, contract: CID_FLIGHT, rail: "flop-htlc", ref: "r1" })),
   ],
   [dealRoom(CID_DONE)]: [
-    msg(1, PAYER, frame(doneOffer)),
-    msg(2, PAYEE, frame(acc(doneOffer.id, CID_DONE))),
-    msg(3, PAYER, frame({ type: "lock", from: PAYER, contract: CID_DONE, rail: "flop-htlc", ref: "r2" })),
-    msg(4, PAYEE, frame({ type: "reveal", from: PAYEE, contract: CID_DONE, secret: SECRET })),
+    dmsg(1, PAYER, frame(doneOffer)),
+    dmsg(2, PAYEE, frame(acc(doneOffer.id, CID_DONE))),
+    dmsg(3, PAYER, frame({ type: "lock", from: PAYER, contract: CID_DONE, rail: "flop-htlc", ref: "r2" })),
+    dmsg(4, PAYEE, frame({ type: "reveal", from: PAYEE, contract: CID_DONE, secret: SECRET })),
   ],
   /* THE LIAR: the body says the payer sent it, the transport says otherwise.
      The lock must be ignored and the deal must stay at accepted. */
   [dealRoom(CID_LIAR)]: [
-    msg(1, PAYER, frame(liarOffer)),
-    msg(2, PAYEE, frame(acc(liarOffer.id, CID_LIAR))),
-    msg(3, "did:key:z6MkNobodyCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC",
+    dmsg(1, PAYER, frame(liarOffer)),
+    dmsg(2, PAYEE, frame(acc(liarOffer.id, CID_LIAR))),
+    dmsg(3, "did:key:z6MkNobodyCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC",
       frame({ type: "lock", from: PAYER, contract: CID_LIAR, rail: "flop-htlc", ref: "r3" })),
   ],
 };
@@ -142,7 +147,7 @@ async function open(width, height, mobile) {
   const errs = [];
   pg.on("pageerror", (e) => errs.push(e.message));
   await pg.goto("http://localhost:9101" + PAGE);
-  await pg.waitForFunction(() => document.querySelectorAll("#open .deal, #open .empty, #open .teach").length > 0, null, { timeout: 20000 });
+  await pg.waitForFunction(() => document.querySelectorAll("#wanted .deal, #wanted .empty, #offered .deal, #offered .empty").length > 0, null, { timeout: 20000 });
   await pg.waitForTimeout(900);
   return { ctx, pg, errs };
 }
@@ -152,7 +157,7 @@ console.log("\n=== A. deals land in the right section");
 const { ctx, pg, errs } = await open(1280, 1000, false);
 
 const counts = await pg.evaluate(() => ({
-  open: document.querySelectorAll("#open .deal").length,
+  open: document.querySelectorAll("#wanted .deal, #offered .deal").length,
   live: document.querySelectorAll("#live .deal").length,
   done: document.querySelectorAll("#done .deal").length,
 }));
@@ -192,7 +197,7 @@ ok("canonical frames are marked as reproducing", marks.some((m) => /yes\|bytes r
 ok("a well-formed offer says so", marks.some((m) => /yes\|offer is well formed/.test(m)));
 
 const badMarks = await pg.evaluate(async () => {
-  const c = [...document.querySelectorAll("#open .deal")].find((x) => x.textContent.includes("problem"));
+  const c = [...document.querySelectorAll("#wanted .deal, #offered .deal")].find((x) => x.textContent.includes("problem"));
   c.querySelector(".more").click();
   await new Promise((r) => setTimeout(r, 300));
   return [...c.querySelectorAll(".mark")].map((m) => m.textContent);
@@ -203,9 +208,9 @@ ok("an offer with inverted deadlines is called out",
 /* ── D. hostile strings ────────────────────────────────────────────────── */
 console.log("\n=== D. a frame carrying HTML");
 ok("no injected script ran", await pg.evaluate(() => window.__pwned === undefined));
-ok("no element was created from it", await pg.evaluate(() => !document.querySelector("#open img")));
+ok("no element was created from it", await pg.evaluate(() => !document.querySelector("#wanted img")));
 ok("it is displayed as the text it is",
-  await pg.evaluate(() => document.querySelector("#open").textContent.includes("<img src=x")));
+  await pg.evaluate(() => document.querySelector("#wanted").textContent.includes("<img src=x")));
 
 /* ── E. unparseable frames ─────────────────────────────────────────────── */
 console.log("\n=== E. things that are not deals");
@@ -215,9 +220,9 @@ ok("a broken frame does not break the page", errs.length === 0);
 
 /* ── F. the clock ──────────────────────────────────────────────────────── */
 console.log("\n=== F. countdowns");
-const t1 = await pg.evaluate(() => document.querySelector("#open .left")?.textContent);
+const t1 = await pg.evaluate(() => document.querySelector("#wanted .left")?.textContent);
 await pg.waitForTimeout(2200);
-const t2 = await pg.evaluate(() => document.querySelector("#open .left")?.textContent);
+const t2 = await pg.evaluate(() => document.querySelector("#wanted .left")?.textContent);
 ok("an open offer counts down", t1 !== t2, `${t1} → ${t2}`);
 ok("a settled deal has no countdown element at all",
   await pg.evaluate(() => !document.querySelector("#done .deal .left") &&
@@ -235,7 +240,7 @@ ok("an open card is not repainted out from under a reader",
 console.log("\n=== G. it says where the data came from");
 ok("the source strip reports live", await pg.evaluate(() => document.getElementById("src").className.includes("live")));
 ok("the alpha notice is present",
-  await pg.evaluate(() => document.body.textContent.includes("the testnet is not live")));
+  await pg.evaluate(() => document.body.textContent.includes("the testnet is not open yet")));
 await ctx.close();
 
 /* an empty network must read as empty, never as broken and never as busy */
@@ -245,11 +250,14 @@ console.log("\n=== H. the empty case, which is today's case");
   const { ctx: c2, pg: p2, errs: e2 } = await open(1280, 1000, false);
   const txt = await p2.evaluate(() => document.body.textContent);
   ok("no deals are invented", await p2.evaluate(() => document.querySelectorAll(".deal").length === 0));
-  ok("with nothing to list, it explains what will appear",
-    await p2.evaluate(() => document.querySelectorAll("#open .teach .fstep").length === 4));
+  ok("it says nobody is asking, rather than inventing anyone",
+    /Nobody is asking for work right now/.test(txt));
+  ok("and the gig menu is still there when the board is empty",
+    await p2.evaluate(() => document.querySelectorAll(".gig").length === 4));
   ok("and nothing has settled", /Nothing has settled yet/.test(txt));
   ok("the tiles read zero rather than blank",
-    await p2.evaluate(() => document.getElementById("tOpen").textContent === "0"));
+    await p2.evaluate(() => document.getElementById("tWanted").textContent === "0" &&
+                            document.getElementById("tOffered").textContent === "0"));
   ok("no errors on an empty room", e2.length === 0, e2.join(" | "));
   await c2.close();
   OFFERS.push(...saved);
@@ -297,18 +305,20 @@ console.log("\n=== K. tabs, search and sort");
   const { ctx: c4, pg: p4, errs: e4 } = await open(1280, 1000, false);
 
   ok("the tiles count what is there", await p4.evaluate(() =>
-    document.getElementById("tOpen").textContent === "3" &&
+    Number(document.getElementById("tWanted").textContent) +
+    Number(document.getElementById("tOffered").textContent) === 3 &&
     document.getElementById("tLive").textContent === "2" &&
     document.getElementById("tDone").textContent === "1"));
-  /* One fixture carries a different asset, so there is no honest single
-     total and the tile must decline to invent one. */
-  ok("it refuses to add up unlike assets", await p4.evaluate(() =>
-    document.getElementById("tValue").textContent === "2 assets"),
-    await p4.evaluate(() => document.getElementById("tValue").textContent));
+  ok("every fixture offer is role:payer, so all land under Work wanted",
+    await p4.evaluate(() => document.getElementById("tOffered").textContent === "0" &&
+                            document.getElementById("tWanted").textContent === "3"));
 
+  /* Scoped to the network bands: the gig menu is a .band too, and it is
+     never hidden by a tab because it is not part of the board. */
   const seeing = () => p4.evaluate(() =>
-    [...document.querySelectorAll("section.band")].filter((s) => !s.hidden).map((s) => s.id));
-  ok("all three sections show by default", (await seeing()).length === 3);
+    [...document.querySelectorAll("#bWanted,#bOffered,#bLive,#bDone")]
+      .filter((s) => !s.hidden).map((s) => s.id));
+  ok("all four sections show by default", (await seeing()).length === 4);
   await p4.click('.tab[data-view="live"]');
   ok("a tab narrows to one section", JSON.stringify(await seeing()) === '["bLive"]');
   ok("and the tab reads as selected", await p4.evaluate(() =>
@@ -318,22 +328,22 @@ console.log("\n=== K. tabs, search and sort");
   await p4.fill("#q", "flop-htlc");
   await p4.waitForTimeout(300);
   ok("a search that matches everything keeps everything",
-    await p4.evaluate(() => document.querySelectorAll("#open .deal").length === 3));
+    await p4.evaluate(() => document.querySelectorAll("#wanted .deal, #offered .deal").length === 3));
   await p4.fill("#q", "zzzznothing");
   await p4.waitForTimeout(300);
   ok("a search that matches nothing says so, and does not teach",
-    await p4.evaluate(() => document.querySelectorAll("#open .deal").length === 0 &&
-      document.querySelector("#open .empty")?.textContent.includes("matches that") === true &&
-      !document.querySelector("#open .teach")));
+    await p4.evaluate(() => document.querySelectorAll("#wanted .deal, #offered .deal").length === 0 &&
+      document.querySelector("#wanted .empty")?.textContent.includes("matches that") === true &&
+      !document.querySelector("#wanted .teach")));
   await p4.fill("#q", "");
   await p4.waitForTimeout(300);
   ok("clearing the search brings them back",
-    await p4.evaluate(() => document.querySelectorAll("#open .deal").length === 3));
+    await p4.evaluate(() => document.querySelectorAll("#wanted .deal, #offered .deal").length === 3));
 
   const order = () => p4.evaluate(() =>
-    [...document.querySelectorAll("#open .deal .left")].map((n) => n.textContent));
+    [...document.querySelectorAll("#wanted .deal .left")].map((n) => n.textContent));
   const amounts = () => p4.evaluate(() =>
-    [...document.querySelectorAll("#open .deal .amount")].map((n) => n.firstChild.textContent));
+    [...document.querySelectorAll("#wanted .deal .price")].map((n) => n.firstChild.textContent));
   const bySoon = await order();
   ok("closing soonest really is soonest first",
     bySoon[0].startsWith("9m") || bySoon[0].startsWith("10m"), bySoon.join(" · "));
