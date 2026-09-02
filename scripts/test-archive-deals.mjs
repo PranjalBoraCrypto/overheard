@@ -175,10 +175,13 @@ console.log("\n=== F. the workflow that asks for the next run");
   ok("the token is never printed", !/echo[^\n]*\$\{?CHAIN_TOKEN/.test(wf));
   ok("and shell tracing is never turned on in that step",
     !/^\s*set -x/m.test(wf), "set -x would put the header in the log");
-  /* The schedule is the fix that is actually in force, so it is the one
-     asserted. Six chances an hour rather than two: a hole needs six dropped
-     firings instead of two, and GitHub drops several in a row on public
-     repositories — which is what the 137-minute silence was. */
+  /* The schedule is asserted because it is what the file says, NOT because it
+     fixes the dead air. It was put in to fix it, on the theory that GitHub
+     drops several scheduled firings in a row; the run log disproved that —
+     runs fire, and #86 ran 5h30m and published nothing because its push loop
+     could not rebase under a working tree the collector was writing to. That
+     is tested in test-archive-push.mjs, which is the file that matters here.
+     Six stays for its own smaller reasons, and claims nothing. */
   const crons = [...wf.matchAll(/- cron: "([^"]+)"/g)].map((m) => m[1]);
   ok("the schedule asks at least six times an hour", crons.length >= 6, crons.join(" | "));
   ok("and they are spread across the hour rather than bunched",

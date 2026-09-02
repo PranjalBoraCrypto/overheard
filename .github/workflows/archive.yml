@@ -39,20 +39,23 @@ on:
     # effect of asking more often is that the successor is more likely to
     # already be waiting the moment this run ends.
     #
-    # WHY IT WENT UP. Measured on this repository on 2 September: silences of
-    # 137, 134, 65, 58 and 48 minutes with nothing collecting, and one of them
-    # cost 935,407 messages in the lobby alone — 99% of everything that room
-    # has ever lost. Asking twice an hour means two firings have to be dropped
-    # to open a hole; GitHub deprioritises scheduled jobs on public
-    # repositories and evidently drops several in a row. Six makes that
-    # markedly less likely for nothing: a dropped firing costs us nothing, and
-    # a firing that lands mid-run costs one queued job that was going to be
-    # queued anyway.
+    # WHY IT WENT UP, AND WHAT THAT REASON TURNED OUT TO BE WORTH. It went up
+    # because of silences of 137, 134, 65, 58 and 48 minutes on 2 September,
+    # one of which cost 935,407 messages in the lobby alone. The reason given
+    # here was that GitHub deprioritises cron on public repositories and drops
+    # several firings in a row.
     #
-    # This is a probability improvement, not a guarantee. The archive now
-    # labels dead air as "collector was not running" rather than filing it
-    # under poll interval, so whether this actually worked is a thing we can
-    # read off the data in a few days rather than argue about.
+    # THAT REASON WAS WRONG, and the run log says so. Runs fire. Run #86 was
+    # scheduled, started on time, ran 5h30m and finished green — while pushing
+    # absolutely nothing, because the retry below could not rebase under a
+    # working tree the collector was still writing to. The dead air was never
+    # the scheduler. It was this job succeeding at collecting and failing at
+    # publishing, which is why it never showed up as a red run.
+    #
+    # The schedule stays at six anyway, on its own smaller merits: concurrency
+    # below keeps at most one run pending, a dropped firing costs nothing, and
+    # a successor already queued when this one ends is the handover we want. It
+    # is no longer offered as a fix for anything, because it never was one.
     - cron: "0 * * * *"
     - cron: "10 * * * *"
     - cron: "20 * * * *"
@@ -154,9 +157,16 @@ jobs:
             # on its own schedule and writes to disk continuously. This only
             # changes how often git is asked to remember it.
             SMALL="web/data/cursors.json web/data/recent.json web/data/standings.json web/data/index.json web/data/owners.json web/data/roster.json"
-            for f in $SMALL; do [ -f "$f" ] && nice -n 15 git add "$f"; done
-            if [ $(( pass % 3 )) -eq 0 ]; then nice -n 15 git add web/data/profiles; fi
-            if [ $(( (pass - 1) % 12 )) -eq 0 ]; then nice -n 15 git add web/data; fi
+            # A function, because the retry below has to stage EXACTLY these
+            # same tiers again after it moves onto the remote tip. Two copies
+            # of this list would drift, and the copy that drifted would be the
+            # one that only runs after something has already gone wrong.
+            stage_this_pass() {
+              for f in $SMALL; do [ -f "$f" ] && nice -n 15 git add "$f"; done
+              if [ $(( pass % 3 )) -eq 0 ]; then nice -n 15 git add web/data/profiles; fi
+              if [ $(( (pass - 1) % 12 )) -eq 0 ]; then nice -n 15 git add web/data; fi
+            }
+            stage_this_pass
             if git diff --staged --quiet; then
               echo "pass $pass: no new messages"
             else
@@ -172,22 +182,58 @@ jobs:
               fi
               nice -n 15 git commit -m "$MSG"
 
-              # Your own pushes race with this loop. Retry, and on a conflict
-              # in the generated data keep THIS run's version — it read the
-              # rooms later, so it is strictly newer. A lost push is never
-              # fatal: the cursor lives in the repo AND in the running
-              # process's memory, so nothing is re-read or skipped.
-              for attempt in 1 2 3; do
-                git push && break
-                echo "push rejected, rebasing (attempt $attempt)"
-                git fetch origin "${GITHUB_REF_NAME}"
-                if ! git rebase "origin/${GITHUB_REF_NAME}"; then
-                  git checkout --ours web/data 2>/dev/null || true
-                  git add web/data 2>/dev/null || true
-                  GIT_EDITOR=true git rebase --continue || git rebase --abort || true
+              # ── WHY THIS IS NOT A REBASE ANY MORE ─────────────────────
+              # MEASURED, run #86 on 2 September: 157 push rejections and not
+              # one successful push across 5h30m. 52 commits and 909,466
+              # insertions were built and then destroyed with the runner. The
+              # collector was healthy the whole time — coverage climbed 6.26%
+              # to 58.53% and it exited on its own clock — so this was never
+              # a scheduling problem or a dead collector. Nothing could leave
+              # the machine.
+              #
+              # The cause is one sentence: `git rebase` refuses to start when
+              # the working tree is dirty, and the collector writes to that
+              # tree continuously. Between `git add` and `git rebase` there is
+              # always a new shard, so every single rebase died on "cannot
+              # rebase: You have unstaged changes", the fallback printed "no
+              # rebase in progress" twice because no rebase had begun, and the
+              # branch stayed behind. Once behind, permanently behind: every
+              # later pass committed onto a branch that could never be pushed.
+              #
+              # `git reset --mixed` does not look at the working tree at all.
+              # It moves HEAD and the index to the remote tip and leaves every
+              # file exactly where it is, so this pass's freshly collected
+              # data survives and is simply staged and committed again on top
+              # of whatever landed. That IS the "keep this run's version" rule
+              # the rebase was trying and failing to express — this run read
+              # the rooms later, so its data is strictly newer.
+              #
+              # And it cannot revert your work. Only the paths staged above
+              # are ever committed; a file the remote changed outside them
+              # stays behind in the working tree as an unstaged difference and
+              # is never staged, never committed, and thrown away with the
+              # runner.
+              PUSHED=""
+              for attempt in 1 2 3 4 5; do
+                if git push; then PUSHED=1; break; fi
+                echo "push rejected, catching up (attempt $attempt)"
+                git fetch origin "${GITHUB_REF_NAME}" || true
+                # Drop our commit, keep our files, land on the remote tip.
+                git reset --mixed "origin/${GITHUB_REF_NAME}" || true
+                stage_this_pass
+                if git diff --staged --quiet; then
+                  echo "  caught up, and somebody else already said it"
+                  PUSHED=1
+                  break
                 fi
-                sleep 5
+                nice -n 15 git commit -m "$MSG"
+                sleep 3
               done
+              # Loud, because this is the failure that looks like success. The
+              # run above stayed green for five and a half hours while putting
+              # nothing in the repository, and the only reason we know is that
+              # somebody read the log.
+              [ -n "$PUSHED" ] || echo "  NOT PUBLISHED — pass $pass is still only on this runner"
             fi
 
             # Coverage is the number worth watching, so it goes in the log
