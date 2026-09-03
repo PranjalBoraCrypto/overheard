@@ -395,8 +395,12 @@ console.log("\n=== J. when the deal room cannot exist");
     posts[0]?.startsWith("mb-p-tclk-"), posts.join(" then "));
   ok("and falls back to the board when the venue refuses it",
     posts[1] === "tclk-offers" && /on the board instead/.test(out), out);
+  /* Reported, and reported HONESTLY: an earlier version blamed the room cap
+     for every failure including a local refusal, which sends a reader to the
+     venue looking for a bug that is here. The line names what actually came
+     back. */
   ok("the fallback is reported rather than silent",
-    lines.some((l) => /room cap/.test(l)), lines.join(" | "));
+    lines.some((l) => /would not take it \(400\)/.test(l)), lines.join(" | "));
 }
 
 /* ── I. the question that was holding the shop shut, and the one that is ──
@@ -560,6 +564,32 @@ console.log("\n=== K. the secret");
   ok("a rotated seed cannot reopen an old statement",
     !(await checkReveal("hash", acc.body.statement, await recoverSecret(OTHER_SEED, acc.body))).ok,
     "SELLING.md already says a rotated key lapses open deals; this is that, on the sell side");
+}
+
+/* ── L. delivery, then reveal, and never the other way round ─────────────
+ * The reveal is what lets the payer's money move, and it is irreversible: the
+ * preimage goes on a public wire and anyone can complete the deal with it. So
+ * the ORDER is the whole safety property. Deliver first; reveal only if the
+ * delivery actually landed. A failed handler must leave the deal locked, so
+ * the buyer refunds at refundAfterMs and we simply earned nothing — which is
+ * the correct direction to fail in.
+ *
+ * Runs in a CHILD process because `US` is read at import time and this needs
+ * a key whose DID is the shop's. The real seed is a repository secret and is
+ * not in this tree, so the child sets SHOP_DID to the test key's DID — which
+ * grants nothing on its own, since refusals() still demands a matching seed.
+ * ─────────────────────────────────────────────────────────────────────── */
+console.log("\n=== L. what we owe");
+{
+  const { execFileSync } = await import("node:child_process");
+  const out = execFileSync(process.execPath,
+    [path.join(ROOT, "scripts/test-deliver.mjs")],
+    { encoding: "utf8", env: { ...process.env, SHOP_DID: me.did, TEST_SEED: SEED } });
+  for (const line of out.trim().split("\n")) {
+    if (!line.startsWith("RESULT ")) { console.log(line); continue; }
+    const r = JSON.parse(line.slice(7));
+    ok(r.name, r.pass, r.note);
+  }
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);

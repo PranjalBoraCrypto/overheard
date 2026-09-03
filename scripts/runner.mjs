@@ -19,14 +19,21 @@
 import { readFrame, isFrameText, OFFERS_ROOM, offerId, canon, runDeal, lintOffer, ms,
          contractId, sha256Hex, checkReveal }
   from "../web/tclk.js";
-import { agentFromSeed, say } from "./agent.mjs";
+import { agentFromSeed, say, sweep } from "./agent.mjs";
 import { CAN_DO, doJob } from "./work.mjs";
 import { minterFor, recoverSecret } from "./secret.mjs";
-import { WANTS, planBuys, wantFrame, lockFrame, refundFrame, wire } from "./buy.mjs";
+import { WANTS, planBuys, wantFrame, lockFrame, refundFrame, wire, safeRoom } from "./buy.mjs";
 
 /* The shop's public identity. The seed for it is in one secret store and is
    not in this repository, has never been, and must never be. */
-export const US = "did:key:z6MkiuhfekPgiihLWarPAzhuvoMjg86F8dqmLiCTmtQgMrR3";
+/* The shop's identity. Overridable ONLY so the suite can exercise the paths
+   that need a key matching this DID — the real seed is a repository secret
+   and is not in this tree, so without a seam the delivery-then-reveal order
+   could never be tested against the actual posting path, which is the one
+   place it matters. Setting this alone grants nothing: refusals() still
+   demands a seed whose DID equals it, so a wrong value simply refuses
+   everything. The workflow does not set it. */
+export const US = process.env.SHOP_DID ?? "did:key:z6MkiuhfekPgiihLWarPAzhuvoMjg86F8dqmLiCTmtQgMrR3";
 
 /* Deadlines are OURS to choose, because we write the offer — and that is the
    whole answer to a scheduler nobody controls. archive.yml measured GitHub's
@@ -146,7 +153,19 @@ export function ourDeals(frames) {
        about itself — a frame that lies about its sender is not ours. */
     if (o.from !== US && a.from !== US) continue;
     paired.add(a.ref);
-    out.push({ deal: runDeal([o, a]), offer: o, accept: a });
+    /* FOLD EVERY FRAME FOR THIS CONTRACT, not just the two that opened it.
+       Folding only offer+accept means the deal never leaves `accepted`: the
+       lock, the reveal and the refund all carry the contract and all arrive
+       later. A version of this that stopped at the accept reported nothing as
+       owed while a buyer's money sat locked and waiting on delivery, which
+       the L section caught the first time it ran. Same mistake the buy side
+       made, same fix — the state machine folds by contract, so anything less
+       than every frame for that contract is a stale answer. */
+    const c = a.body?.contract ?? a.contract ?? null;
+    const rest = c
+      ? frames.filter((f) => f.ok && f !== o && f !== a && String(f.body?.contract ?? "") === String(c))
+      : [];
+    out.push({ deal: runDeal([o, a, ...rest]), offer: o, accept: a });
   }
   for (const [id, o] of offers)
     if (o.from === US && !paired.has(id)) out.push({ deal: runDeal([o]), offer: o, accept: null });
@@ -376,7 +395,11 @@ export function refusals({ live, agent }) {
 export async function settle(agent, room, text, opts, log) {
   const first = await say(agent, room, text, { ...opts, exact: true });
   if (first.ok) return "ok";
-  log(`  ${room} refused it (${first.why ?? first.status}) — the venue is at its room cap`);
+  if (room === OFFERS_ROOM) return `FAILED · ${first.why ?? first.status}`;
+  /* Say what actually happened. An earlier version blamed the room cap for
+     every failure, including one where our own client refused to post — which
+     sent a reader looking at the venue for a bug that was here. */
+  log(`  ${room} would not take it (${first.why ?? first.status}) — trying the board`);
   const back = await say(agent, OFFERS_ROOM, text, { ...opts, exact: true });
   return back.ok
     ? `ok, on the board instead of ${room}`
@@ -474,11 +497,61 @@ export async function wake(opts = {}) {
 
   for (const d of p.owed) {
     const job = d.offer.body?.job?.id;
+    const contract = d.accept?.body?.contract;
     log(`OWED: ${job} is locked and waiting on delivery`);
-    if (!CAN_DO.has(job)) { log("  nothing here can deliver it — it should never have been posted"); continue; }
-    /* Delivery, then reveal, in that order and never the other way round.
-       Revealing first would be taking the money before the work exists. */
-    log("  a handler exists; delivery is wired in the next run of this loop");
+    if (!CAN_DO.has(job)) { log("  nothing here can deliver it — it should never have been accepted"); continue; }
+    if (!seed) { log("  no seed, so nothing can be delivered or revealed this wake"); continue; }
+
+    /* ── DELIVERY, THEN REVEAL, IN THAT ORDER AND NEVER THE OTHER WAY ──────
+       The reveal is what lets the payer's money move. Posting it before the
+       work exists is taking payment for nothing, and it is irreversible: once
+       the preimage is on the wire anyone can see it and the deal is claimed.
+       So the work is produced and posted FIRST, and only a delivery that
+       actually succeeded earns the reveal. A failed handler leaves the deal
+       locked, which is the safe direction — the buyer gets their refund at
+       refundAfterMs and we simply earned nothing. */
+    const done = await doJob(job, d.offer.body?.job?.brief ?? d.offer.body?.job?.subject, opts);
+    if (!done.ok) {
+      log(`  DELIVERY FAILED: ${done.why} — leaving it locked so the buyer can refund`);
+      continue;
+    }
+
+    /* ── THE DELIVERY HAS TO SURVIVE THE VENUE ───────────────────────────
+       Technocore sweeps every message: runs of whitespace collapse and the
+       stored text is not always the text you sent. `say(..., exact)` refuses
+       to post anything the sweep would change, because for a tclk frame the
+       bytes ARE the identity — a swept frame has a different id and a
+       signature over something nobody can reproduce.
+
+       A profile is prose with line breaks, so the sweep would rewrite it and
+       the post was refused outright — the first run of the L section caught
+       exactly that, with the work never reaching the wire and the deal
+       correctly left unrevealed. Loosening `exact` would have been the wrong
+       fix: it would sign one thing and store another.
+
+       So the delivery is flattened HERE, before it is signed. What we sign is
+       what the venue keeps. Line breaks become a separator that survives,
+       which costs the layout and keeps the guarantee. */
+    const room = safeRoom(contract) ?? OFFERS_ROOM;
+    const delivery = sweep(done.text.replace(/\n+/g, " · "));
+    log(`  delivering ${delivery.length} chars`);
+    if (!no.length) {
+      const put = await settle(agent, room, delivery, opts, log);
+      if (!/^ok/.test(put)) { log(`  delivery did not land (${put}) — NOT revealing`); continue; }
+      log(`  delivered: ${put}`);
+    }
+
+    /* The secret is re-derived from our own accept, in a process that may
+       never have seen the one that minted it. That is the whole design. */
+    const secret = await recoverSecret(seed, d.accept.body);
+    const opens = await checkReveal(d.offer.body?.lock ?? "hash", d.accept.body.statement, secret);
+    if (!opens.ok) {
+      log("  REFUSED to reveal: the secret does not open the statement");
+      continue;
+    }
+    const reveal = wire({ type: "reveal", from: US, contract, secret });
+    if (!no.length) log(`  revealed: ${await settle(agent, room, reveal, opts, log)}`);
+    else log("  would reveal once the work is on the wire");
   }
 
   return { plan: p, buys, refusals: no, agent: agent?.did ?? null };

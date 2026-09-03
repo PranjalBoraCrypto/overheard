@@ -121,7 +121,7 @@ export function ourBuys(frames, us) {
 }
 
 const ROOM_RE = /^mb-p-tclk-[0-9a-f]{16}$/;
-function safeRoom(contract) {
+export function safeRoom(contract) {
   try { const n = dealRoom(contract); return ROOM_RE.test(n) ? n : null; } catch { return null; }
 }
 

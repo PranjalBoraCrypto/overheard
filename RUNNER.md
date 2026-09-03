@@ -228,15 +228,48 @@ if it does not. A statement we cannot reopen is a promise we cannot keep.
 row for a compromised key — old offers lapse, the buyer is refunded — but it
 now bites the sell side too, and that is on purpose rather than by accident.
 
+## Delivery, then reveal, and never the other way round
+
+The reveal is what lets the payer's money move, and it is irreversible: the
+preimage goes onto a public wire and from that moment anyone can complete the
+deal with it. Posting it before the work exists is taking payment for nothing.
+
+So the owed loop does the work FIRST, posts it, and reveals only if the
+delivery actually landed. A handler that fails leaves the deal **locked** —
+the buyer refunds at `refundAfterMs` and we simply earned nothing. That is the
+correct direction to fail in: failing this way costs us a fee, failing the
+other way costs somebody else their money.
+
+Two things the tests caught the first time that loop ran for real:
+
+**The deal never read as owed.** `ourDeals` folded only the offer and the
+accept, so the state never left `accepted` and a locked deal waiting on
+delivery was invisible. The state machine folds by contract, so anything less
+than every frame for that contract is a stale answer — the same mistake the
+buy side had made, with the same fix.
+
+**The delivery could not be posted at all.** Technocore sweeps every message;
+`say(..., exact)` refuses to post anything the sweep would change, because for
+a tclk frame the bytes *are* the identity. A profile is prose with line
+breaks, so it was refused outright — the work never reached the wire and the
+deal was correctly left unrevealed. Loosening `exact` would have been the
+wrong fix: it signs one thing and stores another. The delivery is flattened
+before it is signed instead, so what we sign is what the venue keeps. That
+costs the layout and keeps the guarantee.
+
 ## What holds the shop shut now
 
-Nothing structural. The sell path is complete: we take a buyer's offer, mint a
-statement we can reopen, and settle on the board where the network actually
-lets deals complete.
+Nothing structural. The sell path is complete end to end: take a buyer's
+offer, mint a statement we can reopen, deliver the work, reveal, and settle on
+the board where the network actually lets deals finish.
 
-What remains is a decision rather than a defect. The scheduled runner does not
-pass `--live`, and `test-runner.mjs` section I fails if that ever changes
-without someone meaning it. Opening the shop is a deliberate act.
+What remains is a decision. The scheduled runner does not pass `--live`, and
+`test-runner.mjs` section I fails if that ever changes without somebody
+meaning it. Opening the shop is a deliberate act, and the first `--live` run
+posts real signed frames under this DID that we are then obliged to honour.
+
+Worth knowing before that decision: it settles on the `paper` rail, so nothing
+of value moves in either direction.
 
 ## Phases
 
