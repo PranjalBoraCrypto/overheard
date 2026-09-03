@@ -21,9 +21,10 @@ import { fileURLToPath } from "node:url";
 import { createPublicKey, verify as edVerify, randomBytes } from "node:crypto";
 import { agentFromSeed, sweep, nextNonce, say } from "./agent.mjs";
 import {
-  US, JOBS, WINDOW, MAX_OPEN_DEALS, buildAccept, refuseTake, randomSecret,
+  US, JOBS, WINDOW, MAX_OPEN_DEALS, buildAccept, refuseTake,
   plan, refusals, framesFrom, ourDeals, wake, settle,
 } from "./runner.mjs";
+import { secretFor, recoverSecret, minterFor } from "./secret.mjs";
 import { canon, offerId, lintOffer, readFrame, runDeal, checkReveal, contractId, dealRoom }
   from "../web/tclk.js";
 import { CAN_DO } from "./work.mjs";
@@ -126,7 +127,7 @@ const frameOf = async (body) => "tclk1 " + canon({ ...body, id: await offerId(bo
     lintOffer(o).length === 0, lintOffer(o).join(", "));
 
   const id = await offerId(o);
-  const a = await buildAccept({ body: o }, id, NOW);
+  const a = await buildAccept({ body: o }, id, NOW, minterFor(SEED));
 
   ok("the accept comes from the shop", a.body.from === US);
   ok("it names the offer it answers", a.body.ref === id);
@@ -141,7 +142,8 @@ const frameOf = async (body) => "tclk1 " + canon({ ...body, id: await offerId(bo
     check.checked && check.ok, check.why);
   ok("the secret is 32 bytes, not something guessable",
     /^0x[0-9a-f]{64}$/.test(a.secret));
-  ok("two accepts never mint the same secret", randomSecret() !== randomSecret());
+  ok("two deals never share a preimage, even for the same offer",
+    (await secretFor(SEED, id, "0000000000000001")) !== (await secretFor(SEED, id, "0000000000000002")));
 
   /* The contract id binds the offer to the accept core, so it cannot be
      computed before the statement exists — a contract named early would name
@@ -446,7 +448,7 @@ console.log("\n=== I. the answered question, and the remaining one");
      point: same shop, same job, secret and reveal right in one hand. */
   const theirs = theirOffer();
   const tid = await offerId(theirs);
-  const a = await buildAccept({ body: theirs }, tid, NOW);
+  const a = await buildAccept({ body: theirs }, tid, NOW, minterFor(SEED));
   const ours = runDeal(framesFrom([
     msg(1, OTHER, "tclk1 " + canon({ ...theirs, id: tid })),
     msg(2, US, "tclk1 " + canon(a.body)),
@@ -455,28 +457,109 @@ console.log("\n=== I. the answered question, and the remaining one");
   ok("a payer-opened deal makes us the payee too", ours.payee === US);
   ok("but this time we minted the statement and can open it", opens.ok);
 
-  /* ── WHAT STILL HOLDS IT SHUT ──────────────────────────────────────────
-     Not the protocol any more. The accept commits us to a statement whose
-     preimage only we hold; lose it and the work is done for nothing while the
-     buyer waits out the clock for a refund. A secret minted into a variable
-     that dies with the process is exactly that. So this stays a dry run until
-     there is somewhere durable to put it. */
+  /* ── AND THE PART THAT USED TO HOLD IT SHUT ────────────────────────────
+     There is no secret store, because the secret is derived rather than kept.
+     What could go wrong is no longer "we lost it" but "we cannot get it
+     back", so the wake proves the round trip before it commits to a
+     statement — section K is that property on its own. */
   const src = fs.readFileSync(path.join(ROOT, "scripts/runner.mjs"), "utf8");
-  ok("the wake refuses to post an accept while there is nowhere to keep the secret",
-    /HOLD: no durable store for the secret/.test(src),
-    "the reason is printed on every wake, not buried in a comment");
-  ok("and buildAccept hands the secret back rather than hiding it",
-    /must persist it before the accept is posted/.test(src),
-    "a secret written somewhere by a pure function is a secret nobody can audit");
+  ok("the wake re-derives and checks the lock opens before posting an accept",
+    /recoverSecret\(seed, a\.body\)/.test(src) && /REFUSED: the secret does not survive/.test(src),
+    "a statement we cannot reopen is a promise we cannot keep");
+  ok("and nothing writes a preimage anywhere",
+    !/randomSecret/.test(src) && !/writeFile[^\n]*secret/i.test(src),
+    "the derivation is the store");
 
   /* The enforceable half: nothing flips this on by accident. */
   const wf = fs.readFileSync(path.join(ROOT, ".github/workflows/runner.yml"), "utf8");
-  ok("the scheduled runner does not pass --live",
+  ok("the scheduled runner still does not pass --live",
     !/runner\.mjs[^\n]*--live/.test(wf),
-    "when this fails, make sure the secret store exists and was not just skipped");
+    "opening the shop stays a deliberate act, not a thing that drifted on");
   ok("and the reasoning is written down where the next person will find it",
     /tclk#12/.test(fs.readFileSync(path.join(ROOT, "RUNNER.md"), "utf8")),
     "RUNNER.md must name the upstream issue, not just say 'a protocol question'");
+}
+
+/* ── K. the secret, which is derived and never stored ────────────────────
+ * The accept commits us to a statement whose preimage only we hold. Every
+ * place we could have written that preimage down is worse than not needing
+ * to: the repository is public, the archive is the repository, a Technocore
+ * note is world-readable, an Actions secret needs an admin token in the
+ * environment, and a database is infrastructure whose loss is silent until
+ * the day it costs a deal.
+ *
+ * So it is derived from the seed and from the two values our own accept puts
+ * on the wire. These are the properties that makes that safe.
+ * ─────────────────────────────────────────────────────────────────────── */
+console.log("\n=== K. the secret");
+{
+  const REF = "0x" + "11".repeat(32);
+  const N1 = "00000000000000aa", N2 = "00000000000000ab";
+  const s1 = await secretFor(SEED, REF, N1);
+
+  ok("it is 32 bytes of hex", /^0x[0-9a-f]{64}$/.test(s1));
+
+  /* THE WHOLE POINT. A process that dies between the accept and the payer's
+     lock must lose nothing, so the same inputs must give the same answer in
+     a process that never saw the first one. */
+  ok("the same deal always yields the same preimage",
+    (await secretFor(SEED, REF, N1)) === s1);
+  ok("and it comes back from the accept frame alone, days later",
+    (await recoverSecret(SEED, { ref: REF, nonce: N1 })) === s1,
+    "this is the reveal path, with nothing but what is already public");
+
+  ok("a different nonce is a different deal and a different secret",
+    (await secretFor(SEED, REF, N2)) !== s1);
+  ok("a different offer is too",
+    (await secretFor(SEED, "0x" + "22".repeat(32), N1)) !== s1);
+
+  /* Uniqueness comes from the fixed widths, not from the separator: a ref is
+     always 64 hex and a nonce always 16, so no two different deals can
+     concatenate to the same input. Worth pinning as a property over many
+     pairs rather than trusting the argument. */
+  const seen = new Set();
+  for (let i = 0; i < 24; i++) {
+    const ref = "0x" + String(i).padStart(64, "0");
+    for (let j = 0; j < 4; j++) seen.add(await secretFor(SEED, ref, String(j).padStart(16, "0")));
+  }
+  ok("96 distinct deals give 96 distinct preimages", seen.size === 96, seen.size + " unique");
+
+  /* KEY SEPARATION. The seed signs frames as this DID. If a preimage were the
+     seed, or a slice of it, publishing a reveal would publish the shop. */
+  const OTHER_SEED = "b".repeat(64);
+  ok("a different seed gives a different secret",
+    (await secretFor(OTHER_SEED, REF, N1)) !== s1);
+  ok("and the secret is not the seed, nor any slice of it",
+    !s1.includes(SEED) && !SEED.includes(s1.slice(2, 34)) && s1.slice(2) !== SEED);
+
+  /* A wrong key produces a plausible-looking secret that opens nothing, so
+     bad input must throw rather than return. */
+  for (const [what, fn] of [
+    ["a short seed", () => secretFor("abc", REF, N1)],
+    ["a non-hex seed", () => secretFor("z".repeat(64), REF, N1)],
+    ["a ref that is not an offer id", () => secretFor(SEED, "nope", N1)],
+    ["a nonce of the wrong length", () => secretFor(SEED, REF, "aa")],
+  ]) {
+    let threw = false;
+    try { await fn(); } catch { threw = true; }
+    ok(`${what} throws rather than returning something that opens nothing`, threw);
+  }
+
+  /* End to end: the statement an accept commits to must be openable by the
+     secret re-derived from that same accept. */
+  const o = theirOffer();
+  const id = await offerId(o);
+  const acc = await buildAccept({ body: o }, id, NOW, minterFor(SEED));
+  const back = await recoverSecret(SEED, acc.body);
+  const opens = await checkReveal("hash", acc.body.statement, back);
+  ok("an accept's statement reopens from the accept itself", opens.checked && opens.ok, opens.why);
+  ok("and the recovered secret is the one it was built with", back === acc.secret);
+
+  /* Rotating the seed strands open deals. Not a bug — the same row SELLING.md
+     already has for a compromised key — but it must be true on purpose. */
+  ok("a rotated seed cannot reopen an old statement",
+    !(await checkReveal("hash", acc.body.statement, await recoverSecret(OTHER_SEED, acc.body))).ok,
+    "SELLING.md already says a rotated key lapses open deals; this is that, on the sell side");
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);

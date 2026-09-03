@@ -187,25 +187,56 @@ a stranger's offers we may honestly answer, and every rule in it is a refusal
 — no handler, underpaid, a lock we cannot open, a claim window too short to
 work in. Nothing in it is a preference.
 
-## What holds the shop shut NOW
-
-One thing, and this one is ours.
+## The secret, which is derived and never stored
 
 The accept commits us to a statement whose preimage only we hold. Lose it and
 the work is done for nothing: the buyer's funds sit until `refundAfterMs` and
-they are made whole, but we are not. A secret minted into a variable that dies
-with the process is exactly that failure, and that is what `buildAccept`
-currently does — deliberately, returning the secret to its caller rather than
-writing it somewhere unaudited.
+they are made whole, while we delivered and cannot collect. That preimage has
+to survive a process living ninety seconds in a throwaway CI container and
+still be there days later when the payer finally locks.
 
-So there is no durable secret store yet, the wake prints
-`HOLD: no durable store for the secret` on every pass, and
-`test-runner.mjs` section I fails if the scheduled runner is ever given
-`--live`. That gate has not moved; only the reason behind it has.
+Every way of writing it down is worse than it looks. The repository is public
+and git remembers deletions. The archive *is* the repository, and served. A
+Technocore note is world-readable by design — that is where the statement
+goes, never the preimage. An Actions secret is not writable from inside a run
+without hanging an admin-scoped token in the environment, trading one secret
+for a more dangerous one. A database is infrastructure whose loss is silent
+until the day it costs a deal.
 
-**What it needs:** somewhere a secret survives the process and the runner can
-find again by contract id, that is not the repository and not a log. Until
-then the runner decides, prints, and signs nothing.
+So there is no store. The secret is **derived**:
+
+```
+secret = HMAC(K, ref | nonce)      K = HMAC(seed, "overheard/tclk/secret/v1")
+```
+
+`ref` and `nonce` are both on the public wire in our own accept. Anyone can
+read them; only the holder of the seed can turn them back into a preimage. A
+process that dies mid-deal loses nothing, and reveal time re-derives from the
+frame itself.
+
+`K` is not the seed — the seed signs frames as this DID, and one key doing two
+jobs is how a signature oracle becomes a secret oracle. The label carries a
+version, so if the scheme ever changes, deals opened under v1 stay claimable;
+a live deal outlives the code that opened it.
+
+**What could go wrong is no longer "we lost it" but "we cannot get it back",**
+so the wake proves the round trip before committing: it re-derives from the
+frame exactly as reveal time will, checks the lock opens, and refuses to post
+if it does not. A statement we cannot reopen is a promise we cannot keep.
+
+**Rotating the seed strands every open deal.** `SELLING.md` already has that
+row for a compromised key — old offers lapse, the buyer is refunded — but it
+now bites the sell side too, and that is on purpose rather than by accident.
+
+## What holds the shop shut now
+
+Nothing structural. The sell path is complete: we take a buyer's offer, mint a
+statement we can reopen, and settle on the board where the network actually
+lets deals complete.
+
+What remains is a decision rather than a defect. The scheduled runner does not
+pass `--live`, and `test-runner.mjs` section I fails if that ever changes
+without someone meaning it. Opening the shop is a deliberate act.
 
 ## Phases
 

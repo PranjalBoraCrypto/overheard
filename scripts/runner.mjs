@@ -17,10 +17,11 @@
  * otherwise breaks the first time it is skipped, and it will be skipped.
  */
 import { readFrame, isFrameText, OFFERS_ROOM, offerId, canon, runDeal, lintOffer, ms,
-         contractId, sha256Hex }
+         contractId, sha256Hex, checkReveal }
   from "../web/tclk.js";
 import { agentFromSeed, say } from "./agent.mjs";
 import { CAN_DO, doJob } from "./work.mjs";
+import { minterFor, recoverSecret } from "./secret.mjs";
 import { WANTS, planBuys, wantFrame, lockFrame, refundFrame, wire } from "./buy.mjs";
 
 /* The shop's public identity. The seed for it is in one secret store and is
@@ -254,23 +255,30 @@ export function refuseTake(offer, now = Date.now()) {
  * reason this direction works: we hold the preimage AND we are the party the
  * machine lets reveal it.
  *
- * It returns the secret rather than storing it because a secret this function
- * quietly wrote somewhere would be a secret nobody could audit. The caller
- * must persist it before the accept is posted — losing it after the payer
- * locks means the funds sit until refundAfterMs and the buyer is made whole,
- * but the work was done for nothing.
+ * Nothing here is stored. The secret is DERIVED from the shop's seed and the
+ * two values this frame puts on the public wire — its `ref` and its `nonce` —
+ * so a process that dies between the accept and the payer's lock loses
+ * nothing, and reveal time re-derives from the accept itself. The reasoning,
+ * including why every place we could have written it down is worse, is in
+ * scripts/secret.mjs.
+ *
+ * It still hands the secret back rather than logging or filing it, because a
+ * secret a function quietly puts somewhere is a secret nobody can audit.
  */
-export async function buildAccept(offer, id, now = Date.now(), mint = randomSecret) {
-  const secret = mint();
+export async function buildAccept(offer, id, now = Date.now(), mint) {
+  if (typeof mint !== "function")
+    throw new Error("buildAccept needs a minter — see scripts/secret.mjs");
+
+  /* The nonce is chosen FIRST, because the secret is derived from it. That
+     ordering is the whole recovery story: ref and nonce are both on the wire
+     in the accept below, so anyone can read them and only we can turn them
+     back into a preimage. */
+  const nonce = [...crypto.getRandomValues(new Uint8Array(8))]
+    .map((b) => b.toString(16).padStart(2, "0")).join("");
+  const secret = await mint(id, nonce);
   const statement = "0x" + (await sha256Hex(secret));
-  const core = {
-    type: "accept",
-    from: US,
-    ref: id,
-    statement,
-    nonce: [...crypto.getRandomValues(new Uint8Array(8))]
-      .map((b) => b.toString(16).padStart(2, "0")).join(""),
-  };
+
+  const core = { type: "accept", from: US, ref: id, statement, nonce };
   /* contractId hashes the offer together with the accept's core fields, so it
      must be computed from the frame as it will be posted and then folded back
      in — not guessed and not derived from anything we have not committed to. */
@@ -278,10 +286,10 @@ export async function buildAccept(offer, id, now = Date.now(), mint = randomSecr
   return { body: { ...core, contract }, secret, statement, at: now };
 }
 
-export function randomSecret() {
-  return "0x" + [...crypto.getRandomValues(new Uint8Array(32))]
-    .map((b) => b.toString(16).padStart(2, "0")).join("");
-}
+/* There is deliberately no function here that invents a preimage. A random
+   one is a preimage that has to be written down somewhere, and every place to
+   write it is worse than not needing to — see the header of
+   scripts/secret.mjs. Derivation is the store. */
 
 /**
  * What this wake should do. Pure: give it frames and a clock, get a plan.
@@ -404,18 +412,28 @@ export async function wake(opts = {}) {
   /* Selling. We answer buyers' offers rather than posting our own — see the
      block above buildAccept for why the other direction cannot settle. */
   for (const f of p.take) {
-    const a = await buildAccept(f, f.id, now);
+    if (!seed) { log(`would take ${f.body?.job?.id} — but no seed, so no statement can be minted`); continue; }
+    const a = await buildAccept(f, f.id, now, minterFor(seed));
     const text = "tclk1 " + canon(a.body);
     log(`would take ${f.body?.job?.id} from ${String(f.body?.from).slice(0, 24)}… · ` +
         `${f.body?.amount} FLOP · ${text.length} chars`);
     log(`  contract ${a.body.contract.slice(0, 18)}…`);
-    /* THE REASON THIS STILL DOES NOT POST. The accept commits us to a
-       statement whose preimage only we hold, and the claim is worthless
-       without it. Minting a secret into a variable that dies with the process
-       is how you do the work and then cannot collect. Durable secret storage
-       is the next thing to build, and until it exists this stays a dry run
-       even with --live and a good key. */
-    log("  HOLD: no durable store for the secret, so the accept is not posted");
+
+    /* THE CHECK THAT MAKES THIS SAFE TO POST. The secret is derived rather
+       than stored, so the thing that could go wrong is no longer "we lost
+       it" — it is "we cannot get it back". So prove the round trip BEFORE
+       committing to the statement: re-derive from the frame as it will go on
+       the wire, in the same way reveal time will, and refuse if what comes
+       back does not open the lock. A statement we cannot reopen is a promise
+       we cannot keep. */
+    const again = await recoverSecret(seed, a.body);
+    const opens = await checkReveal(f.body?.lock ?? "hash", a.body.statement, again);
+    if (!opens.ok) {
+      log("  REFUSED: the secret does not survive the round trip, so this is not posted");
+      continue;
+    }
+    log("  recovery checked: the statement can be reopened from the frame alone");
+    if (!no.length) log(`  accepted: ${await settle(agent, OFFERS_ROOM, text, opts, log)}`);
   }
   for (const x of p.passed.slice(0, 8)) log(`pass:  ${x.id.slice(0, 14)}… ${x.why.join("; ")}`);
   if (p.passed.length > 8) log(`pass:  …and ${p.passed.length - 8} more`);
