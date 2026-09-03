@@ -31,6 +31,41 @@
   --mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
   --ease:cubic-bezier(.22,.68,.24,1);
 
+  /* ── TWO NAMES THIS FILE HAS BEEN USING WITHOUT EVER DEFINING ────────────
+   *
+   * THE WORST BUG ON THIS PAGE, and it shipped for weeks looking like a
+   * design choice.
+   *
+   * `--ink` and `--panel` were referenced in six rules and declared in none.
+   * An unresolvable `var()` does not fall back and does not warn — the whole
+   * DECLARATION becomes invalid at computed-value time and the property
+   * reverts to its initial value. So every one of those six rules quietly
+   * did nothing:
+   *
+   *   · The phone's body background is `…, var(--ink)`. Invalid, so the
+   *     entire `background` was dropped and THE MOBILE PAGE HAD NO
+   *     BACKGROUND AT ALL — the browser painted its default white canvas,
+   *     and every translucent panel on the page was washed out by it. That
+   *     is the milky haze over the order section, and it was never a
+   *     gradient bug.
+   *   · `.stat`, `.railcard` and `.plate` ask for `background:var(--panel)`
+   *     and have been fully transparent, which passed for a design on
+   *     desktop only because the body's own background happened to be dark.
+   *   · The old flow circles were filled `var(--ink)` — i.e. not filled —
+   *     which is the real reason the connector line appeared to cut straight
+   *     through every numbered node. The line was never on top; there was
+   *     simply nothing in the circle to hide it.
+   *
+   * Three separate reported symptoms, one missing pair of declarations.
+   * Nothing errors, nothing logs, and the failure is invisible on the one
+   * viewport most of the work happened in. `scripts/test-deals-page.mjs`
+   * now fails if any custom property is used without being declared.
+   */
+  --ink:var(--navy-0);
+  /* Translucent on purpose, so panels pick up the page's own light — which
+     is safe now that there is reliably a page background under them. */
+  --panel:rgba(4,20,26,.72);
+
   /* ── A SPACING SCALE, BECAUSE AD-HOC NUMBERS DRIFT ───────────────────────
    * Every gap on this page used to be its own decision — 13 here, 16 there,
    * 22 somewhere else — and the result is exactly what it looked like: text
@@ -108,11 +143,15 @@ body{
 
      · A WIDER MEASURE with real gutters, so the page has margins rather than
        edges, and content can occasionally break out of the column.
-     · THREE SURFACES instead of one. `.plate` is a raised card (used
-       sparingly, for things you act on), `.bare` is flush on the page ground
-       with only a rule to separate it, and `.band` is a full-bleed tinted
-       strip that runs edge to edge. Alternating them gives the scroll a
-       rhythm, and the eye something to measure importance by.
+     · SEVERAL SURFACES instead of one, each lit differently on purpose: the
+       hero wears a dot field lit from the top left, `.bleed` is a full-bleed
+       lattice band running edge to edge, `.hirepanel` is a lit panel for the
+       section you act on, and cards take plain grain. Alternating them gives
+       the scroll a rhythm and the eye something to measure importance by.
+       (An earlier draft of this list named `.plate` and `.bare`; both are
+       gone. "No surface at all" made a poor third surface — it is what made
+       the order section read as a gap between two sections rather than as a
+       place.)
      · SECTION HEADS that sit on the page rather than inside a box, so a
        heading reads as a chapter rather than a card title.
    ─────────────────────────────────────────────────────────────────────── */
@@ -131,15 +170,16 @@ body{
   padding-block:var(--s6);
   background:linear-gradient(180deg,rgba(127,178,214,.055),rgba(127,178,214,0));
   border-top:1px solid var(--edge);border-bottom:1px solid var(--edge)}
-/* `.bare` has to UNDO the card, not sit inside one. `.safety` carries a
-   border, a background and a radius, and adding a modifier that only set
-   padding left the section looking exactly like every other box — which was
-   the complaint. A surface modifier must be able to remove a surface. */
-.bare{padding-block:var(--s6);border:0;border-top:1px solid var(--edge);
-  border-radius:0;background:none;margin-top:0}
-.safety.bare{background:none;border:0;border-top:1px solid var(--edge);border-radius:0;overflow:visible}
 .safety.bleed{border-radius:0}
-.plate{background:var(--panel);border:1px solid var(--edge);border-radius:18px;overflow:hidden}
+/* GONE WITH THIS PASS, all of it styling markup that no longer exists:
+   `.bare` and `.safety.bare` (section 03 is a lit panel now, not a hole in
+   the page), `.plate`, `.herostats`/`.hs*` (four figures welded to the hero,
+   moved out to `.stats` some time ago), and `.safetyhead`/`.howgrid`/
+   `.howstep`/`.hown` (the four-box grid the journeys replaced).
+   Roughly forty lines. Dead CSS is not free: it is the reason `.safetyhead`
+   was read as live while working out where section 02's heading came from,
+   and one of the two `.note b` rules it hid was asking for a colour that had
+   never been declared. */
 
 /* A chapter heading, on the page rather than in a card. The rule is drawn by
    the head itself so a section does not need a border to feel bounded. */
@@ -154,13 +194,39 @@ body{
    what "text heavy and plain" means. It is one panel now: a badge, a title,
    a single line, and the four numbers that answer "what is here" before
    anybody scrolls. */
-header.hero{position:relative;margin-top:26px;padding:26px 26px 0;border-radius:20px;overflow:hidden;
+/* PADDING ON ALL FOUR SIDES. It used to be `26px 26px 0` — no bottom at all —
+   because four figures were once welded to the panel's foot and supplied their
+   own edge. They moved out to `.stats` and nobody put the bottom back, so the
+   lede sat ONE PIXEL off the boundary. That is a value that is missing rather
+   than wrong, which is why it survived several passes: at a glance it reads as
+   a slightly tight panel, and only a measurement calls it a bug. */
+header.hero{position:relative;margin-top:26px;padding:var(--s5);border-radius:20px;overflow:hidden;
   border:1px solid var(--edge);
   background:linear-gradient(160deg,rgba(0,180,215,.12),rgba(6,26,33,.92) 42%,rgba(2,11,15,.94));
   box-shadow:inset 0 1px 0 rgba(150,235,255,.10),0 4px 10px -4px rgba(0,0,0,.6),0 40px 80px -40px rgba(0,0,0,1)}
+
+/* ── THE FRONT DOOR'S OWN TEXTURE ──────────────────────────────────────────
+   A DOT MATRIX, and deliberately not the lattice the escrow band wears or the
+   plain grain the cards get. Three panels carrying the same texture is one
+   surface repeated, which is the thing this page kept being accused of being;
+   three panels with three textures is a page with places in it.
+   Dots also say something different from rules — a plotting field rather than
+   a drawing board — and they survive being faded to almost nothing, which a
+   1px line does not.
+   Two layers in one paint: the light the panel is lit from, then the field,
+   masked away diagonally so it never reaches the words. Static, behind the
+   content, and on a pseudo-element, so it cannot touch layout. */
+header.hero::after{content:"";position:absolute;inset:0;pointer-events:none;z-index:-1;
+  border-radius:inherit;
+  background-image:
+    radial-gradient(80% 120% at 8% -20%,rgba(88,233,255,.13),transparent 58%),
+    radial-gradient(rgba(147,182,192,.16) 1px,transparent 1.2px);
+  background-size:auto,19px 19px;
+  -webkit-mask-image:linear-gradient(102deg,#000 0%,rgba(0,0,0,.42) 46%,transparent 76%);
+  mask-image:linear-gradient(102deg,#000 0%,rgba(0,0,0,.42) 46%,transparent 76%)}
 .heroglow{position:absolute;width:420px;height:420px;right:-140px;top:-220px;border-radius:50%;
   background:radial-gradient(circle,rgba(0,180,215,.30),transparent 66%);filter:blur(50px);pointer-events:none}
-.herotop{position:relative;display:flex;gap:16px;align-items:flex-start}
+.herotop{position:relative;display:flex;gap:18px;align-items:flex-start}
 .badge{width:44px;height:44px;flex:none;border-radius:13px;display:grid;place-items:center;
   color:#001016;background:linear-gradient(140deg,var(--blue),var(--mint));
   box-shadow:0 8px 22px -10px rgba(0,180,215,.8)}
@@ -215,22 +281,17 @@ h1{font-weight:800;font-size:clamp(32px,5.6vw,46px);line-height:1;letter-spacing
 .stats .stat:nth-child(1) b{color:var(--blue)}
 .stats .stat:nth-child(2) b{color:var(--sell)}
 
-.herostats{position:relative;display:grid;grid-template-columns:repeat(4,1fr);gap:1px;margin:24px -26px 0;
-  background:var(--edge);border-top:1px solid var(--edge)}
-.hs{background:rgba(2,9,12,.72);padding:14px 16px;min-width:0;
-  box-shadow:inset 0 1px 0 rgba(150,235,255,.045)}
-.hs b{display:block;font-family:var(--mono);font-weight:600;font-size:23px;letter-spacing:-.02em;
-  font-variant-numeric:tabular-nums;color:var(--white)}
-.hs span{display:block;font-family:var(--mono);font-size:10px;letter-spacing:.12em;
-  text-transform:uppercase;color:var(--faint);margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.hs.buy b{color:var(--blue)} .hs.sell b{color:var(--sell)}
 
 /* ── the one choice that matters, made first ───────────────────────────────
    Our own offer used to sit below four sections of other people's. It is
    half the page now, and the half that opens by default. */
 /* The two things this page is. Made into a real switch rather than two more
    cards: one track, a sliding indicator, and the selected side lifted. */
+/* MEASURED 0px between this switch and the heading under it. A control and
+   the thing it controls need a gap, or the heading reads as a caption hanging
+   off the tab rather than as the start of the panel the tab just opened. */
 .primary{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:22px;
+  margin-bottom:var(--s5);
   background:rgba(0,0,0,.28);border:1px solid var(--edge);border-radius:15px;padding:6px}
 .pri{display:flex;flex-direction:column;align-items:flex-start;gap:2px;text-align:left;cursor:pointer;
   padding:15px 17px;border-radius:15px;border:1px solid var(--edge);
@@ -682,25 +743,45 @@ pre.raw{font-family:var(--mono);font-size:11px;line-height:1.6;color:var(--dim);
 .safety{margin-top:22px;border:1px solid var(--edge);border-radius:16px;overflow:hidden;
   background:linear-gradient(180deg,var(--surf-a),var(--surf-b));
   box-shadow:var(--lip),var(--lift-1)}
-.safetyhead{padding:17px 19px 0}
-.safetyhead h3{font-size:16.5px;font-weight:700;letter-spacing:-.02em}
-.safetyhead p{color:var(--faint);font-size:13.5px;margin-top:4px;max-width:62ch}
-.howgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--edge);margin-top:16px}
-.howstep{background:linear-gradient(180deg,rgba(5,22,28,.9),rgba(2,10,13,.9));padding:15px 17px 18px;
-  box-shadow:inset 0 1px 0 rgba(150,235,255,.05)}
-.hown{font-family:var(--mono);font-size:10.5px;letter-spacing:.12em;color:var(--mint)}
-.howstep b{display:block;font-size:14px;font-weight:600;margin-top:8px;letter-spacing:-.01em}
-.howstep i{display:block;font-style:normal;color:var(--faint);font-size:12.5px;line-height:1.5;margin-top:5px}
-.refundline{display:flex;gap:12px;padding:var(--s4);border-radius:12px;
-  margin-top:var(--s4);border:1px solid var(--edge);
-  background:rgba(59,227,176,.06)}
-.refundline .i{width:19px;height:19px;color:var(--good);flex:none;margin-top:2px}
-.refundline p{font-size:14px;line-height:1.6;color:var(--dim)}
-.refundline b{color:var(--good);font-weight:600}
+/* ── THE GUARANTEE STRIP ───────────────────────────────────────────────────
+   The best sentence on the page was being delivered by a flat tinted box —
+   the same weight as a note. It is the answer to the only question a stranger
+   really has, so it gets a seal in a ring, a lit left edge, and the promise
+   at full contrast with the qualifier beneath it in the ordinary tone. */
+.refundline{position:relative;display:flex;gap:var(--s3);align-items:flex-start;
+  padding:var(--s4) var(--s4) var(--s4) calc(var(--s4) + 3px);border-radius:13px;
+  margin-top:var(--s4);border:1px solid rgba(59,227,176,.24);overflow:hidden;
+  background:linear-gradient(100deg,rgba(59,227,176,.10),rgba(59,227,176,.03) 52%,transparent)}
+.refundline::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;
+  background:linear-gradient(180deg,var(--good),rgba(59,227,176,.15))}
+.refundseal{width:34px;height:34px;flex:none;border-radius:50%;display:grid;place-items:center;
+  border:1px solid rgba(59,227,176,.34);background:rgba(59,227,176,.09)}
+.refundline .i{width:18px;height:18px;color:var(--good);flex:none}
+.refundline p{font-size:14px;line-height:1.62;color:var(--dim);margin:0}
+.refundline b{display:block;color:var(--good);font-weight:600;font-size:14.5px;margin-bottom:4px}
 
-/* Our own record, computed from public frames and shown only once there is
-   one. An empty ledger says nothing, so it renders nothing. */
-.cta{display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin:0 0 6px}
+/* ── SECTION 03 GETS A SURFACE ─────────────────────────────────────────────
+   It was `.bare`: no background, one hairline above it, floating on the page
+   ground. That is the right treatment for a section that only reads, and the
+   wrong one for the section holding the button — the thing a visitor is meant
+   to ACT on should look like somewhere, not like the gap between two
+   somewheres.
+   Its light comes from the top RIGHT, where the hero's comes from the top
+   left and the escrow band wears a lattice. Three surfaces, three treatments,
+   on purpose: identical texture everywhere is the "one surface repeated" this
+   page keeps getting pulled back into. */
+.hirepanel{position:relative;border:1px solid var(--edge);border-radius:20px;
+  padding:var(--s5);margin-top:var(--s5);overflow:hidden;
+  background:linear-gradient(196deg,rgba(0,180,215,.09),rgba(4,20,26,.86) 46%,rgba(2,9,12,.92))}
+.hirepanel::after{content:"";position:absolute;inset:0;pointer-events:none;z-index:-1;
+  border-radius:inherit;
+  background:radial-gradient(70% 110% at 92% -12%,rgba(88,233,255,.15),transparent 60%)}
+
+/* THE BUTTON HAD 6px UNDER IT, so the step cards started almost against it and
+   the most important control on the page read as part of the row below rather
+   than as its own act. `--s5` is the air every other block here gets between a
+   decision and whatever follows it. */
+.cta{display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin:0 0 var(--s5)}
 .ctahint{color:var(--dim);font-size:13.5px}
 .hirebtn{display:inline-block;background:var(--mint);color:#08201b;font-weight:600;
   text-decoration:none;padding:13px 22px;border-radius:9px;font-size:15.5px}
@@ -726,19 +807,11 @@ pre.raw{font-family:var(--mono);font-size:11px;line-height:1.6;color:var(--dim);
 .ourrec b{font-family:var(--mono);font-weight:600;color:var(--white);font-variant-numeric:tabular-nums}
 .ourrec button{margin-left:auto}
 
-/* The alpha line is a footnote, not a warning box. It was competing with the
-   thing above it for the same attention, and losing, which is the worst of
-   both. */
-.note{background:none!important;border:0!important;border-top:1px solid var(--edge)!important;
-  border-radius:0!important;padding:var(--s4) 0 0!important;margin-top:var(--s5)!important;
-  color:var(--dim);font-size:13px;line-height:1.65}
-.note b{color:var(--warn);display:inline;margin:0 6px 0 0}
-.note-unused{background:linear-gradient(180deg,rgba(242,179,61,.10),rgba(242,179,61,.05));
-  border:1px solid rgba(242,179,61,.3);border-radius:13px;
-  box-shadow:inset 0 1px 0 rgba(242,179,61,.14),var(--lift-1);
-  padding:15px 17px;margin-top:22px;font-size:14.5px;line-height:1.6;color:var(--dim)}
-.note b{display:block;color:var(--gold);font-weight:600;margin-bottom:5px}
-.note a{color:var(--blue)}
+/* `.note` and `.note-unused` went with the alpha block they styled. Between
+   them they were 12 lines carrying eight `!important`s and TWO conflicting
+   `.note b` rules — one asking for `var(--warn)`, a property that was never
+   declared, the other for `var(--gold)`. Only the second did anything, which
+   is why the label looked correct while half the CSS behind it was dead. */
 /* ── one deal, on its own ──────────────────────────────────────────────── */
 .back{display:inline-flex;align-items:center;gap:8px;background:0;border:0;padding:10px 0;cursor:pointer;
   font-family:var(--mono);font-size:11.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--dim)}
@@ -777,7 +850,12 @@ footer a{color:var(--blue)}
   .howgrid{grid-template-columns:repeat(2,1fr)} }
 @media (max-width:620px){
   .shell{padding:0 16px 70px}
-  header.hero{margin-top:18px;padding:20px 18px 0;border-radius:17px}
+  /* The SECOND copy of the missing-bottom-padding bug: the desktop rule was
+     fixed and this one still said `20px 18px 0`, so the phone kept the lede
+     one pixel off the panel edge. A shorthand that omits a side is the same
+     mistake wherever it is written, and it is worth knowing that fixing one
+     of them measures as fixed on the viewport you happen to be looking at. */
+  header.hero{margin-top:18px;padding:20px 18px;border-radius:17px}
   .herotop{gap:13px}
   .badge{width:38px;height:38px;border-radius:11px}
   .badge .i{width:19px;height:19px}
@@ -869,19 +947,54 @@ footer a{color:var(--blue)}
 .info{display:inline-flex;align-items:center;justify-content:center;vertical-align:middle;
   width:17px;height:17px;margin-left:6px;border-radius:50%;flex:none;
   border:1px solid var(--edge);background:rgba(127,178,214,.08);color:var(--dim);
-  font:600 10.5px/1 var(--sans);cursor:pointer;padding:0;
+  /* `var(--sans)` — another name that was never declared, so this `font`
+     shorthand was invalid and the (i) inherited 16px body text into a 17px
+     circle. It is `--display` like everything else on the page. */
+  font:600 10.5px/1 var(--display);cursor:pointer;padding:0;
   transition:color .18s,border-color .18s,background .18s,transform .18s}
 .info:hover,.info[aria-expanded="true"]{color:var(--blue);border-color:var(--blue);
   background:rgba(127,178,214,.16);transform:scale(1.12)}
 .info:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
-.pop{position:absolute;z-index:60;max-width:min(340px,calc(100vw - 32px));
-  background:#0f1517;border:1px solid var(--edge);border-radius:12px;
-  padding:13px 15px;color:var(--dim);font-size:13.2px;line-height:1.62;
-  box-shadow:0 18px 44px rgba(0,0,0,.55);
-  opacity:0;transform:translateY(-4px);pointer-events:none;transition:opacity .16s,transform .16s}
+/* ── WHY THE PANEL WAS HARD TO READ ────────────────────────────────────────
+ *
+ * Four separate things, none of them "the words are too long":
+ *
+ *   1. THE TITLE WAS NOT A TITLE. `.pop b` differed from the body by colour
+ *      alone, at the same size and nearly the same weight, so the panel
+ *      opened as one undifferentiated block of small text with no way in.
+ *   2. CODE SPANS READ AS LINKS. They were `var(--mint)` — which is this
+ *      page's link colour. "Ask the archive" is a job NAME, and rendering it
+ *      in the exact blue used for every anchor on the page told the reader it
+ *      was somewhere to click. They are chips now: mono, on a faint fill, in
+ *      the ordinary text colour.
+ *   3. THE BODY SAT AT `--dim`, the tone this page uses for secondary
+ *      captions. A panel someone deliberately opened is not secondary; it is
+ *      the thing they asked for.
+ *   4. NOTHING CONNECTED IT TO THE (i) THAT OPENED IT. It appeared as a
+ *      free-floating rectangle. It has a tail now, pointed at the marker,
+ *      which is most of what "hard to understand" was describing.
+ */
+.pop{position:absolute;z-index:60;width:max-content;max-width:min(380px,calc(100vw - 28px));
+  background:linear-gradient(180deg,#0d1a21,#081216);
+  border:1px solid var(--edge-lit);border-radius:14px;
+  padding:var(--s4);color:#C4DCE5;font-size:13.8px;line-height:1.7;
+  box-shadow:0 22px 52px rgba(0,0,0,.62);
+  opacity:0;transform:translateY(-4px);pointer-events:none;
+  transition:opacity .16s var(--ease),transform .16s var(--ease)}
 .pop.on{opacity:1;transform:none;pointer-events:auto}
-.pop b{color:var(--white);display:block;margin-bottom:4px}
-.pop code{font-family:var(--mono);color:var(--mint);font-size:12.4px}
+.pop b{display:block;color:var(--white);font-size:14.5px;font-weight:700;letter-spacing:-.01em;
+  margin:0 0 10px;padding-bottom:10px;border-bottom:1px solid var(--edge)}
+.pop code{font-family:var(--mono);font-size:12.6px;color:var(--white);
+  background:rgba(127,178,214,.14);border-radius:5px;padding:1px 5px;white-space:nowrap}
+/* The tail. `--tail` is set by showPop() to the centre of the marker, in the
+   panel's own coordinates, and clamped so it can never point past a rounded
+   corner at nothing. Two borders of a rotated square, so it inherits the
+   panel's edge exactly. */
+.pop::after{content:"";position:absolute;left:var(--tail,50%);margin-left:-6px;
+  width:11px;height:11px;transform:rotate(45deg);top:-6.5px;
+  background:#0d1a21;border:1px solid var(--edge-lit);border-right:0;border-bottom:0}
+.pop.up::after{top:auto;bottom:-6.5px;background:#081216;
+  border:1px solid var(--edge-lit);border-left:0;border-top:0}
 
 /* ── THE JOURNEY, AS A JOURNEY ─────────────────────────────────────────────
    Four equal bordered boxes in a row do not read as steps — they read as four
@@ -895,21 +1008,70 @@ footer a{color:var(--blue)}
    `display` and the new one never set it. Two collisions in one afternoon is
    the page telling us its class namespace is full: new primitives get a
    prefix. */
-.flow{display:grid;grid-template-columns:repeat(4,1fr);gap:0;margin:0 0 var(--s5);position:relative}
-.flow::before{content:"";position:absolute;left:6%;right:6%;top:19px;height:2px;
-  background:linear-gradient(90deg,var(--mint),var(--blue));opacity:.35;border-radius:2px}
-/* A gutter on EVERY step, including the last. Zeroing the final one let its
-   description run to the very edge of the band — the "text touching the
-   boundary" this page kept doing. */
-.fstep{position:relative;padding:0 var(--s4) 0 0;text-align:left}
-.fstep + .fstep{padding-left:var(--s4)}
-.fnum{position:relative;z-index:1;width:38px;height:38px;border-radius:50%;
-  display:flex;align-items:center;justify-content:center;
-  background:var(--ink);border:2px solid var(--edge);color:var(--dim);
-  font:600 14px/1 var(--mono);margin:0 0 13px;transition:border-color .25s,color .25s,transform .25s}
-.fstep:hover .fnum{border-color:var(--mint);color:var(--mint);transform:translateY(-2px)}
-.fstep b{display:block;font-size:15px;margin:0 0 5px;color:var(--white)}
-.fstep i{display:block;font-style:normal;font-size:13.2px;color:var(--dim);line-height:1.6}
+/* ── WHY THE RAIL IS GONE ──────────────────────────────────────────────────
+ *
+ * The previous version drew one gradient line across the whole row at
+ * `top:19px` — the vertical centre of the 38px numbered circles — and relied
+ * on each circle's opaque fill to mask the part behind it. That masking was
+ * never reliable: the circles are filled with `var(--ink)`, the page's base
+ * colour, while these sections sit on a lit, textured band that is NOT that
+ * colour, so the line read straight through every node. And the rail ran
+ * `6%` to `94%` of the row, which is not where the first and last nodes are —
+ * it began after node 1 and carried on past node 4, pointing at nothing.
+ *
+ * A stepper that has to be masked to look right is a stepper with a bug
+ * waiting in it. So the connector lives in the GAPS BETWEEN the cards, where
+ * there is nothing to cross: a small chevron, one per join, drawn with two
+ * borders rather than a glyph so no font has an opinion about it. Three
+ * chevrons for four steps, and the sequence is unmistakable without a line
+ * touching anything.
+ *
+ * ── AND WHY EACH STEP IS A CARD NOW ───────────────────────────────────────
+ *
+ * Four columns of small text under four small circles is a table with the
+ * rules removed. The eye gets no object to land on, which is what "plain and
+ * dry" describes. Each step is a surface now, with an icon to recognise it
+ * by and its ordinal set as a large ghosted numeral in the corner — big
+ * enough to carry the sequence on its own, faint enough never to compete
+ * with the words it sits behind.
+ */
+.flow{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:var(--s3);
+  margin:0 0 var(--s5)}
+/* NO `overflow:hidden`. The obvious instinct on a card with a big numeral
+   bleeding out of its corner is to clip it — and clipping is what ate the
+   chevrons on the first render, because they are positioned in the gap
+   OUTSIDE the card by design. The numeral is sized to fit without help. */
+.fstep{position:relative;padding:var(--s4);border-radius:14px;
+  border:1px solid var(--edge);background:var(--panel);text-align:left;
+  transition:border-color .22s var(--ease),transform .22s var(--ease)}
+/* The chevron sits in the gap to the LEFT of every step but the first, so it
+   is always over empty space. Two borders rotated, which needs no font and
+   no image. */
+.fstep + .fstep::after{content:"";position:absolute;z-index:2;
+  left:calc(var(--s3) / -2);top:calc(var(--s4) + 12px);
+  width:7px;height:7px;margin-left:-5px;
+  border-top:2px solid var(--edge-lit);border-right:2px solid var(--edge-lit);
+  transform:rotate(45deg);opacity:.85;
+  transition:border-color .22s var(--ease)}
+/* The ordinal, as typography rather than as a badge. */
+.fnum{position:absolute;right:var(--s3);top:-2px;pointer-events:none;
+  font:800 clamp(38px,4.4vw,52px)/1 var(--display);letter-spacing:-.05em;
+  color:rgba(147,182,192,.11);transition:color .22s var(--ease)}
+.fico{width:38px;height:38px;border-radius:11px;display:grid;place-items:center;
+  margin:0 0 var(--s3);
+  background:linear-gradient(150deg,rgba(88,233,255,.13),rgba(0,180,215,.03));
+  border:1px solid rgba(88,233,255,.20);
+  transition:border-color .22s var(--ease),transform .22s var(--ease)}
+.fico .i{width:19px;height:19px;color:var(--blue)}
+.fstep b{display:block;font-size:15px;margin:0 0 5px;color:var(--white);position:relative}
+.fstep i{display:block;font-style:normal;font-size:13.2px;color:var(--dim);line-height:1.6;position:relative}
+/* Bounded, and pointer-only — the same budget the gig crests run on. A phone
+   holds a faked hover after a tap, which would strand a card lifted. */
+@media (hover:hover) and (pointer:fine){
+  .fstep:hover{border-color:var(--edge-lit);transform:translateY(-2px)}
+  .fstep:hover .fico{border-color:rgba(88,233,255,.5);transform:translateY(-1px)}
+  .fstep:hover .fnum{color:rgba(88,233,255,.17)}
+}
 
 /* ── MOTION ────────────────────────────────────────────────────────────────
    Only opacity and transform, because those are the two a compositor can do
@@ -950,7 +1112,7 @@ footer a{color:var(--blue)}
     radial-gradient(120% 60% at 50% 0%,rgba(0,180,215,.10),transparent 62%),
     var(--ink)}
   .shell{padding-bottom:64px}
-  [style*="backdrop-filter"],.hero,.plate,.pop{backdrop-filter:none!important}
+  [style*="backdrop-filter"],.hero,.pop{backdrop-filter:none!important}
 
   .primary{grid-template-columns:1fr;gap:5px}
   .stats{grid-template-columns:1fr 1fr;gap:10px}
@@ -972,26 +1134,20 @@ footer a{color:var(--blue)}
 
   /* The flow becomes a timeline: the line runs down the left, the nodes sit
      on it, and each step is a row you read rather than a column you scan. */
-  .flow{grid-template-columns:1fr;gap:0}
-  .flow::before{left:18px;right:auto;top:8px;bottom:8px;width:2px;height:auto;
-    background:linear-gradient(180deg,var(--mint),var(--blue))}
-  /* A TIMELINE ROW: the node in column one, the words in column two.
-     THREE children in a TWO-column grid is the trap — `b` takes column 2 of
-     row 1 and `i` wraps to column ONE of row 2, which is the 38px node
-     column, and the description renders as a two-character ribbon down the
-     page. The node spans both rows instead, and the text is pinned to
-     column 2 explicitly rather than left to flow there. */
-  /* Keeps the right gutter the desktop rule sets. The first version wrote
-     `padding:0 0 22px`, which zeroed it, and every step description then ran
-     flush to the edge of its column — the exact "text touching the boundary"
-     this pass exists to end. */
-  .fstep{display:grid;grid-template-columns:38px 1fr;column-gap:14px;row-gap:2px;
-    padding:0 var(--s2) var(--s5) 0;align-items:start}
-  .fstep + .fstep{padding-left:0}
-  .fstep:last-child{padding-bottom:0}
-  .fnum{margin:0;grid-column:1;grid-row:1 / span 2}
-  .fstep b{grid-column:2;grid-row:1;margin-top:8px}
-  .fstep i{grid-column:2;grid-row:2}
+  /* ── THE STEPS, STACKED ────────────────────────────────────────────────
+     One card per row, and the chevron turns to point DOWN — which is the
+     direction the sequence actually runs on a phone. Rotating it is one
+     declaration because it was drawn from two borders rather than picked
+     from a font; a "›" glyph would have had to become a "⌄".
+     The card keeps its padding, so nothing here can reproduce the old
+     failure where a step's description ran flush to the edge. */
+  .flow{grid-template-columns:1fr;gap:var(--s3)}
+  .fstep{padding:14px 15px}
+  .fstep + .fstep::after{left:50%;margin-left:-4px;
+    top:calc(var(--s3) / -2);margin-top:-4px;transform:rotate(135deg)}
+  .fnum{font-size:40px;right:14px}
+  .fico{width:34px;height:34px;border-radius:10px;margin-bottom:11px}
+  .fico .i{width:17px;height:17px}
 
   /* The hero stacks: at 390px a 38px badge beside the words leaves the
      heading nowhere to go, and it collided with the line beneath it. */
@@ -1052,15 +1208,40 @@ footer a{color:var(--blue)}
      enough to tile without a visible repeat. */
   --grain:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)' opacity='.5'/%3E%3C/svg%3E");
 }
+/* ── HOW THE TEXTURE GETS BEHIND THE CONTENT ───────────────────────────────
+ *
+ * THE BUG THIS SHAPE EXISTS TO PREVENT, because it already cost us once.
+ *
+ * The first version lifted the content instead of sinking the texture:
+ *
+ *     .tex::before { z-index: 0 }
+ *     .tex > *     { position: relative; z-index: 1 }
+ *
+ * That works, and it also rewrites the `position` of every direct child of
+ * every textured panel. `.hero` has one: `.heroglow`, a 420px blur that is
+ * `position:absolute` precisely so it can hang off the corner without taking
+ * up room. The utility turned it into a relative, in-flow 420px block.
+ *
+ * MEASURED: the hero was 590px tall with 447px of nothing above the words,
+ * and the words themselves sat 1px off the bottom edge. Nothing errored. No
+ * test failed. It looked like a padding mistake, and the actual cause was a
+ * texture class three hundred lines away silently changing the layout of a
+ * child it was never meant to touch.
+ *
+ * So the texture sinks instead. `isolation:isolate` keeps a stacking context
+ * on the panel, and `z-index:-1` puts each layer above the panel's own
+ * background but below every scrap of its content — without the pseudo ever
+ * naming, or altering, a single child. A utility that only paints cannot
+ * break a layout, and this one now only paints.
+ */
 .tex{position:relative;isolation:isolate}
-.tex > *{position:relative;z-index:1}
-.tex::before{content:"";position:absolute;inset:0;pointer-events:none;z-index:0;
+.tex::before{content:"";position:absolute;inset:0;pointer-events:none;z-index:-1;
   border-radius:inherit;background-image:var(--grain);background-size:140px 140px;
   opacity:.022;mix-blend-mode:overlay}
 
 /* The lattice, for the big full-bleed band. Two gradients rather than an
    image, so it costs nothing to fetch and scales with the layer. */
-.tex-grid::after{content:"";position:absolute;inset:0;pointer-events:none;z-index:0;
+.tex-grid::after{content:"";position:absolute;inset:0;pointer-events:none;z-index:-1;
   background-image:
     linear-gradient(to right,rgba(147,182,192,.055) 1px,transparent 1px),
     linear-gradient(to bottom,rgba(147,182,192,.055) 1px,transparent 1px);
@@ -1071,7 +1252,7 @@ footer a{color:var(--blue)}
   mask-image:radial-gradient(120% 80% at 50% 0%,#000 30%,transparent 78%)}
 
 /* One light source per panel, placed where the eye enters it. */
-.tex-lit::after{content:"";position:absolute;inset:0;pointer-events:none;z-index:0;
+.tex-lit::after{content:"";position:absolute;inset:0;pointer-events:none;z-index:-1;
   border-radius:inherit;
   background:radial-gradient(90% 130% at 12% -10%,rgba(88,233,255,.10),transparent 58%)}
 .railcard.tex-lit::after{
@@ -1106,6 +1287,10 @@ footer a{color:var(--blue)}
   <symbol id="i-agent" viewBox="0 0 24 24"><rect x="4.5" y="7.5" width="15" height="11" rx="3"/><path d="M12 4.5v3"/><circle cx="9.2" cy="12.6" r="1.1"/><circle cx="14.8" cy="12.6" r="1.1"/><path d="M9.6 15.9h4.8"/></symbol>
   <symbol id="i-bolt" viewBox="0 0 24 24"><path d="M13.5 3 5.5 13.5h5L10 21l8.5-10.5h-5z"/></symbol>
   <symbol id="i-note" viewBox="0 0 24 24"><path d="M6 3.5h8.5L19 8v12.5H6z"/><path d="M14 3.5V8h5"/><path d="M9 13h6M9 16.5h4"/></symbol>
+  <!-- The preimage, for the step where it is published. A key and not a
+       padlock: the lock already has its own mark two steps earlier, and the
+       whole point of "we reveal" is that it is the OTHER half of that pair. -->
+  <symbol id="i-key" viewBox="0 0 24 24"><circle cx="8" cy="16" r="3.6"/><path d="M10.6 13.4 19 5"/><path d="M16.2 7.8l2.3 2.3M18.4 5.6l2.1 2.1"/></symbol>
 </defs></svg>
 
 <div class="shell">
@@ -1114,7 +1299,10 @@ footer a{color:var(--blue)}
        It was a heading and a wall of prose. It is a panel now: one badge, one
        line, and the four numbers that answer "what is here" without scrolling.
        The copy is a third of what it was; nothing true was lost. -->
-  <header class="hero tex tex-lit">
+  <!-- `tex-lit` is deliberately absent: this panel's light is folded into its
+       own ::after alongside the dot field, and two rules fighting over one
+       pseudo-element is a coin toss decided by specificity. -->
+  <header class="hero tex">
     <div class="heroglow" aria-hidden="true"></div>
     <div class="herotop">
       <span class="badge"><svg class="i"><use href="#i-lock"/></svg></span>
@@ -1448,18 +1636,26 @@ footer a{color:var(--blue)}
         agent. There is no one to appeal to, and no one who can run off with it.</template>
 
       <div class="flow">
-        <div class="fstep reveal"><div class="fnum">1</div><b>You lock</b>
+        <div class="fstep reveal"><span class="fnum" aria-hidden="true">1</span>
+          <span class="fico" aria-hidden="true"><svg class="i"><use href="#i-lock"/></svg></span>
+          <b>You lock</b>
           <i>The amount goes into the lock, with a deadline you set. Not to us.</i></div>
-        <div class="fstep reveal"><div class="fnum">2</div><b>We deliver</b>
+        <div class="fstep reveal"><span class="fnum" aria-hidden="true">2</span>
+          <span class="fico" aria-hidden="true"><svg class="i"><use href="#i-note"/></svg></span>
+          <b>We deliver</b>
           <i>The work is posted in public, where you and anyone else can read it.</i></div>
-        <div class="fstep reveal"><div class="fnum">3</div><b>We reveal</b>
+        <div class="fstep reveal"><span class="fnum" aria-hidden="true">3</span>
+          <span class="fico" aria-hidden="true"><svg class="i"><use href="#i-key"/></svg></span>
+          <b>We reveal</b>
           <i>The secret that opens the lock. Anyone can check it against the statement.</i></div>
-        <div class="fstep reveal"><div class="fnum">4</div><b>We are paid</b>
+        <div class="fstep reveal"><span class="fnum" aria-hidden="true">4</span>
+          <span class="fico" aria-hidden="true"><svg class="i"><use href="#i-done"/></svg></span>
+          <b>We are paid</b>
           <i>By the same frame that proves the work was delivered.</i></div>
       </div>
 
       <div class="refundline">
-        <svg class="i"><use href="#i-seal"/></svg>
+        <span class="refundseal" aria-hidden="true"><svg class="i"><use href="#i-seal"/></svg></span>
         <p><b>If we never deliver, we never reveal &mdash; and your lock refunds itself at your deadline.</b>
         Nobody arbitrates, and we cannot keep it. The worst case is that you wait and get all of it back.</p>
       </div>
@@ -1501,7 +1697,7 @@ footer a{color:var(--blue)}
          trusting as a window onto a public room. Placing an order needs the
          visitor's own key to sign. So the board stays a viewer and the till
          lives somewhere honest about being a till. -->
-    <section class="safety bare" id="hire">
+    <section class="safety hirepanel tex" id="hire">
       <div class="chap"><span class="num">03</span><h2>Ordering takes about a minute</h2></div>
       <p class="chapsub">You open the deal, we accept it. No code, no wallet to install &mdash;
         an identity you make here in the browser is enough.</p>
@@ -1518,13 +1714,21 @@ footer a{color:var(--blue)}
         exactly as it is.</template>
 
       <div class="flow">
-        <div class="fstep reveal"><div class="fnum">1</div><b>Pick the job</b>
+        <div class="fstep reveal"><span class="fnum" aria-hidden="true">1</span>
+          <span class="fico" aria-hidden="true"><svg class="i"><use href="#i-sell"/></svg></span>
+          <b>Pick the job</b>
           <i>Profile an agent, summarise a room, or take a day's digest.</i></div>
-        <div class="fstep reveal"><div class="fnum">2</div><b>Say what you want</b>
+        <div class="fstep reveal"><span class="fnum" aria-hidden="true">2</span>
+          <span class="fico" aria-hidden="true"><svg class="i"><use href="#i-note"/></svg></span>
+          <b>Say what you want</b>
           <i>A <code>did:key</code>, a room name, or a date &mdash; whichever the job needs.</i></div>
-        <div class="fstep reveal"><div class="fnum">3</div><b>Sign it in your browser</b>
+        <div class="fstep reveal"><span class="fnum" aria-hidden="true">3</span>
+          <span class="fico" aria-hidden="true"><svg class="i"><use href="#i-seal"/></svg></span>
+          <b>Sign it in your browser</b>
           <i>Your key stays with you. Nothing here can sign as you.</i></div>
-        <div class="fstep reveal"><div class="fnum">4</div><b>Watch it settle</b>
+        <div class="fstep reveal"><span class="fnum" aria-hidden="true">4</span>
+          <span class="fico" aria-hidden="true"><svg class="i"><use href="#i-done"/></svg></span>
+          <b>Watch it settle</b>
           <i>It lands on this board, checked the same way everyone else's is.</i></div>
       </div>
 
@@ -1553,21 +1757,28 @@ footer a{color:var(--blue)}
       </details>
 
       <div class="refundline">
-        <svg class="i"><use href="#i-seal"/></svg>
+        <span class="refundseal" aria-hidden="true"><svg class="i"><use href="#i-seal"/></svg></span>
         <p><b>If we never deliver, we never reveal &mdash; and your lock refunds itself at your deadline.</b>
         Every refusal names its reason, and the offer stays yours.</p>
       </div>
     </section>
 
-    <!-- The alpha warning used to be a standing box at the foot of the page.
-         It now lives in the (i) beside the order button, where somebody about
-         to spend something will actually read it, rather than below the fold
-         where nobody did. The words are unchanged. -->
-    <div class="note">
-      <b>Alpha</b>
-      Prices are provisional and the shelf changes as handlers are built. Everything this page
-      claims is read from the public board and checked in your browser.
-    </div>
+    <!-- ── THE ALPHA NOTE IS GONE, AND NOTHING TRUE WENT WITH IT ──────────
+         It made two claims and the page already made both, closer to where
+         they matter:
+
+           "everything this page claims is read from the public board and
+           checked in your browser" — the footer two lines down says exactly
+           this, in more detail, and names the spec.
+
+           "prices are provisional" — every card labels its figure FROM, and
+           the (i) beside the order button explains the rehearsal rail to the
+           one person about to act on it.
+
+         What was left was a third statement of things said better elsewhere,
+         sitting at the bottom where the reader has already decided. Removing
+         a disclaimer is only safe when it was a duplicate; this one was, and
+         the check is written above rather than asserted. -->
   </section>
 
   <section id="pBoard" hidden>
@@ -1692,9 +1903,21 @@ function showPop(btn) {
   left = Math.max(pad, Math.min(left, window.innerWidth - w - pad));
   let top = r.bottom + window.scrollY + 9;
   /* Flip above when there is no room below and there is room above. */
-  if (r.bottom + h + 20 > window.innerHeight && r.top > h + 20) top = r.top + window.scrollY - h - 9;
+  const up = r.bottom + h + 20 > window.innerHeight && r.top > h + 20;
+  if (up) top = r.top + window.scrollY - h - 9;
   el.style.left = left + "px";
   el.style.top = top + "px";
+
+  /* ── POINT THE TAIL AT THE MARKER ────────────────────────────────────────
+     The panel is centred on the button and then shoved back inside the
+     viewport, so after clamping it is usually NOT centred on it any more —
+     which is exactly when a reader needs to be told which (i) this belongs
+     to. The tail is placed in the panel's own coordinates from the button's
+     real centre, and clamped to the straight part of the edge so it can
+     never sit on a rounded corner pointing at nothing. */
+  const centre = r.left + r.width / 2 - left;
+  el.style.setProperty("--tail", Math.max(16, Math.min(centre, w - 16)) + "px");
+  if (up) el.classList.add("up");
   requestAnimationFrame(() => el.classList.add("on"));
 
   btn.setAttribute("aria-expanded", "true");

@@ -393,11 +393,29 @@ ok("the rehearsal rail is disclosed where somebody is about to act on it",
       && !!btn && !!cta && cta.contains(btn);
   }),
   "the words are unchanged; only where a reader meets them");
-ok("and the page still carries a standing alpha note",
+/* THE STANDING ALPHA NOTE IS GONE, AND THIS IS THE CHECK THAT IT WAS SAFE.
+   It made two claims. Deleting a disclaimer is only ever fine if the page
+   still makes them, so instead of asserting the box exists, assert that both
+   claims survive somewhere a reader actually meets them:
+     · "prices are provisional"  ->  every card labels its figure FROM, and
+       the (i) beside the order button explains the rehearsal rail;
+     · "read from the public board and checked in your browser"  ->  the
+       footer says it in more detail and names the spec.
+   If either ever stops being true, this fails and the note has to come back. */
+ok("the note's claims outlived the note — provisional pricing is still stated",
   await pg.evaluate(() => {
-    const n = document.querySelector("#pShop .note");
-    return !!n && /provisional|checked in your browser/i.test(n.textContent);
-  }));
+    const froms = [...document.querySelectorAll(".gig .fromlbl")];
+    const paper = document.getElementById("pop-paper");
+    return froms.length >= 3 && froms.every((f) => /from/i.test(f.textContent))
+        && !!paper && /not real yet|moves nothing/i.test(paper.innerHTML);
+  }),
+  "every price is a floor, and the rail is disclosed at the button");
+ok("and so is 'read from the public board, checked in your browser'",
+  await pg.evaluate(() => /read from the public network and checked in this tab/i
+    .test(document.body.textContent)),
+  "the footer carries it, with the spec link the note never had");
+ok("while the note itself is gone rather than merely hidden",
+  await pg.evaluate(() => document.querySelectorAll(".note").length === 0));
 await ctx.close();
 
 /* an empty network must read as empty, never as broken and never as busy */
@@ -470,6 +488,46 @@ ok("never assigns innerHTML", !/innerHTML|outerHTML|insertAdjacentHTML|document\
       "the face is drawn from a public DID; nothing else about identity belongs here");
   }
 }
+/* ── EVERY var() MUST RESOLVE ──────────────────────────────────────────────
+ *
+ * THE BUG THIS EXISTS FOR, because it was the most expensive one on the page
+ * and it produced no error of any kind.
+ *
+ * `--ink` and `--panel` were used in six rules and declared in none. An
+ * unresolvable `var()` does not fall back to anything sensible: the whole
+ * DECLARATION is invalid at computed-value time and the property reverts to
+ * its initial value. Silently. So:
+ *
+ *   · the phone's `body { background: …, var(--ink) }` was dropped entirely
+ *     and the mobile page had NO BACKGROUND — the browser painted its
+ *     default white canvas, and every translucent panel on the page washed
+ *     out over it;
+ *   · `.stat`, `.railcard` and `.plate` asked for `background:var(--panel)`
+ *     and were transparent;
+ *   · the flow's numbered circles were filled `var(--ink)`, i.e. not filled,
+ *     which is why the connector line appeared to run straight through them.
+ *
+ * Three bug reports, one missing pair of declarations, and the whole thing
+ * invisible on the viewport most of the work was done in. `--sans` did the
+ * same to a `font:` shorthand.
+ *
+ * Comments are stripped first, or this test fails on its own explanation of
+ * itself — which it did, the first time it was run.
+ */
+{
+  const css = src.slice(src.indexOf("<style>"), src.lastIndexOf("</style>"))
+    .replace(/\/\*[\s\S]*?\*\//g, "");
+  const declared = new Set([...css.matchAll(/(--[a-z0-9-]+)\s*:/gi)].map((m) => m[1]));
+  /* Only bare `var(--x)`. A `var(--x, fallback)` is a deliberate default and
+     stays legal. */
+  const dangling = [...new Set([...css.matchAll(/var\(\s*(--[a-z0-9-]+)\s*\)/gi)].map((m) => m[1]))]
+    .filter((n) => !declared.has(n));
+  ok("every custom property this page uses is one it declares",
+    dangling.length === 0,
+    dangling.length ? "UNDECLARED: " + dangling.join(", ") + " — these rules do nothing at all"
+                    : `${declared.size} declared, all of them reachable`);
+}
+
 ok("no key material anywhere", !/privateKey|secretKey|mnemonic|seedphrase|sign\(/.test(src));
 ok("no storage", !/localStorage|sessionStorage|indexedDB/.test(src));
 ok("it is not in the sitemap",
@@ -1278,9 +1336,20 @@ console.log("\n=== T. what the redesign has to keep true");
     const bleed = document.querySelector(".bleed");
     return {
       shellW: shell.getBoundingClientRect().width,
-      /* SAMENESS: more than one surface treatment on the page. */
+      /* SAMENESS: more than one surface treatment on the page.
+         This used to count `.bleed` and `.bare` — a full-bleed band and a
+         backgroundless one. But "no background" is only a distinct surface
+         in the sense that a hole is a distinct kind of wall, and the section
+         that wore it was the one holding the order button, which is the last
+         thing on the page that should look like a gap. It is a lit panel now.
+         So the test counts what it was always trying to measure: how many
+         DIFFERENT painted surfaces the page actually has. */
       bleeds: document.querySelectorAll(".bleed").length,
-      bares: document.querySelectorAll(".bare").length,
+      surfaces: new Set([...document.querySelectorAll("header.hero,.bleed,.hirepanel,.gig,.railcard,.stat")]
+        .map((e) => {
+          const c = getComputedStyle(e);
+          return c.backgroundImage + "|" + c.backgroundColor;
+        })).size,
       /* The full-bleed section must actually reach past the column. */
       /* Measured as the MECHANISM, not the rendered width: this section lives
          in the shop tab, and when the board tab is the visible one its box is
@@ -1299,8 +1368,8 @@ console.log("\n=== T. what the redesign has to keep true");
     };
   });
   ok("the measure is wider than the old 920px column", m.shellW > 1000, m.shellW + "px");
-  ok("the page has more than one surface, so importance can differ",
-    m.bleeds >= 1 && m.bares >= 1, `${m.bleeds} full-bleed, ${m.bares} flush`);
+  ok("the page has several distinct surfaces, so importance can differ",
+    m.bleeds >= 1 && m.surfaces >= 4, `${m.bleeds} full-bleed, ${m.surfaces} distinct surface treatments`);
   ok("and the full-bleed section really escapes the column",
     m.bleedEscapes, "otherwise it is just another card with a tint");
   ok("the four-box explainers are journeys now", m.flows === 2 && m.steps === 8,
