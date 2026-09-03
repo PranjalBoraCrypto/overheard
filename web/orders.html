@@ -1,0 +1,705 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="icon" href="/favicon.svg">
+<title>Your orders · Overheard</title>
+<meta name="description" content="Every order you have placed with Overheard, read from the public archive and matched to the key in this browser.">
+<meta name="theme-color" content="#00070A">
+<meta name="robots" content="noindex,nofollow">
+<!--
+  YOUR ORDERS.
+  ═══════════════════════════════════════════════════════════════════════════
+
+  WHY THIS IS A PAGE AND NOT A PANEL ON THE ORDER FORM
+
+  The order page had a short list at the bottom, which is the right thing
+  immediately after ordering — it answers "did that work?" — and the wrong
+  thing for somebody who came back a week later to find out what they had
+  asked for. Those are two different jobs: one is a receipt, the other is a
+  record. A receipt belongs beside the till. A record needs room, filters and
+  pages, and putting all of that under a checkout would bury the checkout.
+
+  So the form keeps three rows and a link, and everything else lives here.
+
+  ═══════════════════════════════════════════════════════════════════════════
+  WHERE THE LIST COMES FROM, AND WHAT IT CANNOT SAY
+
+  Two reads, merged:
+
+    /api/orders   the archive, filtered server-side by did. Complete back to
+                  the window the endpoint scans, and a few kilobytes rather
+                  than the three megabytes of daily shard it reads on our
+                  behalf.
+    /api/room     the live offers room, 200 messages. The archive trails the
+                  network by about one collector pass, so this covers the
+                  order placed four minutes ago that is not committed yet.
+
+  Deduplicated on the frame's own nonce, which is the sender's freshness value
+  and unique per order.
+
+  WHAT IT DOES NOT CLAIM. Whether an order was accepted, delivered or refunded
+  lives in a per-deal room derived from the contract id. Following those would
+  cost one upstream read per order — the exact cost that once made the deals
+  board render empty because it had spent the shared allowance on itself. So
+  "open" here means one thing only: this offer's own expiry has not passed, so
+  it could still be accepted. Every row links to the board, which is the page
+  that resolves the rest properly and checks every signature while it does.
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --navy-0:#000000; --navy-1:#02090C; --navy-2:#04141A;
+  --void:#00070A; --ink:var(--void);
+  --edge:#0E3A47; --edge-lit:#1B6478;
+  --white:#EAF7FB; --dim:#93B6C0; --faint:#5C818C;
+  --mint:#00B4D7; --blue:#58E9FF; --gold:#F2B33D; --red:#FF6B6B; --good:#3BE3B0;
+  --sell:#B98BFF;
+  --panel:rgba(4,20,26,.72);
+  --display:"Outfit",system-ui,sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+  --ease:cubic-bezier(.22,.68,.24,1);
+
+  --s1:6px; --s2:10px; --s3:16px;
+  --s4:clamp(18px,2.2vw,24px);
+  --s5:clamp(26px,3.4vw,36px);
+  --s6:clamp(34px,5vw,56px);
+  --gutter:clamp(18px,4vw,40px);
+
+  --surf-a:rgba(6,26,33,.92);
+  --surf-b:rgba(2,11,15,.92);
+  --lip:inset 0 1px 0 rgba(150,235,255,.07);
+  --lift-1:0 2px 4px -2px rgba(0,0,0,.6), 0 14px 34px -22px rgba(0,0,0,.95);
+  --lift-2:0 3px 8px -3px rgba(0,0,0,.65), 0 26px 56px -26px rgba(0,0,0,1), 0 0 0 1px rgba(27,100,120,.35);
+
+  --grain:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)' opacity='.5'/%3E%3C/svg%3E");
+}
+*{box-sizing:border-box;margin:0;padding:0}
+[hidden]{display:none !important}
+
+/* ── THE ATMOSPHERE, VERBATIM FROM rooms.html ─────────────────────────────*/
+body{background:var(--void);color:var(--white);font-family:var(--display);
+  font-size:16px;line-height:1.6;-webkit-font-smoothing:antialiased;overflow-x:hidden}
+.sky{position:fixed;inset:0;z-index:0;pointer-events:none;overflow:hidden}
+.sky i{position:absolute;display:block;border-radius:50%;filter:blur(90px);opacity:.45}
+.sky i:nth-child(1){width:520px;height:520px;left:-160px;top:-160px;background:radial-gradient(circle,#00B4D7,transparent 62%);animation:d1 26s ease-in-out infinite}
+.sky i:nth-child(2){width:460px;height:460px;right:-130px;top:20%;background:radial-gradient(circle,#0077A0,transparent 64%);animation:d2 31s ease-in-out infinite}
+@keyframes d1{50%{transform:translate(110px,80px) scale(1.15)}}
+@keyframes d2{50%{transform:translate(-80px,130px) scale(1.1)}}
+@media (max-width:900px){ .sky i:nth-child(n){animation:none} }
+.spot{position:fixed;inset:0;z-index:0;pointer-events:none;
+  background:radial-gradient(520px circle at var(--px,50%) var(--py,30%),rgba(0,180,215,.1),transparent 62%)}
+@media (hover:none),(pointer:coarse){}
+
+.shell{position:relative;z-index:1;max-width:1080px;margin:0 auto;
+  padding:0 var(--gutter) var(--s6)}
+.tex{position:relative;isolation:isolate}
+.tex::before{content:"";position:absolute;inset:0;pointer-events:none;z-index:-1;
+  border-radius:inherit;background-image:var(--grain);background-size:140px 140px;
+  opacity:.022;mix-blend-mode:overlay}
+.i{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.9;
+   stroke-linecap:round;stroke-linejoin:round;flex:none}
+
+/* ── the bar ──────────────────────────────────────────────────────────────
+   One row: where you came from on the left, where else you can go on the
+   right. The same bar sits on the order page, so moving between the two
+   never feels like leaving. */
+.topbar{display:flex;align-items:center;gap:var(--s3);flex-wrap:wrap;
+  padding:var(--s4) 0 0}
+.back{display:inline-flex;align-items:center;gap:8px;color:var(--dim);
+  text-decoration:none;font-size:13.5px;min-height:44px;
+  transition:color .2s var(--ease)}
+.back .i{width:14px;height:14px;transform:rotate(180deg)}
+.back:hover{color:var(--blue)}
+.barlink{margin-left:auto;display:inline-flex;align-items:center;gap:9px;
+  padding:9px 15px;border-radius:11px;text-decoration:none;
+  border:1px solid var(--edge);background:rgba(0,180,215,.07);color:var(--dim);
+  font-size:13.5px;font-weight:600;min-height:44px;
+  transition:color .2s var(--ease),border-color .2s var(--ease),background .2s var(--ease)}
+.barlink .i{width:15px;height:15px}
+.barlink:hover{color:var(--blue);border-color:var(--blue);background:rgba(0,180,215,.15)}
+.barlink b{font-family:var(--mono);font-size:11px;padding:2px 7px;border-radius:999px;
+  background:rgba(88,233,255,.16);color:var(--blue);font-weight:600}
+.barlink b:empty{display:none}
+
+/* ── the top ──────────────────────────────────────────────────────────────*/
+header.hero{position:relative;margin-top:var(--s3);padding:var(--s5);border-radius:20px;
+  overflow:hidden;border:1px solid var(--edge);
+  background:linear-gradient(160deg,rgba(0,180,215,.12),rgba(6,26,33,.92) 42%,rgba(2,11,15,.94));
+  box-shadow:var(--lip),0 4px 10px -4px rgba(0,0,0,.6),0 40px 80px -40px rgba(0,0,0,1)}
+header.hero::after{content:"";position:absolute;inset:0;pointer-events:none;z-index:-1;
+  border-radius:inherit;
+  background-image:
+    radial-gradient(80% 120% at 8% -20%,rgba(88,233,255,.13),transparent 58%),
+    radial-gradient(rgba(147,182,192,.16) 1px,transparent 1.2px);
+  background-size:auto,19px 19px;
+  -webkit-mask-image:linear-gradient(102deg,#000 0%,rgba(0,0,0,.42) 46%,transparent 76%);
+  mask-image:linear-gradient(102deg,#000 0%,rgba(0,0,0,.42) 46%,transparent 76%)}
+.herotop{position:relative;display:flex;gap:18px;align-items:flex-start}
+.badge{width:44px;height:44px;flex:none;border-radius:13px;display:grid;place-items:center;
+  color:#001016;background:linear-gradient(140deg,var(--blue),var(--mint));
+  box-shadow:0 8px 22px -10px rgba(0,180,215,.8)}
+.badge .i{width:22px;height:22px;stroke-width:2.1}
+.herowords{min-width:0}
+.eyebrow{display:inline-flex;align-items:center;gap:8px;font-family:var(--mono);font-size:11px;
+  letter-spacing:.16em;text-transform:uppercase;color:var(--mint)}
+h1{font-weight:800;font-size:clamp(30px,5vw,42px);line-height:1;letter-spacing:-.04em;
+  margin:9px 0 10px}
+.lede{color:var(--dim);font-size:15.5px;max-width:60ch}
+.lede code{font-family:var(--mono);font-size:13px;color:var(--blue)}
+
+/* ── the four figures ─────────────────────────────────────────────────────
+   Counts, never estimates, and each one says what it counted underneath —
+   the difference between a dashboard and a scoreboard. */
+.stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:var(--s3);
+  margin-top:var(--s4)}
+.stat{position:relative;border:1px solid var(--edge);border-radius:14px;padding:var(--s4);
+  background:var(--panel);min-width:0;overflow:hidden}
+.stat::after{content:"";position:absolute;inset:0;pointer-events:none;border-radius:inherit;
+  background:linear-gradient(180deg,rgba(127,214,193,.05),transparent 42%)}
+.statk{display:flex;align-items:center;gap:7px;font-family:var(--mono);font-size:10px;
+  letter-spacing:.13em;text-transform:uppercase;color:var(--dim);margin:0 0 10px}
+.statk .i{width:13px;height:13px;color:var(--blue)}
+.stat b{display:block;font-family:var(--mono);font-weight:600;font-size:clamp(22px,3vw,28px);
+  letter-spacing:-.02em;color:var(--white);line-height:1.05;font-variant-numeric:tabular-nums}
+.stat i{display:block;font-style:normal;font-size:12.5px;color:var(--faint);margin-top:7px;
+  line-height:1.5}
+.stats .stat:nth-child(2) b{color:var(--good)}
+.stats .stat:nth-child(4) b{color:var(--blue)}
+
+/* ── filters ──────────────────────────────────────────────────────────────*/
+.listhead{display:flex;align-items:center;gap:var(--s3);flex-wrap:wrap;
+  margin:var(--s5) 0 var(--s3)}
+.listhead h2{font-size:clamp(18px,2.4vw,23px);font-weight:700;letter-spacing:-.02em}
+.chips{display:flex;gap:var(--s1);margin-left:auto;flex-wrap:wrap;
+  background:rgba(0,0,0,.28);border:1px solid var(--edge);border-radius:12px;padding:4px}
+.chip{display:inline-flex;align-items:center;gap:7px;cursor:pointer;font:inherit;
+  padding:8px 14px;border-radius:9px;border:1px solid transparent;background:none;
+  color:var(--dim);font-size:13px;font-weight:600;
+  transition:color .2s var(--ease),background .2s var(--ease),border-color .2s var(--ease)}
+.chip span{font-family:var(--mono);font-size:11px;color:var(--faint)}
+.chip:hover{color:var(--white)}
+.chip[aria-pressed="true"]{color:var(--white);background:linear-gradient(180deg,var(--surf-a),var(--surf-b));
+  border-color:var(--edge-lit);box-shadow:var(--lip)}
+.chip[aria-pressed="true"] span{color:var(--blue)}
+.chip:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
+
+/* ── an order ─────────────────────────────────────────────────────────────*/
+.hlist{display:flex;flex-direction:column;gap:var(--s2)}
+.hrow{display:flex;align-items:center;gap:var(--s4);padding:var(--s3) var(--s4);
+  border:1px solid var(--edge);border-radius:14px;min-width:0;text-decoration:none;color:inherit;
+  background:linear-gradient(180deg,var(--surf-a),var(--surf-b));
+  box-shadow:var(--lip),var(--lift-1);
+  transition:border-color .2s var(--ease),transform .2s var(--ease)}
+@media (hover:hover) and (pointer:fine){
+  .hrow:hover{border-color:var(--edge-lit);transform:translateY(-2px)}
+  .hrow:hover .hgo{transform:translateX(3px);color:var(--blue)}
+}
+.hrow:focus-visible{outline:2px solid var(--blue);outline-offset:3px}
+.hem{width:42px;height:42px;flex:none;border-radius:12px;
+  background:linear-gradient(155deg,rgba(88,233,255,.09),rgba(0,180,215,.02) 62%);
+  border:1px solid rgba(88,233,255,.16)}
+.hem svg{width:100%;height:100%;display:block}
+.hem .st{fill:none;stroke:rgba(147,182,192,.34);stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round}
+.hem .st-f{fill:rgba(147,182,192,.26);stroke:none}
+.hem .lit-f{fill:var(--mint);stroke:none}
+.hem .acc{stroke:var(--mint)}
+.hwords{flex:1 1 220px;min-width:0}
+.hjob{display:block;font-weight:700;font-size:14.5px;letter-spacing:-.01em}
+.hbrief{display:block;font-family:var(--mono);font-size:12px;color:var(--faint);margin-top:3px;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.hprice{font-family:var(--mono);font-weight:600;font-size:16px;color:var(--white);
+  font-variant-numeric:tabular-nums;white-space:nowrap}
+.hprice span{font-size:10.5px;color:var(--faint);margin-left:4px;letter-spacing:.07em}
+.hmeta{display:flex;align-items:center;gap:var(--s3);flex-wrap:wrap}
+.hstate{font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;
+  padding:4px 10px;border-radius:999px;border:1px solid var(--edge);color:var(--dim);white-space:nowrap}
+.hstate.live{border-color:rgba(59,227,176,.45);color:var(--good);background:rgba(59,227,176,.08)}
+.hstate.gone{border-color:rgba(92,129,140,.4);color:var(--faint)}
+.hwhen{font-family:var(--mono);font-size:11.5px;color:var(--faint);white-space:nowrap;min-width:66px;
+  text-align:right}
+.hgo{width:16px;height:16px;color:var(--faint);flex:none;
+  transition:transform .2s var(--ease),color .2s var(--ease)}
+
+/* ── pagination ───────────────────────────────────────────────────────────*/
+.pager{display:flex;align-items:center;justify-content:center;gap:var(--s3);
+  margin-top:var(--s4)}
+.pbtn{display:inline-flex;align-items:center;gap:8px;cursor:pointer;font:inherit;
+  padding:10px 15px;border-radius:11px;border:1px solid var(--edge);
+  background:rgba(0,0,0,.22);color:var(--dim);font-size:13.5px;font-weight:600;
+  min-height:44px;
+  transition:color .2s var(--ease),border-color .2s var(--ease),background .2s var(--ease)}
+.pbtn .i{width:15px;height:15px}
+.pbtn:hover:not(:disabled){color:var(--blue);border-color:var(--blue);background:rgba(0,180,215,.12)}
+.pbtn:disabled{opacity:.35;cursor:not-allowed}
+.pbtn:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
+.pbtn.prev .i{transform:rotate(180deg)}
+.pwhere{font-family:var(--mono);font-size:12.5px;color:var(--dim);
+  font-variant-numeric:tabular-nums;white-space:nowrap}
+
+/* ── the states that are not "a list" ─────────────────────────────────────
+   Three of them, and each says what to DO next rather than only what is
+   wrong. An empty state with no way forward is a dead end with better
+   typography. */
+.card{border:1px solid var(--edge);border-radius:16px;padding:var(--s5);
+  background:var(--panel);text-align:center}
+.card .i{width:26px;height:26px;color:var(--blue);margin-bottom:var(--s3)}
+.card h3{font-size:17px;font-weight:700;margin-bottom:var(--s2)}
+.card p{color:var(--dim);font-size:14px;max-width:52ch;margin:0 auto}
+.card .go{display:inline-flex;align-items:center;justify-content:center;gap:9px;
+  margin-top:var(--s4);padding:13px 20px;border-radius:12px;text-decoration:none;
+  font-weight:700;font-size:15px;border:1px solid transparent;
+  background:linear-gradient(180deg,var(--blue),var(--mint));color:#00171d;
+  transition:transform .2s var(--ease),filter .2s var(--ease)}
+.card .go .i{width:16px;height:16px;margin:0;color:inherit}
+.card .go:hover{transform:translateY(-2px);filter:brightness(1.06)}
+
+/* ── the skeleton, so the page never flashes "you have no orders" ─────────
+   MEASURED PROBLEM, not a nicety: the list needs two network reads, and
+   until they land "no orders yet" and "still loading" look identical. A page
+   that tells a returning customer they have never ordered anything, and then
+   corrects itself half a second later, has said something false. */
+.skel{display:flex;flex-direction:column;gap:var(--s2)}
+.skelrow{height:74px;border-radius:14px;border:1px solid var(--edge);
+  background:linear-gradient(100deg,rgba(255,255,255,.02) 30%,rgba(255,255,255,.06) 50%,rgba(255,255,255,.02) 70%);
+  background-size:300% 100%;animation:shimmer 1.4s linear infinite}
+@keyframes shimmer{to{background-position:-150% 0}}
+
+.foot{margin-top:var(--s5);padding-top:var(--s4);border-top:1px solid var(--edge);
+  font-size:12.5px;color:var(--faint);line-height:1.7}
+.foot a{color:var(--blue)}
+.foot code{font-family:var(--mono);font-size:11.5px}
+
+@media (max-width:860px){
+  .stats{grid-template-columns:1fr 1fr;gap:var(--s2)}
+  .chips{margin-left:0;width:100%;justify-content:space-between}
+  .chip{flex:1 1 auto;justify-content:center;padding:9px 8px}
+  .hrow{flex-wrap:wrap;gap:var(--s2) var(--s3);padding:14px 15px}
+  .hwords{flex:1 1 150px}
+  .hmeta{width:100%;justify-content:space-between}
+  .hwhen{text-align:left}
+  .hgo{display:none}
+  header.hero{padding:var(--s4);border-radius:17px}
+  .herotop{flex-direction:column;gap:12px}
+  .pager{justify-content:space-between}
+}
+@media (prefers-reduced-motion:reduce){
+  *{transition:none!important;animation:none!important}
+}
+</style>
+</head>
+<body>
+<div class="sky" aria-hidden="true"><i></i><i></i></div>
+<div class="spot" aria-hidden="true"></div>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+  <symbol id="i-caret" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></symbol>
+  <symbol id="i-cart" viewBox="0 0 24 24"><path d="M4 6.5h3l2.2 9.4a1.6 1.6 0 0 0 1.6 1.2h6.4a1.6 1.6 0 0 0 1.6-1.2L20.5 9H8"/><circle cx="10.5" cy="20" r="1.1"/><circle cx="18" cy="20" r="1.1"/></symbol>
+  <symbol id="i-receipt" viewBox="0 0 24 24"><path d="M5.5 3.5h13v17l-2.2-1.6-2.2 1.6-2.1-1.6-2.2 1.6-2.1-1.6-2.2 1.6z"/><path d="M9 8.5h6M9 12.5h6"/></symbol>
+  <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 1.8"/></symbol>
+  <symbol id="i-done" viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="15" rx="2.5"/><path d="M3.5 9.5h17"/><path d="M8.5 14l2.4 2.4 4.6-4.8"/></symbol>
+  <symbol id="i-coin" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5v9M14.5 9.8c0-1.1-1.1-1.8-2.5-1.8s-2.5.7-2.5 1.8 1 1.5 2.5 1.9 2.5.9 2.5 2-1.1 1.9-2.5 1.9-2.5-.8-2.5-1.9"/></symbol>
+  <symbol id="i-empty" viewBox="0 0 24 24"><path d="M3.5 8.5 12 4l8.5 4.5v7L12 20l-8.5-4.5z"/><path d="M3.5 8.5 12 13l8.5-4.5M12 13v7"/></symbol>
+  <symbol id="i-key" viewBox="0 0 24 24"><circle cx="8" cy="16" r="3.6"/><path d="M10.6 13.4 19 5"/><path d="M16.2 7.8l2.3 2.3M18.4 5.6l2.1 2.1"/></symbol>
+</defs></svg>
+
+<!-- The three job marks, as templates to be CLONED rather than as strings to
+     be assigned. This page renders values that came off the public wire — a
+     brief, a job id, an amount — and the site's rule is that a page handling
+     wire data never assigns markup, not even markup it wrote itself. A
+     constant today is a variable after the next edit. -->
+<template id="mark-agent"><svg viewBox="0 0 96 96">
+  <circle class="st" cx="48" cy="48" r="27" stroke-dasharray="2.5 7" opacity=".8"/>
+  <circle class="lit-f" cx="48" cy="21" r="5"/>
+  <circle class="st-f" cx="71.4" cy="61.5" r="4.2"/><circle class="st-f" cx="24.6" cy="61.5" r="4.2"/>
+  <circle class="st" cx="48" cy="48" r="14"/><circle class="lit-f" cx="48" cy="48" r="5.5"/>
+</svg></template>
+<template id="mark-room"><svg viewBox="0 0 96 96">
+  <g class="st-f"><rect x="14" y="26" width="24" height="4" rx="2"/>
+    <rect x="14" y="36" width="18" height="4" rx="2"/><rect x="14" y="46" width="26" height="4" rx="2"/>
+    <rect x="14" y="56" width="15" height="4" rx="2"/><rect x="14" y="66" width="22" height="4" rx="2"/></g>
+  <path class="st acc" d="M44 28 C54 28 54 44 62 44 M44 48 C54 48 54 46 62 46 M44 68 C54 68 54 50 62 50" stroke-width="2" opacity=".65"/>
+  <g class="lit-f" opacity=".8"><rect x="66" y="40" width="18" height="6" rx="3"/><rect x="66" y="50" width="13" height="6" rx="3"/></g>
+</svg></template>
+<template id="mark-day"><svg viewBox="0 0 96 96">
+  <circle class="st" cx="48" cy="48" r="30" opacity=".45" stroke-width="1.6"/>
+  <g class="st" stroke-width="3"><line x1="48" y1="21" x2="48" y2="29"/><line x1="71.4" y1="34.5" x2="64.5" y2="38.5"/>
+    <line class="acc" x1="75" y1="48" x2="63" y2="48"/><line x1="61.5" y1="71.4" x2="57.5" y2="64.5"/>
+    <line class="acc" x1="48" y1="75" x2="48" y2="63"/><line x1="24.6" y1="61.5" x2="31.5" y2="57.5"/>
+    <line x1="21" y1="48" x2="29" y2="48"/><line x1="34.5" y1="24.6" x2="38.5" y2="31.5"/></g>
+  <line class="st" x1="48" y1="48" x2="48" y2="31" stroke-width="3" stroke="#58E9FF"/>
+  <circle class="lit-f" cx="48" cy="48" r="4.5"/>
+</svg></template>
+
+<div class="shell">
+  <div class="topbar">
+    <a class="back" href="/hire.html"><svg class="i"><use href="#i-caret"/></svg>Back to ordering</a>
+    <a class="barlink" href="/deals-preview-78cb4a1be923c6b4.html">
+      <svg class="i"><use href="#i-cart"/></svg>The deals board</a>
+  </div>
+
+  <header class="hero tex">
+    <div class="herotop">
+      <span class="badge"><svg class="i"><use href="#i-receipt"/></svg></span>
+      <div class="herowords">
+        <span class="eyebrow">signed by this browser</span>
+        <h1>Your orders</h1>
+        <p class="lede" id="lede">Reading the public archive for anything signed with your key…</p>
+      </div>
+    </div>
+  </header>
+
+  <div class="stats" id="stats" hidden>
+    <div class="stat"><span class="statk"><svg class="i"><use href="#i-receipt"/></svg>placed</span>
+      <b id="nAll">—</b><i>Orders signed with this key</i></div>
+    <div class="stat"><span class="statk"><svg class="i"><use href="#i-clock"/></svg>still open</span>
+      <b id="nOpen">—</b><i>Expiry has not passed yet</i></div>
+    <div class="stat"><span class="statk"><svg class="i"><use href="#i-done"/></svg>closed</span>
+      <b id="nShut">—</b><i>Past their own deadline</i></div>
+    <div class="stat"><span class="statk"><svg class="i"><use href="#i-coin"/></svg>committed</span>
+      <b id="nSum">—</b><i>Total asked across every order</i></div>
+  </div>
+
+  <div class="listhead" id="listhead" hidden>
+    <h2>Every order</h2>
+    <div class="chips" role="group" aria-label="Filter orders">
+      <button class="chip" type="button" data-filter="all" aria-pressed="true">All <span id="cAll"></span></button>
+      <button class="chip" type="button" data-filter="open" aria-pressed="false">Open <span id="cOpen"></span></button>
+      <button class="chip" type="button" data-filter="shut" aria-pressed="false">Closed <span id="cShut"></span></button>
+    </div>
+  </div>
+
+  <!-- Three mutually exclusive states, plus the list. Only one is ever
+       visible, and the skeleton is the one that shows first — see the note
+       beside `.skel` for why "no orders" must never be the loading state. -->
+  <div class="skel" id="skel"><div class="skelrow"></div><div class="skelrow"></div><div class="skelrow"></div></div>
+
+  <div class="card" id="signedout" hidden>
+    <svg class="i"><use href="#i-key"/></svg>
+    <h3>No identity in this browser</h3>
+    <p>Orders are matched to the key you sign with, and there is not one here yet.
+       Making one takes a moment and it never leaves this device.</p>
+    <a class="go" href="/create.html">Create an identity<svg class="i"><use href="#i-caret"/></svg></a>
+  </div>
+
+  <div class="card" id="empty" hidden>
+    <svg class="i"><use href="#i-empty"/></svg>
+    <h3>Nothing ordered yet</h3>
+    <p>Nothing signed with this key has reached the offers room. If you have just
+       placed an order, give the archive a minute — it trails the network by about
+       one collector pass.</p>
+    <a class="go" href="/hire.html">Order work<svg class="i"><use href="#i-caret"/></svg></a>
+  </div>
+
+  <div class="card" id="nofilter" hidden>
+    <svg class="i"><use href="#i-empty"/></svg>
+    <h3>Nothing in this filter</h3>
+    <p id="nofiltertext">You have orders, just none matching what is selected.</p>
+  </div>
+
+  <div class="hlist" id="hlist" hidden></div>
+
+  <div class="pager" id="pager" hidden>
+    <button class="pbtn prev" type="button" id="prev"><svg class="i"><use href="#i-caret"/></svg>Newer</button>
+    <span class="pwhere" id="pwhere"></span>
+    <button class="pbtn" type="button" id="next">Older<svg class="i"><use href="#i-caret"/></svg></button>
+  </div>
+
+  <p class="foot" id="foot"></p>
+</div>
+
+<script type="module">
+import { getSession, onSession, shortDid } from "/session.js";
+
+const $ = (id) => document.getElementById(id);
+const PER_PAGE = 10;
+
+const JOBS = {
+  "overheard-agent-profile":  { name: "Profile an agent",  mark: "agent"  },
+  "overheard-room-summary":   { name: "Summarise a room",  mark: "room"   },
+  "overheard-daily-digest":   { name: "Daily digest",      mark: "day"    },
+  "overheard-archive-question": { name: "Ask the archive", mark: "agent"  },
+};
+
+/* The same three marks the board and the order form use, so an order is
+   recognisable by its shape before its name is read. Cloned from templates in
+   the markup — see the note beside them. */
+const markFor = (kind) => document.getElementById("mark-" + kind)?.content.cloneNode(true) ?? null;
+
+const group = (n) => String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+
+const ago = (iso) => {
+  const t = Date.parse(iso);
+  if (!isFinite(t)) return "";
+  const d = Math.max(0, Math.round((Date.now() - t) / 1000));
+  if (d < 60) return "just now";
+  if (d < 3600) return Math.floor(d / 60) + "m ago";
+  if (d < 86400) return Math.floor(d / 3600) + "h ago";
+  return Math.floor(d / 86400) + "d ago";
+};
+
+let ID = null;
+let orders = [];
+let filter = "all";
+let page = 0;
+let meta = null;
+
+/* ── reading ───────────────────────────────────────────────────────────────
+ * Two sources, and neither is complete on its own. The archive is the record
+ * but trails the network by about a collector pass; the live room is current
+ * but only two hundred messages deep. Merged on the frame's nonce, which is
+ * the sender's own freshness value and unique per order — dedup on a
+ * timestamp would collide the moment two orders were placed in one second. */
+async function readArchive(did) {
+  try {
+    const r = await fetch(`/api/orders?did=${encodeURIComponent(did)}`, { cache: "no-store" });
+    if (!r.ok) return null;
+    return await r.json();
+  } catch { return null; }
+}
+
+async function readLive(did) {
+  try {
+    const r = await fetch("/api/room?room=tclk-offers&limit=200", { cache: "no-store" });
+    if (!r.ok) return [];
+    const j = await r.json();
+    if (j.error || j.source === "none") return [];
+    const out = [];
+    for (const m of j.messages ?? []) {
+      if (m.from !== did) continue;
+      const text = String(m.text ?? "");
+      if (!text.startsWith("tclk1 ")) continue;
+      let body; try { body = JSON.parse(text.slice(6)); } catch { continue; }
+      if (body?.type !== "offer" || body.job?.proto !== "overheard") continue;
+      out.push({
+        seq: Number(m.seq) || 0,
+        ts: m.ts ?? null,
+        job: String(body.job?.id ?? ""),
+        brief: String(body.job?.brief ?? ""),
+        amount: String(body.amount ?? ""),
+        asset: String(body.asset ?? ""),
+        expiresMs: Number(body.expiresMs) || null,
+        nonce: String(body.nonce ?? ""),
+      });
+    }
+    return out;
+  } catch { return []; }
+}
+
+async function load() {
+  if (!ID) return;
+  const [arch, live] = await Promise.all([readArchive(ID.did), readLive(ID.did)]);
+  meta = arch;
+  const seen = new Map();
+  /* Live first so its copy wins on a tie — same order, but read a moment
+     closer to now. */
+  for (const o of [...live, ...(arch?.orders ?? [])]) {
+    const key = o.nonce || `${o.seq}`;
+    if (!seen.has(key)) seen.set(key, o);
+  }
+  orders = [...seen.values()].sort((a, b) => b.seq - a.seq);
+  page = 0;
+  paint();
+}
+
+/* ── painting ─────────────────────────────────────────────────────────────*/
+const isOpen = (o) => isFinite(o.expiresMs) && o.expiresMs > Date.now();
+const matching = () => orders.filter((o) => filter === "all" ? true : filter === "open" ? isOpen(o) : !isOpen(o));
+
+function paint() {
+  $("skel").hidden = true;
+
+  if (!ID) {
+    $("signedout").hidden = false;
+    $("lede").textContent = "Orders are matched to the key you sign with. This browser does not have one yet.";
+    for (const id of ["stats", "listhead", "hlist", "pager", "empty", "nofilter"]) $(id).hidden = true;
+    $("foot").replaceChildren();
+    return;
+  }
+  $("signedout").hidden = true;
+
+  const led = $("lede");
+  led.replaceChildren(document.createTextNode("Everything signed with "));
+  const c = document.createElement("code");
+  c.textContent = shortDid(ID.did);
+  led.append(c, document.createTextNode(" that has reached the public offers room."));
+
+  if (!orders.length) {
+    $("empty").hidden = false;
+    for (const id of ["stats", "listhead", "hlist", "pager", "nofilter"]) $(id).hidden = true;
+    paintFoot();
+    return;
+  }
+  $("empty").hidden = true;
+
+  const open = orders.filter(isOpen).length;
+  const total = orders.reduce((s, o) => s + (Number(o.amount) || 0), 0);
+  $("nAll").textContent = group(orders.length);
+  $("nOpen").textContent = group(open);
+  $("nShut").textContent = group(orders.length - open);
+  $("nSum").textContent = group(total);
+  $("cAll").textContent = orders.length;
+  $("cOpen").textContent = open;
+  $("cShut").textContent = orders.length - open;
+  $("stats").hidden = false;
+  $("listhead").hidden = false;
+
+  const rows = matching();
+  const pages = Math.max(1, Math.ceil(rows.length / PER_PAGE));
+  /* Belt and braces, and honest about being that. Every path that shortens
+     the list today — changing the filter, reloading — sets `page` to 0 first,
+     so this clamp is currently unreachable: removing it changes no test and
+     no behaviour, which was checked rather than assumed.
+     It stays because the failure it prevents is invisible. A `paint()` that
+     ever runs with a stale index renders an empty list under a pager reading
+     "3 of 1", and that is indistinguishable from a page whose data failed to
+     load. One `Math.min` against a class of bug nobody would diagnose from a
+     screenshot is a trade worth making. */
+  page = Math.min(page, pages - 1);
+  const slice = rows.slice(page * PER_PAGE, page * PER_PAGE + PER_PAGE);
+
+  $("nofilter").hidden = rows.length > 0;
+  if (!rows.length) {
+    $("nofiltertext").textContent =
+      filter === "open" ? "None of your orders are still open — every one has passed its own expiry."
+                        : "None of your orders have closed yet.";
+  }
+  $("hlist").hidden = rows.length === 0;
+  $("pager").hidden = rows.length <= PER_PAGE;
+
+  const list = $("hlist");
+  list.replaceChildren();
+  for (const o of slice) list.append(rowFor(o));
+
+  $("pwhere").textContent = `${page + 1} of ${pages}`;
+  $("prev").disabled = page === 0;
+  $("next").disabled = page >= pages - 1;
+  paintFoot();
+}
+
+function rowFor(o) {
+  const spec = JOBS[o.job] ?? { name: o.job || "order", mark: "agent" };
+  const a = document.createElement("a");
+  a.className = "hrow";
+  a.href = "/deals-preview-78cb4a1be923c6b4.html";
+
+  const em = document.createElement("span");
+  em.className = "hem";
+  em.setAttribute("aria-hidden", "true");
+  const mark = markFor(spec.mark);
+  if (mark) em.append(mark);
+
+  const words = document.createElement("span");
+  words.className = "hwords";
+  const job = document.createElement("span");
+  job.className = "hjob";
+  job.textContent = spec.name;
+  const brief = document.createElement("span");
+  brief.className = "hbrief";
+  brief.textContent = o.brief || "—";
+  words.append(job, brief);
+
+  const meta2 = document.createElement("span");
+  meta2.className = "hmeta";
+  const price = document.createElement("span");
+  price.className = "hprice";
+  price.append(document.createTextNode(group(o.amount || "0")));
+  const unit = document.createElement("span");
+  unit.textContent = o.asset || "FLOP";
+  price.append(unit);
+  const state = document.createElement("span");
+  const open = isOpen(o);
+  state.className = "hstate " + (open ? "live" : "gone");
+  state.textContent = open ? "open" : "closed";
+  const when = document.createElement("span");
+  when.className = "hwhen";
+  when.textContent = ago(o.ts);
+  meta2.append(price, state, when);
+
+  const go = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  go.setAttribute("class", "i hgo");
+  const use = document.createElementNS("http://www.w3.org/2000/svg", "use");
+  use.setAttribute("href", "#i-caret");
+  go.append(use);
+
+  a.append(em, words, meta2, go);
+  a.setAttribute("aria-label",
+    `${spec.name}, ${o.brief || "no brief"}, ${o.amount} ${o.asset}, ${open ? "open" : "closed"} — open the deals board`);
+  return a;
+}
+
+/* The footer is where the list admits its own limits. A record that does not
+   say how far back it looked is a record you cannot rely on, and this one has
+   two real edges: the endpoint's day window, and the archive's lag. */
+function paintFoot() {
+  const f = $("foot");
+  f.replaceChildren();
+  if (!meta) {
+    f.textContent = "Could not read the archive just now. The live offers room is still being shown, which covers about the last two hundred messages.";
+    return;
+  }
+  const bits = [];
+  if (meta.days_scanned != null && meta.days_available != null) {
+    bits.push(`Read from ${meta.days_scanned} archived ${meta.days_scanned === 1 ? "day" : "days"}`
+      + (meta.days_available > meta.days_scanned
+        ? ` of ${meta.days_available} held — the window is the newest ${meta.window_days}`
+        : ""));
+  }
+  bits.push("merged with the live offers room so an order placed a moment ago is not missing");
+  f.append(document.createTextNode(bits.join(", ") + ". "));
+  f.append(document.createTextNode(
+    "“Open” means this offer's own expiry has not passed, not that nobody has accepted it — what happened after acceptance lives on the "));
+  const a = document.createElement("a");
+  a.href = "/deals-preview-78cb4a1be923c6b4.html";
+  a.textContent = "deals board";
+  f.append(a, document.createTextNode(", which checks every signature itself."));
+  if (meta.truncated) f.append(document.createTextNode(" This list is capped and older orders are not shown."));
+}
+
+/* ── controls ─────────────────────────────────────────────────────────────*/
+for (const chip of document.querySelectorAll(".chip")) {
+  chip.addEventListener("click", () => {
+    filter = chip.dataset.filter;
+    page = 0;
+    for (const c2 of document.querySelectorAll(".chip"))
+      c2.setAttribute("aria-pressed", String(c2 === chip));
+    paint();
+  });
+}
+$("prev").addEventListener("click", () => { if (page > 0) { page--; paint(); scrollTo({ top: $("listhead").offsetTop - 20, behavior: "smooth" }); } });
+$("next").addEventListener("click", () => { page++; paint(); scrollTo({ top: $("listhead").offsetTop - 20, behavior: "smooth" }); });
+
+/* ── start ────────────────────────────────────────────────────────────────*/
+function begin(s) {
+  ID = s;
+  if (!s) { paint(); return; }
+  load();
+}
+begin(getSession());
+onSession(begin);
+
+/* The light follows the pointer; the pointer stays the one the OS drew.
+   Lifted verbatim from rooms.html so every page feels identical under the
+   hand — the easing constant is what makes it glide rather than snap. */
+(() => {
+  if (!matchMedia("(hover: hover) and (pointer: fine)").matches) return;
+  if (matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  let x = innerWidth / 2, y = innerHeight / 2, cx = x, cy = y, running = false;
+  addEventListener("pointermove", (e) => {
+    x = e.clientX; y = e.clientY;
+    if (!running) { running = true; requestAnimationFrame(paintSpot); }
+  }, { passive: true });
+  function paintSpot() {
+    cx += (x - cx) * .16; cy += (y - cy) * .16;
+    document.documentElement.style.setProperty("--px", `${(cx / innerWidth) * 100}%`);
+    document.documentElement.style.setProperty("--py", `${(cy / innerHeight) * 100}%`);
+    if (Math.abs(x - cx) > .5 || Math.abs(y - cy) > .5) requestAnimationFrame(paintSpot); else running = false;
+  }
+  requestAnimationFrame(paintSpot);
+})();
+</script>
+</body>
+</html>

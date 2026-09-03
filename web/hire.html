@@ -134,9 +134,20 @@ body{background:var(--void);color:var(--white);font-family:var(--display);
    A checkout strips navigation on purpose — every extra door is a way to
    abandon it — but one clearly-marked exit is not a distraction. It is the
    difference between focused and trapped. */
-.back{display:inline-flex;align-items:center;gap:8px;margin:var(--s4) 0 0;
-  color:var(--dim);text-decoration:none;font-size:13.5px;
+.topbar{display:flex;align-items:center;gap:var(--s3);flex-wrap:wrap;padding:var(--s4) 0 0}
+.back{display:inline-flex;align-items:center;gap:8px;
+  color:var(--dim);text-decoration:none;font-size:13.5px;min-height:44px;
   transition:color .2s var(--ease)}
+.barlink{margin-left:auto;display:inline-flex;align-items:center;gap:9px;
+  padding:9px 15px;border-radius:11px;text-decoration:none;min-height:44px;
+  border:1px solid var(--edge);background:rgba(0,180,215,.07);color:var(--dim);
+  font-size:13.5px;font-weight:600;
+  transition:color .2s var(--ease),border-color .2s var(--ease),background .2s var(--ease)}
+.barlink .i{width:15px;height:15px}
+.barlink:hover{color:var(--blue);border-color:var(--blue);background:rgba(0,180,215,.15)}
+.barlink b{font-family:var(--mono);font-size:11px;padding:2px 7px;border-radius:999px;
+  background:rgba(88,233,255,.16);color:var(--blue);font-weight:600}
+.barlink b:empty{display:none}
 .back .i{width:14px;height:14px;transform:rotate(180deg)}
 .back:hover{color:var(--blue)}
 
@@ -402,6 +413,10 @@ input[type=text]:focus{outline:none;border-color:var(--blue);background:rgba(0,0
 .histhead{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;margin-bottom:var(--s3)}
 .histhead h2{font-size:clamp(17px,2.2vw,21px);font-weight:700;letter-spacing:-.02em}
 .histcount{font-family:var(--mono);font-size:12px;color:var(--faint)}
+.histall{margin-left:auto;display:inline-flex;align-items:center;gap:6px;
+  color:var(--blue);text-decoration:none;font-size:13.5px;font-weight:600}
+.histall .i{width:14px;height:14px;transition:transform .2s var(--ease)}
+.histall:hover .i{transform:translateX(3px)}
 .hlist{display:flex;flex-direction:column;gap:var(--s2)}
 .hrow{display:flex;align-items:center;gap:var(--s3);padding:13px var(--s4);
   border:1px solid var(--edge);border-radius:13px;background:var(--panel);
@@ -507,11 +522,21 @@ input[type=text]:focus{outline:none;border-color:var(--blue);background:rgba(0,0
   <symbol id="i-check" viewBox="0 0 24 24"><path d="M4.5 12.5 9.5 17.5 19.5 6.5"/></symbol>
   <symbol id="i-cart" viewBox="0 0 24 24"><path d="M4 6.5h3l2.2 9.4a1.6 1.6 0 0 0 1.6 1.2h6.4a1.6 1.6 0 0 0 1.6-1.2L20.5 9H8"/><circle cx="10.5" cy="20" r="1.1"/><circle cx="18" cy="20" r="1.1"/></symbol>
   <symbol id="i-code" viewBox="0 0 24 24"><path d="M8.5 7.5 3.5 12l5 4.5"/><path d="M15.5 7.5 20.5 12l-5 4.5"/><path d="M13.5 4.5l-3 15"/></symbol>
+  <symbol id="i-receipt" viewBox="0 0 24 24"><path d="M5.5 3.5h13v17l-2.2-1.6-2.2 1.6-2.1-1.6-2.2 1.6-2.1-1.6-2.2 1.6z"/><path d="M9 8.5h6M9 12.5h6"/></symbol>
   <symbol id="i-copy" viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2.2"/><path d="M15 9V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h3"/></symbol>
 </defs></svg>
 
 <div class="shell">
-  <a class="back" href="/deals-preview-78cb4a1be923c6b4.html"><svg class="i"><use href="#i-caret"/></svg>Back to the board</a>
+  <!-- One row: where you came from on the left, where else you can go on the
+       right. The orders page carries the same bar, so moving between the two
+       never feels like leaving one for another. The count is filled in once
+       the archive answers, and stays empty rather than showing a zero that
+       might just mean "not read yet". -->
+  <div class="topbar">
+    <a class="back" href="/deals-preview-78cb4a1be923c6b4.html"><svg class="i"><use href="#i-caret"/></svg>Back to the board</a>
+    <a class="barlink" href="/orders.html" id="ordersLink">
+      <svg class="i"><use href="#i-receipt"/></svg>Your orders<b id="ordersCount"></b></a>
+  </div>
 
   <header class="hero tex">
     <div class="herotop">
@@ -717,8 +742,9 @@ input[type=text]:focus{outline:none;border-color:var(--blue);background:rgba(0,0
            resolves that properly. -->
       <section id="history" hidden>
         <div class="histhead">
-          <h2>Your orders</h2>
+          <h2>Your recent orders</h2>
           <span class="histcount" id="histcount"></span>
+          <a class="histall" href="/orders.html">See all<svg class="i"><use href="#i-caret"/></svg></a>
         </div>
         <div class="hlist" id="hlist"></div>
         <p class="histnote" id="histnote"></p>
@@ -1096,7 +1122,11 @@ async function loadHistory() {
     let body; try { body = JSON.parse(text.slice(6)); } catch { continue; }
     if (body?.type !== "offer" || body.from !== ID.did) continue;
     if (body.job?.proto !== "overheard") continue;
-    mine.push({ body, at: m.at ?? m.created_at ?? null });
+    /* `ts` is what /api/room actually returns. The first version read
+       `m.at ?? m.created_at`, neither of which that endpoint has ever sent,
+       so every row's "when" column silently rendered empty — a wrong field
+       name reads exactly like a message with no timestamp. */
+    mine.push({ body, at: m.ts ?? null });
   }
   if (!mine.length) return;
   mine.reverse();                                   // newest first
@@ -1104,7 +1134,7 @@ async function loadHistory() {
   const list = $("hlist");
   list.replaceChildren();
   const now = Date.now();
-  for (const o of mine.slice(0, 8)) {
+  for (const o of mine.slice(0, 3)) {
     const row = document.createElement("a");
     row.className = "hrow";
     row.href = "/deals-preview-78cb4a1be923c6b4.html";
@@ -1130,13 +1160,18 @@ async function loadHistory() {
     list.append(row);
   }
   $("histcount").textContent = mine.length === 1 ? "1 order" : mine.length + " orders";
+  /* The badge in the bar. Only ever set from a read that succeeded, so an
+     empty badge means "not known", never "none". */
+  $("ordersCount").textContent = String(mine.length);
   const note = $("histnote");
   note.replaceChildren(document.createTextNode(
-    "Read from the offers room and matched to your key. What happened after each one was accepted lives on the "));
+    mine.length > 3
+      ? `Showing the newest 3 of ${mine.length} in the live offers room. The full record, with filters and every archived day, is on the `
+      : "Read from the live offers room and matched to your key. The full record, with every archived day, is on the "));
   const a = document.createElement("a");
-  a.href = "/deals-preview-78cb4a1be923c6b4.html";
-  a.textContent = "deals board";
-  note.append(a, document.createTextNode(", which checks every signature itself."));
+  a.href = "/orders.html";
+  a.textContent = "orders page";
+  note.append(a, document.createTextNode("."));
   $("history").hidden = false;
 }
 

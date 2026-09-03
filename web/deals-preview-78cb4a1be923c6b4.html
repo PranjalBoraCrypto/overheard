@@ -275,6 +275,13 @@ h1{font-weight:800;font-size:clamp(32px,5.6vw,46px);line-height:1;letter-spacing
   background:linear-gradient(180deg,rgba(127,214,193,.07),transparent 46%)}
 .railwhy{color:var(--dim);font-size:13.5px;line-height:1.6;margin:12px 0 16px}
 .railbtn{display:block;text-align:center;width:100%}
+.raillink{display:inline-flex;align-items:center;justify-content:center;gap:7px;width:100%;
+  margin-top:var(--s2);padding:9px;border-radius:10px;text-decoration:none;
+  color:var(--dim);font-size:13px;font-weight:600;
+  transition:color .2s var(--ease),background .2s var(--ease)}
+.raillink .i{width:14px;height:14px;transition:transform .2s var(--ease)}
+.raillink:hover{color:var(--blue);background:rgba(0,180,215,.08)}
+.raillink:hover .i{transform:translateX(3px)}
 .railnote{color:var(--dim);font-size:12.5px;line-height:1.55;margin:12px 0 0}
 .railrow{display:flex;justify-content:space-between;align-items:baseline;gap:10px;
   border-top:1px solid var(--edge);margin-top:13px;padding-top:11px;
@@ -1771,6 +1778,11 @@ footer a{color:var(--blue)}
         <p class="railwhy">Pick a job, say what you want, sign it in your browser.
           The payment sits in a lock only the finished work opens.</p>
         <a href="/hire.html" class="hirebtn railbtn">Order work &rarr;</a>
+        <!-- Second door, quieter on purpose: somebody who has already ordered
+             wants their record, and somebody who has not should not be given
+             two equal-weight buttons to choose between. -->
+        <a href="/orders.html" class="raillink">Your orders
+          <svg class="i"><use href="#i-caret"/></svg></a>
         <p class="railnote">Free while the testnet is shut &mdash; nothing of value moves yet
           <button class="info" type="button" aria-expanded="false" data-pop="pop-paper2" aria-label="What paper means">i</button></p>
         <div class="railrow"><span>Jobs open</span><b id="railOpen">3 of 4</b></div>
