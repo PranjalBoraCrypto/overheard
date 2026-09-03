@@ -139,10 +139,24 @@ console.log("\n=== E. when it cannot answer");
 /* ── F. the shelf is this file ───────────────────────────────────────────── */
 console.log("\n=== F. only what has a handler");
 {
-  ok("the profile job has a handler", CAN_DO.has("overheard-agent-profile"));
-  for (const j of ["overheard-archive-question", "overheard-room-summary", "overheard-daily-digest"])
-    ok(`${j.replace("overheard-", "")} does not, and says so rather than improvising`,
-      !CAN_DO.has(j) && !(await doJob(j, "x", { fetch: serve(REAL) })).ok);
+  /* THREE HANDLERS NOW, NOT ONE. Room summaries and the daily digest looked
+     like writing and turned out to be counting: who was there, how much was
+     said, how much of it was one bot repeating itself. All of that is in the
+     archive already, so building them needed no language model — and reaching
+     for one would have meant paying something to invent prose around numbers
+     we hold, which is the single thing an archive-backed deliverable must
+     never do. */
+  for (const j of ["overheard-agent-profile", "overheard-room-summary", "overheard-daily-digest"])
+    ok(`${j.replace("overheard-", "")} has a handler`, CAN_DO.has(j));
+
+  /* And the one that is genuinely different stays shut. An arbitrary question
+     needs judgement about what is being ASKED, and no amount of counting
+     supplies that. The shop refusing it is a lookup, not a promise anybody
+     has to remember to keep. */
+  ok("archive-question still does not, and says so rather than improvising",
+    !CAN_DO.has("overheard-archive-question") &&
+    !(await doJob("overheard-archive-question", "x", { fetch: serve(REAL) })).ok,
+    "counting cannot answer a question it has not been taught to read");
   ok("dispatch routes the one that exists",
     (await doJob("overheard-agent-profile", REAL.did, { fetch: serve(REAL) })).ok);
   ok("an unknown job id is refused", !(await doJob("something-else", "x", {})).ok);

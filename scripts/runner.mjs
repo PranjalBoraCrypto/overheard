@@ -22,6 +22,7 @@ import { readFrame, isFrameText, OFFERS_ROOM, offerId, canon, runDeal, lintOffer
 import { agentFromSeed, say, sweep } from "./agent.mjs";
 import { CAN_DO, doJob } from "./work.mjs";
 import { minterFor, recoverSecret } from "./secret.mjs";
+import { RAILS, RAILS_WE_TAKE } from "./rail.mjs";
 import { WANTS, planBuys, wantFrame, lockFrame, refundFrame, wire, safeRoom } from "./buy.mjs";
 
 /* The shop's public identity. The seed for it is in one secret store and is
@@ -59,7 +60,7 @@ export const JOBS = [
   { id: "overheard-room-summary", amount: "250" },
   { id: "overheard-daily-digest", amount: "1000" },
 ];
-const RAILS = ["paper"];
+/* The rail lives in one file so testnet day is one line — see rail.mjs. */
 
 /* Not a FLOP reserve — we cannot read a balance from anywhere, and a reserve
    figure we cannot check would be a decoration. What we CAN count is how many
@@ -208,9 +209,6 @@ export function ourDeals(frames) {
  * advertising moves off the wire and onto our own deals page, and the runner's
  * job here is to decide which of a stranger's offers it is honest to take.
  * ═════════════════════════════════════════════════════════════════════════ */
-
-/** The rails we can actually settle on. `paper` moves nothing and says so. */
-const RAILS_WE_TAKE = new Set(RAILS);
 
 /**
  * Why we must NOT take this offer. Empty means we may.

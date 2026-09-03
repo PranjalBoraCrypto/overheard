@@ -46,6 +46,7 @@
  * record — not a belief that the lock is a refund button.
  */
 import { canon, offerId, dealRoom, ms, runDeal, checkReveal } from "../web/tclk.js";
+import { RAIL, RAILS } from "./rail.mjs";
 
 /* What we want, what it is worth, and the brief that says what "done" means.
    `context` is where a seller looks to find out what is being asked; the live
@@ -88,7 +89,7 @@ export function buildWant(want, us, now = Date.now()) {
     amount: want.amount,
     asset: "FLOP",
     lock: "hash",
-    rails: ["paper"],
+    rails: RAILS,
     expiresMs: now + BUY_WINDOW.expires,
     claimByMs: now + BUY_WINDOW.claimBy,
     refundAfterMs: now + BUY_WINDOW.refundAfter,
@@ -225,7 +226,7 @@ export function planBuys(frames, rooms, us, now = Date.now()) {
  * Built here rather than at the call site so the tests can look at exactly
  * what would go on the wire without anything going on the wire.
  */
-export const lockFrame = (us, contract, rail = "paper") =>
+export const lockFrame = (us, contract, rail = RAIL) =>
   ({ type: "lock", from: us, contract, rail, ref: hex16() });
 
 export const refundFrame = (us, contract) =>

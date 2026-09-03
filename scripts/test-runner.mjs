@@ -25,6 +25,7 @@ import {
   plan, refusals, framesFrom, ourDeals, wake, settle, annotate,
 } from "./runner.mjs";
 import { secretFor, recoverSecret, minterFor } from "./secret.mjs";
+import { RAIL, RAILS, RAILS_WE_TAKE, IS_REHEARSAL } from "./rail.mjs";
 import { canon, offerId, lintOffer, readFrame, runDeal, checkReveal, contractId, dealRoom }
   from "../web/tclk.js";
 import { CAN_DO } from "./work.mjs";
@@ -674,6 +675,54 @@ console.log("\n=== M. the annotation");
   } finally {
     if (had === undefined) delete process.env.GITHUB_ACTIONS; else process.env.GITHUB_ACTIONS = had;
   }
+}
+
+/* ── N. one rail, named once ─────────────────────────────────────────────
+ * The rail is what actually holds the money while a lock is unopened. Today
+ * it is `paper`, which holds nothing — real frames, real state machine, no
+ * value. On the day that changes, the change must be one line.
+ *
+ * It used to be written out four times: our offers, our locks, the runner's
+ * shelf, and the sample offer on the deals page. That is fine until it
+ * changes, and then it is the exact shape of bug that gets fixed in three
+ * places and missed in the fourth — posting on a live rail while locking on a
+ * dead one. Nothing would fail loudly; the deals would just never settle.
+ * ─────────────────────────────────────────────────────────────────────── */
+console.log("\n=== N. the rail");
+{
+  const src = (f) => fs.readFileSync(path.join(ROOT, f), "utf8");
+  const strip = (t) => t.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+
+  ok("the shop's frames name the rail from one place",
+    /rails: RAILS/.test(src("scripts/buy.mjs")) && /rail = RAIL/.test(src("scripts/buy.mjs")));
+
+  /* The property, not the spelling: no file that BUILDS a frame may spell the
+     rail out for itself. Comments are stripped first — the reasoning above
+     each of these mentions `paper` constantly, and a test that fails on prose
+     is a test that gets weakened rather than obeyed. */
+  for (const f of ["scripts/runner.mjs", "scripts/buy.mjs", "scripts/work.mjs"]) {
+    const bare = strip(src(f));
+    ok(`${f} does not hard-code a rail of its own`,
+      !/["']paper["']/.test(bare),
+      (bare.match(/.{0,40}["']paper["'].{0,20}/) || ["clean"])[0].trim());
+  }
+
+  /* And the shopfront must quote the same rail it will actually be offered,
+     because the sample offer on that page is the interface a buyer copies. */
+  const page = src("web/deals-preview-78cb4a1be923c6b4.html");
+  const quoted = page.match(/"rails":\s*\[([^\]]*)\]/);
+  ok("the deals page quotes the rail the shop actually posts",
+    !!quoted && quoted[1].replace(/["'\s]/g, "") === RAIL,
+    quoted ? quoted[1].trim() : "no sample offer found");
+
+  /* Switching is one line, so prove it moves everything at once rather than
+     trusting that it does. */
+  ok("RAILS and the accept-set both follow RAIL",
+    RAILS.length === 1 && RAILS[0] === RAIL && RAILS_WE_TAKE.has(RAIL),
+    `RAIL=${RAIL} RAILS=${JSON.stringify(RAILS)}`);
+  ok("and the page's own note is still true while the rail is a rehearsal",
+    !IS_REHEARSAL || /testnet is not open|moves nothing/i.test(page),
+    "a rehearsal rail must be disclosed on the page, not just in the code");
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);
