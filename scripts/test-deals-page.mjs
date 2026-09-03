@@ -151,7 +151,13 @@ const ourOffer = (job, over = {}) => mkOffer({
   from: US, role: "payee", job: { id: job, proto: "overheard" }, ...over,
 });
 const OUR_FRAMES = [
-  msg(120, US, frame(ourOffer("overheard-archive-question", {
+  /* WAS `overheard-archive-question`. That job has no handler, so an open
+     sell offer of OURS for it is a fixture describing something that must
+     never happen — and it forced every "our offer is on the board" assertion
+     onto the one card that now carries no price and no delivery window at
+     all. `room-summary` is a job the shop can genuinely do, which is what
+     these assertions are really about. */
+  msg(120, US, frame(ourOffer("overheard-room-summary", {
     id: "0x" + "a1".repeat(32), amount: "1234", expiresMs: NOW + 4000000,
     nonce: "0ur0ffer00000001",
   }))),
@@ -995,15 +1001,15 @@ console.log("\n=== R. availability, read off the board");
      own button, and this badge was cut back to the one thing it CAN see —
      what is happening on the board this second. Hence the wording: it
      describes a frame, not an availability. */
-  const a = await chip("overheard-archive-question");
+  const a = await chip("overheard-room-summary");
   ok("a gig with our live offer on the board says so", a.text === "offer standing", a.text);
   ok("and is marked as open, not merely worded that way", /\bopen\b/.test(a.cls), a.cls);
   ok("and is reachable by keyboard, because it now does something", a.role === "button");
 
   ok("its price comes from the signed frame, not the markup",
-    await pV.evaluate(() => document.querySelector('.gig[data-job="overheard-archive-question"] .gigprice')
+    await pV.evaluate(() => document.querySelector('.gig[data-job="overheard-room-summary"] .gigprice')
       .textContent.startsWith("1,234")),
-    await pV.evaluate(() => document.querySelector('.gig[data-job="overheard-archive-question"] .gigprice').textContent));
+    await pV.evaluate(() => document.querySelector('.gig[data-job="overheard-room-summary"] .gigprice').textContent));
 
   const b2 = await chip("overheard-agent-profile");
   ok("a gig whose offer has been accepted reads as busy", b2.text === "one in flight", b2.text);
@@ -1013,7 +1019,7 @@ console.log("\n=== R. availability, read off the board");
      "not open right now" for a job with no frame on the board — which is
      every job we sell, permanently. The card must stay orderable; only the
      badge goes quiet. */
-  for (const j of ["overheard-room-summary", "overheard-daily-digest"]) {
+  for (const j of ["overheard-daily-digest"]) {
     const c = await chip(j);
     ok(`a gig with nothing on the board is silent, not shut (${j.replace("overheard-", "")})`,
       c.text === "" && c.cls === "soon", `"${c.text}" / ${c.cls}`);
@@ -1048,18 +1054,18 @@ console.log("\n=== R. availability, read off the board");
      is still sitting in the room. */
   IDENTITY.us = US;
   const keep = OUR_FRAMES[0].text;
-  OUR_FRAMES[0].text = "tclk1 " + canon(ourOffer("overheard-archive-question", {
+  OUR_FRAMES[0].text = "tclk1 " + canon(ourOffer("overheard-room-summary", {
     id: "0x" + "a1".repeat(32), amount: "1234", expiresMs: NOW - 60000,
     nonce: "0ur0ffer00000001",
   }));
   const { ctx: cW, pg: pW, errs: eW } = await open(1280, 1000, false);
   ok("an expired offer of ours does not keep the sign lit",
     await pW.evaluate(() => {
-      const c = document.querySelector('.gig[data-job="overheard-archive-question"] .soon');
+      const c = document.querySelector('.gig[data-job="overheard-room-summary"] .soon');
       return c.textContent === "" && !/\bopen\b/.test(c.className);
     }),
     await pW.evaluate(() => {
-      const c = document.querySelector('.gig[data-job="overheard-archive-question"] .soon');
+      const c = document.querySelector('.gig[data-job="overheard-room-summary"] .soon');
       return `"${c.textContent}" / ${c.className}`;
     }));
   ok("no errors", eW.length === 0, eW.join(" | "));
@@ -1099,9 +1105,15 @@ console.log("\n=== T. four things for sale, shaped like a listing");
         const b = c.querySelector(".emblem").getBoundingClientRect();
         return Math.abs(b.width - b.height) <= 1 && b.width >= 40;
       }),
+      /* The seller comes before the card's bottom block. That used to be
+         pinned to `.gigfoot` specifically, which returns -1 on the one card
+         that has no terms row — and `0 < -1` is false, so the assertion
+         failed for a card whose ordering was never in question. It asks for
+         whichever bottom block the card actually has. */
       order: cards.map((c) => {
         const kids = [...c.querySelector(".gigin").children].map((k) => k.className.split(" ")[0]);
-        return kids.indexOf("seller") < kids.indexOf("gigfoot");
+        const foot = kids.indexOf("gigfoot") >= 0 ? kids.indexOf("gigfoot") : kids.indexOf("gigstatus");
+        return foot >= 0 && kids.indexOf("seller") < foot;
       }),
     };
   });
@@ -1110,8 +1122,43 @@ console.log("\n=== T. four things for sale, shaped like a listing");
   ok("and every emblem is square, so no layout can crop it", g.square);
   ok("the seller is named on every card", g.sellers === 4);
   ok("and named before the price, not after it", g.order.every(Boolean));
-  ok("every card says how long", g.deliv.every((d) => d.trim().length > 0), g.deliv.join(" · "));
-  ok("and frames the price as a floor, because these are provisional", g.from === 4);
+
+  /* ── TERMS ONLY ON THE CARDS THAT HAVE ANY ────────────────────────────────
+     These three used to require a price, a "From" and a delivery window on
+     ALL FOUR cards — including the one that says, in the same card, that we
+     cannot do the job at all. So the suite was actively holding in place a
+     price nobody could pay and a deadline for work nobody could order: the
+     exact kind of claim the rest of this file exists to forbid.
+     A card with a handler must state its terms. A card without one must
+     state none, and say instead when they will exist. */
+  const sellable = await pT.evaluate(() =>
+    [...document.querySelectorAll(".gig[data-job]")]
+      .filter((c) => c.querySelector("a.gigcta"))
+      .map((c) => ({
+        job: c.dataset.job,
+        deliv: c.querySelector("[data-deliv]")?.textContent?.trim() ?? "",
+        from: c.querySelector(".fromlbl")?.textContent?.trim() ?? "",
+        price: c.querySelector(".gigprice")?.textContent?.trim() ?? "",
+      })));
+  const shut = await pT.evaluate(() =>
+    [...document.querySelectorAll(".gig[data-job]")]
+      .filter((c) => !c.querySelector("a.gigcta"))
+      .map((c) => ({
+        job: c.dataset.job,
+        terms: [c.querySelector("[data-deliv]"), c.querySelector(".gigprice"),
+                c.querySelector(".fromlbl")].filter(Boolean).length,
+        says: c.querySelector(".crestsoon")?.textContent?.replace(/\s+/g, " ").trim() ?? "",
+      })));
+  ok("every orderable card says how long", sellable.length === 3 &&
+    sellable.every((c) => c.deliv.length > 0), sellable.map((c) => c.deliv).join(" · "));
+  ok("and frames its price as a floor, because these are provisional",
+    sellable.every((c) => c.from === "From" && c.price.length > 0),
+    sellable.map((c) => c.from + " " + c.price).join(" · "));
+  ok("and the card with no handler quotes no price and no deadline",
+    shut.length === 1 && shut[0].terms === 0,
+    shut.length ? `${shut[0].job}: ${shut[0].terms} term(s) still shown` : "no shut card found");
+  ok("it says when there will be one instead of leaving a blank",
+    /price set when it opens/i.test(shut[0]?.says ?? ""), shut[0]?.says);
 
   /* The absent half. Each of these would be an invention, and this page is
      the one place on the site where an invention would do real damage. */
@@ -1184,12 +1231,20 @@ console.log("\n=== T. four things for sale, shaped like a listing");
   const { ctx: cD, pg: pD, errs: eD } = await open(1280, 1000, false);
   await pD.click('.pri[data-main="shop"]');
   await pD.waitForTimeout(200);
+  /* `room-summary` is the job our fixture offer is for; `daily-digest` has
+     no offer of ours. Both were pointed at `archive-question` before, which
+     now carries no delivery window at all — a card that advertises no terms
+     cannot be the fixture for "the terms come from the signed frame". */
   const live = await pD.evaluate(() =>
-    document.querySelector('.gig[data-job="overheard-archive-question"] [data-deliv]').textContent);
-  const shut = await pD.evaluate(() =>
     document.querySelector('.gig[data-job="overheard-room-summary"] [data-deliv]').textContent);
+  const shut = await pD.evaluate(() =>
+    document.querySelector('.gig[data-job="overheard-daily-digest"] [data-deliv]').textContent);
   ok("a gig with a live offer shows the window in the signed frame", live !== "12h" && /[hmd]/.test(live), live);
-  ok("and one with no offer shows the window we intend to post", shut === "12h", shut);
+  /* daily-digest ships "daily" rather than a duration, which is the point:
+     with no signed frame the card shows exactly the markup it was written
+     with, whatever that says, and does not invent a number. */
+  ok("and one with no offer shows the window we intend to post, untouched",
+    shut === "daily", shut);
   ok("our DID appears under the shop name once we have one",
     await pD.evaluate(() => (document.querySelector(".sdid")?.textContent || "").length > 0));
   ok("no errors", eD.length === 0, eD.join(" | "));
@@ -1360,7 +1415,12 @@ console.log("\n=== W. the listing, redrawn for a phone");
   await pW2.click('.pri[data-main="shop"]');
   await pW2.waitForTimeout(250);
   const m = await pW2.evaluate(() => {
-    const g = document.querySelector(".gig");
+    /* The FIRST card is the one with no handler and therefore no price, and
+       everything below measures where the price sits. Measure an orderable
+       card instead — `.gig` alone silently picked the one card that cannot
+       satisfy the thing being asserted. */
+    const g = [...document.querySelectorAll(".gig[data-job]")]
+      .find((c) => c.querySelector("a.gigcta"));
     const crest = g.querySelector(".gigcrest").getBoundingClientRect();
     const em = g.querySelector(".emblem").getBoundingClientRect();
     const price = g.querySelector(".gigprice").getBoundingClientRect();

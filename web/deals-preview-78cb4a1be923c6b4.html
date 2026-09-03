@@ -641,6 +641,11 @@ pre.raw{font-family:var(--mono);font-size:11px;line-height:1.6;color:var(--dim);
 .crestnum .fromlbl{line-height:1}
 .crestnum .gigprice{font-size:23px;line-height:1}
 .crestnum .gigprice span{display:block;margin:0;font-size:10px;line-height:1.15}
+/* Where a price would be, on a job that has no price yet. Deliberately in
+   the price's slot and the price's typeface, so the eye that went looking
+   for a figure gets the answer rather than a blank. */
+.crestsoon{font-family:var(--mono);font-size:11px;line-height:1.5;color:var(--faint);
+  letter-spacing:.04em}
 
 /* ── what moves, per emblem ────────────────────────────────────────────────
  * Each of these is a verb: the probe goes DOWN into the strata, the ring
@@ -755,6 +760,10 @@ pre.raw{font-family:var(--mono);font-size:11px;line-height:1.6;color:var(--dim);
    actually enforces: claimByMs, a term and not a promise. */
 .gigfoot{display:flex;align-items:center;gap:12px;margin-top:auto;
   padding-top:13px;border-top:1px solid var(--edge)}
+/* A card with no terms to state has no footer row, and the bottom anchor has
+   to move with it — otherwise the one card without a `.gigfoot` loses the
+   `margin-top:auto` that keeps every card's button on the same line. */
+.gig:not(:has(.gigfoot)) .gigstatus{margin-top:auto}
 .deliv{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--faint);white-space:nowrap}
 .deliv .i{width:13px;height:13px;color:var(--dim)}
 .deliv b{color:var(--dim);font-family:var(--mono);font-weight:600;font-size:12.5px}
@@ -1579,9 +1588,18 @@ footer a{color:var(--blue)}
               </g>
             </svg>
           </span>
+          <!-- NO PRICE AND NO DELIVERY WINDOW ON THIS ONE.
+               It carried "FROM 1,000 FLOP" and "12h to deliver" while also
+               saying, twelve lines down, that we cannot do it at all. Terms
+               for a service that does not exist are the one kind of claim
+               this page refuses everywhere else, and a figure nobody can act
+               on is worse than no figure: a reader who takes it seriously has
+               been told something untrue, and one who does not starts
+               wondering which of the other three prices are real.
+               `refuseTake()` would reject an offer at this price today, so
+               the card now says exactly what the shop would. -->
           <span class="crestnum">
-            <span class="fromlbl">From</span>
-            <span class="gigprice">1,000<span>FLOP</span></span>
+            <span class="crestsoon">Price set <br>when it opens</span>
           </span>
         </div>
         <div class="gigin">
@@ -1605,9 +1623,10 @@ footer a{color:var(--blue)}
                checkable by anyone in about a minute (read a live room and
                count what comes back), and is the actual moat anyway. -->
           <span class="moat"><svg class="i"><use href="#i-bolt"/></svg>live rooms only return 200 messages</span>
-          <div class="gigfoot">
-            <span class="deliv"><svg class="i"><use href="#i-clock"/></svg><b data-deliv>12h</b>&nbsp;to deliver</span>
-          </div>
+          <!-- The `.gigfoot` row is gone with the delivery window it held: a
+               bordered rule with nothing above it is a divider dividing one
+               thing from nothing. `.gigstatus` takes over as the bottom
+               anchor — see the `:has()` rule beside `.gigfoot{margin-top}`. -->
           <div class="gigstatus">
             <span class="gigcta off">No handler yet &mdash; we will not sell what we cannot deliver</span>
             <span class="soon"></span>
