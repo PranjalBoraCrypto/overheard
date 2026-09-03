@@ -49,8 +49,12 @@ const strip = (t) => t.replace(/<!--[\s\S]*?-->/g, "").replace(/\/\*[\s\S]*?\*\/
 const code = strip(page);
 
 console.log("=== A. it holds nothing, and renders nothing as markup");
+/* Against `code`, not `page`. The rule is that this file holds no key
+   material, not that it may not use the WORD — and the comment explaining
+   what the bar asks for (a passphrase when this browser holds a vault, a seed
+   when it does not) has to be allowed to say so. */
 ok("no key material of any kind",
-  !/privateKey|secretKey|mnemonic|\bseed\b/i.test(page));
+  !/privateKey|secretKey|mnemonic|\bseed\b/i.test(code));
 ok("no 64-hex string anywhere", !/[0-9a-f]{64}/i.test(page),
   (page.match(/[0-9a-f]{64}/i) || ["clean"])[0].slice(0, 20));
 /* This page renders values that came off the public wire — a brief somebody
@@ -78,7 +82,22 @@ ok("the ground is the site's --void", /body\{background:var\(--void\)/.test(page
 ok("and something moves the spotlight",
   /setProperty\("--px"/.test(page) && /hover: hover\) and \(pointer: fine/.test(page));
 
-console.log("\n=== C. you can get here, and get back");
+console.log("\n=== C. the bar, and with it every identity state");
+/* The three states the visitor asked for are all bar.js's, and mounting it is
+   the whole implementation. Asserting the COMPONENT rather than any markup is
+   the point: the bar's own comments record that two earlier attempts at "one
+   bar" were copies of some CSS and both rotted. A fourth copy of an auth flow
+   is the failure mode here, not a missing feature. */
+for (const [name, file] of [["orders", page], ["order form", hire], ["the board", board]]) {
+  ok(`${name} mounts the site's bar`,
+    /<script src="\/bar\.js" type="module"><\/script>/.test(file) &&
+    /<overheard-bar><\/overheard-bar>/.test(file));
+}
+ok("and none of them rolls its own sign-in",
+  ![page, hire, board].some((f) => /type="password"|openVault\(|sealVault\(|keyFromSeed\(/.test(f)),
+  "a passphrase field on a page is a second copy of the vault flow");
+
+console.log("\n=== C2. you can get here, and get back");
 ok("the order page carries a link to it", /href="\/orders\.html"/.test(hire));
 ok("and so does the board's rail", /href="\/orders\.html"/.test(board));
 ok("it links back to ordering", /href="\/hire\.html"/.test(page));
@@ -135,15 +154,38 @@ const asMessage = (o) => ({
 });
 
 const TYPES = { ".html": "text/html", ".js": "text/javascript", ".svg": "image/svg+xml" };
-const SESSION = (did) => did
-  ? `export const getSession=()=>({did:${JSON.stringify(did)}});export const onSession=()=>{};` +
-    `export const shortDid=(d)=>d.slice(0,12)+"…"+d.slice(-4);`
-  : `export const getSession=()=>null;export const onSession=()=>{};` +
-    `export const shortDid=(d)=>String(d);`;
+/* ── THE STUB HAS TO CARRY THE WHOLE MODULE'S SURFACE ──────────────────────
+   The page now mounts <overheard-bar>, and bar.js imports thirteen names from
+   /session.js. A stub exporting three of them makes the browser throw
+   "does not provide an export named PW_MIN" — an ES module import error, so
+   the bar never defines its custom element and simply is not there. Nothing
+   about the PAGE is wrong in that state, which is what makes it worth
+   guarding: a hand-written stub is a second copy of an interface, and this
+   one is generated from the real module's export list so it cannot fall
+   behind it again. */
+const REAL_SESSION = fs.readFileSync(path.join(ROOT, "web/session.js"), "utf8");
+const EXPORTED = [...new Set([
+  ...[...REAL_SESSION.matchAll(/export\s+(?:async\s+)?function\s+([A-Za-z_$][\w$]*)/g)].map((m) => m[1]),
+  ...[...REAL_SESSION.matchAll(/export\s+const\s+([A-Za-z_$][\w$]*)/g)].map((m) => m[1]),
+])];
+const SESSION = (did) => {
+  const overrides = {
+    getSession: did ? `()=>({did:${JSON.stringify(did)}})` : "()=>null",
+    onSession: "()=>{}",
+    shortDid: did ? '(d)=>String(d).slice(0,12)+"…"+String(d).slice(-4)' : "(d)=>String(d)",
+    hueOf: "()=>200",
+    PW_MIN: "6",
+  };
+  return EXPORTED.map((n) =>
+    `export const ${n} = ${overrides[n] ?? "(()=>{ const f = async () => null; return f; })()"};`
+  ).join("\n");
+};
 
 let signedInAs = DID;
 let archiveAnswers = true;
 let liveOverlap = 3;
+/* Held open on purpose for the first-paint test — see section H. */
+let archiveDelayMs = 0;
 
 const srv = http.createServer((q, r) => {
   const u = q.url.split("?")[0];
@@ -152,12 +194,13 @@ const srv = http.createServer((q, r) => {
     return r.end(SESSION(signedInAs));
   }
   if (u === "/api/orders") {
-    r.writeHead(200, { "content-type": "application/json" });
-    if (!archiveAnswers) return r.end(JSON.stringify({ source: "unavailable", orders: [] }));
-    return r.end(JSON.stringify({
-      did: DID, source: "repository", orders: FIXTURE,
-      days_scanned: 2, days_available: 2, window_days: 14, truncated: false,
-    }));
+    const body = archiveAnswers
+      ? JSON.stringify({ did: DID, source: "repository", orders: FIXTURE,
+          days_scanned: 2, days_available: 2, window_days: 14, truncated: false })
+      : JSON.stringify({ source: "unavailable", orders: [] });
+    const send = () => { r.writeHead(200, { "content-type": "application/json" }); r.end(body); };
+    if (archiveDelayMs) setTimeout(send, archiveDelayMs); else send();
+    return;
   }
   if (u === "/api/room") {
     r.writeHead(200, { "content-type": "application/json" });
@@ -270,21 +313,31 @@ console.log("\n=== G. the filters agree with the figures");
 
 console.log("\n=== H. the states that are not a list");
 {
-  /* THE FAILURE THIS SECTION EXISTS FOR: on first paint, before either read
-     has landed, the page must not be telling a returning customer that they
-     have never ordered anything. */
+  /* THE FAILURE THIS SECTION EXISTS FOR: before the reads land, the page must
+     not be telling a returning customer they have never ordered anything.
+
+     The first version raced it — load with `waitUntil:"commit"` and sample
+     immediately — which is not a test, it is a coin toss, and it started
+     failing the moment mounting the bar changed how long the document took to
+     settle. So the ANSWER is held open instead. Now the loading state is a
+     state the test can stand in, rather than an instant it has to catch. */
+  archiveDelayMs = 900;
   const { ctx, pg } = await open();
-  await pg.goto("http://localhost:9441/orders.html", { waitUntil: "commit" });
-  const first = await pg.evaluate(() => ({
-    skel: document.getElementById("skel").hidden,
-    empty: document.getElementById("empty").hidden,
-  })).catch(() => null);
-  if (first) {
-    ok("the skeleton shows before the answer, and the empty state does not",
-      first.skel === false && first.empty === true,
-      "\"you have no orders\" must never be the loading state");
-  } else { ok("the skeleton shows before the answer", false, "could not sample first paint"); }
+  await pg.goto("http://localhost:9441/orders.html", { waitUntil: "domcontentloaded" });
+  await pg.waitForSelector("#skel", { state: "attached" });
+  await pg.waitForTimeout(250);                       // inside the held-open window
+  const first = await read(pg);
+  ok("while the answer is outstanding the skeleton shows",
+    first.skel === false, "skeleton hidden: " + first.skel);
+  ok("and the empty state does NOT",
+    first.empty === true,
+    "\"you have no orders\" must never be what a returning customer sees while it loads");
+  await pg.waitForTimeout(1200);                      // now let it land
+  const then = await read(pg);
+  ok("and once it lands the skeleton gives way to the list",
+    then.skel === true && then.rows > 0, `${then.rows} rows`);
   await ctx.close();
+  archiveDelayMs = 0;
 }
 {
   signedInAs = null;

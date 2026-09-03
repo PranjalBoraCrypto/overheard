@@ -171,8 +171,19 @@ h1{font-weight:800;font-size:clamp(30px,5vw,42px);line-height:1;letter-spacing:-
 .stats .stat:nth-child(4) b{color:var(--blue)}
 
 /* ── filters ──────────────────────────────────────────────────────────────*/
+/* ── THE TWO BLOCKS THAT HAD NO SURFACE ────────────────────────────────────
+   Reported as "two sections have no padding", and that is exactly what it
+   was: the hero is a panel, the four figures are panels, every order is a
+   panel — and the list header and the footnote sat bare on the page ground
+   between them with nothing but the shell's gutter. Not misaligned, but
+   plainly the odd two out, which reads as unfinished rather than as a
+   deliberate change of register.
+   The header keeps its bare heading, because a chapter head on the ground is
+   the device the whole site uses; what it lacked was room. The footnote is
+   boxed, because a paragraph of small print trailing off the bottom of a
+   page is the one place "no surface" reads as "we stopped caring". */
 .listhead{display:flex;align-items:center;gap:var(--s3);flex-wrap:wrap;
-  margin:var(--s5) 0 var(--s3)}
+  margin:var(--s5) 0 var(--s3);padding:0 var(--s2)}
 .listhead h2{font-size:clamp(18px,2.4vw,23px);font-weight:700;letter-spacing:-.02em}
 .chips{display:flex;gap:var(--s1);margin-left:auto;flex-wrap:wrap;
   background:rgba(0,0,0,.28);border:1px solid var(--edge);border-radius:12px;padding:4px}
@@ -226,7 +237,7 @@ h1{font-weight:800;font-size:clamp(30px,5vw,42px);line-height:1;letter-spacing:-
 
 /* ── pagination ───────────────────────────────────────────────────────────*/
 .pager{display:flex;align-items:center;justify-content:center;gap:var(--s3);
-  margin-top:var(--s4)}
+  margin-top:var(--s4);padding:0 var(--s2)}
 .pbtn{display:inline-flex;align-items:center;gap:8px;cursor:pointer;font:inherit;
   padding:10px 15px;border-radius:11px;border:1px solid var(--edge);
   background:rgba(0,0,0,.22);color:var(--dim);font-size:13.5px;font-weight:600;
@@ -249,6 +260,7 @@ h1{font-weight:800;font-size:clamp(30px,5vw,42px);line-height:1;letter-spacing:-
 .card .i{width:26px;height:26px;color:var(--blue);margin-bottom:var(--s3)}
 .card h3{font-size:17px;font-weight:700;margin-bottom:var(--s2)}
 .card p{color:var(--dim);font-size:14px;max-width:52ch;margin:0 auto}
+.card p b{color:var(--blue)}
 .card .go{display:inline-flex;align-items:center;justify-content:center;gap:9px;
   margin-top:var(--s4);padding:13px 20px;border-radius:12px;text-decoration:none;
   font-weight:700;font-size:15px;border:1px solid transparent;
@@ -268,8 +280,8 @@ h1{font-weight:800;font-size:clamp(30px,5vw,42px);line-height:1;letter-spacing:-
   background-size:300% 100%;animation:shimmer 1.4s linear infinite}
 @keyframes shimmer{to{background-position:-150% 0}}
 
-.foot{margin-top:var(--s5);padding-top:var(--s4);border-top:1px solid var(--edge);
-  font-size:12.5px;color:var(--faint);line-height:1.7}
+.foot{margin-top:var(--s5);padding:var(--s4);border:1px solid var(--edge);border-radius:14px;
+  background:var(--panel);font-size:12.5px;color:var(--faint);line-height:1.7}
 .foot a{color:var(--blue)}
 .foot code{font-family:var(--mono);font-size:11.5px}
 
@@ -290,6 +302,26 @@ h1{font-weight:800;font-size:clamp(30px,5vw,42px);line-height:1;letter-spacing:-
   *{transition:none!important;animation:none!important}
 }
 </style>
+<!-- ── THE SITE'S BAR, AND WITH IT THE WHOLE SIGN-IN FLOW ──────────────────
+     Mounted as the component, never copied. It already answers every identity
+     state this page has:
+
+       · nothing in this browser → it asks for a seed and a passphrase to SET,
+         because there is no vault here for an "enter your passphrase" box to
+         unlock and showing one would be a field that cannot succeed on any
+         input a person could type;
+       · a vault present → it asks for the passphrase that EXISTS, with
+         "Forgotten it? Use your seed" folded below it — the common case
+         first, the way back in underneath rather than pushed off the card;
+       · signed in → the face, both ends of the DID, a copy, the way to the
+         card, and a sign out.
+
+     Writing any of that again here would be a fourth copy of an auth flow,
+     and the bar's own comments record that this component exists because two
+     earlier attempts at "one bar" were copies and both rotted. It lives in a
+     shadow root, so this page's CSS cannot reach into it and nothing needed
+     adjusting to make it fit. -->
+<script src="/bar.js" type="module"></script>
 </head>
 <body>
 <div class="sky" aria-hidden="true"><i></i><i></i></div>
@@ -333,6 +365,8 @@ h1{font-weight:800;font-size:clamp(30px,5vw,42px);line-height:1;letter-spacing:-
   <line class="st" x1="48" y1="48" x2="48" y2="31" stroke-width="3" stroke="#58E9FF"/>
   <circle class="lit-f" cx="48" cy="48" r="4.5"/>
 </svg></template>
+
+<overheard-bar></overheard-bar>
 
 <div class="shell">
   <div class="topbar">
@@ -380,8 +414,13 @@ h1{font-weight:800;font-size:clamp(30px,5vw,42px);line-height:1;letter-spacing:-
   <div class="card" id="signedout" hidden>
     <svg class="i"><use href="#i-key"/></svg>
     <h3>No identity in this browser</h3>
-    <p>Orders are matched to the key you sign with, and there is not one here yet.
-       Making one takes a moment and it never leaves this device.</p>
+    <!-- Both routes, because they answer different questions: Sign in is for
+         a key that exists — a passphrase if this browser holds a vault, a seed
+         if it does not — and creating one is for somebody with no identity at
+         all. Naming only one of them strands half the people who read it. -->
+    <p>Orders are matched to the key you sign with. If you already have one, use
+       <b>Sign in</b> at the top of the page. If you do not, making one takes a
+       moment and it never leaves this device.</p>
     <a class="go" href="/create.html">Create an identity<svg class="i"><use href="#i-caret"/></svg></a>
   </div>
 

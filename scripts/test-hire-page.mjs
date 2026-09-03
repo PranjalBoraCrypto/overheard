@@ -27,19 +27,25 @@ const ok = (n, c, note = "") => {
 };
 const page = fs.readFileSync(path.join(ROOT, "web/hire.html"), "utf8");
 const board = fs.readFileSync(path.join(ROOT, "web/deals-preview-78cb4a1be923c6b4.html"), "utf8");
+/* Defined here rather than halfway down, because more than one rule below
+   needs it and a rule that runs before it exists throws instead of failing. */
+const code = page.replace(/<!--[\s\S]*?-->/g, "").replace(/\/\*[\s\S]*?\*\//g, "");
 
 console.log("\n=== the page holds nothing it should not");
 ok("no seed, no 64-hex string of any kind", !/[0-9a-f]{64}/i.test(page),
   (page.match(/[0-9a-f]{64}/i) || ["clean"])[0].slice(0, 24));
+/* Against `code`, not `page`. The rule is that this file holds no key
+   material; it is not that the file may not use the WORD. The sign-in copy
+   now has to explain that the bar asks for a passphrase when this browser
+   holds a vault and for a seed when it does not — which is the true and
+   useful thing to tell somebody staring at a locked identity — and a blunt
+   substring match over comments forbade saying it. Third time this trap has
+   cost something in this repo: innerHTML, <select>, and now this. */
 ok("it never names a private key field",
-  !/privateKey|secretKey|mnemonic|\bseed\b/i.test(page));
+  !/privateKey|secretKey|mnemonic|\bseed\b/i.test(code));
 /* The key lives in a non-extractable store; the page may ask it for a
    signature and may never read it. Importing the getter would be the way that
    goes wrong. */
-/* Comments stripped first. The prose above this import explains that the key
-   is non-extractable, and a test that fails on its own explanation is a test
-   somebody weakens rather than obeys. */
-const code = page.replace(/<!--[\s\S]*?-->/g, "").replace(/\/\*[\s\S]*?\*\//g, "");
 ok("it imports the signer, not the key",
   /signTextB64u/.test(code) && !/signingKey|extractable/.test(code),
   "script may ask the vault for a signature and may never read the key");
