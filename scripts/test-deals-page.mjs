@@ -614,6 +614,25 @@ ok("never assigns innerHTML", !/innerHTML|outerHTML|insertAdjacentHTML|document\
   }
 }
 
+/* ── THE SITE'S BAR ────────────────────────────────────────────────────────
+   This was the only page a visitor could land on with no way back into the
+   rest of the site and nothing above it saying which site it was. It mounts
+   the shared component now, and the point of asserting the COMPONENT rather
+   than any markup is that a copied bar is what drifts: the last two attempts
+   at "one bar" were four copies of some CSS, and both rotted. */
+ok("it mounts the site's bar, the same component every other page mounts",
+  /<script src="\/bar\.js" type="module"><\/script>/.test(src) &&
+  /<overheard-bar><\/overheard-bar>/.test(src));
+/* NOT `class="tabs"`. This page has its own `.tabs` — the Wanted / Offered /
+   Live / Done tablist — and matching on it flagged the page for carrying a
+   navigation bar it does not have. The same name-collision trap that already
+   cost this file `.band` and `.step`: a check is only about the thing it
+   names if the name is not shared. These three belong to the site bar and to
+   nothing else here. */
+ok("and does not carry a hand-rolled copy of one",
+  !/class="logo"|nav\.top\{|class="brand"/.test(src),
+  "a second bar is a second thing to keep in step");
+
 ok("no key material anywhere", !/privateKey|secretKey|mnemonic|seedphrase|sign\(/.test(src));
 ok("no storage", !/localStorage|sessionStorage|indexedDB/.test(src));
 ok("it is not in the sitemap",

@@ -1411,6 +1411,17 @@ footer a{color:var(--blue)}
 }
 @media (prefers-reduced-motion:reduce){ .tex::before{opacity:.014} }
 </style>
+<!-- ── THE SITE'S BAR, AS THE COMPONENT AND NOT AS A COPY ──────────────────
+     Every other page mounts <overheard-bar>; this one did not, and was the
+     only page a visitor could land on with no way back into the rest of the
+     site and nothing above it saying which site it was.
+     It is a custom element with a shadow root, which is the whole reason it
+     can be dropped in here unchanged: page CSS cannot select into a shadow
+     root — not by element, not by class, not with !important — and the
+     component carries its own typeface. This page's own styles therefore
+     cannot move a tab or restyle the wordmark, and nothing about the bar
+     needed adjusting to sit here. -->
+<script src="/bar.js" type="module"></script>
 </head>
 <body>
 <div class="sky" aria-hidden="true"><i></i><i></i></div>
@@ -1442,6 +1453,8 @@ footer a{color:var(--blue)}
   <symbol id="i-code" viewBox="0 0 24 24"><path d="M8.5 7.5 3.5 12l5 4.5"/><path d="M15.5 7.5 20.5 12l-5 4.5"/><path d="M13.5 4.5l-3 15"/></symbol>
   <symbol id="i-copy" viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2.2"/><path d="M15 9V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h3"/></symbol>
 </defs></svg>
+
+<overheard-bar></overheard-bar>
 
 <div class="shell">
 

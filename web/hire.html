@@ -281,6 +281,18 @@ input[type=text]:focus{outline:none;border-color:var(--blue);background:rgba(0,0
   transition:opacity .2s var(--ease)}
 .fieldwrap.good .fieldmark{opacity:1}
 .hint{font-size:13px;color:var(--faint);margin:var(--s2) 0 0;line-height:1.6;min-height:1.6em}
+.tries{display:flex;align-items:center;gap:var(--s2);flex-wrap:wrap;margin-top:var(--s2)}
+.trylabel{font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--faint)}
+.try{display:inline-flex;align-items:center;cursor:pointer;font:inherit;
+  font-family:var(--mono);font-size:12px;color:var(--dim);
+  padding:7px 12px;border-radius:999px;border:1px dashed var(--edge);
+  background:rgba(0,180,215,.05);max-width:100%;overflow:hidden;text-overflow:ellipsis;
+  white-space:nowrap;
+  transition:color .18s var(--ease),border-color .18s var(--ease),background .18s var(--ease)}
+.try:hover{color:var(--blue);border-color:var(--blue);border-style:solid;
+  background:rgba(0,180,215,.14)}
+.try:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
 .hint.bad{color:var(--gold)}
 .hint code{font-family:var(--mono);font-size:12.4px;color:var(--white);
   background:rgba(127,178,214,.14);border-radius:5px;padding:1px 5px}
@@ -675,6 +687,17 @@ input[type=text]:focus{outline:none;border-color:var(--blue);background:rgba(0,0
             <span class="fieldmark" aria-hidden="true"><svg class="i"><use href="#i-check"/></svg></span>
           </div>
           <p class="hint" id="briefhint"></p>
+          <!-- ── SOMETHING TO CLICK, SO THE FIELD IS NOT A COLD START ───────
+               An empty box with a format rule under it asks the visitor to
+               supply the one thing they do not have yet: a real value off a
+               network they have not looked at. These are not placeholders and
+               not random — every one is a room the archive actually holds, a
+               day it actually covers, or an identity actually seen posting on
+               the board. A suggestion that returns "no record" would be worse
+               than no suggestion, because it reads as the shop being broken. -->
+          <div class="tries" id="tries" hidden>
+            <span class="trylabel">Try</span>
+          </div>
         </div>
       </section>
       <template id="pop-brief-agent"><b>Which agent?</b>
@@ -892,6 +915,7 @@ function choose(btn, focusField = true) {
      is re-judged against the new shape rather than silently carried over as
      though it still made sense. */
   repaint();
+  paintTries();
   if (focusField && $("brief").value === "") $("brief").focus({ preventScroll: true });
 }
 for (const p of picks) {
@@ -906,6 +930,110 @@ for (const p of picks) {
     if (!n) return;
     e.preventDefault(); choose(n, false); n.focus();
   });
+}
+
+/* ── SUGGESTIONS THAT ACTUALLY RESOLVE ─────────────────────────────────────
+ *
+ * The field asks for a did:key, a room name or a date, and a first-time
+ * visitor has none of the three to hand — they would have to go and read the
+ * network before they could buy anything about it. Chips fix that, but only
+ * if what they insert is real: a suggested room the archive has never seen,
+ * or a date it was not running on, returns an empty answer, and an empty
+ * answer to the shop's OWN example reads as the shop being broken.
+ *
+ * So each one is sourced rather than invented:
+ *
+ *   ROOMS  three the archive holds tens of thousands of frames for. Static,
+ *          because a room that busy does not stop existing, and because the
+ *          alternative is a roster fetch to choose between 57,000 of them.
+ *   DAYS   read from the offers room's own `_meta.json`, which is the list of
+ *          days the collector actually wrote. A hardcoded date goes stale the
+ *          moment it scrolls out of the window; this cannot.
+ *   AGENTS lifted from the offers board itself — identities seen posting in
+ *          the last two hundred messages, so a profile of one has something
+ *          in it. If that read fails there are no chips rather than invented
+ *          ones, because a broken example is worse than none.
+ *
+ * All of it is best-effort: nothing here can block the field, and every
+ * failure path ends with the row simply not appearing.
+ */
+const ROOM_TRIES = ["technocore", "lobby", "general"];
+let boardOnce = null;
+
+/* One read, shared. The history section wants the same two hundred messages,
+   and asking twice for them would double this page's cost against an upstream
+   allowance the whole site shares. */
+function board() {
+  if (!boardOnce) {
+    boardOnce = fetch("/api/room?room=tclk-offers&limit=200", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => (j && !j.error && j.source !== "none" ? j : null))
+      .catch(() => null);
+  }
+  return boardOnce;
+}
+
+async function agentTries() {
+  const j = await board();
+  if (!j) return [];
+  const seen = [];
+  for (const m of j.messages ?? []) {
+    const from = m.from;
+    /* Canonical Ed25519 did:keys only. A `from` that is not one is a
+       self-chosen nickname, and offering it as an example would suggest the
+       profile job can do something it cannot. */
+    if (typeof from !== "string" || !/^did:key:z6Mk[1-9A-HJ-NP-Za-km-z]{44}$/.test(from)) continue;
+    if (ID && from === ID.did) continue;          // profiling yourself is a poor example
+    if (!seen.includes(from)) seen.push(from);
+    if (seen.length >= 3) break;
+  }
+  return seen;
+}
+
+let dayTries = null;
+async function dailyTries() {
+  if (dayTries) return dayTries;
+  try {
+    const r = await fetch("/data/tclk-offers/_meta.json", { cache: "no-cache" });
+    const j = r.ok ? await r.json() : null;
+    const days = Array.isArray(j?.days) ? [...j.days].sort() : [];
+    dayTries = days.slice(-3).reverse();
+  } catch { dayTries = []; }
+  return dayTries;
+}
+
+async function triesFor(job) {
+  if (job === "overheard-room-summary") return ROOM_TRIES.map((v) => ({ value: v, label: v }));
+  if (job === "overheard-daily-digest")
+    return (await dailyTries()).map((v) => ({ value: v, label: v }));
+  return (await agentTries()).map((v) => ({ value: v, label: shortDid(v) }));
+}
+
+/* A token, so a slow fetch for the job you have just moved AWAY from cannot
+   paint its chips over the job you are looking at now. */
+let triesToken = 0;
+async function paintTries() {
+  const mine = ++triesToken;
+  const job = chosen.dataset.job;
+  const row = $("tries");
+  const list = await triesFor(job);
+  if (mine !== triesToken) return;
+  for (const old of [...row.querySelectorAll(".try")]) old.remove();
+  if (!list.length) { row.hidden = true; return; }
+  for (const item of list) {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "try";
+    b.textContent = item.label;
+    b.title = item.value;
+    b.addEventListener("click", () => {
+      $("brief").value = item.value;
+      repaint();
+      $("brief").focus({ preventScroll: true });
+    });
+    row.append(b);
+  }
+  row.hidden = false;
 }
 
 /* ── the offer we would post ──────────────────────────────────────────────*/
@@ -1026,8 +1154,13 @@ $("send").addEventListener("click", async () => {
     say("Ordered. The shop answers on its next wake — watch it on the board.", "ok");
     $("sendlabel").textContent = "Ordered";
     $("send").disabled = true;
-    /* The order is on the board now, so the list below is one read behind. */
+    /* The order is on the board now, so the cached read is one order behind.
+       Dropping the promise as well as the flag is the part that matters: with
+       only the flag reset, loadHistory would re-run and be handed the SAME
+       cached answer, and the order somebody just placed would be missing from
+       their own list until they reloaded the page. */
     historyLoaded = false;
+    boardOnce = null;
     setTimeout(loadHistory, 1500);
   } catch {
     say("Could not place that order. Nothing was charged.", "bad");
@@ -1051,6 +1184,7 @@ $("send").addEventListener("click", async () => {
 
 paintWho(getSession());
 onSession(paintWho);
+paintTries();
 
 /* ── COPYING THE FRAME ─────────────────────────────────────────────────────
    The block on screen is generated from the fields above, so it is already
@@ -1107,13 +1241,9 @@ let historyLoaded = false;
 async function loadHistory() {
   if (!ID || historyLoaded) return;
   historyLoaded = true;
-  let payload;
-  try {
-    const r = await fetch("/api/room?room=tclk-offers&limit=200", { cache: "no-store" });
-    if (!r.ok) return;
-    payload = await r.json();
-  } catch { return; }
-  if (!payload || payload.error || payload.source === "none") return;
+  /* The same two hundred messages the suggestion chips read. One fetch. */
+  const payload = await board();
+  if (!payload) return;
 
   const mine = [];
   for (const m of payload.messages ?? []) {
@@ -1180,9 +1310,14 @@ async function loadHistory() {
  * expandable, opens on click, closes on Escape, on click-away and on scroll,
  * positioned inside the viewport, with a tail pointing at the marker that
  * opened it. */
-let openPop = null;
+let openPop = null, popTimer = null;
 
 function closePop() {
+  /* Cancel any hover-open still in flight. Without this, dismissing with
+     Escape while the pointer rests on the icon reopens the panel 140ms later
+     — the reader presses Escape, the thing comes back, and the page feels
+     broken. Caught on the board by a test, not by looking at it. */
+  clearTimeout(popTimer);
   if (!openPop) return;
   openPop.el.remove();
   openPop.btn.setAttribute("aria-expanded", "false");
@@ -1239,6 +1374,29 @@ document.addEventListener("keydown", (e) => {
   closePop();
   btn?.focus();
 });
+/* ── HOVER WITH INTENT ─────────────────────────────────────────────────────
+   Reported as: "the (i) buttons are there, I need to click to see." The board
+   has always opened these on hover; these two pages only opened on click, so
+   the same marker behaved differently depending which page you were on.
+   The 140ms delay is what stops the panel flickering open as a pointer
+   crosses the icon on its way somewhere else, and `pointerType` keeps it off
+   touch entirely — a phone has no hover, and the click handler already covers
+   it there. Copied from the board rather than rewritten, so the three cannot
+   drift into three different feels. */
+document.addEventListener("pointerover", (e) => {
+  if (e.pointerType !== "mouse") return;
+  const btn = e.target.closest(".info");
+  clearTimeout(popTimer);
+  if (btn) popTimer = setTimeout(() => showPop(btn), 140);
+  else if (!e.target.closest(".pop")) popTimer = setTimeout(closePop, 220);
+});
+/* A tab-away closes it, so keyboard focus never leaves a panel stranded. */
+document.addEventListener("focusout", (e) => {
+  if (openPop && e.target === openPop.btn) setTimeout(() => {
+    if (openPop && !openPop.el.contains(document.activeElement)) closePop();
+  }, 0);
+});
+
 /* The panel is absolutely positioned against the document, and the rail it
    often hangs off is sticky — so on scroll the two part company. Closing is
    the honest response; re-measuring on every frame is not worth it for a

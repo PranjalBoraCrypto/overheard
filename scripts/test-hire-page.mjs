@@ -220,6 +220,65 @@ ok("and a job with no handler falls back rather than being honoured",
   (await state()).job === "overheard-agent-profile",
   "a query string is a stranger's text; it must never name a job we cannot do");
 
+console.log("\n=== the (i) opens the way it does on the board");
+/* Reported as "the (i) buttons are there, I need to click to see". The board
+   has always opened these on hover; this page only did on click, so the same
+   marker behaved differently depending which page you were on. */
+await pg.goto(`http://localhost:${PORT}/hire.html`, { waitUntil: "domcontentloaded" });
+await pg.waitForTimeout(800);
+await pg.hover("#briefinfo");
+await pg.waitForTimeout(500);
+ok("hovering the marker opens its panel",
+  await pg.evaluate(() => !!document.querySelector(".pop.on")),
+  "140ms of intent, mouse only — a phone has no hover and the click path covers it");
+ok("and the panel points at the marker that opened it",
+  await pg.evaluate(() => {
+    const pop = document.querySelector(".pop");
+    const tail = parseFloat(getComputedStyle(pop).getPropertyValue("--tail"));
+    const b = document.querySelector("#briefinfo").getBoundingClientRect();
+    const r = pop.getBoundingClientRect();
+    return isFinite(tail) && Math.abs((r.left + tail) - (b.left + b.width / 2)) < 20;
+  }));
+await pg.keyboard.press("Escape");
+await pg.waitForTimeout(400);
+/* The bug this catches is specific: with the hover timer left running, Escape
+   closes the panel and the pending open fires 140ms later, so it comes back
+   while the pointer is still resting on the icon. */
+ok("Escape closes it and a pending hover does not reopen it",
+  await pg.evaluate(() => !document.querySelector(".pop")));
+
+console.log("\n=== the empty field offers something to click");
+/* A did:key, a room name or a date are all things a first-time visitor would
+   have to go and read the network to obtain. The chips remove that, but only
+   if what they insert is REAL — a suggested room the archive has never seen
+   answers with nothing, and an empty answer to the shop's own example reads
+   as the shop being broken. */
+for (const [job, expect] of [
+  ["overheard-room-summary", /technocore|lobby|general/],
+  ["overheard-daily-digest", /^\d{4}-\d{2}-\d{2}$/],
+]) {
+  await pg.goto(`http://localhost:${PORT}/hire.html?job=${job}`, { waitUntil: "domcontentloaded" });
+  await pg.waitForTimeout(900);
+  const chips = await pg.evaluate(() => [...document.querySelectorAll(".try")].map((t) => t.title));
+  ok(`${job.replace("overheard-", "")} suggests values of the right shape`,
+    chips.length > 0 && chips.every((c) => expect.test(c)), chips.join(" · ") || "no chips");
+  if (chips.length) {
+    await pg.click(".try");
+    await pg.waitForTimeout(250);
+    const after = await pg.evaluate(() => ({
+      v: document.getElementById("brief").value,
+      done: document.getElementById("s2").classList.contains("done"),
+      hint: document.getElementById("briefhint").textContent,
+    }));
+    /* The real test of a suggestion: the page's OWN validator has to accept
+       it. A chip that fills a value step 2 then rejects would be the site
+       arguing with itself in front of the customer. */
+    ok(`  and clicking one satisfies this page's own validator`,
+      after.v === chips[0] && after.done === true && after.hint === "",
+      `${after.v} -> ${after.done ? "valid" : "REJECTED: " + after.hint}`);
+  }
+}
+
 console.log("\n=== nothing broke on the way");
 ok("no script errors", jsErrors.length === 0, jsErrors.join(" | "));
 
