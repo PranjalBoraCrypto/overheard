@@ -81,3 +81,12 @@ jobs:
       # run on the same wake as the thing that would do the committing.
       - name: buying still refuses what it should
         run: node scripts/test-buy.mjs
+
+      # The one seam with no compiler between its halves: /hire.html composes
+      # the offer in a browser, refuseTake() judges it here, and nothing links
+      # them. Drift either way and every order placed through the site is
+      # refused in silence — the buyer sees "Ordered", the board shows their
+      # offer, and the deal never happens. It runs on the RUNNER's wake, not
+      # on a deploy, because the half that changes underneath is this one.
+      - name: the order form still composes offers this shop takes
+        run: node scripts/test-order-path.mjs
