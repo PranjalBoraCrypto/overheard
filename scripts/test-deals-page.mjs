@@ -379,12 +379,24 @@ ok("an open card is not repainted out from under a reader",
 /* ── G. honesty ────────────────────────────────────────────────────────── */
 console.log("\n=== G. it says where the data came from");
 ok("the source strip reports live", await pg.evaluate(() => document.getElementById("src").className.includes("live")));
-/* The notice lives with the gigs now, which is where somebody about to
-   order needs to read it. */
-ok("the alpha notice is present, and sits with the offer it qualifies",
+/* THE WARNING MOVED, AND THAT IS THE POINT. It used to be a standing box at
+   the foot of the page, where the people who most needed it had already
+   scrolled past. It now sits in the (i) beside the order button — the last
+   thing between a reader and the act it qualifies. So the test follows it
+   there rather than pinning it to the box it used to live in. */
+ok("the rehearsal rail is disclosed where somebody is about to act on it",
   await pg.evaluate(() => {
-    const note = document.querySelector("#pShop .note");
-    return !!note && /testnet is not open/.test(note.textContent);
+    const tpl = document.getElementById("pop-paper");
+    const btn = document.querySelector('[data-pop="pop-paper"]');
+    const cta = document.querySelector("#hire .cta");
+    return !!tpl && /moves nothing|not real yet/.test(tpl.innerHTML)
+      && !!btn && !!cta && cta.contains(btn);
+  }),
+  "the words are unchanged; only where a reader meets them");
+ok("and the page still carries a standing alpha note",
+  await pg.evaluate(() => {
+    const n = document.querySelector("#pShop .note");
+    return !!n && /provisional|checked in your browser/i.test(n.textContent);
   }));
 await ctx.close();
 
@@ -788,11 +800,15 @@ console.log("\n=== R. availability, read off the board");
      the escrow explainer and the how-to-hire-us shopfront — and counting
      `.howstep` across the page would pass for the wrong reason the moment
      either one changed. */
+  /* The four steps are a numbered TRACK now, not four equal boxes. Four
+     bordered cards in a row read as four facts; the order is the whole point,
+     and a connecting line with numbered nodes says "sequence" before a word
+     of it is read. Same four steps, same words, different claim on the eye. */
   ok("the buyer-safety section is there regardless — it is not a claim about us",
     await pU.evaluate(() => {
       const sec = [...document.querySelectorAll("section.safety")]
         .find((x) => /refunds itself/.test(x.textContent));
-      return !!sec && sec.querySelectorAll(".howstep").length === 4;
+      return !!sec && sec.querySelectorAll(".flow .fstep").length === 4;
     }));
 
   /* The shopfront is not a claim about us either: it is the offer shape a
@@ -1177,6 +1193,111 @@ console.log("\n=== S. one public string, and no key");
   ok("and still stores nothing", !/localStorage|sessionStorage|indexedDB/.test(page));
   ok("the operating rule is written down where it can be found",
     fs.existsSync(path.join(ROOT, "..", "SELLING.md")));
+}
+
+/* ── T. the redesign, as properties rather than pixels ───────────────────
+ * A screenshot cannot be asserted, but the three things that were wrong with
+ * the old page can be. It was BOX AFTER BOX (one surface, so nothing could be
+ * more important than anything else), NARROW (a 920px column with dead
+ * margins), and DENSE (four cards, a four-box explainer, another four-box
+ * explainer, no air).
+ *
+ * Two of these were also caught the hard way: `.band` and `.step` were names
+ * this page already used, so the first versions silently restyled the board's
+ * four sections and laid the journey out as one run-on row. Nothing errored.
+ * That is why the class names are pinned here.
+ * ─────────────────────────────────────────────────────────────────────── */
+console.log("\n=== T. what the redesign has to keep true");
+{
+  const { ctx: cT, pg: pT, errs: eT } = await open(1440, 1200, false);
+  /* open() leaves the BOARD tab showing. Everything measured below lives on
+     the shop tab, and a hidden section has no resolved layout at all — a
+     percentage margin comes back unresolved rather than negative. So switch
+     to the tab the section is on before asking the browser about it. */
+  await pT.click('.pri[data-main="shop"]');
+  await pT.waitForTimeout(250);
+  const m = await pT.evaluate(() => {
+    const shell = document.querySelector(".shell");
+    const bleed = document.querySelector(".bleed");
+    return {
+      shellW: shell.getBoundingClientRect().width,
+      /* SAMENESS: more than one surface treatment on the page. */
+      bleeds: document.querySelectorAll(".bleed").length,
+      bares: document.querySelectorAll(".bare").length,
+      /* The full-bleed section must actually reach past the column. */
+      /* Measured as the MECHANISM, not the rendered width: this section lives
+         in the shop tab, and when the board tab is the visible one its box is
+         zero-sized. The negative inline margin is what makes it escape the
+         column, and it is true whether or not the tab is on screen. */
+      bleedEscapes: bleed ? parseFloat(getComputedStyle(bleed).marginLeft) < 0 : false,
+      /* DENSITY: the two four-box grids became journeys. */
+      flows: document.querySelectorAll(".flow").length,
+      steps: document.querySelectorAll(".flow .fstep").length,
+      /* The old names must not have been reused. */
+      oldBands: document.querySelectorAll("section.band").length,
+      /* Long copy moved behind markers. */
+      infos: document.querySelectorAll(".info[data-pop]").length,
+      pops: document.querySelectorAll("template[id^=pop-]").length,
+      chapters: document.querySelectorAll(".chap h2").length,
+    };
+  });
+  ok("the measure is wider than the old 920px column", m.shellW > 1000, m.shellW + "px");
+  ok("the page has more than one surface, so importance can differ",
+    m.bleeds >= 1 && m.bares >= 1, `${m.bleeds} full-bleed, ${m.bares} flush`);
+  ok("and the full-bleed section really escapes the column",
+    m.bleedEscapes, "otherwise it is just another card with a tint");
+  ok("the four-box explainers are journeys now", m.flows === 2 && m.steps === 8,
+    `${m.flows} flows, ${m.steps} steps`);
+  ok("the board's own sections were not hijacked by the new names",
+    m.oldBands === 4, m.oldBands + " board bands intact");
+  ok("long explanations sit behind a marker beside what they explain",
+    m.infos >= 3 && m.pops === m.infos, `${m.infos} markers, ${m.pops} panels`);
+  ok("and the page reads as numbered chapters", m.chapters >= 3, m.chapters);
+
+  /* The (i) has to work for everyone: a click opens it, Escape closes it. A
+     title= attribute would have been one line and invisible on touch. */
+  await pT.click(".info[data-pop]");
+  await pT.waitForTimeout(120);
+  const opened = await pT.evaluate(() => ({
+    shown: !!document.querySelector(".pop.on"),
+    expanded: document.querySelector(".info[data-pop]").getAttribute("aria-expanded"),
+    inView: (() => { const r = document.querySelector(".pop")?.getBoundingClientRect();
+      return !!r && r.left >= 0 && r.right <= innerWidth; })(),
+  }));
+  ok("a click opens the explanation", opened.shown && opened.expanded === "true");
+  ok("and it is kept inside the viewport", opened.inView, "a panel off the edge is a panel nobody reads");
+  await pT.keyboard.press("Escape");
+  await pT.waitForTimeout(120);
+  ok("Escape closes it", await pT.evaluate(() => !document.querySelector(".pop")));
+  ok("no errors", eT.length === 0, eT.join(" | "));
+  await cT.close();
+}
+
+{
+  /* MOBILE: same content, restructured — not the desktop reflowed. */
+  const { ctx: cM, pg: pM, errs: eM } = await open(390, 850, true);
+  await pM.click('.pri[data-main="shop"]');
+  await pM.waitForTimeout(250);
+  const m = await pM.evaluate(() => ({
+    scrollW: document.documentElement.scrollWidth, vw: innerWidth,
+    sky: getComputedStyle(document.querySelector(".sky")).display,
+    steps: document.querySelectorAll(".flow .fstep").length,
+    /* The timeline: node in column one, words in column two, and the text
+       must NOT have wrapped into the 38px node column. */
+    textX: (() => { const s = document.querySelector(".flow .fstep i");
+      return s ? Math.round(s.getBoundingClientRect().width) : 0; })(),
+    infoTap: (() => { const b = document.querySelector(".info");
+      const r = b.getBoundingClientRect(); return Math.round(Math.min(r.width, r.height)); })(),
+  }));
+  ok("the page never scrolls sideways", m.scrollW <= m.vw, `${m.scrollW} vs ${m.vw}`);
+  ok("the blurred ambience is off — it is the most expensive thing on the page",
+    m.sky === "none", "a 90px blur over a 520px layer, repainted every scroll");
+  ok("every step survives the rebuild", m.steps === 8, m.steps);
+  ok("and the step text is a readable column, not a ribbon",
+    m.textX > 180, m.textX + "px wide");
+  ok("the (i) is a real tap target", m.infoTap >= 24, m.infoTap + "px");
+  ok("no errors", eM.length === 0, eM.join(" | "));
+  await cM.close();
 }
 
 await b.close(); srv.close();

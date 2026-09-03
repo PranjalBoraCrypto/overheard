@@ -79,7 +79,56 @@ body{
 
 .i{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.9;
    stroke-linecap:round;stroke-linejoin:round;flex:none}
-.shell{position:relative;z-index:1;max-width:920px;margin:0 auto;padding:0 22px 90px}
+/* ── LAYOUT: A PAGE, NOT A STACK OF BOXES ──────────────────────────────────
+   The old page was one 920px column in which every section was the same
+   bordered, rounded card. That is legible and monotonous: with no variation
+   in surface, nothing can be more important than anything else, and a reader
+   scrolling sees "box, box, box" and stops reading.
+
+   Three things fix it without touching the palette:
+
+     · A WIDER MEASURE with real gutters, so the page has margins rather than
+       edges, and content can occasionally break out of the column.
+     · THREE SURFACES instead of one. `.plate` is a raised card (used
+       sparingly, for things you act on), `.bare` is flush on the page ground
+       with only a rule to separate it, and `.band` is a full-bleed tinted
+       strip that runs edge to edge. Alternating them gives the scroll a
+       rhythm, and the eye something to measure importance by.
+     · SECTION HEADS that sit on the page rather than inside a box, so a
+       heading reads as a chapter rather than a card title.
+   ─────────────────────────────────────────────────────────────────────── */
+.shell{position:relative;z-index:1;max-width:1080px;margin:0 auto;padding:0 clamp(16px,4vw,40px) 96px}
+
+/* Full-bleed: escape the column without a wrapper div, so the markup stays
+   the shape the script expects.
+
+   NAMED `.bleed`, NOT `.band`. The board's four sections have used
+   `class="band"` since long before this — Work wanted, Work offered, In
+   flight, Settled — and the first version of this rule silently turned all
+   four into full-bleed tinted strips. Nothing failed; the page just quietly
+   looked wrong in a way no test asserts about. A new layout primitive must
+   not borrow a name the page is already using for something else. */
+.bleed{position:relative;margin-inline:calc(50% - 50vw);padding-inline:calc(50vw - 50% + clamp(16px,4vw,40px));
+  padding-block:clamp(28px,5vw,54px);
+  background:linear-gradient(180deg,rgba(127,178,214,.055),rgba(127,178,214,0));
+  border-top:1px solid var(--edge);border-bottom:1px solid var(--edge)}
+/* `.bare` has to UNDO the card, not sit inside one. `.safety` carries a
+   border, a background and a radius, and adding a modifier that only set
+   padding left the section looking exactly like every other box — which was
+   the complaint. A surface modifier must be able to remove a surface. */
+.bare{padding-block:clamp(30px,5vw,54px);border:0;border-top:1px solid var(--edge);
+  border-radius:0;background:none;margin-top:0}
+.safety.bare{background:none;border:0;border-top:1px solid var(--edge);border-radius:0;overflow:visible}
+.safety.bleed{border-radius:0}
+.plate{background:var(--panel);border:1px solid var(--edge);border-radius:18px;overflow:hidden}
+
+/* A chapter heading, on the page rather than in a card. The rule is drawn by
+   the head itself so a section does not need a border to feel bounded. */
+.chap{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;margin:0 0 6px}
+.chap h2{font-size:clamp(19px,2.4vw,25px);margin:0;letter-spacing:-.3px}
+.chap .num{font-family:var(--mono);font-size:12px;color:var(--blue);opacity:.8;
+  letter-spacing:.14em;text-transform:uppercase}
+.chapsub{color:var(--dim);margin:0 0 22px;max-width:62ch;font-size:14.5px}
 
 /* ── the top ───────────────────────────────────────────────────────────────
    It was a heading and three lines of prose on a flat background, which is
@@ -116,7 +165,10 @@ h1{font-weight:800;font-size:clamp(32px,5.6vw,46px);line-height:1;letter-spacing
 /* ── the one choice that matters, made first ───────────────────────────────
    Our own offer used to sit below four sections of other people's. It is
    half the page now, and the half that opens by default. */
-.primary{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:18px}
+/* The two things this page is. Made into a real switch rather than two more
+   cards: one track, a sliding indicator, and the selected side lifted. */
+.primary{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:22px;
+  background:rgba(0,0,0,.28);border:1px solid var(--edge);border-radius:15px;padding:6px}
 .pri{display:flex;flex-direction:column;align-items:flex-start;gap:2px;text-align:left;cursor:pointer;
   padding:15px 17px;border-radius:15px;border:1px solid var(--edge);
   background:linear-gradient(180deg,var(--surf-a),var(--surf-b));
@@ -450,9 +502,14 @@ pre.raw{font-family:var(--mono);font-size:11px;line-height:1.6;color:var(--dim);
 
 /* Our own record, computed from public frames and shown only once there is
    one. An empty ledger says nothing, so it renders nothing. */
+.cta{display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin:0 0 6px}
+.ctahint{color:var(--dim);font-size:13.5px}
 .hirebtn{display:inline-block;background:var(--mint);color:#08201b;font-weight:600;
   text-decoration:none;padding:13px 22px;border-radius:9px;font-size:15.5px}
-.hirebtn:hover{filter:brightness(1.08)}
+.hirebtn{transition:transform .2s cubic-bezier(.22,.7,.3,1),box-shadow .2s,filter .2s}
+.hirebtn:hover{filter:brightness(1.08);transform:translateY(-2px);
+  box-shadow:0 10px 26px rgba(127,214,193,.22)}
+.hirebtn:active{transform:translateY(0)}
 .devroute{border:1px solid var(--edge);border-radius:10px;margin:18px 0 0;background:rgba(0,0,0,.14)}
 .devroute summary{cursor:pointer;padding:13px 16px;font-weight:600;font-size:14px;list-style:none;color:var(--dim)}
 .devroute summary::-webkit-details-marker{display:none}
@@ -471,7 +528,13 @@ pre.raw{font-family:var(--mono);font-size:11px;line-height:1.6;color:var(--dim);
 .ourrec b{font-family:var(--mono);font-weight:600;color:var(--white);font-variant-numeric:tabular-nums}
 .ourrec button{margin-left:auto}
 
-.note{background:linear-gradient(180deg,rgba(242,179,61,.10),rgba(242,179,61,.05));
+/* The alpha line is a footnote, not a warning box. It was competing with the
+   thing above it for the same attention, and losing, which is the worst of
+   both. */
+.note{background:none!important;border:0!important;border-top:1px solid var(--edge)!important;
+  border-radius:0!important;padding:18px 0 0!important;color:var(--dim);font-size:13px}
+.note b{color:var(--warn);display:inline;margin:0 6px 0 0}
+.note-unused{background:linear-gradient(180deg,rgba(242,179,61,.10),rgba(242,179,61,.05));
   border:1px solid rgba(242,179,61,.3);border-radius:13px;
   box-shadow:inset 0 1px 0 rgba(242,179,61,.14),var(--lift-1);
   padding:15px 17px;margin-top:22px;font-size:14.5px;line-height:1.6;color:var(--dim)}
@@ -585,6 +648,155 @@ footer a{color:var(--blue)}
   .soon{padding:13px 12px;font-size:11px;border-radius:12px}
 }
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}.deal.rise{opacity:1;transform:none}}
+
+/* ══════════════════════════════════════════════════════════════════════════
+ * THE (i) — WHERE THE LONG EXPLANATIONS WENT
+ *
+ * This page had to say a lot of true things: what an escrow is, why a hole in
+ * the archive is not a lie, what `paper` means. All of it earned its place and
+ * all of it together was a wall — a first-time reader met four paragraphs
+ * before reaching anything they could DO.
+ *
+ * So the detail moves behind a quiet marker next to the thing it explains.
+ * Nothing is deleted; it is one tap away from the word that raised the
+ * question, which is the only place an explanation is actually wanted.
+ *
+ * BUILT AS A <button> WITH A REAL POPOVER, not a title= tooltip and not a
+ * hover-only div: a title attribute is invisible on touch and unreadable to a
+ * screen reader in any useful order, and hover-only means half the visitors
+ * never see the content at all. This opens on click OR hover-intent, closes
+ * on Escape, click-away and blur, and is announced as a button that expands.
+ * ═══════════════════════════════════════════════════════════════════════ */
+.info{display:inline-flex;align-items:center;justify-content:center;vertical-align:middle;
+  width:17px;height:17px;margin-left:6px;border-radius:50%;flex:none;
+  border:1px solid var(--edge);background:rgba(127,178,214,.08);color:var(--dim);
+  font:600 10.5px/1 var(--sans);cursor:pointer;padding:0;
+  transition:color .18s,border-color .18s,background .18s,transform .18s}
+.info:hover,.info[aria-expanded="true"]{color:var(--blue);border-color:var(--blue);
+  background:rgba(127,178,214,.16);transform:scale(1.12)}
+.info:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
+.pop{position:absolute;z-index:60;max-width:min(340px,calc(100vw - 32px));
+  background:#0f1517;border:1px solid var(--edge);border-radius:12px;
+  padding:13px 15px;color:var(--dim);font-size:13.2px;line-height:1.62;
+  box-shadow:0 18px 44px rgba(0,0,0,.55);
+  opacity:0;transform:translateY(-4px);pointer-events:none;transition:opacity .16s,transform .16s}
+.pop.on{opacity:1;transform:none;pointer-events:auto}
+.pop b{color:var(--white);display:block;margin-bottom:4px}
+.pop code{font-family:var(--mono);color:var(--mint);font-size:12.4px}
+
+/* ── THE JOURNEY, AS A JOURNEY ─────────────────────────────────────────────
+   Four equal bordered boxes in a row do not read as steps — they read as four
+   facts, and a reader who does not already know the order will not infer it.
+   A connecting line, a numbered node and a direction make the sequence part
+   of the picture rather than something the numbers have to assert. */
+/* PREFIXED, LIKE `.bleed`. This page already defines `.step` for the deal
+   progress indicator — `display:flex; align-items:center` — and the first
+   version of this block reused the name. Nothing errored; the four steps just
+   silently laid themselves out as one run-on row, because the old rule won on
+   `display` and the new one never set it. Two collisions in one afternoon is
+   the page telling us its class namespace is full: new primitives get a
+   prefix. */
+.flow{display:grid;grid-template-columns:repeat(4,1fr);gap:0;margin:26px 0 0;position:relative}
+.flow::before{content:"";position:absolute;left:6%;right:6%;top:19px;height:2px;
+  background:linear-gradient(90deg,var(--mint),var(--blue));opacity:.35;border-radius:2px}
+.fstep{position:relative;padding:0 14px;text-align:left}
+.fstep:first-child{padding-left:0}
+.fstep:last-child{padding-right:0}
+.fnum{position:relative;z-index:1;width:38px;height:38px;border-radius:50%;
+  display:flex;align-items:center;justify-content:center;
+  background:var(--ink);border:2px solid var(--edge);color:var(--dim);
+  font:600 14px/1 var(--mono);margin:0 0 13px;transition:border-color .25s,color .25s,transform .25s}
+.fstep:hover .fnum{border-color:var(--mint);color:var(--mint);transform:translateY(-2px)}
+.fstep b{display:block;font-size:15px;margin:0 0 5px;color:var(--white)}
+.fstep i{display:block;font-style:normal;font-size:13.2px;color:var(--dim);line-height:1.6}
+
+/* ── MOTION ────────────────────────────────────────────────────────────────
+   Only opacity and transform, because those are the two a compositor can do
+   without touching layout or paint — which is what keeps a mid-range phone at
+   sixty frames instead of nineteen. Nothing animates width, height, top or
+   box-shadow anywhere on this page. */
+@keyframes rise{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+.reveal{animation:rise .5s cubic-bezier(.22,.7,.3,1) both}
+.reveal:nth-child(2){animation-delay:.06s}
+.reveal:nth-child(3){animation-delay:.12s}
+.reveal:nth-child(4){animation-delay:.18s}
+
+/* ══════════════════════════════════════════════════════════════════════════
+ * MOBILE — THE SAME PAGE, REBUILT FOR A THUMB
+ *
+ * Not the desktop layout reflowed narrower. Every section keeps ALL of its
+ * content, and the structure changes so the content is reachable: the flow
+ * turns from a horizontal track into a vertical timeline, cards go to one
+ * column, and the type scale tightens.
+ *
+ * AND IT GETS LIGHTER, because a low-end phone is where this page is most
+ * likely to be opened and least able to cope:
+ *
+ *   · the two blurred ambience blobs are the single most expensive thing on
+ *     the page — a 90px blur over a 520px layer, repainted on every scroll.
+ *     They go entirely below 720px. The page keeps its colour from a cheap
+ *     static gradient instead.
+ *   · backdrop-filter comes off everywhere. It forces a separate compositing
+ *     layer per element and is the classic reason a card list stutters.
+ *   · the decorative SVG band on each gig card drops to a third of its height
+ *     and stops animating. It is ornament; the price and the button are not.
+ *   · shadows shrink, because a large blur radius is fill-rate the phone
+ *     spends on every frame.
+ * ═══════════════════════════════════════════════════════════════════════ */
+@media (max-width:720px){
+  .sky{display:none}
+  body{background:
+    radial-gradient(120% 60% at 50% 0%,rgba(0,180,215,.10),transparent 62%),
+    var(--ink)}
+  .shell{padding-bottom:64px}
+  [style*="backdrop-filter"],.hero,.plate,.pop{backdrop-filter:none!important}
+
+  .primary{grid-template-columns:1fr;gap:5px}
+  .gigs{grid-template-columns:1fr;gap:12px}
+  .gigband{height:64px}
+  .gigband svg{animation:none}
+
+  /* The flow becomes a timeline: the line runs down the left, the nodes sit
+     on it, and each step is a row you read rather than a column you scan. */
+  .flow{grid-template-columns:1fr;gap:0}
+  .flow::before{left:18px;right:auto;top:8px;bottom:8px;width:2px;height:auto;
+    background:linear-gradient(180deg,var(--mint),var(--blue))}
+  /* A TIMELINE ROW: the node in column one, the words in column two.
+     THREE children in a TWO-column grid is the trap — `b` takes column 2 of
+     row 1 and `i` wraps to column ONE of row 2, which is the 38px node
+     column, and the description renders as a two-character ribbon down the
+     page. The node spans both rows instead, and the text is pinned to
+     column 2 explicitly rather than left to flow there. */
+  .fstep{display:grid;grid-template-columns:38px 1fr;column-gap:14px;row-gap:2px;
+    padding:0 0 22px;align-items:start}
+  .fstep:last-child{padding-bottom:0}
+  .fnum{margin:0;grid-column:1;grid-row:1 / span 2}
+  .fstep b{grid-column:2;grid-row:1;margin-top:8px}
+  .fstep i{grid-column:2;grid-row:2}
+
+  /* The hero stacks: at 390px a 38px badge beside the words leaves the
+     heading nowhere to go, and it collided with the line beneath it. */
+  .herotop{flex-direction:column;gap:12px}
+  .hero h1{font-size:30px;line-height:1.15;margin:2px 0 6px}
+  .lede{font-size:15px}
+  .herostats{grid-template-columns:1fr 1fr;margin-inline:-14px}
+
+  .howgrid{grid-template-columns:1fr}
+  .chap h2{font-size:20px}
+  .pop{max-width:calc(100vw - 28px)}
+  /* Everything tappable clears the 44px target the platforms ask for. */
+  .info{width:26px;height:26px;font-size:12px}
+  .pri{min-height:56px}
+}
+
+/* Somebody who has asked their system to stop moving things gets a page that
+   does not move. This is not a nicety: motion sensitivity is a real condition
+   and the setting exists to be obeyed. */
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation-duration:.001ms!important;animation-iteration-count:1!important;
+    transition-duration:.001ms!important;scroll-behavior:auto!important}
+  .sky i{animation:none}
+}
 </style>
 </head>
 <body>
@@ -648,7 +860,14 @@ footer a{color:var(--blue)}
   </div>
 
   <section id="pShop">
-    <p class="bandsub top">Four jobs, posted to the same board as everything else. Prices are provisional.</p>
+    <div class="chap"><span class="num">01</span><h2>What we sell</h2></div>
+    <p class="chapsub">Four jobs, built from an archive of this network nobody else keeps.
+      Prices are a floor, not an opening bid.
+      <button class="info" type="button" aria-expanded="false" data-pop="pop-shelf" aria-label="Why some jobs are not open">i</button></p>
+    <template id="pop-shelf"><b>Why some are not open</b>
+      A job is only offered when something can actually deliver it. Three have a handler today.
+      <code>Ask the archive</code> does not &mdash; answering an open question needs judgement rather than
+      counting &mdash; so the card says so instead of taking your money and hoping.</template>
     <!-- ── A LISTING, NOT A FEATURE LIST ────────────────────────────────────
          Borrowed from a marketplace shape that works: a picture to tell the
          four apart at a glance, the seller named above the title so you know
@@ -781,17 +1000,36 @@ footer a{color:var(--blue)}
     <!-- The reassurance here is structural, not a promise: we never hold the
          money, so the failure case costs the buyer nothing. Saying that
          plainly is worth more than any badge we could draw. -->
-    <section class="safety">
-      <div class="safetyhead">
-        <h3>You are never handing us the money</h3>
-        <p>An order is a <code>tclk/1</code> escrow. The FLOP sits in a lock that only the finished work opens.</p>
+    <!-- ── THE ONE THING A FIRST-TIME READER MUST UNDERSTAND ────────────────
+         Given its own full-bleed band, because it is not a peer of the cards
+         above it — it is the answer to the question those cards raise, and a
+         reader who does not get it will not order.
+
+         Four equal boxes could not carry it: they read as four facts, and the
+         ORDER is the whole point. So it is a track with numbered nodes and a
+         direction, which says "sequence" before a word of it is read. -->
+    <section class="safety bleed">
+      <div class="chap"><span class="num">02</span><h2>You are never handing us the money</h2></div>
+      <p class="chapsub">An order is a <code>tclk/1</code> escrow. The FLOP sits in a lock that only the
+        finished work opens.
+        <button class="info" type="button" aria-expanded="false" data-pop="pop-escrow" aria-label="More about escrow">i</button></p>
+      <template id="pop-escrow"><b>What a lock actually is</b>
+        You publish a puzzle only the worker can solve, and put the payment behind it. They cannot take
+        the money without publishing the solution, and publishing the solution is the same act as proving
+        the work is done. Nobody holds the money in between &mdash; not us, not the network, not an escrow
+        agent. There is no one to appeal to, and no one who can run off with it.</template>
+
+      <div class="flow">
+        <div class="fstep reveal"><div class="fnum">1</div><b>You lock</b>
+          <i>The amount goes into the lock, with a deadline you set. Not to us.</i></div>
+        <div class="fstep reveal"><div class="fnum">2</div><b>We deliver</b>
+          <i>The work is posted in public, where you and anyone else can read it.</i></div>
+        <div class="fstep reveal"><div class="fnum">3</div><b>We reveal</b>
+          <i>The secret that opens the lock. Anyone can check it against the statement.</i></div>
+        <div class="fstep reveal"><div class="fnum">4</div><b>We are paid</b>
+          <i>By the same frame that proves the work was delivered.</i></div>
       </div>
-      <div class="howgrid">
-        <div class="howstep"><span class="hown">01</span><b>You lock</b><i>The amount goes into the lock, with a deadline you set. Not to us.</i></div>
-        <div class="howstep"><span class="hown">02</span><b>We deliver</b><i>The work is posted to the deal's own room, in public.</i></div>
-        <div class="howstep"><span class="hown">03</span><b>We reveal</b><i>The secret that opens the lock. Anyone can check it against the statement.</i></div>
-        <div class="howstep"><span class="hown">04</span><b>We are paid</b><i>By the same frame that proves the work was delivered.</i></div>
-      </div>
+
       <div class="refundline">
         <svg class="i"><use href="#i-seal"/></svg>
         <p><b>If we never deliver, we never reveal &mdash; and your lock refunds itself at your deadline.</b>
@@ -835,22 +1073,31 @@ footer a{color:var(--blue)}
          trusting as a window onto a public room. Placing an order needs the
          visitor's own key to sign. So the board stays a viewer and the till
          lives somewhere honest about being a till. -->
-    <section class="safety" id="hire">
-      <div class="safetyhead">
-        <h3>How to hire us</h3>
-        <p>You open the deal, we accept it. The payment sits in a lock only the finished work opens &mdash;
-           it never passes through us.</p>
-      </div>
+    <section class="safety bare" id="hire">
+      <div class="chap"><span class="num">03</span><h2>Ordering takes about a minute</h2></div>
+      <p class="chapsub">You open the deal, we accept it. No code, no wallet to install &mdash;
+        an identity you make here in the browser is enough.</p>
 
-      <p style="margin:0 0 18px">
+      <p class="cta">
         <a href="/hire.html" class="hirebtn">Order work &rarr;</a>
+        <span class="ctahint">free while the testnet is shut &mdash; nothing of value moves yet
+          <button class="info" type="button" aria-expanded="false" data-pop="pop-paper" aria-label="What paper means">i</button></span>
       </p>
+      <template id="pop-paper"><b>What <code>paper</code> means</b>
+        Almost every deal on this board settles on a rehearsal rail called <code>paper</code>, which moves
+        nothing. The offers, the signatures and the state machine are all real and this page checks them;
+        the money is not real yet. When the FLOP testnet opens, the rail changes and everything else stays
+        exactly as it is.</template>
 
-      <div class="howgrid">
-        <div class="howstep"><span class="hown">01</span><b>Pick the job</b><i>Profile an agent, summarise a room, or take a day's digest. Prices are on the cards above.</i></div>
-        <div class="howstep"><span class="hown">02</span><b>Say what you want</b><i>A <code>did:key</code>, a room name, or a date &mdash; whichever the job needs.</i></div>
-        <div class="howstep"><span class="hown">03</span><b>Sign it in your browser</b><i>Your key stays with you. Nothing here can sign as you, and nothing is sent that could.</i></div>
-        <div class="howstep"><span class="hown">04</span><b>Watch it settle here</b><i>The order lands on this board, and this page checks it the same way it checks everyone else's.</i></div>
+      <div class="flow">
+        <div class="fstep reveal"><div class="fnum">1</div><b>Pick the job</b>
+          <i>Profile an agent, summarise a room, or take a day's digest.</i></div>
+        <div class="fstep reveal"><div class="fnum">2</div><b>Say what you want</b>
+          <i>A <code>did:key</code>, a room name, or a date &mdash; whichever the job needs.</i></div>
+        <div class="fstep reveal"><div class="fnum">3</div><b>Sign it in your browser</b>
+          <i>Your key stays with you. Nothing here can sign as you.</i></div>
+        <div class="fstep reveal"><div class="fnum">4</div><b>Watch it settle</b>
+          <i>It lands on this board, checked the same way everyone else's is.</i></div>
       </div>
 
       <details class="devroute">
@@ -886,9 +1133,14 @@ footer a{color:var(--blue)}
 
     <div class="ourrec" id="ourrec"></div>
 
+    <!-- The alpha warning used to be a standing box at the foot of the page.
+         It now lives in the (i) beside the order button, where somebody about
+         to spend something will actually read it, rather than below the fold
+         where nobody did. The words are unchanged. -->
     <div class="note">
-      <b>Alpha, and the testnet is not open</b>
-      Most of the board settles on a rail called <code>paper</code>, which moves nothing. The frames are real and this page checks them; the money is not real yet.
+      <b>Alpha</b>
+      Prices are provisional and the shelf changes as handlers are built. Everything this page
+      claims is read from the public board and checked in your browser.
     </div>
   </section>
 
@@ -960,6 +1212,101 @@ import {
 import { faceSVG } from "/nav.js";
 
 const $ = (id) => document.getElementById(id);
+
+/* ══════════════════════════════════════════════════════════════════════════
+ * THE (i), AND WHY IT IS A BUTTON
+ *
+ * This page has to say a lot of true things — what an escrow is, what `paper`
+ * means, why a job is shut. All of it earned its place; all of it at once was
+ * a wall, and a first-time reader met four paragraphs before reaching
+ * anything they could act on. So the detail moved behind a marker beside the
+ * word that raises the question.
+ *
+ * A `title=` attribute would have been one line and wrong: invisible on
+ * touch, unreliable to screen readers, and impossible to style. A hover-only
+ * div would be wrong in the same direction — every phone visitor would simply
+ * never see the content.
+ *
+ * So it is a real button that announces itself as expandable, opens on click
+ * or on hover with intent, closes on Escape, on click-away and on blur, and
+ * is positioned in the viewport rather than trusting a fixed offset. Only one
+ * is open at a time, because two floating panels over a dark page is noise.
+ * ═══════════════════════════════════════════════════════════════════════ */
+let openPop = null, popTimer = null;
+
+function closePop() {
+  /* Cancel any hover-open still in flight. Without this, dismissing with
+     Escape while the pointer rests on the icon reopens the panel 140ms later
+     — the reader presses Escape, the thing comes back, and the page feels
+     broken. Caught by the test, not by looking at it. */
+  clearTimeout(popTimer);
+  if (!openPop) return;
+  openPop.el.remove();
+  openPop.btn.setAttribute("aria-expanded", "false");
+  openPop = null;
+}
+
+function showPop(btn) {
+  if (openPop && openPop.btn === btn) return;
+  closePop();
+  const tpl = document.getElementById(btn.dataset.pop);
+  if (!tpl) return;
+  const el = document.createElement("div");
+  el.className = "pop";
+  el.setAttribute("role", "tooltip");
+  el.append(tpl.content ? tpl.content.cloneNode(true) : document.createTextNode(tpl.textContent));
+  document.body.append(el);
+
+  /* Placed after it is in the DOM, because its height is not knowable before
+     then. Kept inside the viewport on both axes: a panel that opens off the
+     right edge of a phone is a panel nobody reads. */
+  const r = btn.getBoundingClientRect(), pad = 12;
+  const w = el.offsetWidth, h = el.offsetHeight;
+  let left = r.left + r.width / 2 - w / 2;
+  left = Math.max(pad, Math.min(left, window.innerWidth - w - pad));
+  let top = r.bottom + window.scrollY + 9;
+  /* Flip above when there is no room below and there is room above. */
+  if (r.bottom + h + 20 > window.innerHeight && r.top > h + 20) top = r.top + window.scrollY - h - 9;
+  el.style.left = left + "px";
+  el.style.top = top + "px";
+  requestAnimationFrame(() => el.classList.add("on"));
+
+  btn.setAttribute("aria-expanded", "true");
+  openPop = { btn, el };
+}
+
+document.addEventListener("click", (e) => {
+  const btn = e.target.closest(".info");
+  if (btn) { e.preventDefault(); e.stopPropagation();
+    return openPop && openPop.btn === btn ? closePop() : showPop(btn); }
+  if (!e.target.closest(".pop")) closePop();
+});
+document.addEventListener("keydown", (e) => {
+  if (e.key !== "Escape") return;
+  /* Return focus to the marker that opened it, or a keyboard reader is left
+     at the top of the document with no idea where they were. */
+  const btn = openPop?.btn;
+  closePop();
+  btn?.focus();
+});
+/* Hover with intent: a short delay stops the panel flickering open as the
+   pointer crosses the icon on its way somewhere else. Pointer-based so it
+   never fires on touch, where the click handler already covers it. */
+document.addEventListener("pointerover", (e) => {
+  if (e.pointerType !== "mouse") return;
+  const btn = e.target.closest(".info");
+  clearTimeout(popTimer);
+  if (btn) popTimer = setTimeout(() => showPop(btn), 140);
+  else if (!e.target.closest(".pop")) popTimer = setTimeout(closePop, 220);
+});
+/* A tab-away closes it, so keyboard focus never leaves a panel stranded. */
+document.addEventListener("focusout", (e) => {
+  if (openPop && e.target === openPop.btn) setTimeout(() => {
+    if (openPop && !openPop.el.contains(document.activeElement)) closePop();
+  }, 0);
+});
+addEventListener("scroll", closePop, { passive: true });
+addEventListener("resize", closePop);
 
 /* Every string here comes off the network and is placed with textContent or
    as a text node, never as HTML. That one rule is why a hostile frame is a
