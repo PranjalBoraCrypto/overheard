@@ -207,12 +207,18 @@ for (let i = 0; i < 19; i++) {
 const FAILMODE = { v: "good" };
 const REQS = { n: 0 };
 
+/* The page now SHIPS with a real identity — it was set on 3 September, once
+   the runner had actually posted and there was something for it to be true
+   about. So this rewrites whatever constant is there, in both directions:
+   to a fixture DID for the tests that need one, and to empty for the tests
+   that check what the page says when it has no identity at all. Anchoring on
+   `const US = "";` only worked while the shipped value happened to be empty,
+   which is a thing tests should never depend on. */
+const US_RE = /const US = "[^"]*";/;
 const servePage = () => {
   const html = fs.readFileSync(path.join(ROOT, PAGE + ".html"), "utf8");
-  if (!IDENTITY.us) return html;
-  const out = html.replace('const US = "";', `const US = ${JSON.stringify(IDENTITY.us)};`);
-  if (out === html) throw new Error("the US constant moved — this test is no longer testing it");
-  return out;
+  if (!US_RE.test(html)) throw new Error("the US constant moved — this test is no longer testing it");
+  return html.replace(US_RE, `const US = ${JSON.stringify(IDENTITY.us ?? "")};`);
 };
 
 const srv = http.createServer((q, r) => {
@@ -766,6 +772,7 @@ console.log("\n=== Q. pagination at 390px");
  */
 console.log("\n=== R. availability, read off the board");
 {
+  IDENTITY.us = "";            // explicit: this section is about having none
   const { ctx: cU, pg: pU, errs: eU } = await open(1280, 1000, false);
   const chips = () => pU.evaluate(() =>
     [...document.querySelectorAll(".gig[data-job]")].map((g) =>
@@ -777,9 +784,26 @@ console.log("\n=== R. availability, read off the board");
       .some((c) => c.textContent === "overheard")));
   ok("and the record shows nothing rather than a row of zeroes",
     await pU.evaluate(() => document.getElementById("ourrec").children.length === 0));
+  /* Scoped to the section it is about. There are two `.safety` blocks now —
+     the escrow explainer and the how-to-hire-us shopfront — and counting
+     `.howstep` across the page would pass for the wrong reason the moment
+     either one changed. */
   ok("the buyer-safety section is there regardless — it is not a claim about us",
-    await pU.evaluate(() => document.querySelectorAll(".howstep").length === 4 &&
-      /refunds itself/.test(document.querySelector(".refundline").textContent)));
+    await pU.evaluate(() => {
+      const sec = [...document.querySelectorAll("section.safety")]
+        .find((x) => /refunds itself/.test(x.textContent));
+      return !!sec && sec.querySelectorAll(".howstep").length === 4;
+    }));
+
+  /* The shopfront is not a claim about us either: it is the offer shape a
+     buyer must post, and it must be there whether or not we have posted
+     anything ourselves. */
+  ok("and the how-to-hire-us block is shown with no identity too",
+    await pU.evaluate(() => {
+      const h = document.getElementById("hire");
+      return !!h && /overheard-agent-profile/.test(h.textContent)
+                 && /"proto"|proto/.test(h.textContent);
+    }));
   ok("no errors", eU.length === 0, eU.join(" | "));
   await cU.close();
 }
@@ -1131,8 +1155,24 @@ console.log("\n=== W. the listing, redrawn for a phone");
 console.log("\n=== S. one public string, and no key");
 {
   const page = fs.readFileSync(path.join(ROOT, PAGE + ".html"), "utf8");
-  ok("US ships empty — we do not have that identity yet, and the page does not pretend",
-    /const US = "";/.test(page));
+  /* This used to assert US shipped EMPTY, which was right only while we had
+     no identity. It was never the property worth protecting: what matters is
+     that the page holds nothing SECRET, and an empty string is just one way
+     of satisfying that. Now that the runner has posted and US names a real
+     DID, the test says the thing it always meant.
+
+     A did:key is a PUBLIC key — it is on every frame we sign, and a visitor
+     needs it to check that the offers on the board are ours. The seed that
+     signs them is 64 hex characters and lives only in the runner's
+     environment; if one ever appeared here it would be published to every
+     visitor, so that is what is checked. */
+  const usLine = page.match(/const US = "([^"]*)";/);
+  ok("the page carries exactly one US constant", !!usLine, usLine ? "found" : "MISSING");
+  ok("and it is either nothing or a public did:key — never anything else",
+    usLine[1] === "" || /^did:key:z[1-9A-HJ-NP-Za-km-z]{40,}$/.test(usLine[1]), usLine[1] || "(empty)");
+  ok("no 64-hex string anywhere in the page, which is what a seed looks like",
+    !/[0-9a-f]{64}/i.test(page),
+    (page.match(/[0-9a-f]{64}/i) || ["clean"])[0].slice(0, 20));
   ok("the page still signs nothing", !/sign\(|privateKey|secretKey|mnemonic/.test(page));
   ok("and still stores nothing", !/localStorage|sessionStorage|indexedDB/.test(page));
   ok("the operating rule is written down where it can be found",
