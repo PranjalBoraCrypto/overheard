@@ -229,6 +229,13 @@ function setInterval_(e, ms) {
   return e.interval;
 }
 
+/* How many times a room may come back empty while claiming a head ahead of
+   our cursor before we stop waiting and write the loss down. Three is enough
+   for the race to settle and short enough that a genuinely stuck room is not
+   re-read for ever; the empty-page backoff widens the interval each time, so
+   the three attempts span roughly ten seconds rather than three ticks. */
+const EMPTY_RETRIES = Number(process.env.EMPTY_RETRIES ?? 3);
+
 const ROSTER_LIMIT = 500;
 const REPEAT_LIMIT = 5;
 /* MEASURED: templates.json had reached 8.2 MB, and it was being stringified
@@ -591,6 +598,41 @@ async function readRoom(state, e) {
       });
       p.stored++;
     }
+  }
+
+  /* ── THE CURSOR MUST NEVER STEP OVER A MESSAGE IN SILENCE ────────────────
+     MEASURED on this repository, 3 September, by walking the sequence numbers
+     actually stored in tclk-offers rather than trusting our own bookkeeping:
+     3,984 frames stored across seq 1935..7151, with 157 holes totalling 1,233
+     missing — while _meta.json admitted to 3 gaps totalling 142. Off by nine
+     times, and the two largest holes (384 frames over 77 minutes, 401 over
+     58) appeared nowhere in it at all.
+
+     The cause was this line, which used to run unconditionally while every
+     line that notices a gap sits inside `if (msgs.length)`. A read that comes
+     back with last_seq far ahead of our cursor and an EMPTY array would move
+     the cursor to the head, past messages we never fetched, and say nothing.
+
+     An empty page with the head ahead is a RACE, not a refusal. The server
+     always hands back the newest `limit` messages for any `since`, so asking
+     again a moment later normally returns them. The old code threw that away
+     by advancing first. So: hold the cursor and let the next scheduled read
+     have them — 2.5 seconds later for the offers room. Only when the room
+     keeps coming back empty is this a real hole, and then it is recorded with
+     a cause of its own, because neither existing label would be true. Reading
+     faster would not have helped and the collector was running the whole
+     time. */
+  if (!msgs.length && head > cursor) {
+    e.emptyAhead = (e.emptyAhead ?? 0) + 1;
+    if (e.emptyAhead < EMPTY_RETRIES) return produced;   // cursor untouched
+    const missed = head - cursor;
+    const p = state.pending.get(e.room) ?? { days: new Map(), seen: 0, stored: 0, collapsed: 0, capped: 0, gaps: [] };
+    state.pending.set(e.room, p);
+    e.lost += missed;
+    p.gaps.push({ after: cursor, resumed_at: head + 1, missed,
+                  cause: "server returned no messages", noticed: new Date().toISOString() });
+  } else {
+    e.emptyAhead = 0;
   }
 
   state.cursors[e.room] = head;
