@@ -2,11 +2,16 @@ name: runner
 
 # The shop, on a timer.
 #
-# WHAT THIS DOES TODAY: nothing to the network. It runs the decision loop
-# against the live board and prints what it would do. Going live needs three
-# things it does not have — the --live flag, the seed in a secret, and a work
-# side that can actually answer a job — and runner.mjs refuses on any one of
-# them. See RUNNER.md.
+# WHAT THIS DOES depends on one switch that is NOT in this file. With the
+# repository variable AUTOPILOT set to "on", the hourly wake posts real signed
+# frames: it answers buyers' offers, delivers, reveals, and — the half that
+# spends — posts its own wants, funds them when a stranger accepts, and
+# refunds them when nobody delivers. With the variable unset or anything else,
+# every wake is a dry run that prints what it would have done.
+#
+# runner.mjs refuses to post at all without a seed in the secret and a work
+# side that can answer the job, so arming the variable alone cannot make it
+# post something it cannot honour. See RUNNER.md.
 #
 # WHY HOURLY IS ENOUGH, given what archive.yml measured on this same repo:
 # cron here is a request, not a promise, and the gaps between firings ran
@@ -45,26 +50,61 @@ jobs:
         with:
           node-version: "22"
 
+      # ── WHAT ARMS THIS, AND WHAT DISARMS IT ─────────────────────────────
+      #
+      # The rule used to be "the timer can NEVER post": --live required a
+      # person pressing the button. That was correct while the buy side was
+      # unproven, and it is the wrong rule now, because the thing this shop
+      # exists to do — spend on the board, repeatedly, without supervision —
+      # cannot be done by a human pressing a button every hour.
+      #
+      # The property that replaces it is not weaker, it is different, and it
+      # is the one that matters operationally:
+      #
+      #   A COMMIT CANNOT ARM THE TIMER. A REPOSITORY VARIABLE CAN.
+      #
+      # `vars.AUTOPILOT` lives in GitHub's settings, not in this file. So:
+      #
+      #   · merging a branch can never start unattended spending, however the
+      #     workflow was edited — the variable is not in the diff;
+      #   · turning it OFF is one field in a web form, with no commit, no
+      #     review and no deploy. That is the direction that has to be fast:
+      #     during an incident, "revert and wait for CI" is not a stop button;
+      #   · GitHub keeps the audit trail of who changed it and when, which a
+      #     constant in a YAML file does not have.
+      #
+      # The manual path is unchanged and still needs both halves: a person
+      # dispatching AND ticking the box. test-runner.mjs section J asserts
+      # both routes and fails on an unconditional --live.
+      - name: decide whether this wake posts
+        id: mode
+        env:
+          AUTOPILOT: ${{ vars.AUTOPILOT }}
+        run: |
+          live=""
+          why="dry run"
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.live }}" = "true" ]; then
+            live="--live"; why="a person dispatched this and ticked the box"
+          elif [ "${{ github.event_name }}" = "schedule" ] && [ "$AUTOPILOT" = "on" ]; then
+            live="--live"; why="autopilot is on (repository variable AUTOPILOT)"
+          fi
+          echo "live=$live" >> "$GITHUB_OUTPUT"
+          # Loud in the run summary, because "did this one post?" is the first
+          # question anybody asks of a log and it should never need inferring.
+          if [ -n "$live" ]; then
+            echo "::warning title=Posting real frames::$why"
+          else
+            echo "::notice title=Dry run::$why — nothing will be posted"
+          fi
+
       # The seed reaches the process as an environment variable and by no
       # other route. Not an argument — arguments show up in `ps` and in any
       # log that echoes the command. Not a file — a file has to be deleted,
       # and deletion is a step that can be skipped.
-      #
-      # It is empty today. When it is not, this is still the only line that
-      # needs to change, and the runner will verify the key it derives really
-      # is this shop's before it will sign anything with it.
-      # LIVE IS A HUMAN ACT, AND THE WORKFLOW MAKES THAT STRUCTURAL.
-      # `--live` is reachable only when BOTH halves hold: the run was started
-      # by a person (workflow_dispatch) and that person ticked the box. The
-      # event check is not decoration — inputs.live is empty on a schedule, so
-      # without it a default flipped to true would quietly arm the cron. With
-      # it, no edit to the input can make the timer post; someone has to press
-      # the button. test-runner.mjs section I asserts exactly that shape, and
-      # fails on an unconditional --live.
       - name: wake
         env:
           OVERHEARD_SEED: ${{ secrets.OVERHEARD_SEED }}
-        run: node scripts/runner.mjs ${{ (github.event_name == 'workflow_dispatch' && inputs.live) && '--live' || '' }}
+        run: node scripts/runner.mjs ${{ steps.mode.outputs.live }}
 
       # Runs on the same wake so a change that would leak the key fails here
       # rather than in production. It needs no secret of its own.

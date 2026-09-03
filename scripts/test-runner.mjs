@@ -476,30 +476,63 @@ console.log("\n=== I. the answered question, and the remaining one");
     !/randomSecret/.test(src) && !/writeFile[^\n]*secret/i.test(src),
     "the derivation is the store");
 
-  /* ── THE ENFORCEABLE HALF ───────────────────────────────────────────────
-     This used to ban the string `--live` outright. That was the right guard
-     while there was no safe way to pass it, and the wrong one now: a manual
-     live run is a legitimate deliberate act, and a test that cannot tell it
-     apart from an armed cron just gets deleted by whoever needs the former.
+  /* ── THE ENFORCEABLE HALF, AND HOW IT CHANGED ───────────────────────────
+     Two rules have been retired here, each correct in its turn.
 
-     So the property under test is the one that actually matters — THE TIMER
-     CAN NEVER POST. --live must be reachable only when both halves hold: the
-     run was started by a person, and that person ticked the box. The event
-     check is load-bearing on its own, because `inputs.live` is empty on a
-     schedule and a default flipped to true would otherwise arm the cron
-     silently. */
+     FIRST it banned the string `--live` outright — right while there was no
+     safe way to pass it, wrong once a manual live run became a legitimate
+     deliberate act.
+
+     THEN the rule was THE TIMER CAN NEVER POST: --live only when a person
+     dispatched AND ticked the box. That was right while the buy side was
+     unproven. It is wrong now, and not because the risk went away — because
+     the thing this shop exists to do is spend on the board repeatedly without
+     supervision, and a rule that requires a human every hour does not make
+     that safe, it makes it not happen.
+
+     THE RULE NOW: A COMMIT CANNOT ARM THE TIMER. The schedule may post, but
+     only when a switch that is NOT in this repository says so. That keeps the
+     half that actually protects anything — no branch, however edited, starts
+     unattended spending, because the switch is not in the diff — and it moves
+     the off switch somewhere it can be thrown in ten seconds without a commit
+     or a deploy, which is the direction that has to be fast.
+
+     What is still asserted, and what would be a real regression:
+       · --live is never unconditional;
+       · the manual route still needs BOTH the event and the ticked box, since
+         `inputs.live` is empty on a schedule and a flipped default must not
+         arm anything on its own;
+       · the scheduled route is gated on a repository variable and on nothing
+         else — a literal, an env default or a `secrets.` fallback here would
+         all put the switch back inside the repository. */
   const wf = fs.readFileSync(path.join(ROOT, ".github/workflows/runner.yml"), "utf8");
   const runLine = wf.split("\n").find((l) => /^\s*run:\s*node scripts\/runner\.mjs/.test(l)) ?? "";
   ok("the wake is invoked exactly once, and this is it", runLine !== "", runLine.trim().slice(0, 60));
   ok("it never passes --live unconditionally",
-    !/runner\.mjs\s+--live/.test(runLine), runLine.trim());
-  ok("--live needs a human pressing the button, not just an input default",
-    !runLine.includes("--live") ||
-      (/github\.event_name\s*==\s*'workflow_dispatch'/.test(runLine) && /inputs\.live/.test(runLine)),
-    "a schedule leaves inputs.live empty, so the event check is what stops a flipped default arming the cron");
+    !/runner\.mjs\s+--live\b/.test(runLine), runLine.trim());
+
+  /* The flag is computed in its own step now, so the decision is a block of
+     shell rather than one expression — read that block, not the run line. */
+  const decide = wf.slice(wf.indexOf("- name: decide whether this wake posts"),
+                          wf.indexOf("- name: wake"));
+  ok("the decision is made in one place", decide.includes("GITHUB_OUTPUT"), "and read once by the wake");
+  ok("the manual route still needs the event AND the ticked box",
+    /github\.event_name \}\}" = "workflow_dispatch"/.test(decide) && /inputs\.live \}\}" = "true"/.test(decide),
+    "a schedule leaves inputs.live empty, so the event check is what stops a flipped default arming it");
   ok("and the input it reads defaults to off",
     /live:\s*\n\s*description:[^\n]*\n\s*type:\s*boolean\s*\n\s*default:\s*false/.test(wf),
     "so dispatching without thinking about it is still a dry run");
+  ok("the timer posts only when a repository VARIABLE says so",
+    /vars\.AUTOPILOT/.test(wf) && /"\$AUTOPILOT" = "on"/.test(decide),
+    "vars live in GitHub's settings, so no commit can arm the cron and no deploy is needed to stop it");
+  ok("and that switch has no fallback inside the repository",
+    !/AUTOPILOT:\s*\$\{\{\s*vars\.AUTOPILOT\s*\|\|/.test(wf) &&
+    !/secrets\.AUTOPILOT/.test(wf) &&
+    !/AUTOPILOT[=:]\s*["']?on/.test(wf.replace(/"\$AUTOPILOT" = "on"/g, "")),
+    "a default of \"on\" anywhere in here would put the switch back in the diff");
+  ok("every wake says out loud whether it posted",
+    /::warning title=Posting real frames/.test(decide) && /::notice title=Dry run/.test(decide),
+    "\"did this one post?\" is the first question anybody asks of a log");
 
   ok("and the reasoning is written down where the next person will find it",
     /tclk#12/.test(fs.readFileSync(path.join(ROOT, "RUNNER.md"), "utf8")),
