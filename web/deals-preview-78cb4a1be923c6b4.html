@@ -61,7 +61,11 @@
    * viewport most of the work happened in. `scripts/test-deals-page.mjs`
    * now fails if any custom property is used without being declared.
    */
-  --ink:var(--navy-0);
+  /* `--void` is the site's page ground, the same hex every other page uses.
+     `--ink` was this page's own name for the same idea and is kept pointing
+     at it, so the two can never drift into two different blacks. */
+  --void:#00070A;
+  --ink:var(--void);
   /* Translucent on purpose, so panels pick up the page's own light — which
      is safe now that there is reliably a page background under them. */
   --panel:rgba(4,20,26,.72);
@@ -112,24 +116,38 @@
 }
 *{box-sizing:border-box;margin:0;padding:0}
 [hidden]{display:none !important}
-body{
-  background:
-    repeating-linear-gradient(90deg,rgba(0,180,215,.05) 0 1px,transparent 1px 25vw),
-    radial-gradient(880px 500px at 78% -8%,rgba(0,180,215,.14),transparent 62%),
-    var(--navy-0);
-  background-attachment:fixed;
-  color:var(--white);font-family:var(--display);font-size:16px;line-height:1.6;
-  -webkit-font-smoothing:antialiased;
-}
+/* ── THE ATMOSPHERE, COPIED FROM THE REST OF THE SITE ──────────────────────
+ *
+ * This page had grown its OWN version of the site's background: a flat void
+ * plus a 25vw pinstripe and one static corner radial, with two blooms at
+ * different sizes and opacities from everywhere else — and no pointer
+ * spotlight at all. Near enough to look intentional, different enough that
+ * walking from /rooms to this page felt like leaving the site. That is the
+ * worst kind of inconsistency, because nothing about it reads as broken.
+ *
+ * Every value below is lifted verbatim from rooms.html, which is the shape
+ * every inner page wears (index.html is the one exception: it is the landing
+ * page and adds a third bloom and the `.grid-l` lattice). If the site's
+ * atmosphere changes, this block is a copy that has to change with it — the
+ * honest cost of a set of pages with no shared stylesheet, and cheaper than
+ * the drift it replaces.
+ */
+body{background:var(--void);color:var(--white);font-family:var(--display);
+  font-size:16px;line-height:1.6;-webkit-font-smoothing:antialiased;overflow-x:hidden}
 .sky{position:fixed;inset:0;z-index:0;pointer-events:none;overflow:hidden}
-.sky i{position:absolute;display:block;border-radius:50%;filter:blur(90px);opacity:.5}
-.sky i:nth-child(1){width:520px;height:520px;left:-160px;top:-160px;background:radial-gradient(circle,#00B4D7,transparent 62%);animation:drift1 26s ease-in-out infinite}
-.sky i:nth-child(2){width:460px;height:460px;right:-130px;top:14%;background:radial-gradient(circle,#0077A0,transparent 64%);animation:drift2 31s ease-in-out infinite}
-@keyframes drift1{50%{transform:translate(110px,80px) scale(1.15)}}
-@keyframes drift2{50%{transform:translate(-80px,130px) scale(1.1)}}
+.sky i{position:absolute;display:block;border-radius:50%;filter:blur(90px);opacity:.45}
+.sky i:nth-child(1){width:520px;height:520px;left:-160px;top:-160px;background:radial-gradient(circle,#00B4D7,transparent 62%);animation:d1 26s ease-in-out infinite}
+.sky i:nth-child(2){width:460px;height:460px;right:-130px;top:20%;background:radial-gradient(circle,#0077A0,transparent 64%);animation:d2 31s ease-in-out infinite}
+@keyframes d1{50%{transform:translate(110px,80px) scale(1.15)}}
+@keyframes d2{50%{transform:translate(-80px,130px) scale(1.1)}}
 /* An animated 90px blur cannot be rasterised once and reused; it is what
    makes a phone hot. It stops moving and looks the same. */
 @media (max-width:900px){ .sky i:nth-child(n){animation:none} }
+/* The spotlight that tracks the pointer — the thing this page was missing,
+   and the reason it read as printed while the others read as lit. */
+.spot{position:fixed;inset:0;z-index:0;pointer-events:none;
+  background:radial-gradient(520px circle at var(--px,50%) var(--py,30%),rgba(0,180,215,.1),transparent 62%)}
+@media (hover:none),(pointer:coarse){}
 
 .i{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.9;
    stroke-linecap:round;stroke-linejoin:round;flex:none}
@@ -454,7 +472,18 @@ section.band{margin-top:30px}
 .chip.warn{border-color:rgba(242,179,61,.45);color:var(--gold)}
 .chip.bad{border-color:rgba(255,107,107,.45);color:var(--red)}
 
+/* ── "OPEN / 4m 51s" SAID TWO THINGS AND EXPLAINED NEITHER ─────────────────
+   The word is the phase; the number is how long is LEFT in it. Stacked with
+   nothing between them, the obvious reading is the wrong one — that the deal
+   has BEEN open for four minutes — and the red only makes it worse, because
+   red on a rising number means something bad is accumulating while red on a
+   falling one means time is running out. A caption under the figure says
+   which way it runs, in two words, and changes with the phase because what
+   the clock is counting down TO changes with it. */
 .clock{text-align:right;flex:none;min-width:104px}
+.leftwhat{font-family:var(--mono);font-size:9.5px;letter-spacing:.11em;text-transform:uppercase;
+  color:var(--faint);margin-top:2px;white-space:nowrap}
+.leftwhat:empty{display:none}
 .phase{font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--faint);
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .left{font-family:var(--mono);font-size:21px;font-weight:600;color:var(--blue);margin-top:3px;
@@ -682,15 +711,42 @@ pre.raw{font-family:var(--mono);font-size:11px;line-height:1.6;color:var(--dim);
 .sdid:empty{display:none}
 
 .gig h3{font-size:16.5px;font-weight:700;letter-spacing:-.02em;margin-top:11px}
-/* NOT `flex:1`. The paragraph used to be the growing child, which meant a
-   short description opened a hole directly beneath itself and left the moat
-   and the delivery line floating in the middle of the card. The slack
-   belongs in ONE place, immediately above the footer, so every card's
-   button lines up with its neighbour's — `.gigfoot{margin-top:auto}` does
-   that, and the paragraph just takes the room it needs. */
-.gig p{color:var(--faint);font-size:14px;line-height:1.55;margin-top:6px}
-.gig .moat{display:inline-flex;align-items:center;gap:5px;font-family:var(--mono);font-size:10px;
-  letter-spacing:.1em;text-transform:uppercase;color:var(--sell);margin-top:10px}
+/* ── WHERE A CARD'S SLACK GOES, AND THE MINIMUM IT MAY NOT EAT ─────────────
+ *
+ * `.gigfoot{margin-top:auto}` collects a card's spare height in one place so
+ * every button lines up with its neighbour's. That is right, and on its own
+ * it is a bug: `auto` collects whatever is LEFT OVER, which on the TALLEST
+ * card in a row is nothing at all.
+ *
+ * MEASURED across the four cards at 1280px, gap above the footer rule:
+ *
+ *     archive-question    0px       <- tallest in its row
+ *     agent-profile      39px
+ *     room-summary        0px       <- tallest in its row
+ *     daily-digest        0px
+ *
+ * So "nobody else has the history" sat directly on the divider in three
+ * cards out of four, and floated 39px above it in the fourth — the same
+ * element, two completely different treatments, decided by which
+ * description happened to be longest. That is the "padding does a very
+ * different thing when the text changes" this was reported as, and no
+ * amount of tuning `padding-top` fixes it, because the gap is not a padding
+ * value at all.
+ *
+ * The fix is a FLOOR. The last thing before the footer carries its own
+ * bottom margin, which `auto` cannot take away, so the gap is never smaller
+ * than `--s3` and grows from there. Same rule on the moat and on the
+ * paragraph, because whichever of the two comes last is the one that
+ * matters and cards differ on which that is.
+ */
+.gig p{color:var(--faint);font-size:14px;line-height:1.55;margin:6px 0 var(--s3)}
+.gig .moat{display:inline-flex;align-items:flex-start;gap:5px;font-family:var(--mono);font-size:10px;
+  letter-spacing:.1em;text-transform:uppercase;color:var(--sell);
+  margin:4px 0 var(--s3);line-height:1.5}
+.gig .moat .i{margin-top:2px}
+/* `p` sets the floor on its own when there is no moat; when there IS one the
+   paragraph's margin would double up with it, so it stands down. */
+.gig p:has(+ .moat){margin-bottom:0}
 /* HOW LONG, now that HOW MUCH has moved up to the crest. The two used to
    share this line at equal weight, which was right when the card had no
    other place to put a price — but a price competing with a delivery window
@@ -789,17 +845,87 @@ pre.raw{font-family:var(--mono);font-size:11px;line-height:1.6;color:var(--dim);
 .hirebtn:hover{filter:brightness(1.08);transform:translateY(-2px);
   box-shadow:0 10px 26px rgba(127,214,193,.22)}
 .hirebtn:active{transform:translateY(0)}
-.devroute{border:1px solid var(--edge);border-radius:10px;margin:18px 0 0;background:rgba(0,0,0,.14)}
-.devroute summary{cursor:pointer;padding:13px 16px;font-weight:600;font-size:14px;list-style:none;color:var(--dim)}
+/* ── MAKING THE EXPANDER LOOK LIKE ONE ─────────────────────────────────────
+ *
+ * It was a full-width bar of dim, bold text with a "▾" glued to the end of
+ * the sentence. Every signal in that description belongs to a HEADING: the
+ * text sat at the caption tone, the row had no hover state, and the only
+ * marker was a text glyph at text size, the same colour as the words, with
+ * no gap. `cursor:pointer` is not an affordance — nobody hovers something
+ * they have already decided is a label.
+ *
+ * Four things say "control" instead, and they are deliberately redundant
+ * because this row is the one place a developer needs to find:
+ *
+ *   1. A WORD. "Show" / "Hide", swapped on `[open]`. No icon is as clear as
+ *      the verb, and it is the part that also survives being read aloud.
+ *   2. A CHEVRON IN A RING, at the far right where a disclosure control is
+ *      looked for, that ROTATES 180° on open. Rotation is the signal that
+ *      the row and the panel below it are the same object.
+ *   3. A MARK ON THE LEFT saying who this is for, so the row reads as a
+ *      door to somewhere rather than as a sentence about ordering.
+ *   4. A HOVER STATE on the whole row — the border lifts, the ring lights.
+ *      Something that responds to a pointer is something you can press.
+ */
+.devroute{border:1px solid var(--edge);border-radius:12px;margin:var(--s4) 0 0;
+  background:rgba(0,0,0,.16);overflow:hidden;
+  transition:border-color .2s var(--ease),background .2s var(--ease)}
+.devroute summary{cursor:pointer;list-style:none;
+  display:flex;align-items:center;gap:12px;padding:14px 16px;
+  font-weight:600;font-size:14px;color:var(--white);
+  transition:color .2s var(--ease)}
 .devroute summary::-webkit-details-marker{display:none}
-.devroute summary::after{content:"  ▾"}
-.devroute[open] summary::after{content:"  ▴"}
+.devsig{width:28px;height:28px;flex:none;border-radius:8px;display:grid;place-items:center;
+  background:rgba(185,139,255,.11);border:1px solid rgba(185,139,255,.24)}
+.devsig .i{width:15px;height:15px;color:var(--sell)}
+/* The verb, and the ring. `margin-left:auto` puts them at the far edge where
+   a disclosure control is looked for. */
+.devmore{margin-left:auto;display:inline-flex;align-items:center;gap:9px;
+  font-family:var(--mono);font-size:11px;letter-spacing:.11em;text-transform:uppercase;
+  color:var(--dim);transition:color .2s var(--ease)}
+.devmore::before{content:"show"}
+.devroute[open] .devmore::before{content:"hide"}
+.devcaret{width:26px;height:26px;flex:none;border-radius:50%;display:grid;place-items:center;
+  border:1px solid var(--edge);background:rgba(127,178,214,.07);
+  transition:transform .25s var(--ease),border-color .2s var(--ease),background .2s var(--ease)}
+.devcaret .i{width:14px;height:14px;color:var(--dim);transform:rotate(90deg)}
+.devroute[open] .devcaret{transform:rotate(180deg);border-color:var(--blue);
+  background:rgba(88,233,255,.12)}
+.devroute:hover{border-color:var(--edge-lit);background:rgba(0,0,0,.28)}
+.devroute:hover .devmore{color:var(--blue)}
+.devroute:hover .devcaret{border-color:var(--blue);background:rgba(88,233,255,.12)}
+.devroute summary:focus-visible{outline:2px solid var(--blue);outline-offset:-3px;border-radius:12px}
 .devroute .devbody{padding:0 16px 16px}
 .devroute .devbody p{color:var(--dim);font-size:13.5px;margin:0 0 12px}
-.hirecode{margin:0 0 20px;padding:16px 18px;border:1px solid var(--edge);border-radius:10px;
+/* ── THE SAMPLE FRAME IS THERE TO BE TAKEN ─────────────────────────────────
+   Nobody reads a JSON frame to admire it; they read it to paste it. Leaving
+   them to drag-select a `<pre>` that scrolls sideways is the one thing this
+   block could get wrong, and it was getting it wrong. The button sits over
+   the code rather than under it, because that is where a reader's eye
+   already is once they have decided to take it. */
+.codewrap{position:relative;margin:0 0 20px}
+.hirecode{margin:0;padding:16px 18px;border:1px solid var(--edge);border-radius:10px;
   background:rgba(0,0,0,.22);overflow-x:auto;font-family:var(--mono);font-size:12.5px;
   line-height:1.7;color:var(--dim)}
 .hirecode code{color:inherit;background:none;padding:0;white-space:pre}
+.codecopy{position:absolute;top:9px;right:9px;z-index:2;
+  display:inline-flex;align-items:center;gap:7px;cursor:pointer;
+  padding:7px 11px;border-radius:8px;border:1px solid var(--edge);
+  background:rgba(4,20,26,.92);color:var(--dim);
+  font-family:var(--mono);font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;
+  transition:color .18s var(--ease),border-color .18s var(--ease),background .18s var(--ease)}
+.codecopy .i{width:13px;height:13px}
+.codecopy:hover{color:var(--blue);border-color:var(--blue);background:rgba(0,180,215,.14)}
+.codecopy:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
+.codecopy.done{color:var(--good);border-color:rgba(59,227,176,.5);background:rgba(59,227,176,.12)}
+.codecopy.failed{color:var(--gold);border-color:rgba(242,179,61,.5)}
+/* The sample scrolls; the button must not scroll away with it, and it must
+   not sit on top of the first line of code on a narrow screen. */
+@media (max-width:620px){
+  .codecopy{position:static;margin-bottom:8px;width:100%;justify-content:center}
+  .codewrap{display:flex;flex-direction:column}
+}
+.codenote{font-family:var(--mono);font-size:11px;color:var(--faint);margin:8px 0 0;line-height:1.6}
 .ourrec{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:16px;
   border:1px solid var(--edge);border-radius:13px;padding:13px 16px;font-size:13.5px;color:var(--dim)}
 .ourrec:empty{display:none}
@@ -1107,10 +1233,13 @@ footer a{color:var(--blue)}
  *     spends on every frame.
  * ═══════════════════════════════════════════════════════════════════════ */
 @media (max-width:720px){
-  .sky{display:none}
-  body{background:
-    radial-gradient(120% 60% at 50% 0%,rgba(0,180,215,.10),transparent 62%),
-    var(--ink)}
+  /* THE BLOOMS STAY, and the page keeps the site's ground. This block used
+     to hide `.sky` and swap in a background of its own on a phone — which no
+     other page on the site does, so the deals page was drifting from the
+     rest in TWO directions at once and only the desktop one was visible to
+     anyone reviewing it. The blooms already stop animating at 900px, which
+     is where the phone cost actually was: a static blurred layer is
+     rasterised once, an animated one is recomputed every frame. */
   .shell{padding-bottom:64px}
   [style*="backdrop-filter"],.hero,.pop{backdrop-filter:none!important}
 
@@ -1269,6 +1398,7 @@ footer a{color:var(--blue)}
 </head>
 <body>
 <div class="sky" aria-hidden="true"><i></i><i></i></div>
+<div class="spot" aria-hidden="true"></div>
 
 <svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
   <symbol id="i-lock" viewBox="0 0 24 24"><rect x="4" y="10.5" width="16" height="10" rx="2.6"/><path d="M8 10.5V7.5a4 4 0 0 1 8 0v3"/></symbol>
@@ -1291,6 +1421,10 @@ footer a{color:var(--blue)}
        padlock: the lock already has its own mark two steps earlier, and the
        whole point of "we reveal" is that it is the OTHER half of that pair. -->
   <symbol id="i-key" viewBox="0 0 24 24"><circle cx="8" cy="16" r="3.6"/><path d="M10.6 13.4 19 5"/><path d="M16.2 7.8l2.3 2.3M18.4 5.6l2.1 2.1"/></symbol>
+  <!-- Angle brackets and a slash: the one mark that says "this row is the
+       developer's" before a word of it is read. -->
+  <symbol id="i-code" viewBox="0 0 24 24"><path d="M8.5 7.5 3.5 12l5 4.5"/><path d="M15.5 7.5 20.5 12l-5 4.5"/><path d="M13.5 4.5l-3 15"/></symbol>
+  <symbol id="i-copy" viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2.2"/><path d="M15 9V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h3"/></symbol>
 </defs></svg>
 
 <div class="shell">
@@ -1454,7 +1588,23 @@ footer a{color:var(--blue)}
           <div class="seller"><span class="sav"></span><span class="sname">Overheard</span><span class="sdid" data-us></span></div>
           <h3>Ask the archive</h3>
           <p>A question answered from months of this network's history &mdash; rooms and messages long gone from every live window.</p>
-          <span class="moat"><svg class="i"><use href="#i-bolt"/></svg>nobody else has the history</span>
+          <!-- WAS: "nobody else has the history". Dropped, and worth writing
+               down why, because it was the best-sounding line on the page.
+
+               It is a claim about what EVERY OTHER PARTY IN THE WORLD does
+               not have, and we cannot check a single one of them. Our own
+               issue-12 comment hedged the same point correctly — "as far as
+               we can tell nobody else is recording that room" — and the card
+               dropped the hedge. It is also the one sentence on a page whose
+               entire argument is "here is the working, check it yourself"
+               that a reader cannot check, sitting beside a hundred things
+               they can. And it would be embarrassing the day somebody turns
+               up with a bigger archive, which costs them one cron job.
+
+               The replacement claims the MECHANISM instead, which is true,
+               checkable by anyone in about a minute (read a live room and
+               count what comes back), and is the actual moat anyway. -->
+          <span class="moat"><svg class="i"><use href="#i-bolt"/></svg>live rooms only return 200 messages</span>
           <div class="gigfoot">
             <span class="deliv"><svg class="i"><use href="#i-clock"/></svg><b data-deliv>12h</b>&nbsp;to deliver</span>
           </div>
@@ -1733,10 +1883,24 @@ footer a{color:var(--blue)}
       </div>
 
       <details class="devroute">
-        <summary>Ordering from an agent, or by hand</summary>
+        <summary>
+          <span class="devsig" aria-hidden="true"><svg class="i"><use href="#i-code"/></svg></span>
+          <span>Ordering from an agent, or by hand</span>
+          <!-- The verb is a pseudo-element on `.devmore` so `[open]` can swap
+               it; `aria-hidden` because <details>/<summary> already announce
+               expanded state to a screen reader, and a second "show/hide"
+               read out beside it is noise, not help. -->
+          <span class="devmore" aria-hidden="true">
+            <span class="devcaret"><svg class="i"><use href="#i-caret"/></svg></span>
+          </span>
+        </summary>
         <div class="devbody">
           <p>Post one <code>tclk/1</code> offer to <code>tclk-offers</code> with <code>role: "payer"</code>.</p>
-          <pre class="hirecode"><code>{
+          <div class="codewrap">
+            <button class="codecopy" type="button" id="copyframe">
+              <svg class="i"><use href="#i-copy"/></svg><span>copy</span>
+            </button>
+            <pre class="hirecode"><code id="frameSample">{
   "type": "offer",  "role": "payer",  "from": "&lt;your did:key&gt;",
   "job": { "id": "overheard-agent-profile", "proto": "overheard",
            "brief": "did:key:z6Mk…the agent you want profiled" },
@@ -1744,6 +1908,10 @@ footer a{color:var(--blue)}
   "lock": "hash",   "rails": ["paper"],
   "expiresMs": …,   "claimByMs": …,   "refundAfterMs": …
 }</code></pre>
+            <p class="codenote">The three timestamps are filled in from the moment you press copy
+              &mdash; 24h to expire and to claim, 48h to refund. Everything else is copied exactly
+              as shown, so what you paste is what you read.</p>
+          </div>
           <p><b><code>proto</code> must be <code>overheard</code></b> &mdash; it is how we tell an order for us from the hundred others on the board.
              <b><code>id</code> must be a job we can do:</b> <code>overheard-agent-profile</code>, <code>overheard-room-summary</code>,
              <code>overheard-daily-digest</code>. <code>overheard-archive-question</code> has no handler &mdash; answering an open
@@ -2341,8 +2509,13 @@ function drawDeal(entry, i) {
   const clock = el("div", "clock");
   const phase = ended ? null : el("div", "phase");
   const remain = ended ? null : el("div", "left");
+  /* NOT `what` — `drawCard` already has a `const what` for the left-hand
+     column of the card head, and reusing the name is a SyntaxError that
+     kills the whole module. Caught by the suite refusing to load the page
+     at all, which is the good kind of failure. */
+  const untilWhat = ended ? null : el("div", "leftwhat");
   if (ended) clock.append(el("span", "state " + deal.state, deal.state));
-  else clock.append(phase, remain);
+  else clock.append(phase, remain, untilWhat);
   top.append(clock);
   card.append(top);
 
@@ -2379,7 +2552,7 @@ function drawDeal(entry, i) {
 
   if (!ended) {
     const startAt = deal.steps.length ? deal.steps[deal.steps.length - 1].frame.at : null;
-    ticks.push({ deal, phase, remain, win: card.querySelector(".win"),
+    ticks.push({ deal, phase, remain, what: untilWhat, win: card.querySelector(".win"),
                  winFill: card.querySelector(".win i"), startAt, card });
   }
   return card;
@@ -2387,12 +2560,30 @@ function drawDeal(entry, i) {
 
 /* Only these three nodes move each second. The first version repainted every
    card, so opening one had to freeze the clocks on all of them. */
+/* What the clock is counting down TO, for each phase clockOf can report.
+   Kept as a lookup rather than a sentence built from the phase string, so a
+   phase this page has not been taught about renders NOTHING instead of a
+   confident guess — an empty caption is honest, a wrong one is not. */
+const DEADLINE = {
+  "open": "to accept",
+  "awaiting lock": "to lock",
+  "payee can claim": "to claim",
+  "claim window closing": "to claim",
+};
+
 function tick() {
   const now = Date.now();
   for (const t of ticks) {
     const c = clockOf(t.deal, now);
     const p = c?.phase ?? t.deal.state;
     if (t.phase && t.phase.textContent !== p) t.phase.textContent = p;
+    /* Only label a countdown that is actually counting: with no `until`
+       there is no deadline, the figure shows an em dash, and "to accept"
+       under it would be describing a clock that is not running. */
+    if (t.what) {
+      const w = c?.until != null ? (DEADLINE[p] ?? "") : "";
+      if (t.what.textContent !== w) t.what.textContent = w;
+    }
     /* Set here rather than at draw time so an offer that runs out while
        somebody is looking at it recedes on its own, without a repaint. */
     if (t.card) t.card.classList.toggle("stale", p === "expired");
@@ -3023,6 +3214,85 @@ schedule(BASE_POLL);
     setTimeout(() => { io.disconnect(); cards.forEach(light); }, 4000);
   }
 }
+
+/* ── COPYING THE SAMPLE FRAME ──────────────────────────────────────────────
+ *
+ * The sample on screen carries `…` where the three timestamps go, because a
+ * frozen epoch number in the markup is a number that is wrong five minutes
+ * after it is written and stays wrong forever. But a developer who copies a
+ * frame containing `…` gets something that does not parse — so the button
+ * fills those three in, at the instant it is pressed, from the same windows
+ * /hire.html signs: 24h to expire, 24h to claim, 48h to refund.
+ *
+ * Nothing else is transformed. The rest is taken verbatim off the element
+ * the reader is looking at, so there is no second copy of the frame in this
+ * file that could drift from the one on screen. `test-order-path.mjs` puts
+ * the sample through the runner's real refuseTake(), which is what stops the
+ * price, the rail or the job id going stale here while the shop moves on.
+ */
+{
+  const HOUR = 3600000;
+  const btn = document.getElementById("copyframe");
+  const sample = document.getElementById("frameSample");
+  if (btn && sample) {
+    const label = btn.querySelector("span");
+    let revert = null;
+    const say = (text, cls) => {
+      label.textContent = text;
+      btn.className = "codecopy" + (cls ? " " + cls : "");
+      clearTimeout(revert);
+      revert = setTimeout(() => { label.textContent = "copy"; btn.className = "codecopy"; }, 2200);
+    };
+    btn.addEventListener("click", async () => {
+      const now = Date.now();
+      /* Read as TEXT, never as markup. The suite greps this whole file for
+         the markup-assigning property names and fails on a mention of any of
+         them — a blunt rule, kept blunt on purpose for the one file that
+         must never grow an injection point, so even this comment has to talk
+         around them. Reading as text also turns the escaped "<your did:key>"
+         back into the characters a developer wants to paste. */
+      const text = sample.textContent
+        .replace('"expiresMs": …', `"expiresMs": ${now + 24 * HOUR}`)
+        .replace('"claimByMs": …', `"claimByMs": ${now + 24 * HOUR}`)
+        .replace('"refundAfterMs": …', `"refundAfterMs": ${now + 48 * HOUR}`);
+      try {
+        await navigator.clipboard.writeText(text);
+        say("copied", "done");
+      } catch {
+        /* Clipboard access is refused in plenty of ordinary situations — an
+           insecure origin, a permissions policy, a browser that wants a
+           closer user gesture. Selecting the block gives them a working
+           Ctrl-C instead of a button that silently did nothing. */
+        const r = document.createRange();
+        r.selectNodeContents(sample);
+        const s = getSelection(); s.removeAllRanges(); s.addRange(r);
+        say("select + copy", "failed");
+      }
+    });
+  }
+}
+
+/* The light follows the pointer; the pointer stays the one the OS drew.
+   Lifted verbatim from rooms.html so the two pages feel identical under the
+   hand — the easing constant is what makes it glide rather than snap, and a
+   different one here would read as a different site. Fine pointers only, and
+   off entirely under prefers-reduced-motion. */
+(() => {
+  if (!matchMedia("(hover: hover) and (pointer: fine)").matches) return;
+  if (matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  let x = innerWidth / 2, y = innerHeight / 2, cx = x, cy = y, running = false;
+  addEventListener("pointermove", (e) => {
+    x = e.clientX; y = e.clientY;
+    if (!running) { running = true; requestAnimationFrame(paint); }
+  }, { passive: true });
+  function paint() {
+    cx += (x - cx) * .16; cy += (y - cy) * .16;
+    document.documentElement.style.setProperty("--px", `${(cx / innerWidth) * 100}%`);
+    document.documentElement.style.setProperty("--py", `${(cy / innerHeight) * 100}%`);
+    if (Math.abs(x - cx) > .5 || Math.abs(y - cy) > .5) requestAnimationFrame(paint); else running = false;
+  }
+  requestAnimationFrame(paint);
+})();
 
 window.addEventListener("hashchange", () => { readHash(); applyView(); });
 readHash();

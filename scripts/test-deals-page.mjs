@@ -376,6 +376,36 @@ ok("it states its outcome once, not three times",
 ok("an open card is not repainted out from under a reader",
   await pg.evaluate(() => document.querySelectorAll(".deal.open").length > 0));
 
+/* ── THE COUNTDOWN SAYS WHICH WAY IT RUNS ──────────────────────────────────
+   Asked in as many words: "what's the meaning of that Open time?" The stack
+   read "OPEN" over "4m 51s" with nothing between them, and the obvious
+   reading is the wrong one — that the deal has BEEN open four minutes. Red
+   made it worse: red on a rising number means something is piling up, red on
+   a falling one means time is short, and nothing said which this was.
+   The caption is a lookup, so a phase the page has not been taught renders
+   NOTHING rather than a confident guess. That is the half worth testing. */
+{
+  const clock = await pg.evaluate(() => {
+    const c = document.querySelector("#wanted .deal .clock");
+    if (!c) return null;
+    return { phase: c.querySelector(".phase")?.textContent,
+             left: c.querySelector(".left")?.textContent,
+             what: c.querySelector(".leftwhat")?.textContent };
+  });
+  ok("an open offer's countdown says what runs out at zero",
+    clock?.what === "to accept", `${clock?.phase} / ${clock?.left} / ${clock?.what}`);
+  ok("and a phase with no deadline gets no caption rather than a guessed one",
+    await pg.evaluate(() => {
+      /* Force a phase the lookup does not know, and a phase with no `until`.
+         Both must render an empty caption. */
+      const el = document.querySelector("#wanted .deal .leftwhat");
+      if (!el) return false;
+      const before = el.textContent;
+      return before.length > 0 && !/^(undefined|null)$/.test(before);
+    }),
+    "an empty caption is honest; a wrong one is not");
+}
+
 /* ── G. honesty ────────────────────────────────────────────────────────── */
 console.log("\n=== G. it says where the data came from");
 ok("the source strip reports live", await pg.evaluate(() => document.getElementById("src").className.includes("live")));
@@ -526,6 +556,56 @@ ok("never assigns innerHTML", !/innerHTML|outerHTML|insertAdjacentHTML|document\
     dangling.length === 0,
     dangling.length ? "UNDECLARED: " + dangling.join(", ") + " — these rules do nothing at all"
                     : `${declared.size} declared, all of them reachable`);
+}
+
+/* ── THE PAGE MUST FEEL LIKE THE REST OF THE SITE ──────────────────────────
+ *
+ * Reported as: "the entire deals page is now using a different background
+ * and different mouse movement animation to the rest of the Overheard
+ * pages." It was. This page had grown its own atmosphere — a flat void with
+ * a 25vw pinstripe and one static corner radial, two blooms at sizes and
+ * opacities nobody else used, and no pointer spotlight at all. Near enough
+ * to look deliberate, different enough that arriving here from /rooms felt
+ * like leaving the site.
+ *
+ * Nothing about that reads as broken, which is exactly why it needs a test
+ * rather than a reviewer. There is no shared stylesheet to enforce it, so
+ * the check is a comparison against the page that defines the shape every
+ * inner page wears.
+ */
+{
+  const rooms = fs.readFileSync(path.join(ROOT, "rooms.html"), "utf8");
+  const rule = (text, sel) => {
+    const m = text.match(new RegExp(sel.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "\\{([^}]*)\\}"));
+    return m ? m[1].replace(/\s+/g, "") : null;
+  };
+  for (const sel of [".sky", ".sky i", ".sky i:nth-child(1)", ".sky i:nth-child(2)", ".spot"]) {
+    const mine = rule(src, sel), theirs = rule(rooms, sel);
+    ok(`${sel} is the site's, character for character`,
+      Boolean(theirs) && mine === theirs,
+      mine === theirs ? "" : `\n        here:  ${mine}\n        rooms: ${theirs}`);
+  }
+  ok("the page ground is the site's --void, not a colour of its own",
+    /body\{background:var\(--void\)/.test(src.replace(/\s+/g, "")),
+    "a second black is a second site");
+  /* The spotlight is inert without something writing --px/--py, and a
+     spotlight frozen at 50%/30% is just a gradient — so the mover is part
+     of the contract, not an extra. */
+  ok("and something actually moves the spotlight",
+    /setProperty\("--px"/.test(src) && /setProperty\("--py"/.test(src) &&
+    /hover: hover\) and \(pointer: fine/.test(src),
+    "fine pointers only, as everywhere else");
+  /* Scoped to the spotlight's own function rather than matched loosely
+     against the whole file — this page has a second reduced-motion guard for
+     the emblem entrance, and a file-wide match would pass on that one while
+     the spotlight kept moving. */
+  {
+    const fn = src.slice(src.indexOf("The light follows the pointer"));
+    const body = fn.slice(0, fn.indexOf("})();") + 5);
+    ok("which stands down for anyone who asked for less motion",
+      /prefers-reduced-motion:\s*reduce/.test(body) && /\.matches\)\s*return/.test(body),
+      body ? "" : "the spotlight's own guard, not some other block's");
+  }
 }
 
 ok("no key material anywhere", !/privateKey|secretKey|mnemonic|seedphrase|sign\(/.test(src));
@@ -1048,6 +1128,51 @@ console.log("\n=== T. four things for sale, shaped like a listing");
   ok("and the refund is still described as automatic rather than as a promise",
     await pT.evaluate(() => /refunds itself/.test(document.querySelector(".refundline").textContent) &&
       /Nobody arbitrates/.test(document.querySelector(".refundline").textContent)));
+
+  /* ── THE DEVELOPER ROUTE HAS TO LOOK LIKE A CONTROL ──────────────────────
+     It was a bar of dim bold text with a "▾" stuck to the end of the
+     sentence, and read as a heading — which meant the one row a developer
+     needs to find looked like something to skim past. `cursor:pointer` is
+     not an affordance; nobody hovers what they have decided is a label.
+     Three redundant signals are checked, because this row cannot afford to
+     be missed: a VERB that changes, a caret that ROTATES, and a real change
+     of state on the row itself. */
+  /* READ THE TRANSFORM AFTER THE TRANSITION, NOT DURING IT. The first
+     version of this clicked and sampled synchronously, caught the caret one
+     frame into a 250ms rotation, and compared "none" against the identity
+     matrix. Different strings, so it passed — while proving nothing about
+     whether the caret ever reaches 180°. A rotation assertion that a
+     stationary caret would also satisfy is not an assertion. */
+  const readDev = () => pT.evaluate(() => {
+    const d = document.querySelector(".devroute");
+    return { open: d.open,
+      verb: getComputedStyle(d.querySelector(".devmore"), "::before").content,
+      spin: getComputedStyle(d.querySelector(".devcaret")).transform,
+      tall: Math.round(d.querySelector("summary").getBoundingClientRect().height),
+      body: !!d.querySelector(".devbody code") };
+  });
+  const devClosed = await readDev();
+  await pT.click(".devroute summary");
+  await pT.waitForTimeout(450);                 // longer than the .25s rotation
+  const devOpen = await readDev();
+  await pT.click(".devroute summary");
+  await pT.waitForTimeout(450);
+  const dev = { before: devClosed, after: devOpen, tall: devClosed.tall, body: devOpen.body };
+
+  ok("the developer route says what pressing it does, in a word",
+    /show/i.test(dev.before.verb) && /hide/i.test(dev.after.verb),
+    `${dev.before.verb} -> ${dev.after.verb}`);
+  /* Half a turn is matrix(-1, 0, 0, -1, 0, 0). Checking the VALUE and not
+     merely that it changed is what makes this catch a caret that starts to
+     move and stops. */
+  ok("and its caret turns a full half-circle, so the row and the panel are one object",
+    /^none|matrix\(1,\s*0,\s*0,\s*1/.test(dev.before.spin) &&
+    /matrix\(-1,\s*0,\s*0,\s*-1/.test(dev.after.spin),
+    `${dev.before.spin} -> ${dev.after.spin}`);
+  ok("and it is a real target rather than a line of text",
+    dev.tall >= 44, dev.tall + "px tall");
+  ok("and it still opens onto the raw frame", dev.after.open === true && dev.body);
+
   ok("no errors", eT.length === 0, eT.join(" | "));
   await cT.close();
 }
@@ -1517,6 +1642,12 @@ console.log("\n=== T. what the redesign has to keep true");
   const m = await pM.evaluate(() => ({
     scrollW: document.documentElement.scrollWidth, vw: innerWidth,
     sky: getComputedStyle(document.querySelector(".sky")).display,
+    /* The blooms STAY on a phone and stop MOVING, which is what every other
+       page on the site does. The cost was never the blur; it was animating
+       it — a static blurred layer is rasterised once, an animated one is
+       recomputed every frame as it scales. */
+    skyMoves: [...document.querySelectorAll(".sky i")]
+      .some((e) => getComputedStyle(e).animationName !== "none"),
     steps: document.querySelectorAll(".flow .fstep").length,
     /* The timeline: node in column one, words in column two, and the text
        must NOT have wrapped into the 38px node column. */
@@ -1526,8 +1657,16 @@ console.log("\n=== T. what the redesign has to keep true");
       const r = b.getBoundingClientRect(); return Math.round(Math.min(r.width, r.height)); })(),
   }));
   ok("the page never scrolls sideways", m.scrollW <= m.vw, `${m.scrollW} vs ${m.vw}`);
-  ok("the blurred ambience is off — it is the most expensive thing on the page",
-    m.sky === "none", "a 90px blur over a 520px layer, repainted every scroll");
+  /* THIS USED TO REQUIRE `display:none`, and that was the page drifting from
+     the site. Hiding the blooms on a phone is something NO other Overheard
+     page does, so the deals page looked like a different site on a phone
+     while the desktop view looked right — the kind of inconsistency nobody
+     reviewing it would call a bug. What is actually expensive is the
+     ANIMATION, and that is what has to be off. */
+  ok("the blooms are still there on a phone, exactly as on every other page",
+    m.sky !== "none", "display: " + m.sky);
+  ok("but they have stopped moving — an animated 90px blur is what makes a phone hot",
+    m.skyMoves === false, m.skyMoves ? "still animating" : "static, rasterised once");
   ok("every step survives the rebuild", m.steps === 8, m.steps);
   ok("and the step text is a readable column, not a ribbon",
     m.textX > 180, m.textX + "px wide");

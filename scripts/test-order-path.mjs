@@ -152,6 +152,45 @@ ok("and every job the shop CAN do is on the form",
   JOBS.filter((j) => !unhandled.includes(j.id) && !options.some((o) => o.id === j.id))
      .map((j) => j.id).join(", ") || "all of them");
 
+console.log("\n=== G. the sample frame a developer copies is one the shop takes");
+/* The board's dev route shows a ready-to-paste tclk offer with the price,
+   the rail, the lock kind and the job id written out by hand. Every one of
+   those is a value the runner judges, and none of them is generated — so the
+   sample can go stale the moment any of them moves, and the only symptom is
+   a developer whose pasted frame is refused with no explanation.
+   The `…` timestamps are what the copy button fills in at click time, so
+   they are filled the same way here. */
+{
+  const board = fs.readFileSync(new URL("../web/deals-preview-78cb4a1be923c6b4.html", import.meta.url), "utf8");
+  const block = board.match(/<code id="frameSample">([\s\S]*?)<\/code>/);
+  ok("the sample frame is where the copy button can reach it", Boolean(block),
+    block ? "" : "no #frameSample — the copy button has nothing to copy and this test is blind");
+  if (block) {
+    const now = Date.now();
+    const json = block[1]
+      .replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&")
+      .replace('"expiresMs": …', `"expiresMs": ${now + 24 * HOUR}`)
+      .replace('"claimByMs": …', `"claimByMs": ${now + 24 * HOUR}`)
+      .replace('"refundAfterMs": …', `"refundAfterMs": ${now + 48 * HOUR}`);
+    let body = null, why = "";
+    try { body = JSON.parse(json); } catch (e) { why = e.message; }
+    ok("and once its timestamps are filled it is valid JSON", Boolean(body),
+      body ? "" : "a developer would paste this and get a parse error: " + why);
+    if (body) {
+      /* The placeholders are the two fields a human must replace. Everything
+         else has to stand on its own. */
+      body.from = "did:key:z6MkBuyerNotUs0000000000000000000000000000";
+      body.job.brief = "did:key:z6MkSomeone";
+      const no = refuseTake({ body }, now);
+      ok("and the shop would accept exactly what it says",
+        no.length === 0, no.join("; ") || `${body.amount} ${body.asset} on ${body.rails.join(",")}`);
+      ok("and it names a job that has a handler",
+        options.some((o) => o.id === body.job.id),
+        body.job.id + (options.some((o) => o.id === body.job.id) ? "" : " — the form does not sell this"));
+    }
+  }
+}
+
 console.log("\n=== F. the gig cards link to jobs the form knows");
 /* A card whose ?job= names something the form has no option for falls back
    to the default silently — the buyer's click is discarded and they order
