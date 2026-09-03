@@ -21,6 +21,11 @@ on:
   schedule:
     - cron: "17 * * * *"     # not :00 — everyone's cron is at :00
   workflow_dispatch:
+    inputs:
+      live:
+        description: "Post real signed frames. Paper rail, so no value moves — but the frames are real and must be honoured."
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -48,10 +53,18 @@ jobs:
       # It is empty today. When it is not, this is still the only line that
       # needs to change, and the runner will verify the key it derives really
       # is this shop's before it will sign anything with it.
+      # LIVE IS A HUMAN ACT, AND THE WORKFLOW MAKES THAT STRUCTURAL.
+      # `--live` is reachable only when BOTH halves hold: the run was started
+      # by a person (workflow_dispatch) and that person ticked the box. The
+      # event check is not decoration — inputs.live is empty on a schedule, so
+      # without it a default flipped to true would quietly arm the cron. With
+      # it, no edit to the input can make the timer post; someone has to press
+      # the button. test-runner.mjs section I asserts exactly that shape, and
+      # fails on an unconditional --live.
       - name: wake
         env:
           OVERHEARD_SEED: ${{ secrets.OVERHEARD_SEED }}
-        run: node scripts/runner.mjs
+        run: node scripts/runner.mjs ${{ (github.event_name == 'workflow_dispatch' && inputs.live) && '--live' || '' }}
 
       # Runs on the same wake so a change that would leak the key fails here
       # rather than in production. It needs no secret of its own.

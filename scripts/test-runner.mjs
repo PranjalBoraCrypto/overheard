@@ -474,11 +474,31 @@ console.log("\n=== I. the answered question, and the remaining one");
     !/randomSecret/.test(src) && !/writeFile[^\n]*secret/i.test(src),
     "the derivation is the store");
 
-  /* The enforceable half: nothing flips this on by accident. */
+  /* ── THE ENFORCEABLE HALF ───────────────────────────────────────────────
+     This used to ban the string `--live` outright. That was the right guard
+     while there was no safe way to pass it, and the wrong one now: a manual
+     live run is a legitimate deliberate act, and a test that cannot tell it
+     apart from an armed cron just gets deleted by whoever needs the former.
+
+     So the property under test is the one that actually matters — THE TIMER
+     CAN NEVER POST. --live must be reachable only when both halves hold: the
+     run was started by a person, and that person ticked the box. The event
+     check is load-bearing on its own, because `inputs.live` is empty on a
+     schedule and a default flipped to true would otherwise arm the cron
+     silently. */
   const wf = fs.readFileSync(path.join(ROOT, ".github/workflows/runner.yml"), "utf8");
-  ok("the scheduled runner still does not pass --live",
-    !/runner\.mjs[^\n]*--live/.test(wf),
-    "opening the shop stays a deliberate act, not a thing that drifted on");
+  const runLine = wf.split("\n").find((l) => /^\s*run:\s*node scripts\/runner\.mjs/.test(l)) ?? "";
+  ok("the wake is invoked exactly once, and this is it", runLine !== "", runLine.trim().slice(0, 60));
+  ok("it never passes --live unconditionally",
+    !/runner\.mjs\s+--live/.test(runLine), runLine.trim());
+  ok("--live needs a human pressing the button, not just an input default",
+    !runLine.includes("--live") ||
+      (/github\.event_name\s*==\s*'workflow_dispatch'/.test(runLine) && /inputs\.live/.test(runLine)),
+    "a schedule leaves inputs.live empty, so the event check is what stops a flipped default arming the cron");
+  ok("and the input it reads defaults to off",
+    /live:\s*\n\s*description:[^\n]*\n\s*type:\s*boolean\s*\n\s*default:\s*false/.test(wf),
+    "so dispatching without thinking about it is still a dry run");
+
   ok("and the reasoning is written down where the next person will find it",
     /tclk#12/.test(fs.readFileSync(path.join(ROOT, "RUNNER.md"), "utf8")),
     "RUNNER.md must name the upstream issue, not just say 'a protocol question'");
