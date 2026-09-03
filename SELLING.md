@@ -57,15 +57,56 @@ the protocol doing its job, not a policy we could get wrong.
 
 ## On spending to qualify for anything
 
-The claim that spending faucet earns a share of a mainnet distribution is
-secondhand from an AMA and is not confirmed. Two things follow:
+**Updated 3 September.** This section used to open "the claim is secondhand
+from an AMA and is not confirmed". It is no longer secondhand. Arthur Hayes,
+quote-tweeting Flop Labs: *"We will reward true agentic commerce using this
+feature with airdrop FLOP tokens. Agentic economic swarms that use FLOP for
+commerce is the future. Start today on Technocore.chat"*.
 
-- Do not build economics that only make sense if it is true.
-- Do not price the jobs to burn faucet quickly. Self-dealing is the first
-  thing any such rule would filter for, and with one identity on both sides
-  of the board, ours would be trivially visible. Real two-sided activity with
-  real counterparties is both the honest position and — if the rule exists at
-  all — almost certainly the one that counts.
+So the premise is public and attributed. What remains unconfirmed is every
+number attached to it — the size, the formula, the ratio, whether spend or
+settled deals or counterparties is what gets counted. Nobody outside Flop Labs
+knows, and anybody who says they do is guessing.
+
+**The owner's stated position** is that this is worth spending into: testnet
+FLOP comes from a faucet and costs nothing, so burning three of it for one
+mainnet token is a trade worth making. That is a reasonable bet on his own
+money and this document records it as the objective rather than arguing with
+it. It changes what the shop optimises for once a real rail exists: **the buy
+side stops being the quieter half and becomes the point.**
+
+What it does NOT change, and this matters more now rather than less:
+
+- **No self-dealing.** One identity on both sides of the board is the first
+  thing any rule would filter for, and with a single DID ours would be
+  trivially visible. It would also be the exact opposite of "true agentic
+  commerce" — the phrase does the work in that sentence.
+- **No buying junk to move the number.** A deal that settles because we paid
+  for something worthless is volume, not commerce. If the rule is any good it
+  will not count; if it is not, we have still spent the day teaching our own
+  shop to lie about what it bought.
+- **Nothing gets posted we cannot honour.** Volume that lapses is worse than
+  no volume: a lapse is a lapse whether or not value moved, and it is on the
+  public record under our DID for as long as the archive exists.
+
+**The knobs, when the rail is real.** These are tuned for caution today and
+are the levers that change, in one place each:
+
+| | today | why it is low |
+|---|---|---|
+| `MAX_OPEN_BUYS` | 2 | we could not read a balance, so we capped count instead |
+| `WANTS` | 2 jobs | both things we genuinely want and can check the answer to |
+| `BUY_WINDOW` | 24h / 48h | a stranger needs time to read, work and post |
+| `MAX_OPEN_DEALS` | 3 | the reserve rule we can actually check |
+
+Raising them is a decision to take deliberately once we can read a FLOP
+balance and know what locking costs — not before. Until the balance is
+readable, "how many deals are open at once" is the only reserve rule that is
+checkable, and an unreadable reserve figure would be a decoration.
+
+**The one honest thing to keep saying:** we do not know the ratio. Three-for-
+one is the owner's bet, not a modelled number, and this file should not start
+pretending otherwise the moment somebody quotes it back.
 
 ## What the page may never do
 
