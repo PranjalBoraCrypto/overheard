@@ -426,10 +426,16 @@ export async function settle(agent, room, text, opts, log) {
  *     hand one over, and if a later edit does, this stops it leaving.
  */
 const HEX64 = /[0-9a-f]{64}/gi;
+/* A Technocore signature is 86 characters of base64url, not hex, so the hex
+   scrub alone would not catch one. Nothing here should ever carry a signature
+   — say() already refuses to put a URL in an error — but the whole point of a
+   last-resort scrub is that it does not depend on that staying true. */
+const LONGTOKEN = /[A-Za-z0-9_-]{60,}/g;
 export function annotate(kind, title, message, out = console.log) {
   if (!process.env.GITHUB_ACTIONS) return null;
-  const clean = String(message).replace(HEX64, "[redacted]").replace(/[\r\n]+/g, " · ");
-  const line = `::${kind} title=${String(title).replace(HEX64, "[redacted]")}::${clean}`;
+  const scrub = (t) => String(t).replace(HEX64, "[redacted]").replace(LONGTOKEN, "[redacted]");
+  const clean = scrub(message).replace(/[\r\n]+/g, " · ");
+  const line = `::${kind} title=${scrub(title)}::${clean}`;
   out(line);
   return line;
 }
@@ -447,6 +453,20 @@ export async function wake(opts = {}) {
     try { agent = agentFromSeed(seed); }
     catch { log("! the seed in the environment is not 64 hex characters"); }
   }
+
+  /* WHAT ACTUALLY REACHED THE WIRE. A live run that posts nothing looks
+     exactly like a live run that posts everything, unless the writes are
+     counted. Not hypothetical: the first live wake came back green having
+     posted not one frame, and finding out why cost a whole extra round trip
+     because this list did not exist. */
+  const wrote = [];
+  const post = async (room, text, what) => {
+    const r = await say(agent, room, text, { ...opts, exact: true });
+    /* Only our own short reason strings and a status code. Never the URL — it
+       carries the signature, which is why say() keeps it out of errors. */
+    wrote.push(`${what}:${r.ok ? "ok" : "FAILED(" + (r.status ?? r.why ?? "?") + ")"}`);
+    return r;
+  };
 
   const messages = await readOffers(opts);
   const frames = framesFrom(messages);
@@ -499,7 +519,11 @@ export async function wake(opts = {}) {
       continue;
     }
     log("  recovery checked: the statement can be reopened from the frame alone");
-    if (!no.length) log(`  accepted: ${await settle(agent, OFFERS_ROOM, text, opts, log)}`);
+    if (!no.length) {
+      const put = await settle(agent, OFFERS_ROOM, text, opts, log);
+      wrote.push(`accept:${/^ok/.test(put) ? "ok" : "FAILED"}`);
+      log(`  accepted: ${put}`);
+    }
   }
   for (const x of p.passed.slice(0, 8)) log(`pass:  ${x.id.slice(0, 14)}… ${x.why.join("; ")}`);
   if (p.passed.length > 8) log(`pass:  …and ${p.passed.length - 8} more`);
@@ -522,7 +546,7 @@ export async function wake(opts = {}) {
     const { text } = await wantFrame(w, US, now);
     log(`would offer to buy ${w.id} · ${w.amount} FLOP · ${text.length} chars`);
     if (!no.length) {
-      const r = await say(agent, OFFERS_ROOM, text, { ...opts, exact: true });
+      const r = await post(OFFERS_ROOM, text, `want-${w.id}`);
       log(`  posted: ${r.ok ? "ok" : "FAILED · " + (r.why ?? r.status)}`);
     }
   }
@@ -597,7 +621,20 @@ export async function wake(opts = {}) {
     else log("  would reveal once the work is on the wire");
   }
 
-  return { plan: p, buys, refusals: no, agent: agent?.did ?? null };
+  /* The line that says what happened ON THE WIRE, as opposed to what was
+     decided. A green run that wrote nothing and a green run that wrote
+     everything are otherwise identical from outside, which is exactly the
+     hole the first live wake fell into. */
+  annotate(wrote.some((w) => w.includes("FAILED")) ? "warning" : "notice",
+    wrote.length ? "what reached the wire" : "nothing was written",
+    wrote.length
+      ? wrote.join(" · ")
+      : (no.length
+          ? `held: ${no.join("; ")}`
+          : `nothing to write — ${p.take.length} to take, ${p.owed.length} owed, ${buys.want.length} wanted, ${buys.lock.length} to fund`),
+    log);
+
+  return { plan: p, buys, refusals: no, wrote, agent: agent?.did ?? null };
 }
 
 /* Only when run directly, so importing this in a test never touches a wire.

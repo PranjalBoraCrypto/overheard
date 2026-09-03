@@ -659,9 +659,15 @@ console.log("\n=== M. the annotation");
       : { ok: true, status: 200, json: async () => ({ messages: [] }) };
     await wake({ fetch: stub, base: "http://stub", log: (l) => lines.push(l), now: NOW, seed: SEED });
     const ann = lines.filter((l) => l.startsWith("::"));
-    ok("a wake emits exactly one annotation", ann.length === 1, ann.join(" | "));
-    ok("it names the key's verdict", /key (✓|✗)/.test(ann[0]), ann[0].slice(0, 90));
+    /* TWO, and they answer different questions. The first is what the wake
+       DECIDED; the second is what reached the WIRE. Collapsing them was how a
+       live run that posted nothing still read as a success — the decision
+       line looked identical either way. */
+    ok("a wake emits both the decision and the outcome", ann.length === 2, ann.length + " emitted");
+    ok("the first names the key's verdict", /key (✓|✗)/.test(ann[0]), ann[0].slice(0, 90));
     ok("and says what is holding the shop", /holding:|nothing holding it/.test(ann[0]), ann[0].slice(-60));
+    ok("the second says what was written, or that nothing was",
+      /what reached the wire|nothing was written/.test(ann[1]), ann[1].slice(0, 90));
     ok("with no 64-hex anywhere in the whole wake",
       !/[0-9a-f]{64}/.test(lines.join("\n")),
       lines.find((l) => /[0-9a-f]{64}/.test(l))?.slice(0, 60) ?? "clean");
