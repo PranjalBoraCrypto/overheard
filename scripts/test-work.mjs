@@ -19,7 +19,7 @@
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "node:url";
-import { profileAgent, doJob, CAN_DO } from "./work.mjs";
+import { profileAgent, doJob, CAN_DO, num } from "./work.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(HERE, "..");
@@ -148,27 +148,97 @@ console.log("\n=== F. only what has a handler");
   ok("an unknown job id is refused", !(await doJob("something-else", "x", {})).ok);
 }
 
-/* ── G. the fixtures are real ────────────────────────────────────────────── */
-console.log("\n=== G. these numbers came out of the archive");
+/* ── G. the fixtures are real, and the builder does not massage them ───────
+ *
+ * THIS SECTION WAS WRONG, and wrong in the way that costs the most.
+ *
+ * It asserted that the archive's count for each fixture DID still equalled
+ * the number written into this file — 64/0 and 10/10, taken on 27 August.
+ * Those are agents, and they kept talking. By 3 September the archive said
+ * 152/71 and 96/96, so the assertion failed; and it was always going to,
+ * because it pinned live growing data to a constant. It could only be true
+ * on the day it was written.
+ *
+ * That is not a small mistake. This suite runs on every wake of the hourly
+ * runner, so from the day the fixtures aged the entire job went red, every
+ * hour, for something that was not a fault. A scheduled job that is always
+ * red teaches its owner to stop opening it — which is the worst state to be
+ * in on the morning something real breaks. Something real did break in the
+ * archive during exactly this window, and this is the noise it hid under.
+ *
+ * What the section was FOR is still worth having: proof that the fixtures
+ * above are lifted from real records rather than imagined, because a
+ * generator tested only against invented input is tested against nothing.
+ * So the intent stays and the brittleness goes, in two parts.
+ */
+console.log("\n=== G. the fixtures are real, and the numbers are not massaged");
 {
   const dir = path.join(ROOT, "web/data/profiles");
-  if (fs.existsSync(dir)) {
-    const { createHash } = await import("node:crypto");
-    let checked = 0;
-    for (const f of [SPAMMER, REAL]) {
-      const shard = createHash("sha256").update(f.did).digest("hex").slice(0, 2);
-      const file = path.join(dir, `${shard}.json`);
-      if (!fs.existsSync(file)) continue;
-      const got = JSON.parse(fs.readFileSync(file, "utf8"))[f.did];
-      if (!got) continue;
-      checked++;
-      ok(`${f.did.slice(0, 22)}… still matches the archive`,
-        got.count === f.profile.count && got.unique === f.profile.unique,
-        `archive says ${got.count}/${got.unique}`);
-    }
-    if (!checked) console.log("  --    archive present but neither fixture is in it any more");
+  const { createHash } = await import("node:crypto");
+  const live = (did) => {
+    const shard = createHash("sha256").update(did).digest("hex").slice(0, 2);
+    const file = path.join(dir, `${shard}.json`);
+    if (!fs.existsSync(file)) return null;
+    return JSON.parse(fs.readFileSync(file, "utf8"))[did] ?? null;
+  };
+
+  if (!fs.existsSync(dir)) {
+    console.log("  --    web/data is not in this checkout, so nothing here can be checked");
   } else {
-    console.log("  --    web/data is not in this checkout, so the fixtures cannot be re-checked");
+    /* PART ONE: the identities are real. Not that their counts are frozen —
+       they are not — but that these are records the archive actually holds,
+       so the shapes fed to the generator above are shapes the network really
+       produces. */
+    let seen = 0;
+    for (const f of [SPAMMER, REAL]) {
+      const got = live(f.did);
+      if (!got) { console.log(`  --    ${f.did.slice(0, 22)}… has aged out of the archive`); continue; }
+      seen++;
+      ok(`${f.did.slice(0, 22)}… is a real identity in the archive`,
+        Number.isInteger(got.count) && got.count > 0 &&
+        Number.isInteger(got.unique) && got.unique >= 0 && got.unique <= got.count,
+        `${got.count} messages, ${got.unique} of them its own`);
+      /* A record only grows. If the archive holds FEWER messages for an
+         identity than when the fixture was taken, something deleted history,
+         and that genuinely does deserve a red cross. */
+      ok("  and its record has only grown since the fixture was taken",
+        got.count >= f.profile.count,
+        `${f.profile.count} on 27 August, ${got.count} now`);
+    }
+    if (!seen) console.log("  --    neither fixture is in the archive any more");
+
+    /* PART TWO, which is the half that earns its place: take whatever the
+       archive says TODAY, run it through the generator, and check the
+       generator hands it back unchanged. That is the actual promise of this
+       module — a profile is a correct count of what was captured, not a
+       flattering one — and unlike a pinned number it cannot go stale,
+       because the input is read fresh on every run. */
+    for (const f of [SPAMMER, REAL]) {
+      const got = live(f.did);
+      /* An empty record has nothing to be honest or dishonest about, and
+         zero of zero is 0% by arithmetic and 100% by intent. Skipped rather
+         than argued with. */
+      if (!got || !got.count) continue;
+      const pct = Math.round((got.unique / got.count) * 100);
+      const body = {
+        profile: got,
+        standing: { identities: 511178, rank: 1000, percentile: 0.2, rooms_rank: 1000,
+                    rooms_percentile: 0.2, originality: pct, joined_before: 1000 },
+        owned: { rooms: [], owners: 502, claimed: 502, identities: 511178 },
+      };
+      const r = await profileAgent(f.did, { fetch: serve(body) });
+      ok(`the profile of ${f.did.slice(0, 22)}… reports the archive's own numbers back`,
+        r.ok && r.text.includes(num(got.count)) && r.text.includes(num(got.unique)),
+        `${got.count} messages / ${got.unique} its own, read live`);
+      /* The unflattering half, which is the whole reason this module has a
+         test suite: whatever today's numbers are, the document must not
+         round a partial record up into a clean one. */
+      const claimsPerfect = /\b100%/.test(r.text);
+      ok("  and does not round a partial record up to a whole one",
+        r.ok && claimsPerfect === (got.unique === got.count),
+        got.unique === got.count ? "it genuinely is all its own"
+                                 : `${pct}% original, and it does not say 100`);
+    }
   }
 }
 

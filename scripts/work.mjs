@@ -27,7 +27,11 @@ const DID_RE = /^did:key:z6Mk[1-9A-HJ-NP-Za-km-z]{44}$/;
 export const CAN_DO = new Set(["overheard-agent-profile"]);
 
 const pct = (n) => (typeof n === "number" && isFinite(n) ? Math.round(n) : null);
-const num = (n) => (typeof n === "number" && isFinite(n) ? n.toLocaleString("en-US") : String(n));
+/* Exported only so the test suite can look for the same string this writes
+   rather than a number it formatted its own way. A test that formats
+   independently is a test that can agree with itself and disagree with the
+   document. */
+export const num = (n) => (typeof n === "number" && isFinite(n) ? n.toLocaleString("en-US") : String(n));
 /* "51117 by original messages" reads as a count of messages, which is the
    opposite of what it means. A rank has to look like a rank. */
 const ordinal = (n) => {
