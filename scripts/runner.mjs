@@ -406,6 +406,34 @@ export async function settle(agent, room, text, opts, log) {
     : `FAILED in both rooms · ${back.why ?? back.status}`;
 }
 
+/* ── SAYING WHAT HAPPENED, WHERE WE CAN ACTUALLY READ IT ───────────────────
+ *
+ * This shop is run from a network that cannot download its own CI logs: the
+ * host results-receiver.actions.githubusercontent.com is outside the egress
+ * allowlist, so `gh run view --log` returns Forbidden and every wake has been
+ * a green tick with nothing behind it. That is how a live run posted nothing
+ * at all and looked like a success — the run succeeded, the shop simply
+ * refused, and the reason was written somewhere unreachable.
+ *
+ * Annotations are not logs. They ride the check-run API, which IS reachable,
+ * so one `::notice::` per wake turns a silent green tick into something we can
+ * query. Two hard rules, because this writes to a public repository:
+ *
+ *   · NOTHING that is not already public. Counts, refusal reasons and our own
+ *     DID, which is on every frame we post. Never the seed, never a preimage.
+ *   · A LAST-RESORT SCRUB anyway. Any run of 64 hex characters is replaced
+ *     before the line is emitted. Belt and braces: the caller should never
+ *     hand one over, and if a later edit does, this stops it leaving.
+ */
+const HEX64 = /[0-9a-f]{64}/gi;
+export function annotate(kind, title, message, out = console.log) {
+  if (!process.env.GITHUB_ACTIONS) return null;
+  const clean = String(message).replace(HEX64, "[redacted]").replace(/[\r\n]+/g, " · ");
+  const line = `::${kind} title=${String(title).replace(HEX64, "[redacted]")}::${clean}`;
+  out(line);
+  return line;
+}
+
 /* ── the wake ────────────────────────────────────────────────────────────── */
 
 export async function wake(opts = {}) {
@@ -431,6 +459,21 @@ export async function wake(opts = {}) {
 
   const no = refusals({ live, agent });
   for (const r of no) log(`hold:  ${r}`);
+
+  /* The one line a human can retrieve without the logs. Emitted on every
+     wake, live or not, because "it refused and here is why" is exactly the
+     fact that was invisible when a live run quietly did nothing. */
+  annotate(no.length ? "warning" : "notice",
+    no.length ? "the shop held" : "the shop is open",
+    [
+      live ? "LIVE" : "dry run",
+      agent ? (agent.did === US ? "key ✓ this shop" : "key ✗ NOT this shop") : "no key",
+      `${p.take.length} to take`,
+      `${p.passed.length} passed over`,
+      `${p.owed.length} owed`,
+      `${p.open} open`,
+      no.length ? `holding: ${no.join("; ")}` : "nothing holding it",
+    ].join(" · "), log);
 
   /* Selling. We answer buyers' offers rather than posting our own — see the
      block above buildAccept for why the other direction cannot settle. */

@@ -22,7 +22,7 @@ import { createPublicKey, verify as edVerify, randomBytes } from "node:crypto";
 import { agentFromSeed, sweep, nextNonce, say } from "./agent.mjs";
 import {
   US, JOBS, WINDOW, MAX_OPEN_DEALS, buildAccept, refuseTake,
-  plan, refusals, framesFrom, ourDeals, wake, settle,
+  plan, refusals, framesFrom, ourDeals, wake, settle, annotate,
 } from "./runner.mjs";
 import { secretFor, recoverSecret, minterFor } from "./secret.mjs";
 import { canon, offerId, lintOffer, readFrame, runDeal, checkReveal, contractId, dealRoom }
@@ -609,6 +609,64 @@ console.log("\n=== L. what we owe");
     if (!line.startsWith("RESULT ")) { console.log(line); continue; }
     const r = JSON.parse(line.slice(7));
     ok(r.name, r.pass, r.note);
+  }
+}
+
+/* ── M. saying what happened where we can read it ────────────────────────
+ * We cannot download our own CI logs: results-receiver.actions.githubusercontent.com
+ * is outside the egress allowlist, so every wake has been a green tick with
+ * nothing behind it — which is how a LIVE run posted nothing and still looked
+ * like a success. Annotations ride the check-run API, which is reachable.
+ * They also go to a public repository, so what they may contain is a test and
+ * not a habit.
+ * ─────────────────────────────────────────────────────────────────────── */
+console.log("\n=== M. the annotation");
+{
+  const had = process.env.GITHUB_ACTIONS;
+  try {
+    delete process.env.GITHUB_ACTIONS;
+    ok("outside Actions it emits nothing at all",
+      annotate("notice", "t", "m", () => { throw new Error("should not have written"); }) === null);
+
+    process.env.GITHUB_ACTIONS = "true";
+    const out = [];
+    annotate("notice", "hello", "a plain message", (l) => out.push(l));
+    ok("inside Actions it writes one workflow command",
+      out.length === 1 && out[0] === "::notice title=hello::a plain message", out[0]);
+
+    /* The rule that matters: a preimage or a seed must not survive contact
+       with this function even if a later edit hands one over. */
+    const secret = "d".repeat(64);
+    const leaked = [];
+    annotate("warning", `t ${secret}`, `before ${secret} after`, (l) => leaked.push(l));
+    ok("a 64-hex string is scrubbed from the message",
+      !leaked[0].includes(secret) && leaked[0].includes("[redacted]"), leaked[0]);
+    ok("and from the title too, which is the half easy to forget",
+      !leaked[0].split("::")[1].includes(secret), leaked[0].split("::")[1]);
+
+    /* A newline would end the command early and turn the rest into raw log
+       output, which is both broken and a way to smuggle text past the scrub. */
+    const nl = [];
+    annotate("notice", "t", "one\ntwo\r\nthree", (l) => nl.push(l));
+    ok("newlines cannot break out of the annotation",
+      !/[\r\n]/.test(nl[0]) && nl[0].includes("one · two · three"), JSON.stringify(nl[0]));
+
+    /* And the wake emits one, every time, saying whether it held and why —
+       that is the fact that was invisible. */
+    const lines = [];
+    const stub = async (u) => String(u).includes("say-signed")
+      ? { ok: true, status: 200, text: async () => "{}" }
+      : { ok: true, status: 200, json: async () => ({ messages: [] }) };
+    await wake({ fetch: stub, base: "http://stub", log: (l) => lines.push(l), now: NOW, seed: SEED });
+    const ann = lines.filter((l) => l.startsWith("::"));
+    ok("a wake emits exactly one annotation", ann.length === 1, ann.join(" | "));
+    ok("it names the key's verdict", /key (✓|✗)/.test(ann[0]), ann[0].slice(0, 90));
+    ok("and says what is holding the shop", /holding:|nothing holding it/.test(ann[0]), ann[0].slice(-60));
+    ok("with no 64-hex anywhere in the whole wake",
+      !/[0-9a-f]{64}/.test(lines.join("\n")),
+      lines.find((l) => /[0-9a-f]{64}/.test(l))?.slice(0, 60) ?? "clean");
+  } finally {
+    if (had === undefined) delete process.env.GITHUB_ACTIONS; else process.env.GITHUB_ACTIONS = had;
   }
 }
 
