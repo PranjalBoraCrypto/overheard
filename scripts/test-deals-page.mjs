@@ -946,21 +946,30 @@ console.log("\n=== T. four things for sale, shaped like a listing");
     const cards = [...document.querySelectorAll(".gig[data-job]")];
     return {
       n: cards.length,
-      bands: cards.filter((c) => c.querySelector(".gigband svg")).length,
+      crests: cards.filter((c) => c.querySelector(".gigcrest .emblem svg")).length,
       sellers: cards.filter((c) => (c.querySelector(".sname")?.textContent || "").trim() === "Overheard").length,
       deliv: cards.map((c) => c.querySelector("[data-deliv]")?.textContent || ""),
       from: cards.filter((c) => (c.querySelector(".fromlbl")?.textContent || "").trim() === "From").length,
-      /* Every band drawn from different geometry — four copies of one
-         picture would tell you nothing, which is the whole job of a band. */
-      shapes: new Set(cards.map((c) => c.querySelector(".gigband svg")?.innerHTML.length)).size,
+      /* Every emblem drawn from different geometry — four copies of one
+         picture would tell you nothing, which is the whole job of a mark. */
+      shapes: new Set(cards.map((c) => c.querySelector(".emblem svg")?.innerHTML.length)).size,
+      /* The emblem is square. This is the assertion the phone layout kept
+         breaking: a wide banner cropped to fit a narrow card destroys the
+         drawing, and a drawing that only works at one aspect ratio is a
+         banner pretending to be a mark. */
+      square: cards.every((c) => {
+        const b = c.querySelector(".emblem").getBoundingClientRect();
+        return Math.abs(b.width - b.height) <= 1 && b.width >= 40;
+      }),
       order: cards.map((c) => {
         const kids = [...c.querySelector(".gigin").children].map((k) => k.className.split(" ")[0]);
         return kids.indexOf("seller") < kids.indexOf("gigfoot");
       }),
     };
   });
-  ok("all four are listings", g.n === 4 && g.bands === 4, `${g.bands}/${g.n} with a band`);
-  ok("each band is its own drawing, not one picture four times", g.shapes === 4, g.shapes + " distinct");
+  ok("all four are listings", g.n === 4 && g.crests === 4, `${g.crests}/${g.n} with a crest`);
+  ok("each emblem is its own drawing, not one picture four times", g.shapes === 4, g.shapes + " distinct");
+  ok("and every emblem is square, so no layout can crop it", g.square);
   ok("the seller is named on every card", g.sellers === 4);
   ok("and named before the price, not after it", g.order.every(Boolean));
   ok("every card says how long", g.deliv.every((d) => d.trim().length > 0), g.deliv.join(" · "));
@@ -1169,9 +1178,10 @@ console.log("\n=== W. the listing, redrawn for a phone");
   await pW2.waitForTimeout(250);
   const m = await pW2.evaluate(() => {
     const g = document.querySelector(".gig");
-    const band = g.querySelector(".gigband").getBoundingClientRect();
+    const crest = g.querySelector(".gigcrest").getBoundingClientRect();
+    const em = g.querySelector(".emblem").getBoundingClientRect();
     const price = g.querySelector(".gigprice").getBoundingClientRect();
-    const deliv = g.querySelector(".deliv").getBoundingClientRect();
+    const h3 = g.querySelector("h3").getBoundingClientRect();
     /* The foot of the card is the ORDER BUTTON now, not the board badge.
        The badge is empty whenever nothing is happening — which is most of
        the time — and an empty span is `display:none`, so measuring it here
@@ -1179,8 +1189,13 @@ console.log("\n=== W. the listing, redrawn for a phone");
     const cta = g.querySelector(".gigcta").getBoundingClientRect();
     const gigs = getComputedStyle(document.querySelector(".gigs")).gridTemplateColumns;
     return {
-      bandH: Math.round(band.height), bandW: Math.round(band.width),
-      priceFirst: price.left < deliv.left,
+      crestH: Math.round(crest.height),
+      emSq: Math.abs(em.width - em.height) <= 1, emW: Math.round(em.width),
+      /* Emblem on the left, price on the right, on ONE row — the shape that
+         replaced a full-width banner stacked above everything. */
+      sameRow: Math.abs(em.top - price.top) < em.height,
+      priceRight: price.left > em.right,
+      priceAboveTitle: price.bottom <= h3.top,
       ctaW: Math.round(cta.width), cardW: Math.round(g.getBoundingClientRect().width),
       ctaH: Math.round(cta.height),
       oneCol: gigs.split(" ").length === 1,
@@ -1189,20 +1204,18 @@ console.log("\n=== W. the listing, redrawn for a phone");
     };
   });
   ok("one card per row", m.oneCol);
-  ok("the band gets shorter rather than smaller", m.bandH <= 80 && m.bandW > 200,
-    `${m.bandW}x${m.bandH}, was 104 tall`);
-  ok("so four listings still fit on a screen instead of four pictures", m.bandH * 4 < 780 / 2, (m.bandH * 4) + "px of picture");
-  /* THE BUG A SCREENSHOT FOUND AND NOTHING ELSE DID. The first phone layout
-     cropped the band to a 64px square, and none of these drawings survives
-     that: "Ask the archive" came out as four grey stripes and a dot, which
-     reads as a rendering fault rather than as a mark. A drawing stretched to
-     fit is the same failure in a different direction, so the scaling is
-     pinned: uniform, cropped, never squashed. */
-  ok("and the drawing is scaled uniformly, never stretched to fit",
-    !/preserveAspectRatio="none"/.test(src) && /preserveAspectRatio="xMidYMid slice"/.test(src),
-    "a squashed band reads as a bug, not as a picture");
-  ok("the price comes first, because that is what a thumb is looking for", m.priceFirst);
-  ok("and it is bigger here than on a desktop", m.priceSize >= 20, m.priceSize + "px");
+  /* WHAT THE BANNER COST, MEASURED. Four cards each opened with a strip of
+     decoration; on a 780px screen that was most of a screenful of picture
+     before a word was read. The crest is a row, so the same drawing costs
+     about the height of a line of text. */
+  ok("the crest is a row, not a band", m.crestH <= 100, m.crestH + "px, the banner was 104 alone");
+  ok("so four listings fit on a screen instead of four pictures",
+    m.crestH * 4 < 780 / 2, (m.crestH * 4) + "px of crest");
+  ok("the emblem stays square here too — nothing is cropped to fit",
+    m.emSq && m.emW >= 40, m.emW + "px square");
+  ok("the price sits beside the emblem, not under it", m.sameRow && m.priceRight);
+  ok("and above the title, because a thumb hunts for the number first", m.priceAboveTitle);
+  ok("and it is bigger here than on a desktop", m.priceSize >= 22, m.priceSize + "px");
   ok("the order button is a full-width bar at the foot of the card",
     m.ctaW > m.cardW - 40, `${m.ctaW} of ${m.cardW}`);
   ok("and it is a real tap target", m.ctaH >= 40, m.ctaH + "px");

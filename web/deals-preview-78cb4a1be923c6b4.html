@@ -472,32 +472,140 @@ pre.raw{font-family:var(--mono);font-size:11px;line-height:1.6;color:var(--dim);
 .gig:hover{border-color:var(--edge-lit);transform:translateY(-3px);box-shadow:var(--lip),var(--lift-2)}
 .gigin{padding:16px 19px 19px;display:flex;flex-direction:column;flex:1 1 auto}
 
-/* ── the band ──────────────────────────────────────────────────────────────
- * A marketplace listing needs something to tell four cards apart before any
- * of them is read. There are no photographs here and there is nothing to
- * photograph, so each band is a drawing of the job itself, in the page's own
- * palette. Cheap: four inline SVGs, no requests, no library. */
-.gigband{height:104px;position:relative;flex:none;border-bottom:1px solid var(--edge);
-  background:radial-gradient(120% 150% at 50% 0,rgba(0,180,215,.16),rgba(2,9,12,0) 70%),var(--navy-1)}
-.gigband svg{position:absolute;inset:0;width:100%;height:100%}
-/* `slice` and not `none`. Stretching a 3:1 drawing to fill whatever box it
-   is given looks fine at 300x104 and turns into a smear the moment the
-   phone layout makes the band a 64px square — which is exactly what it did.
-   Scaling uniformly and cropping the sides means one drawing works in both
-   boxes, so the mark is the same mark on a laptop and on a phone. */
-.gigband .strata rect{fill:rgba(147,182,192,.16)}
-.gigband .hit{fill:var(--mint);opacity:.5}
-.gigband .probe{stroke:var(--blue);stroke-width:1.5;opacity:.55;stroke-dasharray:4 5}
-.gigband .pip{fill:var(--blue)}
-.gigband .rings circle{fill:none;stroke:rgba(147,182,192,.22);stroke-width:1.5}
-.gigband .core{fill:var(--mint)}
-.gigband .sats circle{fill:var(--blue);opacity:.75}
-.gigband .many rect{fill:rgba(147,182,192,.2)}
-.gigband .fold{fill:none;stroke:var(--blue);stroke-width:1.5;opacity:.5}
-.gigband .few rect{fill:var(--mint);opacity:.65}
-.gigband .day rect{fill:rgba(147,182,192,.22)}
-.gigband.b4 .day rect:nth-child(3n){fill:var(--mint);opacity:.6}
-.gig:hover .gigband .pip,.gig:hover .gigband .core{filter:drop-shadow(0 0 7px currentColor)}
+/* ── the crest ─────────────────────────────────────────────────────────────
+ *
+ * WHAT THIS REPLACED AND WHY. Each card used to open with a 300x104 banner:
+ * a wide, thin strip of tiny geometry stretched across the top. Two things
+ * were wrong with it. At that aspect ratio nothing in it could be BIG, so
+ * every drawing came out as scattered small marks — the visual register of
+ * a loading skeleton rather than of a product. And a full-width strip above
+ * a full-width paragraph above a full-width footer is three stacked bands,
+ * which is exactly the "text in a box" the whole card was accused of being.
+ *
+ * A crest is a different claim: one object, drawn large, with the number
+ * beside it. That is how a listing is actually read — what is this, and what
+ * does it cost — and putting them on one line at the top means the two
+ * questions are answered before the eye reaches a sentence. It also breaks
+ * the stack, because the crest is a ROW inside a column.
+ *
+ * ── THE ANIMATION BUDGET, WHICH IS THE PART THAT COULD GO WRONG ───────────
+ *
+ * Motion here is cheap by construction, not by hope:
+ *
+ *   · TRANSFORM AND OPACITY ONLY on hover. Both are composited; neither
+ *     forces layout or repaint. No `filter`, no `box-shadow` transition on
+ *     the moving parts, no animated `stroke-dashoffset` — those repaint the
+ *     element every frame and are what makes a card feel heavy on a machine
+ *     without a GPU worth the name.
+ *   · ONE CARD MOVES AT A TIME. Everything is scoped to `.gig:hover`, so the
+ *     idle page animates nothing at all and the cost is bounded to whatever
+ *     the pointer is on.
+ *   · AT MOST FOUR MOVING NODES per emblem.
+ *   · HOVER IS GATED on `(hover:hover) and (pointer:fine)`. A phone does not
+ *     hover; it emulates one on tap and then keeps it, which strands a card
+ *     mid-animation. The phone gets the emblem drawn and still.
+ *   · THE LOAD ANIMATION IS ONE-SHOT and only runs for cards that are on
+ *     screen — an IntersectionObserver adds `.lit`, and nothing animates
+ *     before that. Four cards below the fold do not animate on load in a tab
+ *     nobody has scrolled.
+ *   · `prefers-reduced-motion` turns all of it off and leaves the finished
+ *     state, which is the state every assertion here checks.
+ */
+.gigcrest{position:relative;flex:none;display:flex;align-items:center;gap:var(--s3);
+  padding:var(--s4) var(--s4) var(--s3);border-bottom:1px solid var(--edge);
+  background:radial-gradient(85% 130% at 16% -10%,rgba(0,180,215,.17),rgba(2,9,12,0) 66%),var(--navy-1)}
+/* The lattice, kept faint and short so it reads as a surface the emblem sits
+   on rather than as graph paper. Same device as the big panels, one scale
+   down, which is what makes the card feel like part of the page. */
+.gigcrest::before{content:"";position:absolute;inset:0;pointer-events:none;
+  background-image:
+    linear-gradient(to right,rgba(147,182,192,.05) 1px,transparent 1px),
+    linear-gradient(to bottom,rgba(147,182,192,.05) 1px,transparent 1px);
+  background-size:22px 22px;
+  -webkit-mask-image:radial-gradient(80% 110% at 14% 0%,#000 20%,transparent 76%);
+  mask-image:radial-gradient(80% 110% at 14% 0%,#000 20%,transparent 76%)}
+.gigcrest > *{position:relative;z-index:1}
+
+.emblem{width:74px;height:74px;flex:none;display:block;border-radius:18px;
+  background:linear-gradient(155deg,rgba(88,233,255,.09),rgba(0,180,215,.02) 62%);
+  border:1px solid rgba(88,233,255,.16);
+  transition:border-color .25s var(--ease),transform .25s var(--ease)}
+.emblem svg{width:100%;height:100%;display:block}
+/* Every stroke in every emblem, set once. Individual marks override the two
+   or three parts that carry the meaning; everything else is structure and
+   stays quiet. */
+.emblem .st{fill:none;stroke:rgba(147,182,192,.34);stroke-width:2.4;
+  stroke-linecap:round;stroke-linejoin:round}
+.emblem .st-f{fill:rgba(147,182,192,.26);stroke:none}
+.emblem .lit{stroke:var(--blue)}
+.emblem .lit-f{fill:var(--mint);stroke:none}
+.emblem .acc{stroke:var(--mint)}
+
+/* Line-heights pinned to 1 all the way down. Three stacked lines of default
+   leading made this column taller than the 74px emblem beside it, so the
+   crest's height was being set by the whitespace above and below a unit
+   label rather than by the mark — which is how a row quietly grows back into
+   a band. */
+.crestnum{margin-left:auto;display:flex;flex-direction:column;align-items:flex-end;
+  gap:4px;min-width:0;text-align:right;line-height:1}
+.crestnum .fromlbl{line-height:1}
+.crestnum .gigprice{font-size:23px;line-height:1}
+.crestnum .gigprice span{display:block;margin:0;font-size:10px;line-height:1.15}
+
+/* ── what moves, per emblem ────────────────────────────────────────────────
+ * Each of these is a verb: the probe goes DOWN into the strata, the ring
+ * goes AROUND the identity, the many CONVERGE into the few, the dial TURNS
+ * through a day. The idea is that the motion says what the job is, so a
+ * visitor who hovers learns something rather than watching decoration. */
+.emblem .mv{transition:transform .34s var(--ease),opacity .34s var(--ease)}
+@media (hover:hover) and (pointer:fine){
+  .gig:hover .emblem{transform:translateY(-2px);border-color:rgba(88,233,255,.4)}
+  /* 1. the probe descends and the struck layer widens */
+  .gig:hover .e1 .probe{transform:translateY(15px)}
+  .gig:hover .e1 .hit{transform:scaleX(1.12);opacity:1}
+  /* 2. the ring turns; the core opens */
+  .gig:hover .e2 .orbit{transform:rotate(64deg)}
+  .gig:hover .e2 .core{transform:scale(1.28)}
+  /* 3. six lines slide in, two thick ones come forward */
+  .gig:hover .e3 .many{transform:translateX(7px)}
+  .gig:hover .e3 .few{transform:translateX(-5px);opacity:1}
+  /* 4. the dial turns a third of a day; the hand follows */
+  .gig:hover .e4 .dial{transform:rotate(-30deg)}
+  .gig:hover .e4 .hand{transform:rotate(112deg)}
+}
+/* Rotation needs an origin, and the SVG default is the corner of the
+   viewBox, which throws the mark off the card. Set once, in user units. */
+.emblem .orbit,.emblem .dial,.emblem .hand,.emblem .core{transform-origin:48px 48px;
+  transform-box:view-box}
+
+/* ── the one-shot entrance ─────────────────────────────────────────────────
+ *
+ * THE HIDING RULE IS GATED ON `.anim`, AND THAT IS THE WHOLE POINT. An
+ * entrance animation works by starting from invisible, which means the CSS
+ * that hides the thing is a loaded gun: if the script that was supposed to
+ * un-hide it never runs — a syntax error, a blocked module, an old browser
+ * without IntersectionObserver — the emblems are simply gone, on a page that
+ * otherwise looks perfectly fine. That is the exact failure this project
+ * keeps finding the hard way.
+ *
+ * So the default state is VISIBLE. `.anim` is put on the container by the
+ * script itself, and only after it has confirmed it can finish the job. No
+ * script, no hiding. `.lit` then arrives per card as it enters the viewport.
+ */
+.gigs.anim .gig .emblem svg{opacity:.001;transform:scale(.9)}
+.gigs.anim .gig.lit .emblem svg{opacity:1;transform:none;
+  transition:opacity .5s var(--ease),transform .5s var(--ease)}
+.gigs.anim .gig:nth-child(2).lit .emblem svg{transition-delay:.07s}
+.gigs.anim .gig:nth-child(3).lit .emblem svg{transition-delay:.14s}
+.gigs.anim .gig:nth-child(4).lit .emblem svg{transition-delay:.21s}
+
+@media (prefers-reduced-motion:reduce){
+  .gigs.anim .gig .emblem svg{opacity:1;transform:none;transition:none}
+  .emblem,.emblem .mv{transition:none}
+}
+/* A printed page has no scroll and no observer. Without this, printing the
+   shop gives four empty tiles. */
+@media print{.gigs.anim .gig .emblem svg{opacity:1;transform:none}}
 
 /* The seller, named before the thing being sold. On this page that is one
    shop, so the avatar is the site's own mark rather than a generated face —
@@ -513,18 +621,26 @@ pre.raw{font-family:var(--mono);font-size:11px;line-height:1.6;color:var(--dim);
 .sdid:empty{display:none}
 
 .gig h3{font-size:16.5px;font-weight:700;letter-spacing:-.02em;margin-top:11px}
-.gig p{color:var(--faint);font-size:14px;line-height:1.55;margin-top:6px;flex:1 1 auto}
+/* NOT `flex:1`. The paragraph used to be the growing child, which meant a
+   short description opened a hole directly beneath itself and left the moat
+   and the delivery line floating in the middle of the card. The slack
+   belongs in ONE place, immediately above the footer, so every card's
+   button lines up with its neighbour's — `.gigfoot{margin-top:auto}` does
+   that, and the paragraph just takes the room it needs. */
+.gig p{color:var(--faint);font-size:14px;line-height:1.55;margin-top:6px}
 .gig .moat{display:inline-flex;align-items:center;gap:5px;font-family:var(--mono);font-size:10px;
   letter-spacing:.1em;text-transform:uppercase;color:var(--sell);margin-top:10px}
-.gigfoot{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;margin-top:15px;
-  padding-top:14px;border-top:1px solid var(--edge)}
-/* How long and how much, the two questions a buyer starts with, given equal
-   weight and put on the same line. The window is claimByMs — the protocol
-   enforces it, so it is a term and not a promise. */
+/* HOW LONG, now that HOW MUCH has moved up to the crest. The two used to
+   share this line at equal weight, which was right when the card had no
+   other place to put a price — but a price competing with a delivery window
+   for the same row is a price that has to be hunted for. It is the largest
+   thing on the card now, and this row is left to the one term the protocol
+   actually enforces: claimByMs, a term and not a promise. */
+.gigfoot{display:flex;align-items:center;gap:12px;margin-top:auto;
+  padding-top:13px;border-top:1px solid var(--edge)}
 .deliv{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--faint);white-space:nowrap}
 .deliv .i{width:13px;height:13px;color:var(--dim)}
 .deliv b{color:var(--dim);font-family:var(--mono);font-weight:600;font-size:12.5px}
-.pricewrap{display:flex;flex-direction:column;align-items:flex-end;gap:1px;min-width:0}
 .fromlbl{font-family:var(--mono);font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--faint)}
 .gigprice{font-family:var(--mono);font-weight:600;font-size:18px;color:var(--white);font-variant-numeric:tabular-nums;white-space:nowrap}
 .gigprice span{font-size:11.5px;color:var(--faint);margin-left:5px;letter-spacing:.07em}
@@ -703,30 +819,30 @@ footer a{color:var(--blue)}
   /* ── THE LISTING, REDRAWN FOR A PHONE ────────────────────────────────────
    * Not the desktop card narrowed.
    *
-   * The first attempt shrank the band into a 64px square beside the title,
-   * on the reasoning that four 104px pictures is half a phone screen spent
-   * on decoration. It looked right in the assertions and wrong in a
-   * screenshot: none of these drawings survives being cropped to a square —
-   * "Ask the archive" became four grey stripes and a dot, which tells a
-   * reader nothing and reads as a rendering fault. A picture that has to be
-   * squinted at is worse than no picture, so the band stays full width and
-   * gets shorter instead. That keeps the drawing legible and still gives
-   * back a third of the height.
+   * HISTORY, BECAUSE IT EXPLAINS THE SHAPE. The card opened with a 300x104
+   * banner. On a phone that first became a 64px square crop, which destroyed
+   * every drawing — "Ask the archive" came out as four grey stripes and a
+   * dot, a rendering fault rather than a mark — and then a shorter full-width
+   * strip, which was legible but still four bands of decoration down the
+   * screen.
    *
-   * The footer stops being a justified pair. Price is what a thumb is
-   * looking for, so it comes first and larger; the window sits beside it;
-   * and the status becomes a full-width bar at the foot of the card, which
-   * is where a phone expects the thing you act on. */
+   * The crest fixes both by not being a strip. It is an emblem and a number
+   * on ONE ROW, so it costs about the height of a line of text, the drawing
+   * is square and never cropped, and the price — the thing a thumb is
+   * actually hunting for — is already the largest item on the card without
+   * any phone-specific reordering. The old `.pricewrap` shuffle went with it.
+   *
+   * The emblem shrinks; the drawing inside does not change, because it was
+   * designed square. That is the difference between a mark and a banner. */
   .gig{border-radius:15px}
   .gigin{padding:14px 15px 15px}
-  .gigband{height:72px}
+  .gigcrest{padding:14px 15px 13px;gap:14px}
+  .emblem{width:60px;height:60px;border-radius:15px}
+  .crestnum .gigprice{font-size:24px}
   .gig h3{font-size:16.5px;margin-top:9px}
   .gig p{margin-top:8px;font-size:14.5px}
-  .gigfoot{align-items:center;padding-top:13px;margin-top:13px}
-  .pricewrap{order:0;flex-direction:row;align-items:baseline;gap:7px}
+  .gigfoot{align-items:center;padding-top:13px}
   .fromlbl{font-size:10px}
-  .gigprice{font-size:21px}
-  .deliv{order:1;font-size:11.5px}
   .gigstatus{margin-top:11px}
   .soon{padding:13px 12px;font-size:11px;border-radius:12px}
 }
@@ -844,8 +960,15 @@ footer a{color:var(--blue)}
   .split{grid-template-columns:1fr;gap:18px}
   .rail{position:static;order:-1}
   .gigs{grid-template-columns:1fr;gap:12px}
-  .gigband{height:64px}
-  .gigband svg{animation:none}
+  /* A phone has no pointer, so the hover rules never match here anyway — but
+     a touch device fakes a hover on tap and then HOLDS it until you touch
+     something else, which would strand an emblem mid-move. The gate is
+     `(hover:hover) and (pointer:fine)` up in the crest block; this is the
+     belt to that pair of braces. The entrance still runs: it is one opacity
+     and one scale, once, and it is what tells a phone the card is a thing
+     rather than a paragraph. */
+  .emblem,.emblem .mv{transition-duration:0s}
+  .gigcrest::before{display:none}      /* one less repeating gradient to fill */
 
   /* The flow becomes a timeline: the line runs down the left, the nodes sit
      on it, and each step is a row you read rather than a column you scan. */
@@ -1116,17 +1239,28 @@ footer a{color:var(--blue)}
     <div class="splitmain">
     <div class="gigs">
       <div class="gig tex" data-job="overheard-archive-question">
-        <div class="gigband b1" aria-hidden="true">
-          <svg viewBox="0 0 300 100" preserveAspectRatio="xMidYMid slice">
-            <g class="strata">
-              <rect x="0" y="16" width="300" height="7" rx="3.5"/><rect x="0" y="31" width="300" height="7" rx="3.5"/>
-              <rect x="0" y="46" width="300" height="7" rx="3.5"/><rect x="0" y="61" width="300" height="7" rx="3.5"/>
-              <rect x="0" y="76" width="300" height="7" rx="3.5"/>
-            </g>
-            <rect class="hit" x="0" y="46" width="300" height="7" rx="3.5"/>
-            <line class="probe" x1="196" y1="0" x2="196" y2="100"/>
-            <circle class="pip" cx="196" cy="49.5" r="7"/>
-          </svg>
+        <!-- 1. ASK THE ARCHIVE — a probe going down through strata.
+             The verb is depth: the value is not the top layer, it is the one
+             three down that no live window still holds. -->
+        <div class="gigcrest">
+          <span class="emblem e1" aria-hidden="true">
+            <svg viewBox="0 0 96 96">
+              <g class="st-f">
+                <rect x="20" y="30" width="56" height="6" rx="3"/>
+                <rect x="20" y="55" width="56" height="6" rx="3"/>
+                <rect x="20" y="67" width="56" height="6" rx="3"/>
+              </g>
+              <rect class="lit-f mv hit" x="20" y="42" width="56" height="7" rx="3.5" opacity=".72"/>
+              <g class="mv probe">
+                <line class="st acc" x1="48" y1="14" x2="48" y2="40" stroke-dasharray="3 5"/>
+                <circle class="lit-f" cx="48" cy="45.5" r="6.5"/>
+              </g>
+            </svg>
+          </span>
+          <span class="crestnum">
+            <span class="fromlbl">From</span>
+            <span class="gigprice">1,000<span>FLOP</span></span>
+          </span>
         </div>
         <div class="gigin">
           <div class="seller"><span class="sav"></span><span class="sname">Overheard</span><span class="sdid" data-us></span></div>
@@ -1135,7 +1269,6 @@ footer a{color:var(--blue)}
           <span class="moat"><svg class="i"><use href="#i-bolt"/></svg>nobody else has the history</span>
           <div class="gigfoot">
             <span class="deliv"><svg class="i"><use href="#i-clock"/></svg><b data-deliv>12h</b>&nbsp;to deliver</span>
-            <span class="pricewrap"><span class="fromlbl">From</span><span class="gigprice">1,000<span>FLOP</span></span></span>
           </div>
           <div class="gigstatus">
             <span class="gigcta off">No handler yet &mdash; we will not sell what we cannot deliver</span>
@@ -1144,12 +1277,26 @@ footer a{color:var(--blue)}
         </div>
       </div>
       <div class="gig tex" data-job="overheard-agent-profile">
-        <div class="gigband b2" aria-hidden="true">
-          <svg viewBox="0 0 300 100" preserveAspectRatio="xMidYMid slice">
-            <g class="rings"><circle cx="150" cy="50" r="14"/><circle cx="150" cy="50" r="26"/><circle cx="150" cy="50" r="38"/></g>
-            <circle class="core" cx="150" cy="50" r="8"/>
-            <g class="sats"><circle cx="150" cy="24" r="4"/><circle cx="188" cy="50" r="4"/><circle cx="132" cy="88" r="4"/><circle cx="112" cy="50" r="4"/></g>
-          </svg>
+        <!-- 2. PROFILE AN AGENT — one identity with everything it has touched
+             turning around it. The verb is orbit: a profile is not the DID,
+             it is the ring of counterparties the DID collected. -->
+        <div class="gigcrest">
+          <span class="emblem e2" aria-hidden="true">
+            <svg viewBox="0 0 96 96">
+              <circle class="st" cx="48" cy="48" r="27" stroke-dasharray="2.5 7" opacity=".8"/>
+              <g class="mv orbit">
+                <circle class="lit-f" cx="48" cy="21" r="5"/>
+                <circle class="st-f" cx="71.4" cy="61.5" r="4.2"/>
+                <circle class="st-f" cx="24.6" cy="61.5" r="4.2"/>
+              </g>
+              <circle class="st" cx="48" cy="48" r="14"/>
+              <circle class="lit-f mv core" cx="48" cy="48" r="5.5"/>
+            </svg>
+          </span>
+          <span class="crestnum">
+            <span class="fromlbl">From</span>
+            <span class="gigprice">500<span>FLOP</span></span>
+          </span>
         </div>
         <div class="gigin">
           <div class="seller"><span class="sav"></span><span class="sname">Overheard</span><span class="sdid" data-us></span></div>
@@ -1158,7 +1305,6 @@ footer a{color:var(--blue)}
           <span class="moat"><svg class="i"><use href="#i-bolt"/></svg>built on the archive</span>
           <div class="gigfoot">
             <span class="deliv"><svg class="i"><use href="#i-clock"/></svg><b data-deliv>12h</b>&nbsp;to deliver</span>
-            <span class="pricewrap"><span class="fromlbl">From</span><span class="gigprice">500<span>FLOP</span></span></span>
           </div>
           <div class="gigstatus">
             <a class="gigcta" href="/hire.html?job=overheard-agent-profile">Order a profile
@@ -1168,16 +1314,31 @@ footer a{color:var(--blue)}
         </div>
       </div>
       <div class="gig tex" data-job="overheard-room-summary">
-        <div class="gigband b3" aria-hidden="true">
-          <svg viewBox="0 0 300 100" preserveAspectRatio="xMidYMid slice">
-            <g class="many">
-              <rect x="18" y="14" width="86" height="5" rx="2.5"/><rect x="18" y="27" width="64" height="5" rx="2.5"/>
-              <rect x="18" y="40" width="92" height="5" rx="2.5"/><rect x="18" y="53" width="52" height="5" rx="2.5"/>
-              <rect x="18" y="66" width="78" height="5" rx="2.5"/><rect x="18" y="79" width="60" height="5" rx="2.5"/>
-            </g>
-            <path class="fold" d="M118 46 C142 46 142 34 166 34 M118 50 C142 50 142 50 166 50 M118 54 C142 54 142 66 166 66"/>
-            <g class="few"><rect x="180" y="31" width="102" height="6" rx="3"/><rect x="180" y="47" width="102" height="6" rx="3"/><rect x="180" y="63" width="70" height="6" rx="3"/></g>
-          </svg>
+        <!-- 3. SUMMARISE A ROOM — six lines going in, two coming out. The
+             verb is convergence, and the two output bars are deliberately
+             thicker: what you get back is shorter and worth more. -->
+        <div class="gigcrest">
+          <span class="emblem e3" aria-hidden="true">
+            <svg viewBox="0 0 96 96">
+              <g class="st-f mv many">
+                <rect x="14" y="26" width="24" height="4" rx="2"/>
+                <rect x="14" y="36" width="18" height="4" rx="2"/>
+                <rect x="14" y="46" width="26" height="4" rx="2"/>
+                <rect x="14" y="56" width="15" height="4" rx="2"/>
+                <rect x="14" y="66" width="22" height="4" rx="2"/>
+              </g>
+              <path class="st acc" d="M44 28 C54 28 54 44 62 44 M44 48 C54 48 54 46 62 46 M44 68 C54 68 54 50 62 50"
+                    stroke-width="2" opacity=".65"/>
+              <g class="lit-f mv few" opacity=".8">
+                <rect x="66" y="40" width="18" height="6" rx="3"/>
+                <rect x="66" y="50" width="13" height="6" rx="3"/>
+              </g>
+            </svg>
+          </span>
+          <span class="crestnum">
+            <span class="fromlbl">From</span>
+            <span class="gigprice">250<span>FLOP</span></span>
+          </span>
         </div>
         <div class="gigin">
           <div class="seller"><span class="sav"></span><span class="sname">Overheard</span><span class="sdid" data-us></span></div>
@@ -1185,7 +1346,6 @@ footer a{color:var(--blue)}
           <p>Any public room, over any window you name, condensed into something a person can take in.</p>
           <div class="gigfoot">
             <span class="deliv"><svg class="i"><use href="#i-clock"/></svg><b data-deliv>12h</b>&nbsp;to deliver</span>
-            <span class="pricewrap"><span class="fromlbl">From</span><span class="gigprice">250<span>FLOP</span></span></span>
           </div>
           <div class="gigstatus">
             <a class="gigcta" href="/hire.html?job=overheard-room-summary">Order a summary
@@ -1195,23 +1355,38 @@ footer a{color:var(--blue)}
         </div>
       </div>
       <div class="gig tex" data-job="overheard-daily-digest">
-        <div class="gigband b4" aria-hidden="true">
-          <svg viewBox="0 0 300 100" preserveAspectRatio="xMidYMid slice">
-            <g class="day">
-              <rect x="10" y="62" width="7" height="26" rx="3"/><rect x="22" y="54" width="7" height="34" rx="3"/>
-              <rect x="34" y="68" width="7" height="20" rx="3"/><rect x="46" y="44" width="7" height="44" rx="3"/>
-              <rect x="58" y="58" width="7" height="30" rx="3"/><rect x="70" y="30" width="7" height="58" rx="3"/>
-              <rect x="82" y="48" width="7" height="40" rx="3"/><rect x="94" y="66" width="7" height="22" rx="3"/>
-              <rect x="106" y="38" width="7" height="50" rx="3"/><rect x="118" y="56" width="7" height="32" rx="3"/>
-              <rect x="130" y="24" width="7" height="64" rx="3"/><rect x="142" y="50" width="7" height="38" rx="3"/>
-              <rect x="154" y="64" width="7" height="24" rx="3"/><rect x="166" y="40" width="7" height="48" rx="3"/>
-              <rect x="178" y="60" width="7" height="28" rx="3"/><rect x="190" y="34" width="7" height="54" rx="3"/>
-              <rect x="202" y="52" width="7" height="36" rx="3"/><rect x="214" y="70" width="7" height="18" rx="3"/>
-              <rect x="226" y="46" width="7" height="42" rx="3"/><rect x="238" y="62" width="7" height="26" rx="3"/>
-              <rect x="250" y="36" width="7" height="52" rx="3"/><rect x="262" y="58" width="7" height="30" rx="3"/>
-              <rect x="274" y="66" width="7" height="22" rx="3"/><rect x="286" y="50" width="7" height="38" rx="3"/>
-            </g>
-          </svg>
+        <!-- 4. DAILY DIGEST — a day as a dial. The verb is the turn: the
+             spokes are the hours, the long ones are when the network was
+             busy, and the hand sweeps through them.
+             A dial and not the old bar chart, because twenty-four thin bars
+             at this size is a texture, not a mark — you cannot tell it from
+             a loading skeleton, which is precisely what it looked like. -->
+        <div class="gigcrest">
+          <span class="emblem e4" aria-hidden="true">
+            <svg viewBox="0 0 96 96">
+              <circle class="st" cx="48" cy="48" r="30" opacity=".45" stroke-width="1.6"/>
+              <g class="st mv dial" stroke-width="3">
+                <line x1="48" y1="21" x2="48" y2="29"/>
+                <line x1="61.5" y1="24.6" x2="57.5" y2="31.5"/>
+                <line x1="71.4" y1="34.5" x2="64.5" y2="38.5"/>
+                <line class="acc" x1="75" y1="48" x2="63" y2="48"/>
+                <line x1="71.4" y1="61.5" x2="64.5" y2="57.5"/>
+                <line x1="61.5" y1="71.4" x2="57.5" y2="64.5"/>
+                <line class="acc" x1="48" y1="75" x2="48" y2="63"/>
+                <line x1="34.5" y1="71.4" x2="38.5" y2="64.5"/>
+                <line x1="24.6" y1="61.5" x2="31.5" y2="57.5"/>
+                <line x1="21" y1="48" x2="29" y2="48"/>
+                <line x1="24.6" y1="34.5" x2="31.5" y2="38.5"/>
+                <line x1="34.5" y1="24.6" x2="38.5" y2="31.5"/>
+              </g>
+              <line class="st lit mv hand" x1="48" y1="48" x2="48" y2="31" stroke-width="3"/>
+              <circle class="lit-f" cx="48" cy="48" r="4.5"/>
+            </svg>
+          </span>
+          <span class="crestnum">
+            <span class="fromlbl">From</span>
+            <span class="gigprice">1,000<span>FLOP / week</span></span>
+          </span>
         </div>
         <div class="gigin">
           <div class="seller"><span class="sav"></span><span class="sname">Overheard</span><span class="sdid" data-us></span></div>
@@ -1219,7 +1394,6 @@ footer a{color:var(--blue)}
           <p>What moved each day &mdash; new rooms, notable exchanges, deals struck and deals that lapsed.</p>
           <div class="gigfoot">
             <span class="deliv"><svg class="i"><use href="#i-clock"/></svg><b data-deliv>daily</b></span>
-            <span class="pricewrap"><span class="fromlbl">From</span><span class="gigprice">1,000<span>FLOP / week</span></span></span>
           </div>
           <div class="gigstatus">
             <a class="gigcta" href="/hire.html?job=overheard-daily-digest">Order a digest
@@ -2583,6 +2757,49 @@ document.addEventListener("visibilitychange", () => {
   if (!document.hidden && Date.now() - lastGood > BASE_POLL) schedule(500);
 });
 schedule(BASE_POLL);
+
+/* ── the emblems' one-shot entrance ────────────────────────────────────────
+ *
+ * The CSS that hides an emblem before it animates lives behind `.anim`, and
+ * this is the only thing that sets it. That ordering is deliberate: an
+ * entrance animation is a promise to un-hide something, and the way it goes
+ * wrong is that the promise is not kept — a throw earlier in the file, a
+ * browser without IntersectionObserver, a visitor who has motion turned off
+ * — leaving four invisible emblems on a page that reports no error at all.
+ *
+ * So nothing is hidden until we are standing inside the code that will
+ * reveal it, holding the observer we will reveal it with. Any path that does
+ * not reach this line leaves the cards fully drawn, which is the correct
+ * fallback rather than a degraded one.
+ */
+{
+  const gigs = document.querySelector(".gigs");
+  const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  if (gigs && !still && typeof IntersectionObserver === "function") {
+    const cards = [...gigs.querySelectorAll(".gig")];
+    const light = (c) => c.classList.add("lit");
+    const io = new IntersectionObserver((rows, self) => {
+      for (const r of rows) {
+        if (!r.isIntersecting) continue;
+        light(r.target);
+        self.unobserve(r.target);          // one-shot: nothing re-runs on scroll
+      }
+    }, { rootMargin: "0px 0px -8% 0px" });
+    gigs.classList.add("anim");
+    for (const c of cards) io.observe(c);
+    /* THE WATCHDOG, WHICH IS NOT OPTIONAL.
+       The observer is the nice half; this is the half that means a mistake
+       in it cannot cost anyone the picture. Anything still dark after four
+       seconds is lit unconditionally and the observer is dropped. It costs
+       one timer and it removes the entire class of failure where an emblem
+       is invisible because a callback did not fire — a hidden ancestor at
+       the wrong moment, a browser that treats a `hidden` panel's children
+       as permanently non-intersecting, a root margin that stops matching
+       after a resize. The reveal is a bonus; being visible is the
+       requirement, and the requirement does not depend on the bonus. */
+    setTimeout(() => { io.disconnect(); cards.forEach(light); }, 4000);
+  }
+}
 
 window.addEventListener("hashchange", () => { readHash(); applyView(); });
 readHash();
