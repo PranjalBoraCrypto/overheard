@@ -1289,6 +1289,81 @@ console.log("\n=== T. what the redesign has to keep true");
   ok("and each says what it is counting, in words",
     stats.every((s2) => s2.caption > 12), stats.map((s2) => s2.caption).join(","));
 
+  /* ── SPACING, MEASURED ─────────────────────────────────────────────────
+     "Text touching the boundary line" was the complaint, and it was right in
+     several places at once — the last step of a track ran to the edge of the
+     band because its padding was zeroed, and the refund box butted straight
+     into the description above it. Eyeballing found none of them; measuring
+     found all of them. So the gap between a text block and the edge of what
+     contains it is now a property, not a matter of taste. */
+  const tight = await pT.evaluate(() => {
+    const out = [];
+    for (const sel of [".fstep", ".stat", ".railcard", ".refundline", ".gigin"]) {
+      for (const c of document.querySelectorAll(sel)) {
+        const cr = c.getBoundingClientRect();
+        if (cr.width < 40) continue;
+        for (const el of c.children) {
+          const r = el.getBoundingClientRect();
+          if (r.width < 10 || !(el.textContent || "").trim()) continue;
+          if (getComputedStyle(el).position === "absolute") continue;
+          const gapR = cr.right - r.right, gapL = r.left - cr.left;
+          /* A grid CELL legitimately starts at its own left edge; what must
+             never happen is text reaching the RIGHT edge of the thing that
+             contains it, which is what reads as touching. */
+          if (gapR < 6) out.push(`${sel} "${(el.textContent||"").trim().slice(0,22)}" R${Math.round(gapR)}`);
+          if (gapL < -1) out.push(`${sel} overflows left L${Math.round(gapL)}`);
+        }
+      }
+    }
+    return out;
+  });
+  ok("no text runs into the right edge of its container", tight.length === 0,
+    tight.slice(0, 3).join(" · ") || "clear");
+
+  /* One scale, used everywhere, so a spacing question has an answer. */
+  /* Measured by RESOLVING them, not by reading the tokens. A custom property
+     holding `clamp(18px,2.2vw,24px)` comes back as that literal string —
+     parseFloat gives NaN, and a test that reads NaN as a number would have
+     passed whatever the values were. So a probe element is given each step
+     as a width and the browser is asked what that came to. */
+  const scale = await pT.evaluate(() => {
+    const probe = document.createElement("div");
+    probe.style.cssText = "position:absolute;visibility:hidden;height:0";
+    document.body.append(probe);
+    const out = ["--s1","--s2","--s3","--s4","--s5","--s6","--gutter"].map((v) => {
+      probe.style.width = `var(${v})`;
+      return probe.getBoundingClientRect().width;
+    });
+    probe.remove();
+    return out;
+  });
+  ok("the spacing scale exists and increases", scale.every((n) => n > 0) &&
+    scale.slice(0, 6).every((n, i, a2) => i === 0 || n > a2[i - 1]), scale.join(","));
+
+  /* TEXTURE. A large dark rectangle with a hairline border reads as a
+     wireframe — the eye gets nothing from its interior. Different surfaces
+     get different treatment on purpose: identical grain everywhere would put
+     the page back to one surface repeated. */
+  const tex = await pT.evaluate(() => {
+    const grain = getComputedStyle(document.documentElement).getPropertyValue("--grain");
+    const layer = (el, ps) => el ? getComputedStyle(el, ps).backgroundImage : "";
+    return {
+      hasGrainToken: grain.includes("svg"),
+      hero: layer(document.querySelector(".hero"), "::before").includes("svg"),
+      heroLit: layer(document.querySelector(".hero"), "::after").includes("gradient"),
+      bandGrid: layer(document.querySelector(".bleed"), "::after").includes("gradient"),
+      rail: layer(document.querySelector(".railcard"), "::before").includes("svg"),
+      /* Nothing decorative may eat a click. */
+      inert: [...document.querySelectorAll(".tex")].every((el) =>
+        getComputedStyle(el, "::before").pointerEvents === "none"),
+    };
+  });
+  ok("the grain is an inline SVG, so nothing is downloaded", tex.hasGrainToken);
+  ok("the hero has grain and a light source", tex.hero && tex.heroLit);
+  ok("the full-bleed band gets a different texture from the cards", tex.bandGrid);
+  ok("and the rail, the thing you act on, is lit too", tex.rail);
+  ok("no texture layer can eat a click", tex.inert, "pointer-events:none on every ::before");
+
   /* The (i) has to work for everyone: a click opens it, Escape closes it. A
      title= attribute would have been one line and invisible on touch. */
   await pT.click(".info[data-pop]");

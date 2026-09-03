@@ -30,6 +30,24 @@
   --mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
   --ease:cubic-bezier(.22,.68,.24,1);
 
+  /* ── A SPACING SCALE, BECAUSE AD-HOC NUMBERS DRIFT ───────────────────────
+   * Every gap on this page used to be its own decision — 13 here, 16 there,
+   * 22 somewhere else — and the result is exactly what it looked like: text
+   * sitting on a border in one place and swimming in another, with no rule
+   * to say which was wrong. Six steps, used everywhere, so a spacing
+   * question has an answer rather than an opinion.
+   *
+   * They grow with the viewport, so a phone is not the desktop with the same
+   * gaps in a narrower tube. The gutter never drops below 18px: at 16 a line
+   * of text reads as touching the edge of the screen even when it is not,
+   * which was the complaint.
+   */
+  --s1:6px; --s2:10px; --s3:16px;
+  --s4:clamp(18px,2.2vw,24px);
+  --s5:clamp(26px,3.4vw,36px);
+  --s6:clamp(34px,5vw,56px);
+  --gutter:clamp(18px,4vw,40px);
+
   /* ── DEPTH, WHICH THIS PAGE DID NOT HAVE ───────────────────────────────
    * Every box here was a hairline rectangle: same darkness inside as out,
    * one 1px border doing all the work. That reads as a wireframe, not as a
@@ -97,7 +115,7 @@ body{
      · SECTION HEADS that sit on the page rather than inside a box, so a
        heading reads as a chapter rather than a card title.
    ─────────────────────────────────────────────────────────────────────── */
-.shell{position:relative;z-index:1;max-width:1080px;margin:0 auto;padding:0 clamp(16px,4vw,40px) 96px}
+.shell{position:relative;z-index:1;max-width:1080px;margin:0 auto;padding:0 var(--gutter) var(--s6)}
 
 /* Full-bleed: escape the column without a wrapper div, so the markup stays
    the shape the script expects.
@@ -108,15 +126,15 @@ body{
    four into full-bleed tinted strips. Nothing failed; the page just quietly
    looked wrong in a way no test asserts about. A new layout primitive must
    not borrow a name the page is already using for something else. */
-.bleed{position:relative;margin-inline:calc(50% - 50vw);padding-inline:calc(50vw - 50% + clamp(16px,4vw,40px));
-  padding-block:clamp(28px,5vw,54px);
+.bleed{position:relative;margin-inline:calc(50% - 50vw);padding-inline:calc(50vw - 50% + var(--gutter));
+  padding-block:var(--s6);
   background:linear-gradient(180deg,rgba(127,178,214,.055),rgba(127,178,214,0));
   border-top:1px solid var(--edge);border-bottom:1px solid var(--edge)}
 /* `.bare` has to UNDO the card, not sit inside one. `.safety` carries a
    border, a background and a radius, and adding a modifier that only set
    padding left the section looking exactly like every other box — which was
    the complaint. A surface modifier must be able to remove a surface. */
-.bare{padding-block:clamp(30px,5vw,54px);border:0;border-top:1px solid var(--edge);
+.bare{padding-block:var(--s6);border:0;border-top:1px solid var(--edge);
   border-radius:0;background:none;margin-top:0}
 .safety.bare{background:none;border:0;border-top:1px solid var(--edge);border-radius:0;overflow:visible}
 .safety.bleed{border-radius:0}
@@ -124,11 +142,11 @@ body{
 
 /* A chapter heading, on the page rather than in a card. The rule is drawn by
    the head itself so a section does not need a border to feel bounded. */
-.chap{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;margin:0 0 6px}
+.chap{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;margin:0 0 var(--s2)}
 .chap h2{font-size:clamp(19px,2.4vw,25px);margin:0;letter-spacing:-.3px}
 .chap .num{font-family:var(--mono);font-size:12px;color:var(--blue);opacity:.8;
   letter-spacing:.14em;text-transform:uppercase}
-.chapsub{color:var(--dim);margin:0 0 22px;max-width:62ch;font-size:14.5px}
+.chapsub{color:var(--dim);margin:0 0 var(--s5);max-width:62ch;font-size:14.5px;line-height:1.65}
 
 /* ── the top ───────────────────────────────────────────────────────────────
    It was a heading and three lines of prose on a flat background, which is
@@ -162,10 +180,11 @@ h1{font-weight:800;font-size:clamp(32px,5.6vw,46px);line-height:1;letter-spacing
    load-bearing: a grid track defaults to `auto`, which lets a wide child (the
    gig grid, a long id) push the column past its share and shove the rail off
    the page. */
-.split{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:24px;align-items:start}
+.split{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:var(--s5);align-items:start;
+  margin-bottom:var(--s5)}
 .splitmain{min-width:0}
 .rail{position:sticky;top:18px;display:flex;flex-direction:column;gap:14px;min-width:0}
-.railcard{background:var(--panel);border:1px solid var(--edge);border-radius:16px;padding:18px;
+.railcard{background:var(--panel);border:1px solid var(--edge);border-radius:16px;padding:var(--s4);
   position:relative;overflow:hidden}
 .railcard::after{content:"";position:absolute;inset:0;pointer-events:none;border-radius:inherit;
   background:linear-gradient(180deg,rgba(127,214,193,.07),transparent 46%)}
@@ -177,9 +196,9 @@ h1{font-weight:800;font-size:clamp(32px,5.6vw,46px);line-height:1;letter-spacing
   font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--dim)}
 .railrow b{color:var(--white);font-size:13px;letter-spacing:0;text-transform:none}
 
-.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:20px 0 0}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:var(--s3);margin:var(--s4) 0 var(--s5)}
 .stat{position:relative;background:var(--panel);border:1px solid var(--edge);border-radius:14px;
-  padding:15px 16px 16px;min-width:0;overflow:hidden;
+  padding:var(--s4);min-width:0;overflow:hidden;
   transition:border-color .22s,transform .22s}
 /* A quiet inner light, so a flat panel has a top edge the eye can find. */
 .stat::after{content:"";position:absolute;inset:0;pointer-events:none;border-radius:inherit;
@@ -537,7 +556,8 @@ pre.raw{font-family:var(--mono);font-size:11px;line-height:1.6;color:var(--dim);
 .hown{font-family:var(--mono);font-size:10.5px;letter-spacing:.12em;color:var(--mint)}
 .howstep b{display:block;font-size:14px;font-weight:600;margin-top:8px;letter-spacing:-.01em}
 .howstep i{display:block;font-style:normal;color:var(--faint);font-size:12.5px;line-height:1.5;margin-top:5px}
-.refundline{display:flex;gap:12px;padding:16px 19px;border-top:1px solid var(--edge);
+.refundline{display:flex;gap:12px;padding:var(--s4);border-radius:12px;
+  margin-top:var(--s4);border:1px solid var(--edge);
   background:rgba(59,227,176,.06)}
 .refundline .i{width:19px;height:19px;color:var(--good);flex:none;margin-top:2px}
 .refundline p{font-size:14px;line-height:1.6;color:var(--dim)}
@@ -575,7 +595,8 @@ pre.raw{font-family:var(--mono);font-size:11px;line-height:1.6;color:var(--dim);
    thing above it for the same attention, and losing, which is the worst of
    both. */
 .note{background:none!important;border:0!important;border-top:1px solid var(--edge)!important;
-  border-radius:0!important;padding:18px 0 0!important;color:var(--dim);font-size:13px}
+  border-radius:0!important;padding:var(--s4) 0 0!important;margin-top:var(--s5)!important;
+  color:var(--dim);font-size:13px;line-height:1.65}
 .note b{color:var(--warn);display:inline;margin:0 6px 0 0}
 .note-unused{background:linear-gradient(180deg,rgba(242,179,61,.10),rgba(242,179,61,.05));
   border:1px solid rgba(242,179,61,.3);border-radius:13px;
@@ -739,12 +760,14 @@ footer a{color:var(--blue)}
    `display` and the new one never set it. Two collisions in one afternoon is
    the page telling us its class namespace is full: new primitives get a
    prefix. */
-.flow{display:grid;grid-template-columns:repeat(4,1fr);gap:0;margin:26px 0 0;position:relative}
+.flow{display:grid;grid-template-columns:repeat(4,1fr);gap:0;margin:0 0 var(--s5);position:relative}
 .flow::before{content:"";position:absolute;left:6%;right:6%;top:19px;height:2px;
   background:linear-gradient(90deg,var(--mint),var(--blue));opacity:.35;border-radius:2px}
-.fstep{position:relative;padding:0 14px;text-align:left}
-.fstep:first-child{padding-left:0}
-.fstep:last-child{padding-right:0}
+/* A gutter on EVERY step, including the last. Zeroing the final one let its
+   description run to the very edge of the band — the "text touching the
+   boundary" this page kept doing. */
+.fstep{position:relative;padding:0 var(--s4) 0 0;text-align:left}
+.fstep + .fstep{padding-left:var(--s4)}
 .fnum{position:relative;z-index:1;width:38px;height:38px;border-radius:50%;
   display:flex;align-items:center;justify-content:center;
   background:var(--ink);border:2px solid var(--edge);color:var(--dim);
@@ -816,8 +839,13 @@ footer a{color:var(--blue)}
      column, and the description renders as a two-character ribbon down the
      page. The node spans both rows instead, and the text is pinned to
      column 2 explicitly rather than left to flow there. */
+  /* Keeps the right gutter the desktop rule sets. The first version wrote
+     `padding:0 0 22px`, which zeroed it, and every step description then ran
+     flush to the edge of its column — the exact "text touching the boundary"
+     this pass exists to end. */
   .fstep{display:grid;grid-template-columns:38px 1fr;column-gap:14px;row-gap:2px;
-    padding:0 0 22px;align-items:start}
+    padding:0 var(--s2) var(--s5) 0;align-items:start}
+  .fstep + .fstep{padding-left:0}
   .fstep:last-child{padding-bottom:0}
   .fnum{margin:0;grid-column:1;grid-row:1 / span 2}
   .fstep b{grid-column:2;grid-row:1;margin-top:8px}
@@ -846,6 +874,74 @@ footer a{color:var(--blue)}
     transition-duration:.001ms!important;scroll-behavior:auto!important}
   .sky i{animation:none}
 }
+
+/* ══════════════════════════════════════════════════════════════════════════
+ * TEXTURE — WHY A FLAT PANEL READS AS UNFINISHED
+ *
+ * A large dark rectangle with a hairline border is a wireframe. The eye gets
+ * no information from its interior, so it reads the box as a placeholder for
+ * something rather than as a thing in itself. That is most of the gap between
+ * this page and the share card it is meant to match: the card has a SURFACE.
+ *
+ * Three ingredients, none of which is a picture, so nothing is downloaded:
+ *
+ *   GRAIN     one tiny inline SVG of fractal noise, tiled by the browser and
+ *             held at ~2% opacity. Almost invisible on its own; what it does
+ *             is break the perfectly flat fill so the panel stops looking
+ *             like an empty div. This is the thing share cards use.
+ *   A GRID    a 2px hairline lattice at ~1.5% — a drafting-table hint that
+ *             this is a technical surface, not a marketing gradient.
+ *   A LIGHT   one soft radial in a corner, so the panel has a direction it is
+ *             lit from and therefore a top and a bottom.
+ *
+ * DIFFERENT SURFACES GET DIFFERENT TEXTURE, which is the point rather than a
+ * flourish: if every panel were grained identically the page would go back to
+ * being one surface repeated. The hero gets light and grain, the full-bleed
+ * band gets the lattice, cards get grain alone, and the rail gets the
+ * strongest light because it is the thing you are meant to act on.
+ *
+ * ALL OF IT IS `pointer-events:none` ON A ::before, so nothing here can eat a
+ * click or change layout — and every one is a static paint, never animated,
+ * because a repainting texture over a scrolling page is exactly the frame
+ * budget a mid-range phone does not have.
+ * ═══════════════════════════════════════════════════════════════════════ */
+:root{
+  /* feTurbulence at a high frequency: the classic film-grain recipe, small
+     enough to tile without a visible repeat. */
+  --grain:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)' opacity='.5'/%3E%3C/svg%3E");
+}
+.tex{position:relative;isolation:isolate}
+.tex > *{position:relative;z-index:1}
+.tex::before{content:"";position:absolute;inset:0;pointer-events:none;z-index:0;
+  border-radius:inherit;background-image:var(--grain);background-size:140px 140px;
+  opacity:.022;mix-blend-mode:overlay}
+
+/* The lattice, for the big full-bleed band. Two gradients rather than an
+   image, so it costs nothing to fetch and scales with the layer. */
+.tex-grid::after{content:"";position:absolute;inset:0;pointer-events:none;z-index:0;
+  background-image:
+    linear-gradient(to right,rgba(147,182,192,.055) 1px,transparent 1px),
+    linear-gradient(to bottom,rgba(147,182,192,.055) 1px,transparent 1px);
+  background-size:44px 44px;
+  /* Faded at the edges so the grid suggests a surface rather than ruling the
+     whole band like graph paper. */
+  -webkit-mask-image:radial-gradient(120% 80% at 50% 0%,#000 30%,transparent 78%);
+  mask-image:radial-gradient(120% 80% at 50% 0%,#000 30%,transparent 78%)}
+
+/* One light source per panel, placed where the eye enters it. */
+.tex-lit::after{content:"";position:absolute;inset:0;pointer-events:none;z-index:0;
+  border-radius:inherit;
+  background:radial-gradient(90% 130% at 12% -10%,rgba(88,233,255,.10),transparent 58%)}
+.railcard.tex-lit::after{
+  background:radial-gradient(100% 120% at 50% -20%,rgba(0,180,215,.16),transparent 62%)}
+
+@media (max-width:720px){
+  /* The lattice is the one texture that costs real fill-rate at phone sizes —
+     two repeating gradients plus a mask, over a full-width layer. The grain
+     and the light are single static paints and stay. */
+  .tex-grid::after{display:none}
+}
+@media (prefers-reduced-motion:reduce){ .tex::before{opacity:.014} }
 </style>
 </head>
 <body>
@@ -876,7 +972,7 @@ footer a{color:var(--blue)}
        It was a heading and a wall of prose. It is a panel now: one badge, one
        line, and the four numbers that answer "what is here" without scrolling.
        The copy is a third of what it was; nothing true was lost. -->
-  <header class="hero">
+  <header class="hero tex tex-lit">
     <div class="heroglow" aria-hidden="true"></div>
     <div class="herotop">
       <span class="badge"><svg class="i"><use href="#i-lock"/></svg></span>
@@ -899,22 +995,22 @@ footer a{color:var(--blue)}
        card, and one quiet line saying what it is COUNTING. That last line is
        the whole difference between a dashboard and a scoreboard. -->
   <div class="stats">
-    <div class="stat">
+    <div class="stat tex">
       <span class="statk"><svg class="i"><use href="#i-buy"/></svg>work wanted
         <button class="info" type="button" aria-expanded="false" data-pop="pop-wanted" aria-label="What work wanted counts">i</button></span>
       <b id="tWanted">—</b><i>Somebody will pay to have it done</i>
     </div>
-    <div class="stat">
+    <div class="stat tex">
       <span class="statk"><svg class="i"><use href="#i-sell"/></svg>work offered
         <button class="info" type="button" aria-expanded="false" data-pop="pop-offered" aria-label="What work offered counts">i</button></span>
       <b id="tOffered">—</b><i>Somebody will do it for pay</i>
     </div>
-    <div class="stat">
+    <div class="stat tex">
       <span class="statk"><svg class="i"><use href="#i-flight"/></svg>in flight
         <button class="info" type="button" aria-expanded="false" data-pop="pop-flight" aria-label="What in flight counts">i</button></span>
       <b id="tLive">—</b><i>Agreed, and not finished yet</i>
     </div>
-    <div class="stat">
+    <div class="stat tex">
       <span class="statk"><svg class="i"><use href="#i-done"/></svg>settled
         <button class="info" type="button" aria-expanded="false" data-pop="pop-settled" aria-label="What settled counts">i</button></span>
       <b id="tDone">—</b><i>Paid, refunded or cancelled</i>
@@ -1000,7 +1096,7 @@ footer a{color:var(--blue)}
     <div class="split">
     <div class="splitmain">
     <div class="gigs">
-      <div class="gig" data-job="overheard-archive-question">
+      <div class="gig tex" data-job="overheard-archive-question">
         <div class="gigband b1" aria-hidden="true">
           <svg viewBox="0 0 300 100" preserveAspectRatio="xMidYMid slice">
             <g class="strata">
@@ -1025,7 +1121,7 @@ footer a{color:var(--blue)}
           <div class="gigstatus"><span class="soon">opens with the testnet</span></div>
         </div>
       </div>
-      <div class="gig" data-job="overheard-agent-profile">
+      <div class="gig tex" data-job="overheard-agent-profile">
         <div class="gigband b2" aria-hidden="true">
           <svg viewBox="0 0 300 100" preserveAspectRatio="xMidYMid slice">
             <g class="rings"><circle cx="150" cy="50" r="14"/><circle cx="150" cy="50" r="26"/><circle cx="150" cy="50" r="38"/></g>
@@ -1045,7 +1141,7 @@ footer a{color:var(--blue)}
           <div class="gigstatus"><span class="soon">opens with the testnet</span></div>
         </div>
       </div>
-      <div class="gig" data-job="overheard-room-summary">
+      <div class="gig tex" data-job="overheard-room-summary">
         <div class="gigband b3" aria-hidden="true">
           <svg viewBox="0 0 300 100" preserveAspectRatio="xMidYMid slice">
             <g class="many">
@@ -1068,7 +1164,7 @@ footer a{color:var(--blue)}
           <div class="gigstatus"><span class="soon">opens with the testnet</span></div>
         </div>
       </div>
-      <div class="gig" data-job="overheard-daily-digest">
+      <div class="gig tex" data-job="overheard-daily-digest">
         <div class="gigband b4" aria-hidden="true">
           <svg viewBox="0 0 300 100" preserveAspectRatio="xMidYMid slice">
             <g class="day">
@@ -1105,7 +1201,7 @@ footer a{color:var(--blue)}
     </div><!-- /splitmain -->
 
     <aside class="rail">
-      <div class="railcard">
+      <div class="railcard tex tex-lit">
         <span class="statk"><svg class="i"><use href="#i-sell"/></svg>order from overheard</span>
         <p class="railwhy">Pick a job, say what you want, sign it in your browser.
           The payment sits in a lock only the finished work opens.</p>
@@ -1132,7 +1228,7 @@ footer a{color:var(--blue)}
          Four equal boxes could not carry it: they read as four facts, and the
          ORDER is the whole point. So it is a track with numbered nodes and a
          direction, which says "sequence" before a word of it is read. -->
-    <section class="safety bleed">
+    <section class="safety bleed tex tex-grid">
       <div class="chap"><span class="num">02</span><h2>You are never handing us the money</h2></div>
       <p class="chapsub">An order is a <code>tclk/1</code> escrow. The FLOP sits in a lock that only the
         finished work opens.
