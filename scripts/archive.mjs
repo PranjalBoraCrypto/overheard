@@ -157,6 +157,78 @@ const MIN_INTERVAL_MS = 1_500;
 const MAX_INTERVAL_MS = 150_000;
 const NEW_ROOM_INTERVAL_MS = 20_000;
 
+/* ── THE ESCROW ROOMS ARE NOT ORDINARY ROOMS ───────────────────────────────
+ * MEASURED on 3 September, out of tclk-offers' own _meta.json:
+ *
+ *   {"after":591,"resumed_at":1107,"missed":515,"cause":"poll interval"}
+ *
+ * 515 frames gone in one hole — more than a third of everything that room
+ * has ever produced — and the scheduler did nothing wrong. A room with a low
+ * measured rate earns a long interval, tclk-offers drifted out towards the
+ * 150-second ceiling, then several agents posted at once and a full page
+ * landed inside one interval. The schedule worked exactly as designed and
+ * lost the board.
+ *
+ * The reasoning that is right for 58,699 rooms is wrong for these. Everywhere
+ * else a missed message is one message: a profile count runs a little short
+ * and the loss is spread thin across a network. Here a missed message is an
+ * OFFER, and this room is the entire basis of the deals page, of what the
+ * runner can answer, and of whatever record exists when the testnet opens.
+ * There is also nowhere else to get it — unlike a busy public room, nobody
+ * else on the network is recording this one at all.
+ *
+ * The cost of never backing off is nothing. tclk-offers has produced 2,146
+ * messages in its whole existence. Reading it every 2.5 seconds is 24 reads
+ * a minute out of an allowance of 360 — less than the lobby already spends,
+ * for the one room the product cannot afford to be wrong about.
+ *
+ * Deal rooms get a looser ceiling AND a time limit on it, because the first
+ * version of this got the arithmetic wrong and its own test caught it: 120
+ * rooms at twelve seconds is 600 reads a minute and the whole allowance is
+ * 360. A ceiling that oversubscribes the budget does not read the escrow
+ * rooms faster; it starves everything else and hands the decision to the
+ * priority queue, which is the opposite of the point.
+ *
+ * What makes it cheap is that a deal room is only interesting while the deal
+ * is happening. An offer, an accept, a lock, a reveal, and then it is silent
+ * for ever. So the ceiling holds while the room is still producing and for a
+ * grace period after, and a settled deal falls back to the ordinary cadence
+ * like any other quiet room. Ten deals settling at once costs 50 reads a
+ * minute; a hundred finished ones cost almost nothing.
+ *
+ * This is a CEILING, not a fixed interval. If one of these rooms ever gets
+ * genuinely busy the ordinary arithmetic still applies and reads it faster.
+ * The rule here is only that it may never be read more slowly than this.
+ */
+/* Env-overridable so the test can run the SAME code with the ceiling removed
+   and show it losing messages. A fix with no failing control is a fix nobody
+   can check. */
+const TCLK_OFFERS_MAX_MS = Number(process.env.TCLK_OFFERS_MAX_MS ?? 2_500);
+const TCLK_DEAL_MAX_MS = Number(process.env.TCLK_DEAL_MAX_MS ?? 12_000);
+/* How long after its last frame a deal room keeps the tight ceiling. Long
+   enough to cover a lock answering an accept, short enough that a settled
+   deal stops costing anything. */
+const TCLK_DEAL_HOT_MS = Number(process.env.TCLK_DEAL_HOT_MS ?? 600_000);
+const tclkCeiling = (room, e) => {
+  if (room === OFFERS_ROOM) return TCLK_OFFERS_MAX_MS;
+  if (!DEAL_ROOM_RE.test(room)) return null;
+  /* Freshly discovered counts as hot: we only found it because somebody just
+     accepted, so the frames that decide the deal have not happened yet. */
+  const last = e?.producedAt || e?.discoveredAt || 0;
+  if (!last) return TCLK_DEAL_MAX_MS;
+  return Date.now() - last <= TCLK_DEAL_HOT_MS ? TCLK_DEAL_MAX_MS : null;
+};
+
+/* Every interval in this file goes through here. There are four separate
+   places that lengthen an interval — the rate arithmetic, the empty-page
+   backoff, the long-idle rule and the error backoff — and a ceiling enforced
+   at three of them is not a ceiling. */
+function setInterval_(e, ms) {
+  const cap = tclkCeiling(e.room, e);
+  e.interval = clamp(ms, MIN_INTERVAL_MS, cap == null ? MAX_INTERVAL_MS : cap);
+  return e.interval;
+}
+
 const ROSTER_LIMIT = 500;
 const REPEAT_LIMIT = 5;
 /* MEASURED: templates.json had reached 8.2 MB, and it was being stringified
@@ -383,7 +455,12 @@ function track(sched, room, opts = {}) {
       room,
       core: CORE.includes(room),
       rate: null,
-      interval: CORE.includes(room) ? MIN_INTERVAL_MS : NEW_ROOM_INTERVAL_MS,
+      /* A deal room is discovered mid-run from somebody's accept, and the
+         frames that decide the outcome land within minutes of it. Starting it
+         at the 20-second discovery cadence is starting it too slow. */
+      discoveredAt: Date.now(),
+      producedAt: 0,
+      interval: tclkCeiling(room, null) ?? (CORE.includes(room) ? MIN_INTERVAL_MS : NEW_ROOM_INTERVAL_MS),
       nextAt: 0,
       lastAt: 0,
       score: 0,
@@ -401,7 +478,7 @@ function track(sched, room, opts = {}) {
   if (opts.idle != null && opts.idle > 3600 && !e.core) {
     // Long-idle rooms start at the slow end instead of paying the discovery
     // cadence for a room that has said nothing in an hour.
-    e.interval = Math.max(e.interval, MAX_INTERVAL_MS / 2);
+    setInterval_(e, Math.max(e.interval, MAX_INTERVAL_MS / 2));
   }
   return e;
 }
@@ -518,6 +595,11 @@ async function readRoom(state, e) {
 
   state.cursors[e.room] = head;
 
+  /* When this room last had anything to say. A deal room keeps its tight
+     ceiling while this is recent and falls back to the ordinary cadence once
+     the deal has been over for a while. */
+  if (produced > 0) e.producedAt = Date.now();
+
   /* Re-time. `produced` over the gap we actually waited is the room's real
      rate; smoothing keeps one quiet second from re-rating the lobby. */
   const waited = e.lastAt ? Math.max(250, startedAt - e.lastAt) : 0;
@@ -529,15 +611,15 @@ async function readRoom(state, e) {
 
   if (e.rate != null && e.rate > 0) {
     const fill = e.rate >= FAST_ROOM_RATE ? FAST_SAFE_FILL : SAFE_FILL;
-    e.interval = clamp((PAGE * fill) / e.rate * 1000, MIN_INTERVAL_MS, MAX_INTERVAL_MS);
+    setInterval_(e, (PAGE * fill) / e.rate * 1000);
   } else if (!msgs.length) {
     // Nothing at all: back off, but never past the window, so every tracked
     // room is still read at least once per run.
-    e.interval = clamp(e.interval * 1.6, MIN_INTERVAL_MS, MAX_INTERVAL_MS);
+    setInterval_(e, e.interval * 1.6);
   }
   // A page that came back full is the one unambiguous danger signal: we may
   // already be behind. Halve the interval regardless of what the rate says.
-  if (msgs.length >= PAGE) e.interval = clamp(e.interval / 2, MIN_INTERVAL_MS, MAX_INTERVAL_MS);
+  if (msgs.length >= PAGE) setInterval_(e, e.interval / 2);
   e.nextAt = Date.now() + e.interval;
   return produced;
 }
@@ -1072,7 +1154,7 @@ async function main() {
       .then((n) => { state.produced += n; })
       .catch((err) => {
         console.error(`  ${e.room}: ${err.message}`);
-        e.interval = clamp(e.interval * 2, MIN_INTERVAL_MS, MAX_INTERVAL_MS);
+        setInterval_(e, e.interval * 2);
         e.nextAt = Date.now() + e.interval;
       })
       .finally(() => { e.busy = false; inflight.delete(p); });
