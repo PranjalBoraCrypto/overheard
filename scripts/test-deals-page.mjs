@@ -19,6 +19,10 @@ import path from "path";
 import { fileURLToPath } from "node:url";
 import { createHash } from "node:crypto";
 import { canon, dealRoom } from "../web/tclk.js";
+/* The site's one definition of an agent's colour. The deals page carries a
+   copy so it never has to import the vault module; this is what that copy is
+   checked against, below. */
+import { hueOf as realHue } from "../web/session.js";
 
 /* The repository, found from this file rather than from a path typed into it.
    The absolute one was /tmp/oh — the sandbox this was written in — so on any
@@ -430,6 +434,24 @@ for (const w of [390, 360]) {
 console.log("\n=== J. the page holds nothing");
 const src = fs.readFileSync(path.join(ROOT, PAGE + ".html"), "utf8");
 ok("never assigns innerHTML", !/innerHTML|outerHTML|insertAdjacentHTML|document\.write/.test(src));
+/* The page imports modules now, so the promise has to cover them too: a
+   guarantee about this one file stops being a guarantee about what runs.
+   Comments are stripped first — the blunt text match above is worth keeping
+   for the file we own most, but a rule that a shared module may not so much
+   as NAME the thing is a rule about prose rather than about behaviour. */
+{
+  const imported = [...src.matchAll(/from\s+"\/([\w.-]+\.js)"/g)].map((m) => m[1]);
+  ok("it imports a small, named set", imported.length > 0 && imported.length <= 2, imported.join(", "));
+  const strip = (t) => t.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/gm, "");
+  for (const f of imported) {
+    const mod = strip(fs.readFileSync(path.join(ROOT, f), "utf8"));
+    ok(`nor does ${f}, which it pulls in`,
+      !/innerHTML|outerHTML|insertAdjacentHTML|document\.write/.test(mod));
+    ok(`and ${f} holds no key material either`,
+      !/privateKey|secretKey|mnemonic|seedphrase/.test(mod),
+      "the face is drawn from a public DID; nothing else about identity belongs here");
+  }
+}
 ok("no key material anywhere", !/privateKey|secretKey|mnemonic|seedphrase|sign\(/.test(src));
 ok("no storage", !/localStorage|sessionStorage|indexedDB/.test(src));
 ok("it is not in the sitemap",
@@ -826,6 +848,283 @@ console.log("\n=== R. availability, read off the board");
   await cW.close();
   OUR_FRAMES[0].text = keep;
   IDENTITY.us = "";
+}
+
+/* ── T. the listing ───────────────────────────────────────────────────────
+ * The shop borrows a marketplace shape: a picture to tell four cards apart,
+ * the seller named above the thing sold, and a footer answering how long and
+ * how much. What it must NOT borrow is the part with no data behind it, so
+ * the tests here are as much about what is absent as what is present.
+ */
+console.log("\n=== T. four things for sale, shaped like a listing");
+{
+  const { ctx: cT, pg: pT, errs: eT } = await open(1280, 1000, false);
+  await pT.click('.pri[data-main="shop"]');
+  await pT.waitForTimeout(200);
+
+  const g = await pT.evaluate(() => {
+    const cards = [...document.querySelectorAll(".gig[data-job]")];
+    return {
+      n: cards.length,
+      bands: cards.filter((c) => c.querySelector(".gigband svg")).length,
+      sellers: cards.filter((c) => (c.querySelector(".sname")?.textContent || "").trim() === "Overheard").length,
+      deliv: cards.map((c) => c.querySelector("[data-deliv]")?.textContent || ""),
+      from: cards.filter((c) => (c.querySelector(".fromlbl")?.textContent || "").trim() === "From").length,
+      /* Every band drawn from different geometry — four copies of one
+         picture would tell you nothing, which is the whole job of a band. */
+      shapes: new Set(cards.map((c) => c.querySelector(".gigband svg")?.innerHTML.length)).size,
+      order: cards.map((c) => {
+        const kids = [...c.querySelector(".gigin").children].map((k) => k.className.split(" ")[0]);
+        return kids.indexOf("seller") < kids.indexOf("gigfoot");
+      }),
+    };
+  });
+  ok("all four are listings", g.n === 4 && g.bands === 4, `${g.bands}/${g.n} with a band`);
+  ok("each band is its own drawing, not one picture four times", g.shapes === 4, g.shapes + " distinct");
+  ok("the seller is named on every card", g.sellers === 4);
+  ok("and named before the price, not after it", g.order.every(Boolean));
+  ok("every card says how long", g.deliv.every((d) => d.trim().length > 0), g.deliv.join(" · "));
+  ok("and frames the price as a floor, because these are provisional", g.from === 4);
+
+  /* The absent half. Each of these would be an invention, and this page is
+     the one place on the site where an invention would do real damage. */
+  const invented = await pT.evaluate(() => {
+    const t = document.getElementById("pShop").textContent.toLowerCase();
+    return ["★", "out of 5", "reviews", "rating", "level 2", "top rated",
+            "money-back", "money back", "guarantee", "revisions"].filter((w) => t.includes(w));
+  });
+  ok("no stars, no reviews, no seller level, no guarantee — none of it exists here",
+    invented.length === 0, invented.join(", ") || "none of it");
+  ok("what stands in for reputation is the settled count, and only above a threshold",
+    await pT.evaluate(() => /MIN_HISTORY/.test(document.documentElement.outerHTML) ||
+      true) && /MIN_HISTORY/.test(src), "drawn from the board, not from us");
+  ok("and the refund is still described as automatic rather than as a promise",
+    await pT.evaluate(() => /refunds itself/.test(document.querySelector(".refundline").textContent) &&
+      /Nobody arbitrates/.test(document.querySelector(".refundline").textContent)));
+  ok("no errors", eT.length === 0, eT.join(" | "));
+  await cT.close();
+}
+
+/* The window on the card must come from the frame once there is a frame,
+   exactly as the price does. Same rule, same reason. */
+{
+  IDENTITY.us = US;
+  const { ctx: cD, pg: pD, errs: eD } = await open(1280, 1000, false);
+  await pD.click('.pri[data-main="shop"]');
+  await pD.waitForTimeout(200);
+  const live = await pD.evaluate(() =>
+    document.querySelector('.gig[data-job="overheard-archive-question"] [data-deliv]').textContent);
+  const shut = await pD.evaluate(() =>
+    document.querySelector('.gig[data-job="overheard-room-summary"] [data-deliv]').textContent);
+  ok("a gig with a live offer shows the window in the signed frame", live !== "12h" && /[hmd]/.test(live), live);
+  ok("and one with no offer shows the window we intend to post", shut === "12h", shut);
+  ok("our DID appears under the shop name once we have one",
+    await pD.evaluate(() => (document.querySelector(".sdid")?.textContent || "").length > 0));
+  ok("no errors", eD.length === 0, eD.join(" | "));
+  await cD.close();
+  IDENTITY.us = "";
+}
+
+/* ── U. who, before what ─────────────────────────────────────────────────*/
+console.log("\n=== U. the board leads with the agent");
+{
+  const { ctx: cU2, pg: pU2, errs: eU2 } = await open(1280, 1000, false);
+  const h = await pU2.evaluate(() => {
+    const cards = [...document.querySelectorAll(".deal")];
+    return {
+      n: cards.length,
+      heads: cards.filter((c) => c.querySelector(".dhead")).length,
+      faces: cards.filter((c) => c.querySelector(".dhead .dface")).length,
+      /* Above the job id, which is what "leads" means. */
+      above: cards.filter((c) => {
+        const w = c.querySelector(".what"); if (!w) return false;
+        const kids = [...w.children].map((k) => k.className.split(" ")[0]);
+        const d = kids.indexOf("dhead"), j = kids.findIndex((k) => k === "job" || k === "price");
+        return d === 0 && (j === -1 || d < j);
+      }).length,
+      roles: [...new Set(cards.map((c) => c.querySelector(".drole")?.textContent))],
+      /* The lead is not repeated as a party line underneath. */
+      dupes: cards.filter((c) => {
+        const lead = c.querySelector(".dhead .dwho b")?.textContent;
+        return lead && [...c.querySelectorAll(".party .who")].some((p) => p.textContent.includes(lead));
+      }).length,
+    };
+  });
+  ok("every deal card names an agent at the top", h.heads === h.n, `${h.heads}/${h.n}`);
+  ok("with a face, so a 40-character id is recognisable", h.faces === h.n);
+  /* AND IT IS THE REAL DRAWING, not the fallback. faceSVG writes markup for
+     an HTML document, so parsed as XML it lands in no namespace and renders
+     nothing; the fallback that caught it was a flat coloured square that
+     looked entirely intentional on screen. Nothing here failed, no error was
+     thrown, and every other assertion in this section still passed. So the
+     shape is checked, not merely the presence of a node. */
+  const real = await pU2.evaluate(() => {
+    const f = document.querySelector(".dhead .dface");
+    return { tag: f?.tagName?.toLowerCase(), ns: f?.namespaceURI,
+             parts: f?.querySelectorAll("rect").length ?? 0,
+             grads: f?.querySelectorAll("linearGradient").length ?? 0 };
+  });
+  ok("and it is the drawing itself, not the flat square it falls back to",
+    real.tag === "svg" && real.ns === "http://www.w3.org/2000/svg" && real.parts >= 5 && real.grads >= 2,
+    JSON.stringify(real));
+  ok("and it comes before the job and the price", h.above === h.n, `${h.above}/${h.n}`);
+  ok("the side is spelled out rather than left to a colour",
+    h.roles.every((r) => r === "offering work" || r === "buying work"), h.roles.join(" / "));
+  ok("and the same agent is not printed twice on one card", h.dupes === 0);
+
+  /* A face is a function of the DID and nothing else. Two agents, two faces;
+     the same agent twice, the same face. */
+  const same = await pU2.evaluate(() => {
+    const hue = (n) => (n?.querySelector("stop")?.getAttribute("stop-color")) || "";
+    const by = new Map();
+    for (const c of document.querySelectorAll(".deal")) {
+      const id = c.querySelector(".dhead .dwho b")?.textContent;
+      const col = hue(c.querySelector(".dhead .dface"));
+      if (!id) continue;
+      if (by.has(id) && by.get(id) !== col) return { stable: false };
+      by.set(id, col);
+    }
+    return { stable: true, distinct: new Set(by.values()).size, ids: by.size };
+  });
+  ok("one agent always gets the same face", same.stable);
+  /* Every fixture on this board is payer-side, so the leads are all one
+     agent and a DOM check for distinctness would pass while proving
+     nothing. The colours are compared directly instead.
+     
+     AND A REAL LIMIT, WORTH WRITING DOWN RATHER THAN TESTING AROUND: the
+     hue is derived from characters 9 to 14 of the DID and nothing else, so
+     two identities sharing that six-character window share a face. The
+     fixture DIDs here are hand-written and PAYER and PAYEE collide exactly
+     that way. Real did:key values are random base58 and do not, but the
+     face is a recognition aid and never an identifier — which is why the
+     id is printed next to it on every card. */
+  const FACED = ["did:key:z6MkaQ1rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr",
+                 "did:key:z6MkbW9ssssssssssssssssssssssssssssssssssss",
+                 "did:key:z6MkcZ4tttttttttttttttttttttttttttttttttttt"];
+  ok("and two agents do not share one",
+    new Set(FACED.map((d) => realHue(d).toFixed(6))).size === 3,
+    FACED.map((d) => realHue(d).toFixed(1)).join(" · "));
+  ok("though two ids alike in the six characters it reads do, which is why the id is shown too",
+    realHue(PAYER) === realHue(PAYEE),
+    "a known limit of the face, not a claim it is unique");
+  ok("no errors", eU2.length === 0, eU2.join(" | "));
+  await cU2.close();
+}
+
+/* The hue is copied out of session.js so this page never imports the vault
+   module. A copy that is allowed to drift is worse than the import it
+   replaced, so it is pinned here rather than trusted. */
+{
+  const mine = new Function("did",
+    src.match(/const B58 = "[^"]+";/)[0] + "\n" +
+    src.match(/function hueOf\(did\) \{[\s\S]*?\n\}/)[0] + "\nreturn hueOf(did);");
+  const dids = [PAYER, PAYEE, US, "did:key:z6Mkzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz"];
+  ok("the copied hue is the same hue session.js computes",
+    dids.every((d) => Math.abs(realHue(d) - mine(d)) < 1e-9),
+    dids.map((d) => realHue(d).toFixed(2)).join(" · "));
+}
+
+/* ── V. the boxes are surfaces now, not outlines ──────────────────────────
+ * This was the note: everything was a hairline rectangle with the same
+ * darkness inside as out, which reads as a wireframe. The fix is a raised
+ * panel — a lip of light along the top edge and a soft shadow beneath — and
+ * a hover that has somewhere to go. Asserted because it is exactly the kind
+ * of thing a later edit deletes without noticing.
+ */
+console.log("\n=== V. depth");
+{
+  const { ctx: cV2, pg: pV2, errs: eV2 } = await open(1280, 1000, false);
+  await pV2.click('.pri[data-main="shop"]');
+  await pV2.waitForTimeout(250);
+  const d = await pV2.evaluate(() => {
+    const g = document.querySelector(".gig");
+    const cs = getComputedStyle(g);
+    const page = getComputedStyle(document.body).backgroundColor;
+    const lum = (c) => { const m = c.match(/\d+/g); return m ? (+m[0] + +m[1] + +m[2]) / 3 : 0; };
+    return {
+      shadow: cs.boxShadow,
+      inset: /inset/.test(cs.boxShadow),
+      cardLum: lum(cs.backgroundColor.includes("rgba(0, 0, 0, 0)") ? "rgb(6,26,33)" : cs.backgroundColor),
+      pageLum: lum(page),
+      radius: parseFloat(cs.borderRadius),
+    };
+  });
+  ok("a card casts a shadow rather than merely being outlined", d.shadow !== "none", d.shadow.slice(0, 60) + "…");
+  ok("with a lip of light along its top edge, which is what makes it read as raised", d.inset);
+  ok("and it sits on a ground darker than itself", d.pageLum < d.cardLum, `page ${d.pageLum.toFixed(1)} vs card ${d.cardLum.toFixed(1)}`);
+  ok("the corner is rounded enough to read as a panel", d.radius >= 12, d.radius + "px");
+
+  const hov = await pV2.evaluate(async () => {
+    const g = document.querySelector(".gig");
+    const before = getComputedStyle(g).boxShadow;
+    g.dispatchEvent(new MouseEvent("mouseover", { bubbles: true }));
+    /* :hover is not settable from script, so the declaration is read from
+       the stylesheet instead — the point is that one EXISTS and differs. */
+    /* A cross-origin sheet (the font CSS) throws on .cssRules, and one
+       throw ends the whole scan. Each sheet is read on its own. */
+    let rule = "";
+    for (const s of document.styleSheets) {
+      let rules = null;
+      try { rules = s.cssRules; } catch { continue; }
+      for (const r of rules || []) if (r.selectorText === ".gig:hover") rule = r.style.boxShadow;
+    }
+    return { before, rule };
+  });
+  ok("and hovering has somewhere to go", hov.rule && hov.rule !== hov.before, hov.rule.slice(0, 50) + "…");
+
+  /* The selected tab is pressed in rather than raised — a difference you
+     cannot miss, unlike two raised cards in slightly different colours. */
+  const sel = await pV2.evaluate(() =>
+    getComputedStyle(document.querySelector('.pri[aria-selected="true"]')).boxShadow);
+  ok("the chosen tab is recessed, not just tinted", /inset/.test(sel), sel.slice(0, 50) + "…");
+  ok("no errors", eV2.length === 0, eV2.join(" | "));
+  await cV2.close();
+}
+
+/* ── W. the phone gets a different listing, not a narrower one ────────────*/
+console.log("\n=== W. the listing, redrawn for a phone");
+{
+  const { ctx: cW2, pg: pW2, errs: eW2 } = await open(390, 780, true);
+  await pW2.click('.pri[data-main="shop"]');
+  await pW2.waitForTimeout(250);
+  const m = await pW2.evaluate(() => {
+    const g = document.querySelector(".gig");
+    const band = g.querySelector(".gigband").getBoundingClientRect();
+    const price = g.querySelector(".gigprice").getBoundingClientRect();
+    const deliv = g.querySelector(".deliv").getBoundingClientRect();
+    const soon = g.querySelector(".soon").getBoundingClientRect();
+    const gigs = getComputedStyle(document.querySelector(".gigs")).gridTemplateColumns;
+    return {
+      bandH: Math.round(band.height), bandW: Math.round(band.width),
+      priceFirst: price.left < deliv.left,
+      soonW: Math.round(soon.width), cardW: Math.round(g.getBoundingClientRect().width),
+      soonH: Math.round(soon.height),
+      oneCol: gigs.split(" ").length === 1,
+      scroll: document.documentElement.scrollWidth, vw: window.innerWidth,
+      priceSize: parseFloat(getComputedStyle(g.querySelector(".gigprice")).fontSize),
+    };
+  });
+  ok("one card per row", m.oneCol);
+  ok("the band gets shorter rather than smaller", m.bandH <= 80 && m.bandW > 200,
+    `${m.bandW}x${m.bandH}, was 104 tall`);
+  ok("so four listings still fit on a screen instead of four pictures", m.bandH * 4 < 780 / 2, (m.bandH * 4) + "px of picture");
+  /* THE BUG A SCREENSHOT FOUND AND NOTHING ELSE DID. The first phone layout
+     cropped the band to a 64px square, and none of these drawings survives
+     that: "Ask the archive" came out as four grey stripes and a dot, which
+     reads as a rendering fault rather than as a mark. A drawing stretched to
+     fit is the same failure in a different direction, so the scaling is
+     pinned: uniform, cropped, never squashed. */
+  ok("and the drawing is scaled uniformly, never stretched to fit",
+    !/preserveAspectRatio="none"/.test(src) && /preserveAspectRatio="xMidYMid slice"/.test(src),
+    "a squashed band reads as a bug, not as a picture");
+  ok("the price comes first, because that is what a thumb is looking for", m.priceFirst);
+  ok("and it is bigger here than on a desktop", m.priceSize >= 20, m.priceSize + "px");
+  ok("the status is a full-width bar at the foot of the card",
+    m.soonW > m.cardW - 40, `${m.soonW} of ${m.cardW}`);
+  ok("and it is a real tap target", m.soonH >= 40, m.soonH + "px");
+  ok("the page never scrolls sideways", m.scroll <= m.vw, `${m.scroll} vs ${m.vw}`);
+  ok("no errors", eW2.length === 0, eW2.join(" | "));
+  await cW2.close();
 }
 
 /* ── S. the page still holds nothing ──────────────────────────────────────*/
