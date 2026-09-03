@@ -22,6 +22,8 @@ import { readFrame, isFrameText, OFFERS_ROOM, offerId, canon, runDeal, lintOffer
 import { agentFromSeed, say, sweep } from "./agent.mjs";
 import { CAN_DO, doJob } from "./work.mjs";
 import { minterFor, recoverSecret } from "./secret.mjs";
+import { readFile } from "node:fs/promises";
+import path from "node:path";
 import { RAILS, RAILS_WE_TAKE } from "./rail.mjs";
 import { WANTS, planBuys, wantFrame, lockFrame, refundFrame, wire, safeRoom } from "./buy.mjs";
 
@@ -84,6 +86,66 @@ export async function readAnyRoom(name, opts = {}) {
   if (!res.ok) return [];
   const body = await res.json().catch(() => ({}));
   return Array.isArray(body?.messages) ? body.messages : [];
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+ * WHY A LIVE READ IS NOT ENOUGH TO KNOW WHAT WE HAVE STANDING
+ *
+ * MEASURED on the board, 3 September. The runner posted two buy offers at
+ * 14:24 and two MORE at 16:20 — the same two jobs, duplicated, because by the
+ * second wake it could no longer see the first pair:
+ *
+ *     seq  9540  14:24  room-summary  250
+ *     seq  9541  14:24  daily-digest  400
+ *     seq 11198  16:20  room-summary  250   <- duplicate
+ *     seq 11199  16:20  daily-digest  400   <- duplicate
+ *
+ * A read returns the newest 200 messages and nothing else. 2,284 messages
+ * landed on that board between the two wakes, so our own offers had scrolled
+ * out of every window we can see, `standing` came back empty, and planBuys
+ * did exactly what it was told: nothing was standing, so post.
+ *
+ * On an hourly live schedule that is ~48 duplicate commitments a day. Each is
+ * a real signed promise to pay, under our DID, permanently on the record —
+ * the precise failure of posting promises faster than we can keep them.
+ *
+ * THE FIX USES THE THING THIS PROJECT ALREADY IS. We keep an archive of that
+ * exact room, on disk in the checkout the runner is already running from, and
+ * it holds everything the ring buffer forgot. So "what do we have standing"
+ * is answered from the archive, and the live read stays what it is good for:
+ * what happened in the last few minutes.
+ *
+ * Bounded deliberately. It reads only OUR OWN frames, only from the last two
+ * days, because a buy window is 24h and a refund window 48h — anything older
+ * cannot still be standing and parsing it would be work for no answer.
+ */
+const ARCHIVE_DIR = process.env.ARCHIVE_DIR ?? "web/data";
+const ARCHIVE_DAYS = 3;
+
+export async function ourArchive(us = US, opts = {}) {
+  const dir = opts.archive ?? ARCHIVE_DIR;
+  const out = [];
+  const day = (d) => new Date(d).toISOString().slice(0, 10);
+  const now = opts.now ?? Date.now();
+  for (let i = 0; i < ARCHIVE_DAYS; i++) {
+    const f = path.join(dir, OFFERS_ROOM, `${day(now - i * 86400000)}.ndjson`);
+    let txt = null;
+    try { txt = await readFile(f, "utf8"); } catch { continue; }
+    for (const line of txt.split("\n")) {
+      /* Cheap reject before JSON.parse: these shards run to thousands of
+         lines a day and all but a handful are somebody else's. */
+      if (!line || !line.includes(us)) continue;
+      try { const r = JSON.parse(line); if (r.from === us) out.push(r); } catch { /* half-written line */ }
+    }
+  }
+  return out;
+}
+
+/** Live plus our own history, newest-wins, one entry per seq. */
+export function mergeBySeq(...lists) {
+  const m = new Map();
+  for (const list of lists) for (const r of list) if (r && r.seq != null) m.set(String(r.seq), r);
+  return [...m.values()].sort((a, b) => Number(a.seq) - Number(b.seq));
 }
 
 export async function readOffers(opts = {}) {
@@ -466,11 +528,24 @@ export async function wake(opts = {}) {
     return r;
   };
 
-  const messages = await readOffers(opts);
+  const fresh = await readOffers(opts);
+  /* Our own standing offers do not fit in a 200-message window on a board
+     this busy, so they come from the archive. Failing to read it must not
+     stop a wake — but it DOES mean we cannot see what we have standing, so
+     the run says so loudly rather than posting duplicates in silence. */
+  let mine = [], archiveOk = true;
+  try { mine = await ourArchive(US, opts); }
+  catch { archiveOk = false; }
+  const messages = mergeBySeq(fresh, mine);
   const frames = framesFrom(messages);
   const p = plan(frames, now);
 
-  log(`board: ${messages.length} messages, ${frames.length} frames`);
+  /* Said on every wake, in the plain log as well as the annotation, because
+     "how many of our own offers can I see" is the number that decides whether
+     this run posts duplicates — and it was invisible when it mattered. */
+  log(`board: ${messages.length} messages, ${frames.length} frames` +
+      ` · ${mine.length} of ours from the archive` +
+      (archiveOk ? "" : "  ARCHIVE UNREADABLE — cannot tell what we have standing"));
   log(`ours:  ${p.deals.length} deals · ${p.open} open${p.atCapacity ? " · AT CAPACITY" : ""}`);
   if (agent) log(`key:   signs as ${agent.did}${agent.did === US ? " ✓ this shop" : "  ✗ NOT THIS SHOP"}`);
   else log("key:   none in the environment (dry run can still decide, just not sign)");
@@ -486,6 +561,7 @@ export async function wake(opts = {}) {
     [
       live ? "LIVE" : "dry run",
       agent ? (agent.did === US ? "key ✓ this shop" : "key ✗ NOT this shop") : "no key",
+      archiveOk ? `${mine.length} of ours in the archive` : "ARCHIVE UNREADABLE — cannot see what we have standing",
       `${p.take.length} to take`,
       `${p.passed.length} passed over`,
       `${p.owed.length} owed`,

@@ -17,6 +17,7 @@
  */
 import fs from "fs";
 import path from "path";
+import os from "node:os";
 import { fileURLToPath } from "node:url";
 import { createPublicKey, verify as edVerify, randomBytes } from "node:crypto";
 import { agentFromSeed, sweep, nextNonce, say } from "./agent.mjs";
@@ -723,6 +724,69 @@ console.log("\n=== N. the rail");
   ok("and the page's own note is still true while the rail is a rehearsal",
     !IS_REHEARSAL || /testnet is not open|moves nothing/i.test(page),
     "a rehearsal rail must be disclosed on the page, not just in the code");
+}
+
+/* ── O. what we already have standing ────────────────────────────────────
+ * MEASURED on the live board: the runner posted two buy offers at 14:24 and
+ * the same two again at 16:20, because 2,284 messages landed between the
+ * wakes and a read only ever returns the newest 200. Our own offers had
+ * scrolled out of every window we can see, `standing` came back empty, and
+ * planBuys correctly posted what appeared to be missing.
+ *
+ * On an hourly live schedule that is ~48 duplicate promises a day, each one
+ * signed and permanent. So this stages exactly that board.
+ * ─────────────────────────────────────────────────────────────────────── */
+console.log("\n=== O. offers that scrolled out of sight");
+{
+  const OUT = fs.mkdtempSync(path.join(os.tmpdir(), "arch-runner-"));
+  const room = path.join(OUT, "tclk-offers");
+  fs.mkdirSync(room, { recursive: true });
+  const today = new Date(NOW).toISOString().slice(0, 10);
+
+  /* Our two buy offers, posted hours ago and still well inside their window. */
+  const { WANTS, buildWant } = await import("./buy.mjs");
+  const rows = [];
+  let seq = 9540;
+  for (const w of WANTS.slice(0, 2)) {
+    const body = buildWant(w, US, NOW - 4 * 3600000);
+    rows.push(JSON.stringify({ seq: seq++, ts: new Date(NOW - 4 * 3600000).toISOString(),
+      from: US, text: "tclk1 " + canon({ ...body, id: await offerId(body) }), sig: "s" }));
+  }
+  fs.writeFileSync(path.join(room, `${today}.ndjson`), rows.join("\n") + "\n");
+
+  /* The live window: 200 messages of somebody else's traffic, far past ours. */
+  const busy = [];
+  for (let i = 0; i < 200; i++)
+    busy.push({ seq: 11800 + i, ts: new Date(NOW - 60000).toISOString(),
+      from: OTHER, text: "chatter " + i, sig: "s" });
+
+  const stub = async (u) => String(u).includes("say-signed")
+    ? { ok: true, status: 200, text: async () => "{}" }
+    : { ok: true, status: 200, json: async () => ({ messages: busy }) };
+
+  const seen = [];
+  const r = await wake({ fetch: stub, base: "http://stub", log: (l) => seen.push(l),
+                         now: NOW, seed: SEED, archive: OUT });
+
+  ok("it finds our standing offers in the archive, not the live window",
+    r.buys.want.length === 0,
+    r.buys.want.map((w) => w.id).join(", ") || "nothing to post — correct");
+  ok("and says how many of ours it could see",
+    seen.some((l) => /2 of ours from the archive/.test(l)),
+    seen.find((l) => /of ours/.test(l)) ?? "not stated");
+
+  /* The control: same board, no archive. This is the bug, reproduced. */
+  const gone = [];
+  const r2 = await wake({ fetch: stub, base: "http://stub", log: (l) => gone.push(l),
+                          now: NOW, seed: SEED, archive: path.join(OUT, "nothing-here") });
+  ok("without the archive it would post them all over again",
+    r2.buys.want.length === 2,
+    `${r2.buys.want.length} duplicates — this is what happened on the real board`);
+  ok("and an unreadable archive is visible in the run, not swallowed",
+    gone.some((l) => /0 of ours from the archive/.test(l)),
+    gone.find((l) => /of ours/.test(l)) ?? "not stated");
+
+  fs.rmSync(OUT, { recursive: true, force: true });
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);
