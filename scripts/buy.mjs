@@ -149,10 +149,46 @@ export function planBuys(frames, rooms, us, now = Date.now()) {
       continue;
     }
     openBuys.push(b);
-    if (!b.room) continue;                       /* an accept we cannot place */
 
-    const seen = rooms.get(b.room) ?? [];
-    const deal = runDeal([b.offer, b.accept, ...seen]);
+    /* A contract we cannot turn into a safe room name is a malformed accept,
+       and that is still a refusal: `dealRoom` returning null means the
+       contract was missing, not hex, or trying to be a path. Note this is a
+       DIFFERENT question from whether the room can be created — a legitimate
+       contract always yields a name, the venue just may not let anyone make
+       the room. Deleting this guard let "../../etc/passwd" through, which the
+       suite caught immediately. */
+    if (!b.room) continue;
+
+    /* ── WHERE A DEAL ACTUALLY LIVES ────────────────────────────────────────
+       The spec moves a deal into a room named after its contract, and this
+       used to read ONLY that room — treating anything not written there as
+       not having happened.
+
+       On the live network that room usually cannot exist. technocore.chat is
+       at its room cap (50,036 of a documented 81,920, private rooms included),
+       and asking for a new one returns a bare `400 room limit reached` that
+       does not say it is the blocker. Measured independently on 3 September
+       by @tatthang across the newest 200 records of the board: 92 offers, 52
+       accepts, and only 7 that ever locked. Step three is where the network
+       stops everyone, and it matches what we see — our own archive holds 4,330
+       frames on the board against 109 across every deal room we follow, with
+       the locks and reveals sitting on the board.
+
+       The deals that DO complete simply never move. Nothing in the state
+       machine reads a room name — `runDeal` folds by contract — so a deal that
+       stays put is still a valid deal, and the seven that got through all did
+       exactly that.
+
+       So the fold takes frames from the deal room when there is one AND from
+       the board, keyed by contract. Reading only one of the two is how a
+       funded deal looks unfunded. */
+    const room = b.room ? (rooms.get(b.room) ?? []) : [];
+    const contract = b.accept?.body?.contract ?? b.accept?.contract ?? null;
+    const onBoard = contract
+      ? frames.filter((f) => f.ok && f !== b.offer && f !== b.accept &&
+                             String(f.body?.contract ?? "") === String(contract))
+      : [];
+    const deal = runDeal([b.offer, b.accept, ...room, ...onBoard]);
     const state = deal.state;
 
     /* ONE OF EACH THING AT A TIME. A want that is already being worked on is

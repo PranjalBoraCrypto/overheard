@@ -16,7 +16,8 @@
  * finished, or finished the way it meant to — a scheduled job that assumes
  * otherwise breaks the first time it is skipped, and it will be skipped.
  */
-import { readFrame, isFrameText, OFFERS_ROOM, offerId, canon, runDeal, lintOffer, ms }
+import { readFrame, isFrameText, OFFERS_ROOM, offerId, canon, runDeal, lintOffer, ms,
+         contractId, sha256Hex }
   from "../web/tclk.js";
 import { agentFromSeed, say } from "./agent.mjs";
 import { CAN_DO, doJob } from "./work.mjs";
@@ -57,6 +58,12 @@ const RAILS = ["paper"];
    deals are open at once, so that is what is capped until a balance is
    readable. SELLING.md has the reserve rule this stands in for. */
 export const MAX_OPEN_DEALS = 3;
+
+/* The least time we will accept between now and claimByMs. A profile is built
+   from the archive in seconds, but the runner wakes on a schedule and a
+   window shorter than the gap between wakes is one we could miss entirely
+   through no fault of the work. */
+const MIN_WORK_MS = Number(process.env.MIN_WORK_MS ?? 30 * 60 * 1000);
 
 /* ── reading ─────────────────────────────────────────────────────────────── */
 
@@ -110,48 +117,170 @@ export function framesFrom(messages) {
 }
 
 /** Our deals, and only ours: offers we signed, plus any accept that answers one. */
+/**
+ * The deals this shop is party to.
+ *
+ * A deal is ours if EITHER frame is ours, and since the rewrite it is almost
+ * always the accept: we answer buyers' offers rather than posting our own, so
+ * a version of this that only recognised our offers would report an empty
+ * book while three of our deals were live — and MAX_OPEN_DEALS, the one
+ * reserve rule we can actually check, would never bind.
+ *
+ * Both directions are still recognised. Our old payee-opened offers are on
+ * the board for ever, they still have counterparties, and a deal we can no
+ * longer open is still a deal we must be able to SEE.
+ */
 export function ourDeals(frames) {
-  const mine = new Map();
+  const offers = new Map();
   for (const f of frames)
-    if (f.ok && f.type === "offer" && f.from === US && f.body?.id) mine.set(f.body.id, f);
+    if (f.ok && f.type === "offer" && f.body?.id) offers.set(f.body.id, f);
+
   const out = [];
-  const answered = new Set();
+  const paired = new Set();
   for (const a of frames) {
-    if (!a.ok || a.type !== "accept") continue;
-    const o = mine.get(a.ref);
+    if (!a.ok || a.type !== "accept" || !a.ref) continue;
+    const o = offers.get(a.ref);
     if (!o) continue;
-    answered.add(a.ref);
+    /* `from` is the transport's word for who signed it, not the body's claim
+       about itself — a frame that lies about its sender is not ours. */
+    if (o.from !== US && a.from !== US) continue;
+    paired.add(a.ref);
     out.push({ deal: runDeal([o, a]), offer: o, accept: a });
   }
-  for (const [id, o] of mine)
-    if (!answered.has(id)) out.push({ deal: runDeal([o]), offer: o, accept: null });
+  for (const [id, o] of offers)
+    if (o.from === US && !paired.has(id)) out.push({ deal: runDeal([o]), offer: o, accept: null });
   return out;
 }
 
 /* ── deciding ────────────────────────────────────────────────────────────── */
 
-export function buildOffer(job, now = Date.now()) {
-  const body = {
-    type: "offer",
+/* ══════════════════════════════════════════════════════════════════════════
+ * WE SELL BY ACCEPTING, NOT BY OFFERING.
+ *
+ * This used to build `role: "payee"` offers — the shop advertising work on the
+ * wire and waiting for a buyer. That path cannot settle, and it is not our
+ * bug to fix. tclk SPEC.md says either side may open and the offer schema
+ * carries `role`, but the custody model only works in one direction: the
+ * ACCEPTOR mints the secret, and the state machine lets only the payee reveal.
+ * On a payee-opened offer the acceptor becomes the payer, so the secret is
+ * minted by the one party forbidden to spend it.
+ *
+ * That is flop-labs/tclk#12, open since 2 September, confirmed there by an
+ * independent state machine built from the spec prose rather than ported from
+ * the reference code. The maintainers have not picked a direction, and both
+ * candidate fixes touch frame shapes, so this is not something we can work
+ * around by being clever.
+ *
+ * MEASURED on our own archive of the board — 4,439 decoded frames, and as far
+ * as we can tell nobody else is recording that room:
+ *
+ *     role         offers   accepted        locked   revealed
+ *     payer         1,852   1,385 (75%)       207        185
+ *     payee           430      19 (4.4%)        1          1
+ *
+ * and that single payee-opened reveal came from the PAYER, which the machine
+ * rejects. Not one payee-opened deal has settled validly on the live network.
+ * 430 agents are posting into a path that does not complete.
+ *
+ * The direction that works is fully specced and needs nothing from anyone: a
+ * buyer opens as payer, WE accept, and because the acceptor mints the secret
+ * we are both the party holding it and the party allowed to reveal it. So the
+ * advertising moves off the wire and onto our own deals page, and the runner's
+ * job here is to decide which of a stranger's offers it is honest to take.
+ * ═════════════════════════════════════════════════════════════════════════ */
+
+/** The rails we can actually settle on. `paper` moves nothing and says so. */
+const RAILS_WE_TAKE = new Set(RAILS);
+
+/**
+ * Why we must NOT take this offer. Empty means we may.
+ *
+ * Every rule is a refusal rather than a score, and the list is returned whole
+ * instead of short-circuiting, because the interesting case is an offer that
+ * misses by two things and a log line that names only the first teaches the
+ * reader the wrong lesson.
+ */
+export function refuseTake(offer, now = Date.now()) {
+  const no = [];
+  const b = offer?.body ?? offer ?? {};
+
+  /* The whole point of the rewrite: we take offers where the OTHER side pays,
+     which is the default when `role` is absent, per tclk.js's own reading. */
+  if (b.role === "payee") no.push("payee-opened, which cannot settle (flop-labs/tclk#12)");
+  if (!b.from) no.push("no sender");
+  else if (b.from === US) no.push("our own offer");
+
+  /* Do not sell what we cannot deliver — a lookup, not a rule to remember. */
+  const job = b.job ?? {};
+  if (job.proto !== "overheard") no.push("not addressed to this shop's job protocol");
+  else if (!job.id) no.push("names no job");
+  else if (!CAN_DO.has(job.id)) no.push(`no handler for ${job.id}`);
+
+  /* Terms. A job's price is a floor, not a suggestion: taking less than the
+     shelf price for work we then owe is how a shop talks itself into loss. */
+  const shelf = JOBS.find((j) => j.id === job.id);
+  if (shelf) {
+    const asked = Number(b.amount), want = Number(shelf.amount);
+    if (!isFinite(asked)) no.push("amount is not a number");
+    else if (asked < want) no.push(`offers ${b.amount} for work priced at ${shelf.amount}`);
+  }
+  if (b.asset !== "FLOP") no.push(`asset ${JSON.stringify(b.asset ?? null)} is not FLOP`);
+
+  /* We can only open a lock we can compute. A point lock needs secp256k1,
+     which checkReveal explicitly does not do, so accepting one would be
+     promising a reveal we cannot perform. */
+  if (b.lock !== "hash") no.push(`lock ${JSON.stringify(b.lock ?? null)} is not one we can open`);
+
+  const rails = Array.isArray(b.rails) ? b.rails : [];
+  if (!rails.some((r) => RAILS_WE_TAKE.has(r))) no.push(`no rail in common (theirs: ${rails.join(",") || "none"})`);
+
+  /* Clocks. Accepting an offer whose claim window has already closed, or
+     closes before we could plausibly do the work, is accepting a job we will
+     be late for — and a lapse is a lapse whether or not value moved. */
+  const exp = ms(b.expiresMs), claimBy = ms(b.claimByMs), refundAfter = ms(b.refundAfterMs);
+  if (exp === null || exp <= now) no.push("expired");
+  if (claimBy === null) no.push("no claimByMs");
+  else if (claimBy - now < MIN_WORK_MS) no.push("claim window is too short to do the work in");
+  if (refundAfter === null || claimBy === null || refundAfter <= claimBy)
+    no.push("refundAfterMs does not follow claimByMs");
+
+  return no;
+}
+
+/**
+ * The accept we would post, and the secret it commits to.
+ *
+ * The secret is minted here and the statement is its hash, which is the whole
+ * reason this direction works: we hold the preimage AND we are the party the
+ * machine lets reveal it.
+ *
+ * It returns the secret rather than storing it because a secret this function
+ * quietly wrote somewhere would be a secret nobody could audit. The caller
+ * must persist it before the accept is posted — losing it after the payer
+ * locks means the funds sit until refundAfterMs and the buyer is made whole,
+ * but the work was done for nothing.
+ */
+export async function buildAccept(offer, id, now = Date.now(), mint = randomSecret) {
+  const secret = mint();
+  const statement = "0x" + (await sha256Hex(secret));
+  const core = {
+    type: "accept",
     from: US,
-    role: "payee",
-    job: { id: job.id, proto: "overheard" },
-    amount: job.amount,
-    asset: "FLOP",
-    lock: "hash",
-    rails: RAILS,
-    expiresMs: now + WINDOW.expires,
-    claimByMs: now + WINDOW.claimBy,
-    refundAfterMs: now + WINDOW.refundAfter,
-    /* 16 hex of freshness, so two offers for the same job at the same price
-       are still two different offers with two different ids. */
+    ref: id,
+    statement,
     nonce: [...crypto.getRandomValues(new Uint8Array(8))]
       .map((b) => b.toString(16).padStart(2, "0")).join(""),
   };
-  /* No paymentKey. Every other field here is something we can state truthfully;
-     a rail key for a rail that does not run yet is not, and lintOffer does not
-     ask for one. It goes in when flop-htlc does. */
-  return body;
+  /* contractId hashes the offer together with the accept's core fields, so it
+     must be computed from the frame as it will be posted and then folded back
+     in — not guessed and not derived from anything we have not committed to. */
+  const contract = await contractId(offer.body ?? offer, core);
+  return { body: { ...core, contract }, secret, statement, at: now };
+}
+
+export function randomSecret() {
+  return "0x" + [...crypto.getRandomValues(new Uint8Array(32))]
+    .map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
 /**
@@ -169,20 +298,32 @@ export function plan(frames, now = Date.now()) {
     if (exp !== null && exp > now) live.add(d.offer.body?.job?.id);
   }
 
-  const post = [];
-  const unbuilt = [];
+  /* WHAT WE WOULD TAKE. Strangers' offers, not ours: the shelf is advertised
+     on the deals page and the wire carries only what a buyer opened. An offer
+     already answered by somebody's accept is not ours to take, and neither is
+     one we have answered already. */
+  const answered = new Set();
+  for (const f of frames) if (f.ok && f.type === "accept" && f.body?.ref) answered.add(f.body.ref);
+
+  const take = [], passed = [];
   const atCapacity = open.length >= MAX_OPEN_DEALS;
-  for (const job of JOBS) {
-    if (!CAN_DO.has(job.id)) { unbuilt.push(job.id); continue; }
-    if (live.has(job.id)) continue;
-    if (atCapacity) continue;
-    post.push(job);
+  for (const f of frames) {
+    if (!f.ok || f.type !== "offer" || !f.id) continue;
+    if (answered.has(f.id)) continue;
+    const why = refuseTake(f, now);
+    if (why.length) { passed.push({ id: f.id, why }); continue; }
+    if (atCapacity) continue;              // able and willing, but full
+    take.push(f);
   }
+
+  /* Still worth naming: a job on the shelf with no handler must never be
+     advertised, and the deals page reads this to know what not to show. */
+  const unbuilt = JOBS.filter((j) => !CAN_DO.has(j.id)).map((j) => j.id);
 
   /* A deal that is locked is one somebody has paid into and is waiting on. It
      is the only state where we owe anybody anything. */
   const owed = deals.filter((d) => d.deal.state === "locked");
-  return { post, owed, unbuilt, open: open.length, atCapacity, deals };
+  return { take, passed, owed, unbuilt, open: open.length, atCapacity, deals };
 }
 
 /* ── the refusals, which are the point ───────────────────────────────────── */
@@ -202,6 +343,36 @@ export function refusals({ live, agent }) {
   if (!agent) no.push("no seed in the environment, so nothing can be signed");
   else if (agent.did !== US) no.push("the seed in the environment is not this shop's key");
   return no;
+}
+
+/**
+ * Post a settlement frame where it will actually land.
+ *
+ * The spec says a deal moves into a room named after its contract. On the live
+ * network that room usually cannot be created: technocore.chat is at its room
+ * cap and asking for a new one returns a bare `400 room limit reached` that
+ * never mentions it is the blocker. Measured on the board on 3 September, 52
+ * accepts produced 7 locks — step three is where the network stops nearly
+ * everyone, and a run that treats that 400 as fatal simply never settles.
+ *
+ * Nothing in the state machine reads a room name. `runDeal` folds by contract,
+ * so a frame in the offers room counts exactly as much as one in the deal
+ * room, and the deals that complete on this network are the ones that stayed
+ * put. So: try the room the spec names, and if the venue will not have it,
+ * fall back to the board rather than dropping the frame.
+ *
+ * The fallback is reported, never silent. A deal settling somewhere other than
+ * where the spec says is worth seeing in the log, both because it is evidence
+ * for the upstream issue and because it should stop being necessary one day.
+ */
+export async function settle(agent, room, text, opts, log) {
+  const first = await say(agent, room, text, { ...opts, exact: true });
+  if (first.ok) return "ok";
+  log(`  ${room} refused it (${first.why ?? first.status}) — the venue is at its room cap`);
+  const back = await say(agent, OFFERS_ROOM, text, { ...opts, exact: true });
+  return back.ok
+    ? `ok, on the board instead of ${room}`
+    : `FAILED in both rooms · ${back.why ?? back.status}`;
 }
 
 /* ── the wake ────────────────────────────────────────────────────────────── */
@@ -230,25 +401,29 @@ export async function wake(opts = {}) {
   const no = refusals({ live, agent });
   for (const r of no) log(`hold:  ${r}`);
 
-  for (const job of p.post) {
-    const body = buildOffer(job, now);
-    const bad = lintOffer(body);
-    if (bad.length) { log(`SKIP ${job.id}: ${bad.join(", ")}`); continue; }
-    const id = await offerId(body);
-    const text = "tclk1 " + canon({ ...body, id });
-    log(`would post ${job.id} · ${job.amount} FLOP · ${text.length} chars`);
-    if (agent) log(`  signs ok, id ${id.slice(0, 18)}…`);
-    if (!no.length) {
-      const r = await say(agent, OFFERS_ROOM, text, { ...opts, exact: true });
-      log(`  posted: ${r.ok ? "ok" : "FAILED · " + (r.why ?? r.status)}`);
-    }
+  /* Selling. We answer buyers' offers rather than posting our own — see the
+     block above buildAccept for why the other direction cannot settle. */
+  for (const f of p.take) {
+    const a = await buildAccept(f, f.id, now);
+    const text = "tclk1 " + canon(a.body);
+    log(`would take ${f.body?.job?.id} from ${String(f.body?.from).slice(0, 24)}… · ` +
+        `${f.body?.amount} FLOP · ${text.length} chars`);
+    log(`  contract ${a.body.contract.slice(0, 18)}…`);
+    /* THE REASON THIS STILL DOES NOT POST. The accept commits us to a
+       statement whose preimage only we hold, and the claim is worthless
+       without it. Minting a secret into a variable that dies with the process
+       is how you do the work and then cannot collect. Durable secret storage
+       is the next thing to build, and until it exists this stays a dry run
+       even with --live and a good key. */
+    log("  HOLD: no durable store for the secret, so the accept is not posted");
   }
+  for (const x of p.passed.slice(0, 8)) log(`pass:  ${x.id.slice(0, 14)}… ${x.why.join("; ")}`);
+  if (p.passed.length > 8) log(`pass:  …and ${p.passed.length - 8} more`);
 
   for (const j of p.unbuilt) log(`shut:  ${j} has no handler yet, so it is not advertised`);
 
-  /* ── the side we are not blocked on ───────────────────────────────────
-     Selling waits on a protocol question. Buying does not, so it runs on
-     every wake regardless — and it is the direction that actually spends the
+  /* ── buying ───────────────────────────────────────────────────────────
+     Runs on every wake, and it is the direction that actually spends the
      faucet, which is what the airdrop is said to reward. */
   const openRooms = new Map();
   const pre = planBuys(frames, openRooms, US, now);
@@ -270,18 +445,12 @@ export async function wake(opts = {}) {
   for (const b of buys.lock) {
     const text = wire(lockFrame(US, b.accept.contract));
     log(`would fund ${b.offer.body?.job?.id} in ${b.room}`);
-    if (!no.length) {
-      const r = await say(agent, b.room, text, { ...opts, exact: true });
-      log(`  locked: ${r.ok ? "ok" : "FAILED · " + (r.why ?? r.status)}`);
-    }
+    if (!no.length) log(`  locked: ${await settle(agent, b.room, text, opts, log)}`);
   }
   for (const b of buys.refund) {
     const text = wire(refundFrame(US, b.accept.contract));
     log(`would refund ${b.offer.body?.job?.id} — nobody revealed before the deadline`);
-    if (!no.length) {
-      const r = await say(agent, b.room, text, { ...opts, exact: true });
-      log(`  refunded: ${r.ok ? "ok" : "FAILED · " + (r.why ?? r.status)}`);
-    }
+    if (!no.length) log(`  refunded: ${await settle(agent, b.room, text, opts, log)}`);
   }
   for (const b of buys.waiting) log(`waiting on ${b.offer.body?.job?.id} — funded, not yet delivered`);
 

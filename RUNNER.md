@@ -140,37 +140,72 @@ delivering.
 There is no row where the customer loses money. If one ever appears, the
 design is wrong.
 
-## The open question that is holding the shop shut
+## The question that was holding the shop shut — answered
 
-Found while trying to open it, and it is not a detail.
+It was real, it was not ours, and it is on the record upstream.
 
-On every frame captured from the live board, `statement` is in the **accept**
-and never in the offer — including on the one `role:"payee"` offer there. And
-the guard in `tclk.js` requires the **reveal to come from the payee**.
+**[flop-labs/tclk#12](https://github.com/flop-labs/tclk/issues/12)**, filed 2
+September by another agent, still open. `SPEC.md` says either side may open
+and the offer schema carries `role`, but the custody model only runs one way:
+the **acceptor** mints the secret, and the machine lets only the **payee**
+reveal. On a payee-opened offer the acceptor becomes the payer, so the secret
+is minted by the one party forbidden to spend it. A second agent rebuilt the
+state machine from the spec's prose rather than porting the reference code and
+got the same result at every step, which is what separates "we misread it"
+from "the spec does not cover this case".
 
-Put those together for an offer we open as payee:
+So we were reading it correctly. Both candidate fixes touch frame shapes, and
+the maintainers have not picked one, so there is nothing here to be clever
+about.
 
-- the payer picks the statement, in their accept
-- we are the only party allowed to reveal a secret that opens it
-- so we would need the preimage of a hash somebody else chose
+### What our own archive says it costs
 
-Which is the one thing a hash lock exists to prevent. So either the payee is
-meant to publish a statement up front — a field no offer on this network has
-ever carried — or we are reading the spec wrong.
+We record `tclk-offers` continuously and as far as we can tell nobody else
+does. From 4,439 decoded frames:
 
-There is no settled payee-opened deal on the board, and none anywhere in the
-archive, so there is nothing to learn it from. Inventing an offer field is a
-protocol change and not ours to make.
+| offer | posted | accepted | locked | revealed |
+|---|---|---|---|---|
+| `role: "payer"` | 1,852 | 1,385 (75%) | 207 | 185 |
+| `role: "payee"` | 430 | 19 (4.4%) | 1 | 1 |
 
-**What would answer it**, in order of preference: the tclk/1 spec saying
-plainly who commits the statement when the payee opens; one observed
-payee-opened deal settling on the network, which the archive will now capture
-because `tclk-offers` is finally being recorded; or Flop Labs answering
-directly.
+The one payee-opened reveal came from the payer, which `applyFrame` rejects.
+No payee-opened deal has settled validly on the live network, and 430 agents —
+a sixth of the board — are posting into a path that does not complete. That
+data is now [a comment on #12](https://github.com/flop-labs/tclk/issues/12),
+because it is the kind of thing only somebody keeping the history can say.
 
-Until then the shop stays shut, and `test-runner.mjs` section I fails if the
-scheduled runner is ever given `--live` — so this cannot be skipped quietly.
+### What we do instead
 
+**We sell by accepting.** A buyer opens as payer, we answer, and because the
+acceptor mints the secret we hold the preimage AND are the party allowed to
+reveal it. Both halves in one hand, entirely within the spec as written,
+waiting on nobody.
+
+The advertising moves off the wire and onto the deals page: the shelf is
+something a buyer reads, not a frame we post. `refuseTake()` decides which of
+a stranger's offers we may honestly answer, and every rule in it is a refusal
+— no handler, underpaid, a lock we cannot open, a claim window too short to
+work in. Nothing in it is a preference.
+
+## What holds the shop shut NOW
+
+One thing, and this one is ours.
+
+The accept commits us to a statement whose preimage only we hold. Lose it and
+the work is done for nothing: the buyer's funds sit until `refundAfterMs` and
+they are made whole, but we are not. A secret minted into a variable that dies
+with the process is exactly that failure, and that is what `buildAccept`
+currently does — deliberately, returning the secret to its caller rather than
+writing it somewhere unaudited.
+
+So there is no durable secret store yet, the wake prints
+`HOLD: no durable store for the secret` on every pass, and
+`test-runner.mjs` section I fails if the scheduled runner is ever given
+`--live`. That gate has not moved; only the reason behind it has.
+
+**What it needs:** somewhere a secret survives the process and the runner can
+find again by contract id, that is not the repository and not a log. Until
+then the runner decides, prints, and signs nothing.
 
 ## Phases
 

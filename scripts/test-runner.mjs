@@ -21,9 +21,11 @@ import { fileURLToPath } from "node:url";
 import { createPublicKey, verify as edVerify, randomBytes } from "node:crypto";
 import { agentFromSeed, sweep, nextNonce, say } from "./agent.mjs";
 import {
-  US, JOBS, WINDOW, MAX_OPEN_DEALS, buildOffer, plan, refusals, framesFrom, ourDeals, wake,
+  US, JOBS, WINDOW, MAX_OPEN_DEALS, buildAccept, refuseTake, randomSecret,
+  plan, refusals, framesFrom, ourDeals, wake, settle,
 } from "./runner.mjs";
-import { canon, offerId, lintOffer, readFrame, runDeal } from "../web/tclk.js";
+import { canon, offerId, lintOffer, readFrame, runDeal, checkReveal, contractId, dealRoom }
+  from "../web/tclk.js";
 import { CAN_DO } from "./work.mjs";
 
 /* The repository, found from this file rather than from a path typed into it.
@@ -44,6 +46,7 @@ const ok = (n, c, note = "") => {
 const SEED = randomBytes(32).toString("hex");
 const me = agentFromSeed(SEED);
 const OTHER = "did:key:z6MkStrangerZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZ";
+const THIRD = "did:key:z6MkThirdPartyYYYYYYYYYYYYYYYYYYYYYYYYYYYY";
 
 if (!fs.existsSync(path.join(ROOT, "scripts/runner.mjs")))
   throw new Error(`ROOT does not look like the repository: ${ROOT}`);
@@ -87,103 +90,179 @@ ok("a nonce is 1-19 digits and stays a string",
   /^\d{1,19}$/.test(nextNonce()) && typeof nextNonce() === "string");
 ok("two nonces in the same millisecond still differ", nextNonce() !== nextNonce());
 
-/* ── C. the offer it would post ──────────────────────────────────────────── */
-console.log("\n=== C. the offer");
+/* ── C. the accept it would post ─────────────────────────────────────────
+ * We sell by ANSWERING a buyer's offer, not by posting our own. The other
+ * direction — a `role: "payee"` offer — cannot settle: the acceptor mints the
+ * secret and only the payee may reveal, so on a payee-opened deal the secret
+ * lands with the one party forbidden to spend it. That is flop-labs/tclk#12,
+ * still open, and section I holds the demonstration.
+ * ─────────────────────────────────────────────────────────────────────── */
+console.log("\n=== C. the accept");
 const NOW = Date.now();
-{
-  const o = buildOffer(JOBS[0], NOW);
-  ok("it is well formed by the page's own linter", lintOffer(o).length === 0, lintOffer(o).join(", "));
-  ok("we are the payee, because we are selling", o.role === "payee");
-  ok("it is signed as coming from the shop", o.from === US);
-  ok("expires ≤ claimBy < refundAfter, which is what the linter enforces",
-    o.expiresMs <= o.claimByMs && o.claimByMs < o.refundAfterMs);
-  ok("the claim window is hours, not minutes — a late cron must still fit",
-    o.claimByMs - NOW >= 6 * 3600000, ((o.claimByMs - NOW) / 3600000) + "h");
-  ok("it settles on paper while the testnet is shut, and says so",
-    JSON.stringify(o.rails) === '["paper"]');
-  ok("no paymentKey is invented for a rail that does not run yet", o.paymentKey === undefined);
-  ok("two offers for the same job are different offers",
-    buildOffer(JOBS[0], NOW).nonce !== buildOffer(JOBS[0], NOW).nonce);
-  ok("the frame it becomes is readable by the page that will display it",
-    (async () => true)() && true);
-}
-{
-  const o = buildOffer(JOBS[1], NOW);
-  const id = await offerId(o);
-  const text = "tclk1 " + canon({ ...o, id });
-  const f = readFrame(text);
-  ok("the frame parses", f.ok && f.type === "offer");
-  ok("and reproduces its own bytes exactly, so the page will recompute its id", f.exact);
-  ok("and its id is the id we computed", (await offerId(f.body)) === id);
-  ok("it fits in a Technocore message", text.length < 4000, text.length + " chars");
-  /* Shaped the way the page shapes a frame — body spread, transport last —
-     because that is what runDeal is given in the only place it runs. */
-  const shaped = framesFrom([{ seq: "1", ts: new Date(NOW).toISOString(), from: US, text, sig: "s" }])[0];
-  ok("the deal it starts reads as a sale", runDeal([shaped]).selling);
-}
-
-/* ── D. what a wake decides ──────────────────────────────────────────────── */
-console.log("\n=== D. the plan");
 const msg = (i, from, text) => ({ seq: String(i), ts: new Date(NOW - i * 1000).toISOString(), from, text, sig: "s" });
-const frameOf = async (job, over = {}) => {
-  const o = { ...buildOffer(job, NOW), ...over };
-  return "tclk1 " + canon({ ...o, id: await offerId(o) });
-};
+
+/* A buyer's offer, which is what the wire now carries and what we answer.
+   Built here rather than imported, because the runner no longer has any
+   reason to know how to construct one. */
+const BUILT = JOBS.find((j) => j.id === "overheard-agent-profile");
+const HOUR_MS = 3600000;
+function theirOffer(job = BUILT, over = {}, from = OTHER) {
+  return {
+    type: "offer", from, role: "payer",
+    job: { id: job.id, proto: "overheard" },
+    amount: job.amount, asset: "FLOP", lock: "hash", rails: ["paper"],
+    expiresMs: NOW + 6 * HOUR_MS,
+    claimByMs: NOW + 12 * HOUR_MS,
+    refundAfterMs: NOW + 36 * HOUR_MS,
+    nonce: "0000000000000001",
+    ...over,
+  };
+}
+const frameOf = async (body) => "tclk1 " + canon({ ...body, id: await offerId(body) });
+
 {
-  const empty = plan(framesFrom([]), NOW);
-  ok("an empty board means post only what can be delivered",
-    empty.post.length === 1 && empty.post[0].id === "overheard-agent-profile",
-    empty.post.map((j) => j.id).join(",") || "nothing");
-  ok("and the rest are named as unbuilt rather than silently dropped",
-    empty.unbuilt.length === 3 && !empty.unbuilt.includes("overheard-agent-profile"),
-    empty.unbuilt.join(","));
+  const o = theirOffer();
+  ok("a buyer's offer is well formed by the page's own linter",
+    lintOffer(o).length === 0, lintOffer(o).join(", "));
 
-  const BUILT = JOBS.find((j) => j.id === "overheard-agent-profile");
-  const one = await frameOf(BUILT);
-  const p = plan(framesFrom([msg(1, US, one)]), NOW);
-  ok("a job we already have standing is not posted twice",
-    p.post.length === 0, p.post.map((j) => j.id).join(",") || "nothing");
+  const id = await offerId(o);
+  const a = await buildAccept({ body: o }, id, NOW);
 
-  const stale = await frameOf(BUILT, { expiresMs: NOW - 1000 });
-  ok("an EXPIRED offer of ours is restocked, not counted as standing",
-    plan(framesFrom([msg(1, US, stale)]), NOW).post.length === 1);
+  ok("the accept comes from the shop", a.body.from === US);
+  ok("it names the offer it answers", a.body.ref === id);
+  ok("it carries a statement, which is the field the offer never has",
+    /^0x[0-9a-f]{64}$/.test(a.body.statement) && o.statement === undefined);
 
-  const theirs = await frameOf(BUILT);
-  ok("somebody else's offer for the same job does not stock our shelf",
-    plan(framesFrom([msg(1, OTHER, theirs)]), NOW).post.length === 1);
+  /* THE WHOLE REASON THIS DIRECTION WORKS. We mint the secret, so we hold the
+     preimage; and because the offer is payer-opened we are also the payee,
+     which is the only party the machine lets reveal. Both halves in one hand. */
+  const check = await checkReveal("hash", a.body.statement, a.secret);
+  ok("and the secret we hold really does open it",
+    check.checked && check.ok, check.why);
+  ok("the secret is 32 bytes, not something guessable",
+    /^0x[0-9a-f]{64}$/.test(a.secret));
+  ok("two accepts never mint the same secret", randomSecret() !== randomSecret());
 
-  /* The guard that matters: a job with no handler is never advertised, no
-     matter how empty the board is or how much the shelf says it should be. */
-  const unbuilt = await frameOf(JOBS.find((j) => j.id === "overheard-archive-question"));
-  ok("a job with no handler is not posted even with nothing standing",
-    !plan(framesFrom([]), NOW).post.some((j) => !CAN_DO.has(j.id)));
-  ok("and a standing offer for one would not make it postable either",
-    !plan(framesFrom([msg(1, US, unbuilt)]), NOW).post.some((j) => !CAN_DO.has(j.id)));
+  /* The contract id binds the offer to the accept core, so it cannot be
+     computed before the statement exists — a contract named early would name
+     a deal with a different statement in it. */
+  const expect = await contractId(o, {
+    ref: a.body.ref, from: a.body.from, statement: a.body.statement, nonce: a.body.nonce,
+  });
+  ok("the contract id is the one tclk.js derives from these two frames",
+    a.body.contract === expect, a.body.contract.slice(0, 20) + "…");
+  ok("and it names a deal room both sides can compute",
+    /^mb-p-tclk-[0-9a-f]{16}$/.test(dealRoom(a.body.contract) ?? ""), dealRoom(a.body.contract));
+
+  const text = "tclk1 " + canon(a.body);
+  const f = readFrame(text);
+  ok("the frame parses as an accept", f.ok && f.type === "accept");
+  ok("and reproduces its own bytes exactly", f.exact);
+  ok("it fits in a Technocore message", text.length < 4000, text.length + " chars");
+
+  /* End to end through the state machine that will judge it for real. */
+  const deal = runDeal(framesFrom([
+    msg(1, OTHER, await frameOf(o)),
+    msg(2, US, text),
+  ]));
+  ok("the deal reaches accepted", deal.state === "accepted", deal.state);
+  ok("with the buyer as payer and us as payee", deal.payer === OTHER && deal.payee === US);
+  ok("so the reveal we are allowed to post is the one we can actually make",
+    deal.payee === US && check.ok);
+}
+
+/* ── D. what a wake decides ──────────────────────────────────────────────
+ * The plan no longer stocks a shelf. It reads the board and decides which of
+ * OTHER PEOPLE'S offers this shop may honestly take, which makes every
+ * assertion here a refusal rather than a preference.
+ * ─────────────────────────────────────────────────────────────────────── */
+console.log("\n=== D. the plan");
+{
+  const good = await frameOf(theirOffer());
+  const p = plan(framesFrom([msg(1, OTHER, good)]), NOW);
+  ok("a buyer's offer for work we can do is taken",
+    p.take.length === 1 && p.take[0].body.job.id === BUILT.id,
+    p.take.length + " taken");
+
+  ok("an empty board takes nothing, and that is not an error",
+    plan(framesFrom([]), NOW).take.length === 0);
+
+  /* The guard that matters most: never accept work nothing can deliver. */
+  const noHandler = await frameOf(theirOffer(JOBS.find((j) => j.id === "overheard-archive-question")));
+  const ph = plan(framesFrom([msg(1, OTHER, noHandler)]), NOW);
+  ok("an offer for a job with no handler is refused, not taken",
+    ph.take.length === 0 && ph.passed.some((x) => x.why.some((w) => /no handler/.test(w))),
+    ph.passed[0]?.why.join("; "));
+
+  /* And the one this rewrite exists for. */
+  const payeeOpened = await frameOf(theirOffer(BUILT, { role: "payee" }));
+  const pp = plan(framesFrom([msg(1, OTHER, payeeOpened)]), NOW);
+  ok("a payee-opened offer is refused with the reason written down",
+    pp.take.length === 0 && pp.passed.some((x) => x.why.some((w) => /tclk#12/.test(w))),
+    pp.passed[0]?.why.join("; "));
+
+  ok("our own offer is never taken by us",
+    plan(framesFrom([msg(1, US, await frameOf(theirOffer(BUILT, {}, US)))]), NOW).take.length === 0);
+
+  /* Terms. Each of these is money or a promise we could not keep. */
+  const cases = [
+    ["underpaid",        { amount: "1" },                       /priced at/],
+    ["wrong asset",      { asset: "DOGE" },                     /not FLOP/],
+    ["a lock we cannot open", { lock: "point" },                /not one we can open/],
+    ["no rail in common", { rails: ["lightning"] },             /no rail in common/],
+    ["already expired",  { expiresMs: NOW - 1 },                /expired/],
+    ["a claim window too short to work in", { claimByMs: NOW + 60000 }, /too short/],
+    ["a refund before the claim closes", { refundAfterMs: NOW + 60000 }, /does not follow/],
+    ["not addressed to this shop", { job: { id: BUILT.id, proto: "somebody-else" } }, /job protocol/],
+  ];
+  for (const [name, over, re] of cases) {
+    const why = refuseTake({ body: theirOffer(BUILT, over) }, NOW);
+    ok(`refused: ${name}`, why.some((w) => re.test(w)), why.join("; ") || "TAKEN");
+  }
+
+  /* All the reasons, not just the first, so a log line cannot teach the
+     reader the wrong lesson about why something was passed over. */
+  const many = refuseTake({ body: theirOffer(BUILT, { amount: "1", asset: "DOGE" }) }, NOW);
+  ok("an offer that misses by two things says both", many.length >= 2, many.join("; "));
+
+  /* An offer somebody else already answered is not ours to take. */
+  const o = theirOffer();
+  const id = await offerId(o);
+  const taken = framesFrom([
+    msg(1, OTHER, await frameOf(o)),
+    msg(2, THIRD, "tclk1 " + canon({ type: "accept", from: THIRD, ref: id,
+      statement: "0x" + "7c".repeat(32), nonce: "0000000000000009",
+      contract: "0x" + "cc".repeat(32) })),
+  ]);
+  ok("an offer already accepted by somebody else is left alone",
+    plan(taken, NOW).take.length === 0);
 }
 {
-  /* Capacity: three accepted deals and the shelf stops being restocked. */
+  /* Capacity. Three deals of ours in flight and we stop taking, however
+     good the next offer is — the reserve rule we can actually check. */
   const frames = [];
   for (let i = 0; i < MAX_OPEN_DEALS; i++) {
-    const o = { ...buildOffer(JOBS[i % JOBS.length], NOW), nonce: "cap" + String(i).padStart(13, "0") };
+    const o = theirOffer(BUILT, { nonce: "cap" + String(i).padStart(13, "0") });
     const id = await offerId(o);
-    frames.push(msg(10 + i, US, "tclk1 " + canon({ ...o, id })));
-    frames.push(msg(20 + i, OTHER, "tclk1 " + canon({
-      type: "accept", from: OTHER, ref: id, statement: "0x" + "7c".repeat(32),
-      nonce: "acc" + String(i).padStart(13, "0"), contract: "0x" + String(i).padStart(4, "0") + "e".repeat(60),
+    frames.push(msg(10 + i, OTHER, "tclk1 " + canon({ ...o, id })));
+    frames.push(msg(20 + i, US, "tclk1 " + canon({
+      type: "accept", from: US, ref: id, statement: "0x" + "7c".repeat(32),
+      nonce: "acc" + String(i).padStart(13, "0"),
+      contract: "0x" + String(i).padStart(4, "0") + "e".repeat(60),
     })));
   }
+  frames.push(msg(90, OTHER, await frameOf(theirOffer(BUILT, { nonce: "0000000000000042" }))));
   const p = plan(framesFrom(frames), NOW);
-  ok("at capacity nothing new is posted", p.atCapacity && p.post.length === 0, `${p.open} open`);
+  ok("at capacity nothing new is taken", p.atCapacity && p.take.length === 0, `${p.open} open`);
   ok("and the deals are recognised as ours", p.deals.length === MAX_OPEN_DEALS);
 }
 {
   /* A frame that lies about who sent it must not become one of our deals. */
-  const o = buildOffer(JOBS[0], NOW);
-  const id = await offerId({ ...o, from: US });
-  const lying = "tclk1 " + canon({ ...o, from: US, id });
-  const frames = framesFrom([msg(1, OTHER, lying)]);
+  const o = theirOffer(BUILT, {}, US);
+  const id = await offerId(o);
+  const lying = "tclk1 " + canon({ ...o, id });
   ok("a frame whose BODY claims to be from us, sent by somebody else, is not ours",
-    ourDeals(frames).length === 0,
+    ourDeals(framesFrom([msg(1, OTHER, lying)])).length === 0,
     "the transport decides who signed it, not the body");
 }
 
@@ -214,8 +293,8 @@ console.log("\n=== F. a wake writes nothing");
   };
   const lines = [];
   const r = await wake({ fetch: stub, base: "http://stub", log: (s) => lines.push(s), now: NOW, seed: SEED });
-  ok("it decided to post only the deliverable one", r.plan.post.length === 1);
-  ok("and posted none of them", posted === 0, posted + " writes");
+  ok("an empty board gives it nothing to take", r.plan.take.length === 0);
+  ok("and it wrote nothing either way", posted === 0, posted + " writes");
   ok("it says why it is holding", r.refusals.length > 0 && lines.some((l) => /^hold:/.test(l)));
   ok("it noticed the key is not this shop's", lines.some((l) => /NOT THIS SHOP/.test(l)));
   ok("nothing it printed contains the seed", !lines.join("\n").includes(SEED));
@@ -285,59 +364,119 @@ console.log("\n=== H. when the board cannot be read");
     "a job that emails a red cross for somebody else's bad minute teaches you to ignore red crosses");
 }
 
-/* ── I. the settlement path nobody can demonstrate yet ────────────────────
- *
- * Found while trying to open the shop, and it is the reason it is still shut.
- *
- * On every real frame captured from the board, `statement` appears in the
- * ACCEPT and never in the offer — including on the one role:"payee" offer
- * there. And tclk.js's guard, which matches the spec as we read it, requires
- * the REVEAL to come from the payee.
- *
- * Put those together for an offer we open as payee: the payer picks the
- * statement in their accept, and we are the only party allowed to reveal a
- * secret that opens it. We would have to know the preimage of a hash somebody
- * else chose, which is the one thing a hash lock exists to prevent.
- *
- * So either the payee is meant to publish a statement up front — a field no
- * offer on the network has ever carried — or we are reading it wrong. There
- * is no settled payee-opened deal on the board or anywhere in the archive to
- * learn from, and inventing a field is a protocol change, not an
- * implementation detail.
- *
- * This section exists so that going live cannot quietly happen before the
- * question is answered.
- */
-console.log("\n=== I. why the shop is still shut");
+/* ── J. settling where the network will actually take it ─────────────────
+ * The spec moves a deal into a room named after its contract. technocore.chat
+ * is at its room cap and returns a bare `400 room limit reached` for any new
+ * one, which is where 45 of 52 accepts died on the board on 3 September. The
+ * state machine folds by contract and never reads a room name, so a frame on
+ * the board is worth exactly as much — and falling back is the difference
+ * between settling and stalling.
+ * ─────────────────────────────────────────────────────────────────────── */
+console.log("\n=== J. when the deal room cannot exist");
 {
-  const o = buildOffer(JOBS.find((j) => j.id === "overheard-agent-profile"), NOW);
-  ok("our offer carries no statement, exactly like every real offer on the board",
-    o.statement === undefined,
-    "the accept is where every captured frame puts it");
+  const posts = [];
+  const capped = async (url) => {
+    const u = String(url);
+    if (u.includes("say-signed")) {
+      const room = u.split("/r/")[1].split("/")[0];
+      posts.push(room);
+      if (room.startsWith("mb-p-tclk-"))
+        return { ok: false, status: 400, text: async () => "room limit reached (81920 is the cap)" };
+      return { ok: true, status: 200, text: async () => "{}" };
+    }
+    return { ok: true, status: 200, json: async () => ({ messages: [] }) };
+  };
+  const lines = [];
+  const out = await settle(me, "mb-p-tclk-" + "a".repeat(16), "tclk1 " + canon({ a: 1 }),
+    { fetch: capped, base: "http://stub" }, (s2) => lines.push(s2));
+  ok("it tries the room the spec names first",
+    posts[0]?.startsWith("mb-p-tclk-"), posts.join(" then "));
+  ok("and falls back to the board when the venue refuses it",
+    posts[1] === "tclk-offers" && /on the board instead/.test(out), out);
+  ok("the fallback is reported rather than silent",
+    lines.some((l) => /room cap/.test(l)), lines.join(" | "));
+}
 
-  /* The deal as it would really run, with the payer choosing the statement. */
-  const theirStatement = "0x" + "5c".repeat(32);
+/* ── I. the question that was holding the shop shut, and the one that is ──
+ *
+ * This section used to record an open question: on a payee-opened offer the
+ * statement arrives in the buyer's accept, and only the payee may reveal, so
+ * we would have needed the preimage of a hash somebody else chose. We could
+ * not tell whether that was the spec's intent or our misreading.
+ *
+ * ANSWERED, 3 September. It is flop-labs/tclk#12 — filed by another agent on
+ * 2 September, still open, and confirmed there by an independent state
+ * machine built from SPEC.md's prose rather than ported from the reference
+ * implementation. The spec says either side may open; the custody model only
+ * works one way. Both candidate fixes change frame shapes, so it is not ours
+ * to route around.
+ *
+ * Our own archive of the board says how much this costs the network: 430 of
+ * 2,459 offers are payee-opened, they are accepted 4.4% of the time against
+ * 75% for payer-opened ones, and the single one that ever reached a reveal
+ * had that reveal posted by the payer, which the machine rejects.
+ *
+ * So the shop no longer waits on it. We sell by accepting. What remains below
+ * is the demonstration — kept because it is the reason the runner is shaped
+ * this way, and a later reader deserves to see it fail rather than take it on
+ * trust — and the ONE thing that still holds the shop shut, which is now ours
+ * to fix rather than Flop Labs'.
+ * ─────────────────────────────────────────────────────────────────────── */
+console.log("\n=== I. the answered question, and the remaining one");
+{
+  /* The path we no longer take, still broken, exactly as #12 describes. */
+  const o = theirOffer(BUILT, { role: "payee" }, US);   // us opening as payee
   const id = await offerId(o);
-  const frames = framesFrom([
+  const theirStatement = "0x" + "5c".repeat(32);
+  const d = runDeal(framesFrom([
     msg(1, US, "tclk1 " + canon({ ...o, id })),
     msg(2, OTHER, "tclk1 " + canon({ type: "accept", from: OTHER, ref: id,
       statement: theirStatement, nonce: "0000000000000001",
       contract: "0x" + "ab".repeat(32) })),
-  ]);
-  const d = runDeal(frames);
-  ok("the deal accepts and we are the payee", d.state === "accepted" && d.payee === US);
-  ok("so the reveal would have to come from us", d.payer === OTHER);
-  ok("against a statement we never chose and cannot open",
+  ]));
+  ok("a payee-opened deal still makes us the payee", d.state === "accepted" && d.payee === US);
+  ok("and the buyer the payer, so the reveal must come from us", d.payer === OTHER);
+  ok("against a statement they chose and we cannot open",
     d.accept?.body?.statement === theirStatement,
     "knowing that preimage is the thing the lock exists to prevent");
+  ok("which is why the planner refuses to open one",
+    refuseTake({ body: o }, NOW).some((w) => /tclk#12/.test(w)));
+
+  /* The direction we DO take, end to end, as the contrast that makes the
+     point: same shop, same job, secret and reveal right in one hand. */
+  const theirs = theirOffer();
+  const tid = await offerId(theirs);
+  const a = await buildAccept({ body: theirs }, tid, NOW);
+  const ours = runDeal(framesFrom([
+    msg(1, OTHER, "tclk1 " + canon({ ...theirs, id: tid })),
+    msg(2, US, "tclk1 " + canon(a.body)),
+  ]));
+  const opens = await checkReveal("hash", a.body.statement, a.secret);
+  ok("a payer-opened deal makes us the payee too", ours.payee === US);
+  ok("but this time we minted the statement and can open it", opens.ok);
+
+  /* ── WHAT STILL HOLDS IT SHUT ──────────────────────────────────────────
+     Not the protocol any more. The accept commits us to a statement whose
+     preimage only we hold; lose it and the work is done for nothing while the
+     buyer waits out the clock for a refund. A secret minted into a variable
+     that dies with the process is exactly that. So this stays a dry run until
+     there is somewhere durable to put it. */
+  const src = fs.readFileSync(path.join(ROOT, "scripts/runner.mjs"), "utf8");
+  ok("the wake refuses to post an accept while there is nowhere to keep the secret",
+    /HOLD: no durable store for the secret/.test(src),
+    "the reason is printed on every wake, not buried in a comment");
+  ok("and buildAccept hands the secret back rather than hiding it",
+    /must persist it before the accept is posted/.test(src),
+    "a secret written somewhere by a pure function is a secret nobody can audit");
 
   /* The enforceable half: nothing flips this on by accident. */
   const wf = fs.readFileSync(path.join(ROOT, ".github/workflows/runner.yml"), "utf8");
   ok("the scheduled runner does not pass --live",
     !/runner\.mjs[^\n]*--live/.test(wf),
-    "when this fails, make sure the question above was answered and not just skipped");
-  ok("and the open question is written down where the next person will find it",
-    /statement/i.test(fs.readFileSync(path.join(ROOT, "RUNNER.md"), "utf8")));
+    "when this fails, make sure the secret store exists and was not just skipped");
+  ok("and the reasoning is written down where the next person will find it",
+    /tclk#12/.test(fs.readFileSync(path.join(ROOT, "RUNNER.md"), "utf8")),
+    "RUNNER.md must name the upstream issue, not just say 'a protocol question'");
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);

@@ -59,7 +59,11 @@ export function canon(v) {
  */
 
 let _digest = null;
-async function sha256Hex(text) {
+/* Exported so a statement is minted with the SAME hash that checkReveal
+   verifies against. Two sha256 helpers in one codebase is one too many: the
+   day they disagree, every reveal we post is invalid and the failure shows up
+   only after somebody has locked real money against it. */
+export async function sha256Hex(text) {
   if (!_digest) {
     const sub = globalThis.crypto?.subtle;
     if (sub) {
