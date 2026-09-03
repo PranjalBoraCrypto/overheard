@@ -63,17 +63,30 @@ case "$msg" in
 esac
 
 # ── HEAD is a data commit. Is it burying something? ───────────────────────
-# Only the first one after a real change gets to rescue it, so the parent
-# must itself be a real commit. Anything deeper and we assume the change has
-# had its chance.
-parent_msg="$(git log -1 --format=%s HEAD~1 2>/dev/null)" || exit 0
+# Only the first one after a real change gets to rescue it, so the parent must
+# itself be a real commit. Anything deeper and we assume the change has had
+# its chance.
+#
+# WHEN GIT CANNOT ANSWER, BUILD. The first version of this exited 0 here — it
+# SKIPPED when it could not see the parent — which contradicts the rule three
+# paragraphs above in this same file and cost the two-column layout its
+# deployment on 3 September. The checkout an ignoreCommand runs in is shallow;
+# how shallow is not ours to decide, and a missing HEAD~1 is exactly the
+# ambiguous evidence the rule was written for. Every uncertain path in this
+# script now ends in a build.
+if ! parent_msg="$(git log -1 --format=%s HEAD~1 2>/dev/null)"; then
+  exit 1                            # no history to judge by: ship it
+fi
 case "$parent_msg" in
   *"[skip ci]"*) exit 0 ;;          # a run of data commits — nothing to rescue
 esac
 
 # What did that real commit actually touch? A commit that only moved data is
-# not worth a deployment however it was worded.
-changed="$(git diff --name-only HEAD~2 HEAD~1 2>/dev/null)" || exit 1
+# not worth a deployment however it was worded — but if the diff cannot be
+# read, that is the ambiguous case again.
+if ! changed="$(git diff --name-only HEAD~2 HEAD~1 2>/dev/null)"; then
+  exit 1
+fi
 [ -z "$changed" ] && exit 0         # an empty commit changes nothing to serve
 
 while IFS= read -r f; do

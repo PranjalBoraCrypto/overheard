@@ -106,6 +106,26 @@ ok("an empty commit underneath is not worth a deployment",
   ]) === "skip");
 
 console.log("\n=== when the evidence is missing, build");
+/* A SHALLOW CLONE, which is what an ignoreCommand actually runs in. The first
+   version of the gate skipped here, and that single `|| exit 0` cost the
+   two-column layout its deployment — the rule in the file's own header says
+   build when the evidence is ambiguous, and a missing HEAD~1 is exactly that. */
+{
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "shallow-"));
+  const git = (...a2) => execFileSync("git", a2, { cwd: dir, stdio: "pipe" });
+  git("init", "-q", "-b", "main");
+  git("config", "user.email", "t@t"); git("config", "user.name", "t");
+  fs.writeFileSync(path.join(dir, "only.txt"), "one");
+  git("add", "-A"); git("commit", "-q", "-m", "archive: lone [skip ci]");
+  let code = 0;
+  try {
+    execFileSync("bash", [GATE], { cwd: dir, stdio: "pipe",
+      env: { ...process.env, VERCEL_GIT_COMMIT_MESSAGE: "archive: lone [skip ci]" } });
+  } catch (e) { code = e.status ?? 1; }
+  fs.rmSync(dir, { recursive: true, force: true });
+  ok("a clone too shallow to see the parent builds rather than skipping",
+    code === 1, code === 1 ? "built" : "SKIPPED — this is the 3 September bug");
+}
 ok("no commit message at all builds",
   verdict([{ msg: "archive: x [skip ci]", files: DATA }], { message: "" }) === "build",
   "a missing env var must not silently swallow a release");
