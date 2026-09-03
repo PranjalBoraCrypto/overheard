@@ -1254,6 +1254,41 @@ console.log("\n=== T. what the redesign has to keep true");
     m.infos >= 3 && m.pops === m.infos, `${m.infos} markers, ${m.pops} panels`);
   ok("and the page reads as numbered chapters", m.chapters >= 3, m.chapters);
 
+  /* THE SECOND AXIS. Restyling boxes was never going to be enough — a single
+     centred column reads as a stack however the boxes are painted, because
+     there is only ever one thing at each height. The rail puts the thing you
+     DO beside the thing you are reading, in view the whole way down. */
+  const two = await pT.evaluate(() => {
+    const sp = document.querySelector(".split"), rail = document.querySelector(".rail");
+    const main = document.querySelector(".splitmain");
+    if (!sp || !rail || !main) return null;
+    const r = rail.getBoundingClientRect(), mn = main.getBoundingClientRect();
+    return { cols: getComputedStyle(sp).gridTemplateColumns.split(" ").length,
+             railRight: r.left > mn.left + mn.width - 1,
+             sticky: getComputedStyle(rail).position,
+             /* The main track must be minmax(0,1fr): an `auto` track lets a
+                wide child shove the rail off the page. */
+             mainCanShrink: getComputedStyle(sp).gridTemplateColumns.startsWith("0px") === false && mn.width > 300,
+             hasCta: !!rail.querySelector('a[href="/hire.html"]'),
+             hasRecord: !!rail.querySelector("#ourrec") };
+  });
+  ok("the shop is two columns, not one", two && two.cols === 2, two ? two.cols + " tracks" : "no split");
+  ok("the rail sits beside the content, not under it", two && two.railRight);
+  ok("it stays in view while the shelf scrolls", two && two.sticky === "sticky", two?.sticky);
+  ok("and it carries the thing to DO plus our own record",
+    two && two.hasCta && two.hasRecord, "order button and the settled count");
+
+  /* Stat cards must say what they COUNT, not just what they are called.
+     "in flight" means nothing to somebody who arrived ten seconds ago. */
+  const stats = await pT.evaluate(() => [...document.querySelectorAll(".stat")].map((c) => ({
+    icon: !!c.querySelector(".statk .i"), info: !!c.querySelector(".info"),
+    num: !!c.querySelector("b"), caption: (c.querySelector("i")?.textContent ?? "").trim().length,
+  })));
+  ok("all four numbers are cards with a mark, a marker and a figure",
+    stats.length === 4 && stats.every((s2) => s2.icon && s2.info && s2.num), JSON.stringify(stats.length));
+  ok("and each says what it is counting, in words",
+    stats.every((s2) => s2.caption > 12), stats.map((s2) => s2.caption).join(","));
+
   /* The (i) has to work for everyone: a click opens it, Escape closes it. A
      title= attribute would have been one line and invisible on touch. */
   await pT.click(".info[data-pop]");
@@ -1296,6 +1331,18 @@ console.log("\n=== T. what the redesign has to keep true");
   ok("and the step text is a readable column, not a ribbon",
     m.textX > 180, m.textX + "px wide");
   ok("the (i) is a real tap target", m.infoTap >= 24, m.infoTap + "px");
+  /* On a phone the rail LEADS: "order" belongs above the browsing, not a
+     scroll below it. And it must not be sticky — a pinned card on a 390px
+     screen eats the content it is meant to support. */
+  const rail = await pM.evaluate(() => {
+    const r = document.querySelector(".rail"), g = document.querySelector(".gigs");
+    return { above: r.getBoundingClientRect().top < g.getBoundingClientRect().top,
+             pos: getComputedStyle(r).position,
+             cols: getComputedStyle(document.querySelector(".split")).gridTemplateColumns.split(" ").length };
+  });
+  ok("the order card leads on a phone", rail.above, "not a scroll below the browsing");
+  ok("and is not pinned, which would eat the screen", rail.pos === "static", rail.pos);
+  ok("the split collapses to one column", rail.cols === 1, rail.cols + " track");
   ok("no errors", eM.length === 0, eM.join(" | "));
   await cM.close();
 }

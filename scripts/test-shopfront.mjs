@@ -20,7 +20,22 @@ const ok = (n, c, note = "") => {
   else { fail++; console.log(`  FAIL  ${n}${note ? "   " + note : ""}`); }
 };
 const page = fs.readFileSync("/tmp/oh/web/deals-preview-78cb4a1be923c6b4.html", "utf8");
-const hire = page.slice(page.indexOf('id="hire"'), page.indexOf('id="ourrec"'));
+/* Sliced by the section's OWN bounds, not by whatever element happened to
+   follow it. The first version cut from `id="hire"` to `id="ourrec"`, which
+   worked only while the record sat directly beneath — the moment the record
+   moved into the rail (and above the hire section), the slice inverted to
+   nothing and six assertions passed vacuously in the same instant they
+   stopped meaning anything. A test that depends on the order of two unrelated
+   elements is a test that reports on the layout, not the content. */
+function sectionById(html, id) {
+  const at = html.indexOf(`id="${id}"`);
+  if (at < 0) throw new Error(`no #${id} on the page`);
+  const start = html.lastIndexOf("<section", at);
+  const end = html.indexOf("</section>", at);
+  if (start < 0 || end < 0) throw new Error(`#${id} is not inside a section`);
+  return html.slice(start, end + 10);
+}
+const hire = sectionById(page, "hire");
 
 console.log("\n=== the shopfront tells the truth about the shop");
 for (const j of CAN_DO)
