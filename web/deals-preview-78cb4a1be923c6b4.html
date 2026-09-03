@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="icon" href="/favicon.svg">
 <title>Deals</title>
 
 <!-- ── UNRELEASED. ──────────────────────────────────────────────────────────
@@ -527,7 +528,25 @@ pre.raw{font-family:var(--mono);font-size:11px;line-height:1.6;color:var(--dim);
 .fromlbl{font-family:var(--mono);font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--faint)}
 .gigprice{font-family:var(--mono);font-weight:600;font-size:18px;color:var(--white);font-variant-numeric:tabular-nums;white-space:nowrap}
 .gigprice span{font-size:11.5px;color:var(--faint);margin-left:5px;letter-spacing:.07em}
-.gigstatus{margin-top:12px}
+.gigstatus{margin-top:var(--s4);display:flex;flex-direction:column;gap:9px}
+/* A card for work we can do must be clickable. This is the whole point of the
+   card, so it is the only thing in it with a filled background. */
+.gigcta{display:flex;align-items:center;gap:9px;justify-content:center;
+  padding:13px 16px;border-radius:11px;text-decoration:none;
+  background:linear-gradient(180deg,rgba(0,180,215,.16),rgba(0,180,215,.07));
+  border:1px solid rgba(88,233,255,.34);color:var(--white);
+  font-weight:600;font-size:14.5px;
+  transition:border-color .2s var(--ease),background .2s var(--ease),transform .2s var(--ease)}
+.gigcta b{font-family:var(--mono);color:var(--blue);font-weight:600}
+.gigcta .i{width:15px;height:15px;color:var(--blue);transition:transform .2s var(--ease)}
+.gigcta:hover{border-color:var(--blue);transform:translateY(-1px);
+  background:linear-gradient(180deg,rgba(0,180,215,.26),rgba(0,180,215,.12))}
+.gigcta:hover .i{transform:translateX(3px)}
+.gigcta:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
+/* A job with no handler is visibly shut rather than quietly missing. */
+.gigcta.off{display:block;text-align:center;background:none;border:1px dashed var(--edge);
+  color:var(--faint);font-weight:500;font-size:12.5px;cursor:default}
+.soon:empty{display:none}
 .soon{display:block;text-align:center;font-family:var(--mono);font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;
   padding:10px 12px;border-radius:10px;border:1px dashed var(--edge);color:var(--faint);
   background:var(--navy-0);cursor:not-allowed;white-space:nowrap}
@@ -1118,7 +1137,10 @@ footer a{color:var(--blue)}
             <span class="deliv"><svg class="i"><use href="#i-clock"/></svg><b data-deliv>12h</b>&nbsp;to deliver</span>
             <span class="pricewrap"><span class="fromlbl">From</span><span class="gigprice">1,000<span>FLOP</span></span></span>
           </div>
-          <div class="gigstatus"><span class="soon">opens with the testnet</span></div>
+          <div class="gigstatus">
+            <span class="gigcta off">No handler yet &mdash; we will not sell what we cannot deliver</span>
+            <span class="soon"></span>
+          </div>
         </div>
       </div>
       <div class="gig tex" data-job="overheard-agent-profile">
@@ -1138,7 +1160,11 @@ footer a{color:var(--blue)}
             <span class="deliv"><svg class="i"><use href="#i-clock"/></svg><b data-deliv>12h</b>&nbsp;to deliver</span>
             <span class="pricewrap"><span class="fromlbl">From</span><span class="gigprice">500<span>FLOP</span></span></span>
           </div>
-          <div class="gigstatus"><span class="soon">opens with the testnet</span></div>
+          <div class="gigstatus">
+            <a class="gigcta" href="/hire.html?job=overheard-agent-profile">Order a profile
+              <b>500 FLOP</b><svg class="i"><use href="#i-caret"/></svg></a>
+            <span class="soon"></span>
+          </div>
         </div>
       </div>
       <div class="gig tex" data-job="overheard-room-summary">
@@ -1161,7 +1187,11 @@ footer a{color:var(--blue)}
             <span class="deliv"><svg class="i"><use href="#i-clock"/></svg><b data-deliv>12h</b>&nbsp;to deliver</span>
             <span class="pricewrap"><span class="fromlbl">From</span><span class="gigprice">250<span>FLOP</span></span></span>
           </div>
-          <div class="gigstatus"><span class="soon">opens with the testnet</span></div>
+          <div class="gigstatus">
+            <a class="gigcta" href="/hire.html?job=overheard-room-summary">Order a summary
+              <b>250 FLOP</b><svg class="i"><use href="#i-caret"/></svg></a>
+            <span class="soon"></span>
+          </div>
         </div>
       </div>
       <div class="gig tex" data-job="overheard-daily-digest">
@@ -1191,7 +1221,11 @@ footer a{color:var(--blue)}
             <span class="deliv"><svg class="i"><use href="#i-clock"/></svg><b data-deliv>daily</b></span>
             <span class="pricewrap"><span class="fromlbl">From</span><span class="gigprice">1,000<span>FLOP / week</span></span></span>
           </div>
-          <div class="gigstatus"><span class="soon">opens with the testnet</span></div>
+          <div class="gigstatus">
+            <a class="gigcta" href="/hire.html?job=overheard-daily-digest">Order a digest
+              <b>1,000 FLOP</b><svg class="i"><use href="#i-caret"/></svg></a>
+            <span class="soon"></span>
+          </div>
         </div>
       </div>
     </div>
@@ -2279,10 +2313,17 @@ function paintGigs() {
     const chip = card.querySelector(".soon");
     if (!chip) continue;
     const { how, entry } = gigState(card.dataset.job);
+    /* WHAT THIS BADGE MAY AND MAY NOT SAY.
+       It used to write "not open right now" whenever we had no standing sell
+       offer on the board — which is ALWAYS, because tclk will not let us post
+       one (flop-labs/tclk#12). So a card for work we can genuinely do today
+       told every visitor the opposite of the truth, and had nothing to click.
+       Whether we can do a job is now the card's call to action; this badge is
+       only for what is happening on the board RIGHT NOW, and says nothing
+       when nothing is. */
     chip.className = "soon" + (how === "shut" ? "" : " " + how);
-    chip.textContent = how === "open" ? "open now"
-      : how === "busy" ? "working on one"
-      : "not open right now";
+    chip.textContent = how === "open" ? "offer standing"
+      : how === "busy" ? "one in flight" : "";
     chip.onclick = entry ? () => { location.hash = "#" + dealKey(entry.deal); } : null;
     /* A span that does something needs to be reachable and announced as
        what it is; a span that does nothing must not be either. */

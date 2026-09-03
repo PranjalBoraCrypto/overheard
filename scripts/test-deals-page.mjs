@@ -789,8 +789,27 @@ console.log("\n=== R. availability, read off the board");
   const chips = () => pU.evaluate(() =>
     [...document.querySelectorAll(".gig[data-job]")].map((g) =>
       g.dataset.job + "=" + g.querySelector(".soon").textContent));
-  ok("with no identity of our own, every gig still says the honest thing",
-    (await chips()).every((c) => c.endsWith("=opens with the testnet")), (await chips()).join(" · "));
+  /* THE BADGE SAYS NOTHING WHEN IT KNOWS NOTHING.
+     This used to assert the badge read "opens with the testnet" — a sentence
+     about the future standing in for a fact about the present. With no
+     identity loaded the page cannot see whether anything of ours is on the
+     board at all, and the honest rendering of "I cannot tell" is an empty
+     badge, not a reassuring one.
+     What must NOT be empty is the way in. Whether we can do a job is a
+     property of this shop, not of the board, so the call to action ships in
+     the markup and is there before a single frame has loaded. */
+  ok("with no identity of our own, the board badge claims nothing",
+    (await chips()).every((c) => c.endsWith("=")), (await chips()).join(" · "));
+  ok("but every gig still shows how to order it, or why it cannot be ordered",
+    await pU.evaluate(() => [...document.querySelectorAll(".gig[data-job]")].every((g) => {
+      const cta = g.querySelector(".gigcta");
+      if (!cta) return false;
+      return cta.tagName === "A"
+        ? cta.getAttribute("href") === "/hire.html?job=" + g.dataset.job
+        : cta.classList.contains("off") && /cannot deliver/.test(cta.textContent);
+    })),
+    await pU.evaluate(() => [...document.querySelectorAll(".gig[data-job] .gigcta")]
+      .map((c) => c.tagName + ":" + (c.getAttribute("href") ?? "off")).join(" · ")));
   ok("and nothing on the board is marked as ours",
     await pU.evaluate(() => ![...document.querySelectorAll(".chip")]
       .some((c) => c.textContent === "overheard")));
@@ -831,8 +850,15 @@ console.log("\n=== R. availability, read off the board");
     return { text: c.textContent, cls: c.className, role: c.getAttribute("role") };
   }, job);
 
+  /* WHAT THE BADGE IS FOR, NOW THAT IT IS NOT THE SHOP SIGN.
+     It reported whether we were open for business, which it could never
+     know: tclk#12 stops us posting a sell offer at all, so the answer was
+     permanently "no" for work we can do today. Ordering moved to the card's
+     own button, and this badge was cut back to the one thing it CAN see —
+     what is happening on the board this second. Hence the wording: it
+     describes a frame, not an availability. */
   const a = await chip("overheard-archive-question");
-  ok("a gig with our live offer on the board reads as open", a.text === "open now", a.text);
+  ok("a gig with our live offer on the board says so", a.text === "offer standing", a.text);
   ok("and is marked as open, not merely worded that way", /\bopen\b/.test(a.cls), a.cls);
   ok("and is reachable by keyboard, because it now does something", a.role === "button");
 
@@ -842,13 +868,22 @@ console.log("\n=== R. availability, read off the board");
     await pV.evaluate(() => document.querySelector('.gig[data-job="overheard-archive-question"] .gigprice').textContent));
 
   const b2 = await chip("overheard-agent-profile");
-  ok("a gig whose offer has been accepted reads as busy", b2.text === "working on one", b2.text);
+  ok("a gig whose offer has been accepted reads as busy", b2.text === "one in flight", b2.text);
   ok("and is not dressed up as open", !/\bopen\b/.test(b2.cls), b2.cls);
 
+  /* THE ASSERTION THIS REPLACES WAS THE BUG. It required the badge to read
+     "not open right now" for a job with no frame on the board — which is
+     every job we sell, permanently. The card must stay orderable; only the
+     badge goes quiet. */
   for (const j of ["overheard-room-summary", "overheard-daily-digest"]) {
     const c = await chip(j);
-    ok(`a gig we never posted says so (${j.replace("overheard-", "")})`,
-      c.text === "not open right now" && c.cls === "soon", c.text + " / " + c.cls);
+    ok(`a gig with nothing on the board is silent, not shut (${j.replace("overheard-", "")})`,
+      c.text === "" && c.cls === "soon", `"${c.text}" / ${c.cls}`);
+    ok(`and is still orderable (${j.replace("overheard-", "")})`,
+      await pV.evaluate((job) => {
+        const cta = document.querySelector(`.gig[data-job="${job}"] .gigcta`);
+        return cta?.tagName === "A" && cta.getAttribute("href") === "/hire.html?job=" + job;
+      }, j));
   }
 
   ok("our own deals are marked on the board, so 'open' can be walked to",
@@ -880,10 +915,15 @@ console.log("\n=== R. availability, read off the board");
     nonce: "0ur0ffer00000001",
   }));
   const { ctx: cW, pg: pW, errs: eW } = await open(1280, 1000, false);
-  ok("an expired offer of ours does not keep the shop open",
-    await pW.evaluate(() => document.querySelector('.gig[data-job="overheard-archive-question"] .soon')
-      .textContent === "not open right now"),
-    await pW.evaluate(() => document.querySelector('.gig[data-job="overheard-archive-question"] .soon').textContent));
+  ok("an expired offer of ours does not keep the sign lit",
+    await pW.evaluate(() => {
+      const c = document.querySelector('.gig[data-job="overheard-archive-question"] .soon');
+      return c.textContent === "" && !/\bopen\b/.test(c.className);
+    }),
+    await pW.evaluate(() => {
+      const c = document.querySelector('.gig[data-job="overheard-archive-question"] .soon');
+      return `"${c.textContent}" / ${c.className}`;
+    }));
   ok("no errors", eW.length === 0, eW.join(" | "));
   await cW.close();
   OUR_FRAMES[0].text = keep;
@@ -1132,13 +1172,17 @@ console.log("\n=== W. the listing, redrawn for a phone");
     const band = g.querySelector(".gigband").getBoundingClientRect();
     const price = g.querySelector(".gigprice").getBoundingClientRect();
     const deliv = g.querySelector(".deliv").getBoundingClientRect();
-    const soon = g.querySelector(".soon").getBoundingClientRect();
+    /* The foot of the card is the ORDER BUTTON now, not the board badge.
+       The badge is empty whenever nothing is happening — which is most of
+       the time — and an empty span is `display:none`, so measuring it here
+       was measuring a 0×0 box and calling the result a tap target. */
+    const cta = g.querySelector(".gigcta").getBoundingClientRect();
     const gigs = getComputedStyle(document.querySelector(".gigs")).gridTemplateColumns;
     return {
       bandH: Math.round(band.height), bandW: Math.round(band.width),
       priceFirst: price.left < deliv.left,
-      soonW: Math.round(soon.width), cardW: Math.round(g.getBoundingClientRect().width),
-      soonH: Math.round(soon.height),
+      ctaW: Math.round(cta.width), cardW: Math.round(g.getBoundingClientRect().width),
+      ctaH: Math.round(cta.height),
       oneCol: gigs.split(" ").length === 1,
       scroll: document.documentElement.scrollWidth, vw: window.innerWidth,
       priceSize: parseFloat(getComputedStyle(g.querySelector(".gigprice")).fontSize),
@@ -1159,9 +1203,9 @@ console.log("\n=== W. the listing, redrawn for a phone");
     "a squashed band reads as a bug, not as a picture");
   ok("the price comes first, because that is what a thumb is looking for", m.priceFirst);
   ok("and it is bigger here than on a desktop", m.priceSize >= 20, m.priceSize + "px");
-  ok("the status is a full-width bar at the foot of the card",
-    m.soonW > m.cardW - 40, `${m.soonW} of ${m.cardW}`);
-  ok("and it is a real tap target", m.soonH >= 40, m.soonH + "px");
+  ok("the order button is a full-width bar at the foot of the card",
+    m.ctaW > m.cardW - 40, `${m.ctaW} of ${m.cardW}`);
+  ok("and it is a real tap target", m.ctaH >= 40, m.ctaH + "px");
   ok("the page never scrolls sideways", m.scroll <= m.vw, `${m.scroll} vs ${m.vw}`);
   ok("no errors", eW2.length === 0, eW2.join(" | "));
   await cW2.close();

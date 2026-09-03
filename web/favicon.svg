@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Overheard">
+  <!--
+    An ear made of listening rings.
+
+    The site records rooms it does not own, so the mark is three arcs of a
+    signal with a solid dot at the source: something being overheard, drawn
+    without a single letter, because a 16px glyph of an "O" is a smudge.
+
+    Plain shapes only. No gradients, no filters, no external font — a
+    favicon is fetched before anything else on the page and rendered at
+    sizes where all three of those turn into mush.
+  -->
+  <rect width="64" height="64" rx="14" fill="#02090C"/>
+  <circle cx="23" cy="32" r="5" fill="#00B4D7"/>
+  <g fill="none" stroke="#58E9FF" stroke-linecap="round">
+    <path d="M33 22a13 13 0 0 1 0 20" stroke-width="4" opacity=".95"/>
+    <path d="M41 16a22 22 0 0 1 0 32" stroke-width="4" opacity=".6"/>
+    <path d="M49 11a30 30 0 0 1 0 42" stroke-width="4" opacity=".28"/>
+  </g>
+</svg>

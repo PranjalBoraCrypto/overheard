@@ -257,6 +257,24 @@ function offerBody(from, now) {
   };
 }
 
+/* ── ARRIVING FROM A CARD ──────────────────────────────────────────────────
+ * The gig cards on the board link here with ?job=<id>. Honour it, or the
+ * click means nothing: somebody who pressed "Order a summary" and landed on
+ * a form defaulted to something else has been told their click was ignored.
+ *
+ * The value is checked against the options that actually exist rather than
+ * written into the field — a query string is a stranger's text, and the one
+ * thing it must never be able to do is name a job we cannot deliver.
+ */
+{
+  const want = new URLSearchParams(location.search).get("job");
+  if (want && [...$("job").options].some((o) => o.value === want)) {
+    $("job").value = want;
+    /* Send them straight to the only field that still needs them. */
+    requestAnimationFrame(() => $("brief").focus({ preventScroll: false }));
+  }
+}
+
 $("job").addEventListener("change", repaint);
 $("brief").addEventListener("input", () => {
   $("frame").textContent = JSON.stringify(offerBody("<your did:key>", Date.now()), null, 2);
