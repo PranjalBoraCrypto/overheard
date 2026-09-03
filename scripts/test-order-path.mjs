@@ -45,8 +45,13 @@ const ok = (what, cond, detail = "") => {
 
 const page = fs.readFileSync(new URL("../web/hire.html", import.meta.url), "utf8");
 
-/* ── what the page says it sells ──────────────────────────────────────────*/
-const options = [...page.matchAll(/<option value="([^"]+)"\s+data-price="([^"]+)"/g)]
+/* ── what the page says it sells ──────────────────────────────────────────
+   The shelf used to be a `<select>` of `<option value=… data-price=…>`. It is
+   three `<button data-job=… data-price=…>` cards now, and this parser had to
+   move with it — which it announced by failing on all three jobs at once
+   rather than by quietly matching nothing and reporting a green zero. That
+   is why "the form offers at least one job" exists as its own assertion. */
+const options = [...page.matchAll(/data-job="([^"]+)"\s+data-price="([^"]+)"/g)]
   .map((m) => ({ id: m[1], price: m[2] }));
 
 console.log("=== A. the shelf, as the order form states it");
