@@ -26,7 +26,7 @@ import {
   plan, refusals, framesFrom, ourDeals, wake, settle, annotate, ourArchive, loop,
 } from "./runner.mjs";
 import { secretFor, recoverSecret, minterFor } from "./secret.mjs";
-import { RAIL, RAILS, RAILS_WE_TAKE, IS_REHEARSAL } from "./rail.mjs";
+import { RAIL, RAILS, RAILS_WE_TAKE, IS_REHEARSAL, LOCK_VERIFIERS } from "./rail.mjs";
 import { canon, offerId, lintOffer, readFrame, runDeal, checkReveal, contractId, dealRoom }
   from "../web/tclk.js";
 import { CAN_DO } from "./work.mjs";
@@ -757,6 +757,28 @@ console.log("\n=== N. the rail");
   ok("and the page's own note is still true while the rail is a rehearsal",
     !IS_REHEARSAL || /testnet is not open|moves nothing/i.test(page),
     "a rehearsal rail must be disclosed on the page, not just in the code");
+
+  /* ── AND THE RAIL SWITCH FAILS CLOSED ────────────────────────────────────
+     Switching RAIL is one line, and that is exactly what makes it dangerous:
+     everything else carries on working, including the part that reads a
+     signed `lock` frame as proof the money is held. On `paper` it IS proof,
+     because nothing is held. On a rail with value it is a message anybody can
+     post, and a shop that delivers on one gives the work away and never finds
+     out — no crash, no warning, nothing failing.
+     The verifier for flop-htlc cannot be written: the spec does not yet say
+     what such a lock points at, and code written against an imagined shape
+     passes its own tests and is wrong in the one way none of them can catch.
+     The SEAM can be written, and this is the assertion that keeps it shut. */
+  ok("every rail must name a lock verifier before anything is delivered on it",
+    /LOCK_VERIFIERS/.test(src("scripts/rail.mjs")) && /verifyLock/.test(strip(src("scripts/runner.mjs"))),
+    "without this, flipping RAIL delivers real work against unverified locks");
+  ok("and only the rail that holds nothing has one",
+    Object.keys(LOCK_VERIFIERS).length === 1 && "paper" in LOCK_VERIFIERS,
+    JSON.stringify(Object.keys(LOCK_VERIFIERS)));
+  ok("the check happens BEFORE the work, not before the reveal",
+    strip(src("scripts/runner.mjs")).indexOf("verifyLock(")
+      < strip(src("scripts/runner.mjs")).indexOf("madeThisWake.set("),
+    "verifying after the work is done still gives the work away");
 }
 
 /* ── O. what we already have standing ────────────────────────────────────

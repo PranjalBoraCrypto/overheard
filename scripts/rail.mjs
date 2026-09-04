@@ -61,3 +61,134 @@ export const RAILS_WE_TAKE = new Set(RAILS);
  *  outright rather than letting a buyer assume otherwise, and this is the one
  *  place that decides whether that sentence is still true. */
 export const IS_REHEARSAL = RAIL === "paper";
+
+/* ══════════════════════════════════════════════════════════════════════════
+ * A `lock` FRAME IS NOT PROOF THAT MONEY MOVED
+ *
+ * This is the one bug on this project that would cost real money, and it is
+ * invisible today because nothing is at stake today.
+ *
+ * On `paper`, a lock is a signed message saying "I locked it", and that is
+ * the whole story — the rail holds nothing, so there is nothing behind the
+ * message to check. The shop reads the frame, believes it, does the work,
+ * reveals. Correct, and it has been correct for months.
+ *
+ * On a rail that holds value the same code is a giveaway. Anyone can post a
+ * signed lock frame naming a contract; posting one costs a message. If the
+ * shop delivers on the strength of it, a stranger gets a daily digest for
+ * free and we find out never — no crash, no warning, no failed assertion.
+ * It would simply work, for them.
+ *
+ * WHAT CANNOT BE BUILT YET, and why guessing is worse than waiting: the tclk
+ * spec does not define what a `flop-htlc` lock points AT, because flop-htlc
+ * has not shipped. Writing a verifier against an imagined shape produces code
+ * that looks finished, passes its own tests, and is wrong in the one way no
+ * test can catch.
+ *
+ * WHAT CAN BE BUILT NOW, and is: the seam, closed. Every rail must name a
+ * verifier before the shop will deliver anything on it. `paper` has one, and
+ * it says yes because nothing is at stake. Every other rail has none, so the
+ * shop refuses, loudly, on every wake.
+ *
+ * So testnet day is: flip RAIL, watch the shop refuse everything and say why,
+ * write the verifier, watch it start. Rather than: flip RAIL, and learn how
+ * it went from the board.
+ *
+ * ── THE SECOND HOLE, WHICH IS SUBTLER ────────────────────────────────────
+ *
+ * An offer may advertise several rails, and refuseTake only requires ONE of
+ * them to be ours. runDeal then accepts a lock on any rail the OFFER named.
+ * So an offer listing ["paper","flop-htlc"] is takeable by a shop running on
+ * flop-htlc, and a lock naming `paper` would fold to "locked" and be
+ * delivered against — real work, for a lock on a rail that holds nothing.
+ * The rail we settle on is OURS, not a menu the counterparty picks from at
+ * lock time, so the lock's own rail is checked here too.
+ * ═════════════════════════════════════════════════════════════════════════*/
+
+/** Rails whose locks this shop can actually check. One entry, deliberately. */
+export const LOCK_VERIFIERS = {
+  /* Nothing is held, so there is nothing to check and nothing to lose. This
+     is the ONLY rail for which "the frame says so" is a complete answer. */
+  paper: async () => ({ ok: true, why: "the paper rail holds no value, so the frame is the whole story" }),
+};
+
+/**
+ * May we act on this lock?
+ *
+ * Fails closed on purpose: an unknown rail is refused rather than trusted,
+ * and the refusal names what is missing so it reads as work to be done rather
+ * than as a fault.
+ */
+export async function verifyLock({ rail, ...rest } = {}) {
+  const named = rail ?? RAIL;
+  if (!RAILS_WE_TAKE.has(named)) {
+    return {
+      ok: false,
+      why: `this lock names the rail ${JSON.stringify(named)} and this shop settles on ${JSON.stringify(RAIL)}`,
+    };
+  }
+  const check = LOCK_VERIFIERS[named];
+  if (!check) {
+    return {
+      ok: false,
+      why: `nothing here can verify a lock on ${JSON.stringify(named)}, so a lock frame is not evidence that`
+         + ` value is held — nothing will be delivered on this rail until a verifier exists`,
+    };
+  }
+  return check({ rail: named, ...rest });
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+ * AND THE OTHER DIRECTION, WHICH IS WORSE
+ *
+ * verifyLock above guards the SELL side: do not do work against a lock we
+ * cannot check. The worst case there is that we work for free.
+ *
+ * The BUY side is the shop as payer, and it has the same hole pointing the
+ * other way. `planBuys` decides to fund a deal and the runner posts a `lock`
+ * frame — and on `paper` posting the frame IS the lock, because nothing is
+ * held and the frame is the whole of the rail. On a rail that holds value,
+ * posting a frame moves nothing at all. It just TELLS a stranger their money
+ * is locked.
+ *
+ * So the failure is not that we lose FLOP. It is that a seller reads our
+ * frame, believes it, spends real effort on the work, delivers it, reveals
+ * their preimage — and finds there was never anything to claim. We would have
+ * taken somebody's work under a promise the rail never carried, at scale, on
+ * a public and permanent record, with our DID on every one of them.
+ *
+ * That is the worst thing this shop could do, and today it would do it
+ * silently the moment RAIL changed.
+ *
+ * Same seam, same shape: a rail must say it can actually move money before
+ * this shop will tell anybody that it has.
+ * ═════════════════════════════════════════════════════════════════════════*/
+
+/** Rails on which this shop can actually place and release a real lock. */
+export const FUNDERS = {
+  /* Posting the frame IS the lock here, because there is nothing to hold.
+     That equivalence is exactly what stops being true on every other rail. */
+  paper: async () => ({ ok: true, why: "the paper rail holds nothing, so the frame is the whole of it" }),
+};
+
+/**
+ * May this shop tell somebody their money is locked?
+ *
+ * Fails closed, and the refusal is deliberately phrased as a promise we would
+ * be making rather than as a missing feature, because that is what it is.
+ */
+export async function canFund({ rail } = {}) {
+  const named = rail ?? RAIL;
+  if (!RAILS_WE_TAKE.has(named)) {
+    return { ok: false, why: `this shop settles on ${JSON.stringify(RAIL)}, not ${JSON.stringify(named)}` };
+  }
+  const fund = FUNDERS[named];
+  if (!fund) {
+    return {
+      ok: false,
+      why: `nothing here can actually move value on ${JSON.stringify(named)} — posting a lock frame would`
+         + ` tell a seller their payment is held when it is not, and they would do the work for nothing`,
+    };
+  }
+  return fund({ rail: named });
+}

@@ -250,3 +250,98 @@ say("and no give-up note is posted for one",
    Six identical warnings for one order is six slots spent saying one thing. */
 say("the same stall is not reported twice in one wake",
   new Set(bad1.stalled).size === bad1.stalled.length, JSON.stringify(bad1.stalled));
+
+/* ══════════════════════════════════════════════════════════════════════════
+ * A `lock` FRAME IS NOT PROOF THAT MONEY MOVED
+ *
+ * The one bug on this project that would cost real money, and it is invisible
+ * today because nothing is at stake today. `runDeal` folds a signed lock into
+ * the state `locked`, and every line downstream read that word as proof the
+ * money was held — true on `paper`, where nothing is held and the frame is
+ * the whole story; false the instant a rail holds value, because posting a
+ * lock frame costs a message and anybody can post one for any contract.
+ *
+ * A shop that delivers on the strength of it gives the work away and finds
+ * out never. No crash, no warning, no failing assertion. It simply works, for
+ * them.
+ *
+ * The verifier cannot be written — flop-htlc has not shipped and its lock
+ * does not yet point at anything. The SEAM can, and this is it: every rail
+ * must name a verifier before a single frame is delivered on it.
+ * ═════════════════════════════════════════════════════════════════════════*/
+/* Run in a child, because RAIL is read at import time — the same reason this
+   whole file is a child of the runner suite. */
+{
+  const { execFileSync } = await import("node:child_process");
+  const out = execFileSync(process.execPath, ["-e", `
+    process.env.SHOP_DID = ${JSON.stringify(US)};
+    process.env.TCLK_RAIL = "flop-htlc";
+    const { verifyLock, LOCK_VERIFIERS, RAIL } = await import("./scripts/rail.mjs");
+    const paper = await verifyLock({ rail: "paper" });
+    const live  = await verifyLock({ rail: "flop-htlc" });
+    const none  = await verifyLock({});
+    console.log(JSON.stringify({
+      rail: RAIL,
+      verifiers: Object.keys(LOCK_VERIFIERS),
+      paper, live, none,
+    }));
+  `], { encoding: "utf8", cwd: process.cwd() });
+  const g = JSON.parse(out.trim().split("\n").pop());
+
+  say("on a rail that holds value, an unverifiable lock is refused",
+    g.live.ok === false, JSON.stringify(g.live));
+  say("and the refusal says what is missing, so it reads as work to do",
+    /nothing here can verify a lock/.test(g.live.why ?? ""), g.live.why);
+  say("the default rail is refused too, not merely a named one",
+    g.none.ok === false, JSON.stringify(g.none));
+  say("only one rail has a verifier, and it is the one that holds nothing",
+    g.verifiers.length === 1 && g.verifiers[0] === "paper", JSON.stringify(g.verifiers));
+  /* THE SUBTLER HOLE. An offer may advertise several rails and refuseTake
+     needs only ONE of them to be ours, so a shop on flop-htlc can take an
+     offer listing ["paper","flop-htlc"] — and runDeal accepts a lock on any
+     rail the OFFER named. A `paper` lock would then fold to "locked" and be
+     delivered against: real work, for a lock on a rail that holds nothing.
+     The rail we settle on is ours, not a menu picked from at lock time. */
+  say("a lock naming a rail this shop does not settle on is refused",
+    g.paper.ok === false && /settles on/.test(g.paper.why ?? ""), g.paper.why);
+}
+
+/* ── AND THE SAME THING AS BEHAVIOUR, NOT AS A UNIT ────────────────────────
+   The unit above proves verifyLock says no. This proves the WAKE acts on it:
+   an identical deal, identical frames, identical everything, and the only
+   difference is one environment variable. That is what testnet day is. */
+{
+  const { execFileSync } = await import("node:child_process");
+  const out = execFileSync(process.execPath, ["-e", `
+    process.env.SHOP_DID = ${JSON.stringify(US)};
+    process.env.TCLK_RAIL = "flop-htlc";
+    const { wake } = await import("./scripts/runner.mjs");
+    const frames = ${JSON.stringify(frames)};
+    const posted = [];
+    const stub = async (url) => {
+      const u = String(url);
+      if (u.includes("say-signed")) { posted.push(decodeURIComponent(u.split("/").pop().split("?")[0])); return { ok: true, status: 200, text: async () => "{}" }; }
+      if (u.includes("/api/profile")) return { ok: true, status: 200, json: async () => ({ profile: { did: "x", count: 5, unique: 5, rooms: ["lobby"], first: "a", last: "b" } }) };
+      return { ok: true, status: 200, json: async () => ({ messages: frames }) };
+    };
+    const r = await wake({ fetch: stub, base: "http://stub", log: () => {}, now: ${NOW}, seed: ${JSON.stringify(SEED)}, live: true });
+    console.log(JSON.stringify({ stalled: r.stalled, posted, owed: r.plan.owed.length }));
+  `], { encoding: "utf8", cwd: process.cwd() });
+  const g = JSON.parse(out.trim().split("\n").pop());
+
+  say("on a value rail the wake still SEES the deal as owed",
+    g.owed === 1, `${g.owed} owed — the guard must refuse the work, not hide the deal`);
+  say("but delivers nothing at all",
+    !g.posted.some((t) => !t.startsWith("tclk1 ")), g.posted.map((t) => t.slice(0, 30)).join(" | ") || "nothing");
+  say("and reveals nothing, which is the irreversible half",
+    !g.posted.some((t) => /"type":"reveal"/.test(t)), "a reveal against an unverified lock is the giveaway");
+  say("and says exactly why, in the only channel out of a run",
+    g.stalled.some((x) => /NOT DELIVERING/.test(x) && /verify a lock/.test(x)),
+    JSON.stringify(g.stalled));
+}
+
+/* And on paper — today, and every day until testnet — it says yes, or the
+   guard would have shut the working shop instead of the broken one. */
+say("on the paper rail the shop still delivers",
+  good.posted.includes("delivery") && good.posted.includes("reveal"),
+  good.posted.join(" → "));

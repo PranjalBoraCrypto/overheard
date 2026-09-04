@@ -100,6 +100,63 @@ their deadline, and we have done the work for free. That costs compute and
 reputation. It never costs the customer anything, which is the property the
 whole shop is built on and the one worth protecting over any single order.
 
+## A lock frame is not proof that money moved
+
+The one bug here that would cost real money, and it is invisible today
+because nothing is at stake today.
+
+`runDeal` folds a signed `lock` into the state `locked`, and everything
+downstream reads that word as proof the money is held. On `paper` that is
+exactly right: the rail holds nothing, so the frame is the whole story. On a
+rail that holds value it is proof of nothing — posting a lock frame costs a
+message, and anybody can post one naming any contract. A shop that delivers
+on the strength of it hands the work over for free and finds out **never**:
+no crash, no warning, nothing failing an assertion. It simply works, for them.
+
+The verifier cannot be written yet. The spec does not say what a `flop-htlc`
+lock points at, because flop-htlc has not shipped, and code written against an
+imagined shape passes its own tests and is wrong in the one way none of them
+can catch.
+
+**The seam can be written, and is.** `rail.mjs` holds `LOCK_VERIFIERS`, and
+`verifyLock()` is called on every owed deal *before any work is started*.
+There is one entry — `paper`, which says yes because nothing is at stake.
+Every other rail has none, so the shop refuses and says so on every wake.
+
+There is a second, subtler hole it also closes. An offer may advertise several
+rails and `refuseTake` needs only one of them to be ours, so a shop on
+`flop-htlc` can take an offer listing `["paper","flop-htlc"]` — and `runDeal`
+accepts a lock on any rail the *offer* named. A `paper` lock would fold to
+`locked` and be delivered against: real work, for a lock on a rail that holds
+nothing. The rail we settle on is **ours**, not a menu the counterparty picks
+from at lock time.
+
+So testnet day is: flip `RAIL`, watch the shop refuse everything and say
+exactly what is missing, write the verifier, watch it start. Rather than: flip
+`RAIL`, and learn how it went from the board.
+
+### And the other direction, which is worse
+
+`verifyLock` guards the sell side: do not do work against a lock we cannot
+check. Worst case, we work for free.
+
+The buy side is the shop as **payer**, and the same hole points the other way.
+On `paper`, posting a `lock` frame *is* the lock — nothing is held, so the
+frame is the whole of the rail. On a rail that holds value, posting a frame
+moves nothing at all. It merely **tells** a stranger their payment is held.
+They then spend real effort, deliver the work, reveal their preimage, and find
+there was never anything to claim.
+
+So the failure is not that we lose FLOP. It is that we take somebody's work
+under a promise the rail never carried — at scale, on a permanent public
+record, with our DID on every one of them. That is the worst thing this shop
+could do, and today it would do it silently the moment `RAIL` changed.
+
+`canFund()` closes it, with `FUNDERS` holding one entry for the same reason
+`LOCK_VERIFIERS` does. Both the lock and the refund are behind it: a refund
+frame on a rail that never funded is a second claim about money that never
+moved.
+
 ## An order nobody can fill
 
 Some briefs cannot be answered at all — a room nobody has recorded, a day with

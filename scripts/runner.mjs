@@ -24,7 +24,7 @@ import { CAN_DO, doJob } from "./work.mjs";
 import { minterFor, recoverSecret } from "./secret.mjs";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
-import { RAILS, RAILS_WE_TAKE } from "./rail.mjs";
+import { RAILS, RAILS_WE_TAKE, RAIL, verifyLock, canFund } from "./rail.mjs";
 import { WANTS, planBuys, wantFrame, lockFrame, refundFrame, cancelFrame, wire, safeRoom } from "./buy.mjs";
 
 /* The shop's public identity. The seed for it is in one secret store and is
@@ -390,10 +390,16 @@ export function ourDeals(frames) {
     const rest = c
       ? frames.filter((f) => f.ok && f !== o && f !== a && String(f.body?.contract ?? "") === String(c))
       : [];
-    out.push({ deal: runDeal([o, a, ...rest]), offer: o, accept: a });
+    /* The LOCK itself, carried out rather than folded away. Everything
+       downstream used to know only that the deal reached `locked`, which is a
+       state derived from a frame nobody kept — and on a rail that holds value
+       the frame is exactly what has to be checked before any work is done.
+       See verifyLock in rail.mjs. */
+    const lock = rest.find((f) => f.ok && f.type === "lock") ?? null;
+    out.push({ deal: runDeal([o, a, ...rest]), offer: o, accept: a, lock });
   }
   for (const [id, o] of offers)
-    if (o.from === US && !paired.has(id)) out.push({ deal: runDeal([o]), offer: o, accept: null });
+    if (o.from === US && !paired.has(id)) out.push({ deal: runDeal([o]), offer: o, accept: null, lock: null });
   return out;
 }
 
@@ -1025,14 +1031,37 @@ export async function wake(opts = {}) {
       log(`  posted: ${r.ok ? "ok" : "FAILED · " + (r.why ?? r.status)}`);
     }
   }
+  /* ── TELLING SOMEBODY THEIR MONEY IS LOCKED ────────────────────────────
+     The sell-side guard above stops us doing work against a lock we cannot
+     check; the worst case there is working for free. This is the same hole
+     pointing the other way, and it is worse.
+     On `paper`, posting a lock frame IS the lock — nothing is held, so the
+     frame is the whole of the rail. On a rail that holds value, posting a
+     frame moves nothing; it merely TELLS a stranger their payment is held.
+     They then spend real effort, deliver, reveal — and find there was never
+     anything to claim. Taking somebody's work under a promise the rail never
+     carried, at scale, on a permanent public record, with our DID on every
+     one of them, is the worst thing this shop could do. Today it would do it
+     silently the moment RAIL changed. */
+  const funding = await canFund({ rail: RAIL });
+  if (!funding.ok && (buys.lock.length || buys.refund.length)) {
+    log(`NOT FUNDING: ${funding.why}`);
+    ann("warning", "the buy side is holding",
+      `${buys.lock.length + buys.refund.length} deal(s) not funded — ${funding.why}`, log);
+  }
   for (const b of buys.lock) {
     const text = wire(lockFrame(US, b.accept.contract));
     log(`would fund ${b.offer.body?.job?.id} in ${b.room}`);
+    if (!funding.ok) { log("  held: this rail cannot hold value, so saying it does would be a lie"); continue; }
     if (!no.length) log(`  locked: ${await settled(b.room, text, "lock")}`);
   }
   for (const b of buys.refund) {
     const text = wire(refundFrame(US, b.accept.contract));
     log(`would refund ${b.offer.body?.job?.id} — nobody revealed before the deadline`);
+    /* Same gate, and it costs nothing: funding was refused, so there is
+       nothing on this rail to take back. A refund frame here would be a
+       second claim about money that never moved. */
+    if (!funding.ok) { log("  held: nothing was ever funded on this rail"); continue; }
     if (!no.length) log(`  refunded: ${await settled(b.room, text, "refund")}`);
   }
   for (const b of buys.waiting) log(`waiting on ${b.offer.body?.job?.id} — funded, not yet delivered`);
@@ -1059,6 +1088,29 @@ export async function wake(opts = {}) {
     log(`OWED: ${job} is locked and waiting on delivery`);
     if (!CAN_DO.has(job)) { stall(`${job}: nothing here can deliver it — it should never have been accepted`); continue; }
     if (!seed) { stall(`${job}: no seed, so nothing can be delivered or revealed this wake`); continue; }
+
+    /* ── IS THIS LOCK EVIDENCE OF ANYTHING? ──────────────────────────────
+       Until now the answer was assumed. `runDeal` folds a signed `lock`
+       frame into the state `locked`, and everything downstream treated that
+       word as proof the money was held — which it IS on `paper`, where
+       nothing is held and the frame is the whole story.
+       On a rail that holds value it is proof of nothing. Posting a lock
+       frame costs a message; anybody can post one for any contract. A shop
+       that delivers on the strength of it is giving the work away, and would
+       find out never: no crash, no warning, nothing failing an assertion. It
+       would simply work, for them.
+       So the question is asked out loud, on every deal, before any work is
+       started — and rail.mjs answers NO for every rail with no verifier,
+       which today is every rail except paper. The block at the end of that
+       file says why the verifier itself cannot honestly be written yet. */
+    const proof = await verifyLock({
+      rail: d.lock?.body?.rail ?? d.lock?.rail ?? RAIL,
+      contract, offer: d.offer, accept: d.accept, lock: d.lock,
+    });
+    if (!proof.ok) {
+      stall(`${job}: NOT DELIVERING — ${proof.why}`);
+      continue;
+    }
 
     /* ── DELIVERY, THEN REVEAL, IN THAT ORDER AND NEVER THE OTHER WAY ──────
        The reveal is what lets the payer's money move. Posting it before the

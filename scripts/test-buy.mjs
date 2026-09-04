@@ -23,6 +23,10 @@ import {
   lockFrame, refundFrame, wantFrame, revealHeldUp, wire,
 } from "./buy.mjs";
 import { createHash, randomBytes } from "node:crypto";
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
 let pass = 0, fail = 0;
 const ok = (n, c, note = "") => {
@@ -208,6 +212,66 @@ console.log("\n=== E. the cap");
   ok("an expired want of ours is re-posted",
     planBuys(framesOf([msg(1, US, stale.text)]), new Map(), US, NOW)
       .want.some((w) => w.id === WANTS[0].id));
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+ * F. TELLING SOMEBODY THEIR MONEY IS LOCKED
+ *
+ * The sell-side guard stops the shop doing work against a lock it cannot
+ * check; the worst case there is working for free. This is the same hole
+ * pointing the other way, and it is worse.
+ *
+ * On `paper`, posting a lock frame IS the lock — nothing is held, so the
+ * frame is the whole of the rail. On a rail that holds value, posting a frame
+ * moves nothing. It merely TELLS a stranger their payment is held. They then
+ * spend real effort, deliver the work, reveal their preimage, and find there
+ * was never anything to claim.
+ *
+ * Taking somebody's work under a promise the rail never carried — at scale,
+ * on a permanent public record, with our DID on every one of them — is the
+ * worst thing this shop could do. Today it would do it silently the moment
+ * RAIL changed.
+ * ═════════════════════════════════════════════════════════════════════════*/
+console.log("\n=== F. the buy side cannot promise what the rail will not hold");
+{
+  const { canFund, FUNDERS } = await import("./rail.mjs");
+  const paper = await canFund({ rail: "paper" });
+  ok("on paper the shop may fund, because the frame is the whole of the rail",
+    paper.ok === true, paper.why);
+  ok("and only that one rail can", Object.keys(FUNDERS).length === 1 && "paper" in FUNDERS,
+    JSON.stringify(Object.keys(FUNDERS)));
+
+  const { execFileSync } = await import("node:child_process");
+  const out = execFileSync(process.execPath, ["-e", `
+    process.env.TCLK_RAIL = "flop-htlc";
+    const { canFund } = await import("./scripts/rail.mjs");
+    console.log(JSON.stringify({
+      live: await canFund({ rail: "flop-htlc" }),
+      dflt: await canFund({}),
+      other: await canFund({ rail: "paper" }),
+    }));
+  `], { encoding: "utf8", cwd: ROOT });
+  const g = JSON.parse(out.trim().split("\n").pop());
+
+  ok("on a rail that holds value the shop refuses to fund", g.live.ok === false, JSON.stringify(g.live));
+  ok("and the refusal is phrased as the promise it would be making",
+    /would.*tell a seller their payment is held when it is not/.test(g.live.why ?? ""), g.live.why);
+  ok("it names the harm to THEM, not the inconvenience to us",
+    /they would do the work for nothing/.test(g.live.why ?? ""), g.live.why);
+  ok("the default rail is refused too, not merely a named one", g.dflt.ok === false);
+  ok("and a rail this shop does not settle on is refused whichever way it points",
+    g.other.ok === false && /settles on/.test(g.other.why ?? ""), g.other.why);
+
+  /* The guard has to be WIRED, not merely available — the same mistake as
+     `wrote` being defined and never appended to. */
+  const runner = fs.readFileSync(path.join(ROOT, "scripts/runner.mjs"), "utf8")
+    .replace(/\/\*[\s\S]*?\*\//g, "");
+  ok("and the runner actually asks before it funds",
+    /canFund\(/.test(runner) && /funding\.ok/.test(runner),
+    "a guard nothing calls is a comment");
+  ok("both the lock and the refund are behind it",
+    (runner.match(/if \(!funding\.ok\)/g) ?? []).length >= 2,
+    "a refund frame on a rail that never funded is a second claim about money that never moved");
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);
