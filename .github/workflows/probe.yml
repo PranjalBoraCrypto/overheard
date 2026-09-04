@@ -1,0 +1,39 @@
+name: probe
+
+# A read-only question asked from the one place that can ask it.
+#
+# Neither the cloud container nor a laptop can reach technocore.chat, so
+# anything we need to learn about the venue's real behaviour has to be
+# measured from a runner. This workflow exists to do that and nothing else:
+# it reads, it prints, it never signs and never posts.
+#
+# It has no schedule. Somebody dispatches it when there is a question.
+
+on:
+  workflow_dispatch:
+    inputs:
+      probe:
+        description: "Which probe to run"
+        type: choice
+        options: [room-window]
+        default: room-window
+
+permissions:
+  contents: read
+
+jobs:
+  ask:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      # No seed in the environment, deliberately. This job cannot sign, so it
+      # cannot post, so there is no version of it that commits the shop to
+      # anything — which is what makes it safe to dispatch freely.
+      - name: how far back can we see
+        if: ${{ inputs.probe == 'room-window' }}
+        run: node scripts/probe-room-window.mjs
