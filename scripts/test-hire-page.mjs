@@ -285,6 +285,108 @@ for (const [job, expect] of [
   }
 }
 
+/* ══════════════════════════════════════════════════════════════════════════
+ * THE ROOM THAT DOES NOT EXIST
+ *
+ * Somebody typed `fjuttdttytreuyetuteu` into step 2 and got a green tick.
+ * That is a perfectly well-formed room name, so the shape check passed — and
+ * shape was the only check there was. The order would then have been signed,
+ * posted, accepted and PAID INTO, at which point summariseRoom() answers "the
+ * archive has no record of a room called fjuttdttytreuyetuteu", the runner
+ * refuses to reveal over failed work, and the deal sits locked until the
+ * buyer refunds it thirty-six hours later.
+ *
+ * No money can be taken — that part was already right — but a person spent a
+ * signature and a day and a half to learn something this page could have told
+ * them in one request to its own origin.
+ * ═════════════════════════════════════════════════════════════════════════*/
+console.log("\n=== the archive is asked whether it holds the thing");
+{
+  const state = async () => pg.evaluate(() => ({
+    hint: document.getElementById("briefhint").textContent,
+    bad: document.getElementById("briefhint").className.includes("bad"),
+    good: document.getElementById("fieldwrap").className.includes("good"),
+    disabled: document.getElementById("send").disabled,
+    whynot: document.getElementById("whynot").textContent,
+  }));
+
+  await pg.click('.pick[data-job="overheard-room-summary"]');
+  await pg.fill("#brief", "fjuttdttytreuyetuteu");
+  await pg.waitForTimeout(1200);                  // past the 400ms debounce
+  const junk = await state();
+  ok("a well-formed name for a room nobody recorded is refused",
+    junk.bad && /nothing is recorded/i.test(junk.hint), junk.hint || "no hint at all");
+  ok("and the field does not show a green tick over it", junk.good === false,
+    "the tick is what made this look fine");
+  ok("the order button is dead", junk.disabled === true);
+  /* `whynot` states the FIRST thing standing between this browser and an
+     order, and in a browser with no identity that is the identity — the same
+     precedence a badly-shaped brief already gets. The reason for this refusal
+     is under the field, which is where a step-2 problem belongs. */
+  ok("and the button gives a reason rather than dying silently",
+    junk.whynot !== "", junk.whynot || "nothing said at all");
+  ok("it says what the shop actually sells, not just 'invalid'",
+    /own archive/i.test(junk.hint), junk.hint);
+
+  await pg.fill("#brief", "technocore");
+  await pg.waitForTimeout(1200);
+  const real = await state();
+  ok("a room the archive does hold is accepted", real.hint === "" && real.good === true,
+    real.hint || "clean");
+  ok("with nothing left over from the refusal before it",
+    !/nothing recorded/i.test(real.whynot) && real.hint === "", real.whynot);
+
+  /* A day the room has no record of is the same mistake wearing a date. */
+  await pg.fill("#brief", "technocore@1999-01-01");
+  await pg.waitForTimeout(1200);
+  const oldDay = await state();
+  ok("a day that room has nothing for is refused too",
+    oldDay.bad && /nothing was recorded in technocore on 1999-01-01/i.test(oldDay.hint),
+    oldDay.hint || "no hint");
+  /* ── A RANGE, NOT A LIST ────────────────────────────────────────────
+     The first version printed every day held. Six is already a long line and
+     the archive gains one a day for ever, so a message that fits today wraps
+     next week and overflows the week after. A count and two dates says the
+     same thing at a length that never changes — and the COUNT is what keeps
+     it honest, because days are not guaranteed contiguous. */
+  ok("and it says what the archive DOES hold, so the answer is usable",
+    /the archive holds \d+ days, 2026-\d\d-\d\d to 2026-\d\d-\d\d/i.test(oldDay.hint), oldDay.hint);
+  ok("as a range and a count, not a list that grows for ever",
+    (oldDay.hint.match(/\d{4}-\d{2}-\d{2}/g) ?? []).length <= 3,
+    `${(oldDay.hint.match(/\d{4}-\d{2}-\d{2}/g) ?? []).length} dates in the sentence — one is the day asked for`);
+  ok("and it stays short enough to sit on one line",
+    oldDay.hint.length < 140, `${oldDay.hint.length} characters`);
+
+  await pg.click('.pick[data-job="overheard-daily-digest"]');
+  await pg.fill("#brief", "1999-01-01");
+  await pg.waitForTimeout(1200);
+  const oldDigest = await state();
+  ok("a digest for a day nothing was recorded on is refused",
+    oldDigest.bad && /nothing was recorded anywhere on 1999-01-01/i.test(oldDigest.hint),
+    oldDigest.hint || "no hint");
+  ok("and it names the window the archive does hold",
+    /the archive holds \d+ days, 2026-/i.test(oldDigest.hint), oldDigest.hint);
+  ok("at a fixed length, whatever the archive grows to",
+    oldDigest.hint.length < 140, `${oldDigest.hint.length} characters`);
+
+  /* ── AND THE RULE THAT KEEPS THIS FROM BECOMING THE OUTAGE ─────────────
+     An answer we could not GET is not a no. If this lookup fails, the form
+     must be exactly as it was: a shape-valid order still works, it goes on
+     the board and a wake takes it, so the failure mode of a nice-to-have
+     check must never be a shop nobody can order from. */
+  await pg.route("**/data/**/_meta.json", (route) => route.abort());
+  await pg.click('.pick[data-job="overheard-room-summary"]');
+  await pg.fill("#brief", "somethingelseentirely");
+  await pg.waitForTimeout(1200);
+  const blind = await state();
+  ok("a lookup that fails does not block the order",
+    blind.bad === false && blind.good === true, blind.hint || "clean");
+  ok("and says nothing rather than guessing", blind.hint === "", blind.hint);
+  ok("no capacity or archive excuse is invented",
+    !/nothing recorded/i.test(blind.whynot), blind.whynot);
+  await pg.unroute("**/data/**/_meta.json");
+}
+
 console.log("\n=== nothing broke on the way");
 ok("no script errors", jsErrors.length === 0, jsErrors.join(" | "));
 

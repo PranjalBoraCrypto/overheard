@@ -75,6 +75,10 @@ on:
         description: "Post real signed frames. Paper rail, so no value moves — but the frames are real and must be honoured."
         type: boolean
         default: false
+      chained:
+        description: "Set by the previous window asking for its successor. Do not tick this by hand."
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -149,8 +153,21 @@ jobs:
             live="--live"; why="a person dispatched this and ticked the box"
           elif [ "${{ github.event_name }}" = "schedule" ] && [ "$AUTOPILOT" = "on" ]; then
             live="--live"; why="autopilot is on (repository variable AUTOPILOT)"
+          # ── A CHAINED RUN IS ARMED BY THE VARIABLE, NEVER BY THE CHAIN ──
+          # The successor could simply have been dispatched with live=true,
+          # and that would have been wrong: it makes the previous run the
+          # thing that authorises spending, and then a chain that keeps
+          # running is a chain nobody can stop from the settings page. So a
+          # chained run asks AUTOPILOT the same question a scheduled one does.
+          # Turning the variable off still stops everything, one field, no
+          # commit — which is the property the whole arming design exists for.
+          elif [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.chained }}" = "true" ] && [ "$AUTOPILOT" = "on" ]; then
+            live="--live"; why="chained from the previous window, and autopilot is on"
           fi
           echo "live=$live" >> "$GITHUB_OUTPUT"
+          # Stamped here so the chain step can refuse to fire from a run that
+          # died in its first seconds — see "ask for the next window".
+          echo "started=$(date +%s)" >> "$GITHUB_OUTPUT"
           # Loud in the run summary, because "did this one post?" is the first
           # question anybody asks of a log and it should never need inferring.
           if [ -n "$live" ]; then
@@ -226,3 +243,59 @@ jobs:
           # steps in front of it. See the timeout comment for why not longer.
           WAKE_WINDOW_SECONDS: "3000"
         run: node scripts/runner.mjs --loop ${{ steps.mode.outputs.live }}
+
+      # ══════════════════════════════════════════════════════════════════════
+      # ASKING FOR THE NEXT WINDOW, BECAUSE CRON DOES NOT
+      #
+      # MEASURED on this repository, 2-4 September. This workflow asks for a
+      # wake every five minutes. GitHub delivered ELEVEN scheduled runs in
+      # three days — gaps of 3h11m, 8h38m, 4h56m, 2h24m, 2h45m, 3h24m, 5h10m,
+      # 5h27m and 5h32m. A 99% miss rate against what the cron entry requests.
+      #
+      # The window fixes what happens WHILE a run is alive: fifty wakes, one a
+      # minute. It does nothing about the hours between one firing and the
+      # next, and a buyer who has already paid is waiting in every one of them.
+      #
+      # A run cannot start another with GITHUB_TOKEN — a deliberate loop-guard
+      # — so this needs a token of its own, and THERE IS NO TOKEN. The step is
+      # inert: it prints one line and exits. It is here because the moment a
+      # secret named RUNNER_CHAIN_TOKEN exists, the shop stops depending on a
+      # scheduler that has never once done what it was asked.
+      #
+      # always(), because a run that CRASHED is the one that most needs a
+      # successor. A floor on elapsed time, because a job that fails in ten
+      # seconds and immediately asks for another is a hot loop. And `chained`,
+      # so the successor is armed by the AUTOPILOT variable rather than by
+      # this run's say-so — see the mode step.
+      - name: ask for the next window
+        if: ${{ always() }}
+        env:
+          CHAIN_TOKEN: ${{ secrets.RUNNER_CHAIN_TOKEN }}
+          STARTED: ${{ steps.mode.outputs.started }}
+        run: |
+          set -e
+          if [ -z "${CHAIN_TOKEN:-}" ]; then
+            echo "no RUNNER_CHAIN_TOKEN — the next window waits for cron, which measured 11 firings in 3 days"
+            exit 0
+          fi
+          ELAPSED=$(( $(date +%s) - ${STARTED:-0} ))
+          if [ "${STARTED:-0}" -eq 0 ] || [ "$ELAPSED" -lt 600 ]; then
+            echo "this run lasted ${ELAPSED}s — too short to chain from, leaving it to cron"
+            exit 0
+          fi
+          echo "requesting the next window after ${ELAPSED}s"
+          # The token is only ever an Authorization header read from the
+          # environment. Shell tracing is never turned on here, and a dispatch
+          # returns no body to print.
+          code=$(curl -sS -o /tmp/dispatch.out -w '%{http_code}' -X POST \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer $CHAIN_TOKEN" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/${{ github.repository }}/actions/workflows/runner.yml/dispatches" \
+            -d '{"ref":"main","inputs":{"chained":"true"}}') || true
+          if [ "$code" = "204" ]; then
+            echo "next window queued"
+          else
+            echo "could not queue the next window (HTTP $code) — cron remains the backstop"
+            head -c 400 /tmp/dispatch.out || true
+          fi

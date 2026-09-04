@@ -62,7 +62,7 @@ const day = (iso) => (typeof iso === "string" && iso.length >= 10 ? iso.slice(0,
 export async function profileAgent(did, opts = {}) {
   const fetchImpl = opts.fetch ?? fetch;
   const base = opts.base ?? SITE;
-  if (!DID_RE.test(String(did ?? ""))) return { ok: false, why: "that is not a canonical did:key" };
+  if (!DID_RE.test(String(did ?? ""))) return { ok: false, permanent: true, why: "that is not a canonical did:key" };
 
   let d;
   try {
@@ -155,7 +155,7 @@ export async function doJob(jobId, brief, opts = {}) {
   if (jobId === "overheard-agent-profile") return profileAgent(brief, opts);
   if (jobId === "overheard-room-summary") return summariseRoom(brief, opts);
   if (jobId === "overheard-daily-digest") return dailyDigest(brief, opts);
-  return { ok: false, why: `no handler for ${jobId}` };
+  return { ok: false, permanent: true, why: `no handler for ${jobId}` };
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
@@ -279,23 +279,41 @@ const shortDid = (d) => (String(d).length > 26 ? String(d).slice(0, 22) + "…" 
  *
  * `brief` is a room name, optionally `room@YYYY-MM-DD` for a single day.
  */
+/* ── A FAILURE THAT WAITING WILL NOT FIX ───────────────────────────────────
+ *
+ * MEASURED on a live window, 4 September: somebody ordered a summary of
+ * `lobbygsgfguututu455`, a room nobody has ever recorded. The order was
+ * accepted and paid into, delivery failed, and the runner correctly refused
+ * to reveal — and then tried again on every wake for the next fifty minutes,
+ * fifty times, each attempt certain to fail for the identical reason, each
+ * one spending a warning slot out of the eight GitHub keeps.
+ *
+ * The distinction the code was missing: "the archive did not answer (503)"
+ * is a bad minute and deserves the next wake; "the archive has no record of a
+ * room called X" is an answer, and it will be the same answer in an hour.
+ *
+ * `permanent: true` marks the second kind. The runner tries those once, says
+ * so in the deal's own room so the buyer learns why rather than watching a
+ * locked payment for a day and a half, and stops. Anything NOT marked is
+ * retried, because the safe default for an unknown failure is to try again.
+ */
 export async function summariseRoom(brief, opts = {}) {
   const dir = opts.archive ?? ARCHIVE;
   const [roomRaw, dayRaw] = String(brief ?? "").split("@");
   const room = String(roomRaw ?? "").trim();
-  if (!ROOM_RE.test(room)) return { ok: false, why: "that is not a room name this archive can hold" };
+  if (!ROOM_RE.test(room)) return { ok: false, permanent: true, why: "that is not a room name this archive can hold" };
   if (dayRaw && !DAY_RE.test(dayRaw.trim()))
-    return { ok: false, why: "a day must be written YYYY-MM-DD" };
+    return { ok: false, permanent: true, why: "a day must be written YYYY-MM-DD" };
 
   const meta = await readJson(path.join(dir, room, "_meta.json"));
-  if (!meta) return { ok: false, why: `the archive has no record of a room called ${room}` };
+  if (!meta) return { ok: false, permanent: true, why: `the archive has no record of a room called ${room}` };
 
   const days = dayRaw ? [dayRaw.trim()] : (meta.days ?? []);
   if (dayRaw && !(meta.days ?? []).includes(dayRaw.trim()))
-    return { ok: false, why: `nothing was recorded in ${room} on ${dayRaw.trim()}` };
+    return { ok: false, permanent: true, why: `nothing was recorded in ${room} on ${dayRaw.trim()}` };
 
   const rows = await roomRows(dir, room, days);
-  if (!rows.length) return { ok: false, why: `no stored messages for ${room} on those days` };
+  if (!rows.length) return { ok: false, permanent: true, why: `no stored messages for ${room} on those days` };
 
   const g = gapReport(meta, rows);
   const speakers = speakerCount(rows);
@@ -402,7 +420,7 @@ export async function dailyDigest(brief, opts = {}) {
 
   const day = want ?? rooms.map((r) => r.meta.days[r.meta.days.length - 1]).sort().pop();
   const active = rooms.filter((r) => r.meta.days.includes(day));
-  if (!active.length) return { ok: false, why: `nothing was recorded anywhere on ${day}` };
+  if (!active.length) return { ok: false, permanent: true, why: `nothing was recorded anywhere on ${day}` };
 
   /* A room is NEW on this day if the archive first heard it that day. That is
      a fact about our recording, not about the network, and it is labelled so

@@ -55,9 +55,26 @@ const frames = [
   msg(3, OTHER, "tclk1 " + canon({ type: "lock", from: OTHER, contract: acc.body.contract })),
 ];
 
+/* ── AN ORDER NOBODY CAN EVER FILL ────────────────────────────────────────
+   Same shape, but the brief is not a did:key, so profileAgent answers with a
+   permanent refusal rather than a transient one. This is what a buyer typing
+   nonsense into their own agent produces, and on 4 September somebody did
+   exactly that with a room name — `lobbygsgfguututu455` — and the wake
+   retried it fifty times in fifty minutes while the buyer watched a locked
+   payment with no explanation anywhere. */
+const badOffer = { ...offer, nonce: "0000000000000002", job: { ...offer.job, brief: "not-a-did-at-all" } };
+const badId = await offerId(badOffer);
+const badAcc = await buildAccept({ body: badOffer }, badId, NOW, minterFor(SEED));
+const badFrames = [
+  msg(1, OTHER, "tclk1 " + canon({ ...badOffer, id: badId })),
+  msg(2, US, "tclk1 " + canon(badAcc.body)),
+  msg(3, OTHER, "tclk1 " + canon({ type: "lock", from: OTHER, contract: badAcc.body.contract })),
+];
+
 /** One wake against a venue that records the ORDER of what reaches the wire. */
-async function run(profileOk) {
+async function run(profileOk, useFrames = frames, mod = null) {
   const posted = [];
+  const texts = [];
   const lines = [];
   const stub = async (url) => {
     const u = String(url);
@@ -66,6 +83,7 @@ async function run(profileOk) {
       let kind = "delivery";
       try { const f = JSON.parse(text.replace(/^tclk1 /, "")); if (f.type) kind = f.type; } catch {}
       posted.push(kind);
+      texts.push(text);
       return { ok: true, status: 200, text: async () => "{}" };
     }
     if (u.includes("/api/profile"))
@@ -73,11 +91,12 @@ async function run(profileOk) {
         ? { ok: true, status: 200, json: async () => ({
             profile: { did: OTHER, count: 5, unique: 5, rooms: ["lobby"], first: "2026-09-01", last: "2026-09-03" } }) }
         : { ok: false, status: 503, json: async () => ({}) };
-    return { ok: true, status: 200, json: async () => ({ messages: frames }) };
+    return { ok: true, status: 200, json: async () => ({ messages: useFrames }) };
   };
-  const r = await wake({ fetch: stub, base: "http://stub", log: (l) => lines.push(l),
-                         now: NOW, seed: SEED, live: true });
-  return { posted, lines, out: lines.join("\n"), wrote: r.wrote ?? [], stalled: r.stalled ?? [] };
+  const w = mod?.wake ?? wake;
+  const r = await w({ fetch: stub, base: "http://stub", log: (l) => lines.push(l),
+                      now: NOW, seed: SEED, live: true });
+  return { posted, lines, texts, out: lines.join("\n"), wrote: r.wrote ?? [], stalled: r.stalled ?? [] };
 }
 
 const good = await run(true);
@@ -158,3 +177,76 @@ say("and the annotation carries no 64-hex string either",
   !inCI.lines.filter((l) => l.startsWith("::")).some((l) => /[0-9a-f]{64}/.test(l)));
 say("and no preimage rides along in it", !/[0-9a-f]{64}/.test(bad.stalled.join(" ")),
   bad.stalled.join(" "));
+
+/* ══════════════════════════════════════════════════════════════════════════
+ * AN ORDER THAT CAN NEVER BE FILLED
+ *
+ * MEASURED, 4 September: somebody ordered a summary of `lobbygsgfguututu455`.
+ * The shop accepted it, took the lock, failed the delivery, correctly refused
+ * to reveal — and then did all of that again on every wake for fifty minutes.
+ * Fifty attempts, every one certain to fail for the identical reason, six of
+ * the eight warning slots GitHub keeps spent on the same sentence, and a
+ * buyer watching a locked payment for thirty-six hours with the reason
+ * written nowhere they could see it.
+ *
+ * The money was never at risk — no reveal, no claim — and that is not the
+ * same as this being handled.
+ * ═════════════════════════════════════════════════════════════════════════*/
+const bad1 = await run(true, badFrames);
+/* The give-up note is itself a plain message, so counting "any plain post" as
+   a delivery would fail this for the wrong reason. What must not exist is a
+   post that is neither a frame nor that note — that would be work delivered
+   for an order nothing can fill. */
+const isNote = (t) => /^Overheard cannot deliver this order/.test(t);
+const workPosts = bad1.texts.filter((t) => !t.startsWith("tclk1 ") && !isNote(t));
+say("an order it cannot fill produces no work", workPosts.length === 0,
+  workPosts.join(" | ").slice(0, 120) || "nothing but the explanation");
+say("and is certainly not revealed", !bad1.posted.includes("reveal"),
+  "revealing here is claiming payment for work that does not exist");
+say("the buyer is told why, in the deal's own room where they are looking",
+  bad1.texts.some((t) => /Overheard cannot deliver this order/.test(t)),
+  bad1.texts.join(" | ").slice(0, 140) || "nothing said to them at all");
+say("with the actual reason, not a shrug",
+  bad1.texts.some((t) => /not a canonical did:key/.test(t)),
+  bad1.texts.find((t) => /cannot deliver/.test(t))?.slice(0, 160) ?? "");
+say("and told plainly that no money was taken",
+  bad1.texts.some((t) => /No payment has been taken/.test(t)));
+say("and that the escrow returns it by itself",
+  bad1.texts.some((t) => /returns it to you at the refund deadline/.test(t)),
+  "a buyer who thinks they must chase us is a buyer we have cost more than the fee");
+say("the note is counted as a write", bad1.wrote.some((w) => w.startsWith("cannot-deliver:")),
+  bad1.wrote.join(" · "));
+say("and the run says a paid deal did not get its work",
+  bad1.stalled.some((x) => /CANNOT BE DELIVERED/.test(x)), JSON.stringify(bad1.stalled));
+
+/* ── AND THEN IT STOPS ─────────────────────────────────────────────────────
+   Fifty wakes in a window. The answer does not change between them. */
+const bad2 = await run(true, badFrames);
+say("a second wake does not tell them again",
+  !bad2.texts.some((t) => /cannot deliver this order/i.test(t)),
+  bad2.texts.join(" | ").slice(0, 120) || "silent, correctly");
+/* The buy side still runs, and should — it is a different half of the shop.
+   What must not repeat is anything about THIS deal. */
+say("and posts nothing about that deal at all",
+  bad2.texts.every((t) => t.startsWith("tclk1 ") && /"type":"offer"/.test(t)),
+  bad2.texts.map((t) => t.slice(0, 40)).join(" | ") || "nothing");
+
+/* ── THE DISTINCTION THAT MAKES THIS SAFE ──────────────────────────────────
+   A 503 from the archive is a bad minute, not an answer. Treating the two the
+   same would mean one flaky read permanently abandoning a deal we could have
+   delivered — which costs the buyer their work and us the fee. */
+const flaky = await import("./runner.mjs?flaky=" + Math.random());
+const t1 = await run(false, frames, flaky);
+const t2 = await run(false, frames, flaky);
+say("a transient failure is NOT treated as final",
+  /DELIVERY FAILED/.test(t1.out) && /DELIVERY FAILED/.test(t2.out),
+  "the second wake must still try — a bad minute is not an answer");
+say("and no give-up note is posted for one",
+  !t1.texts.some((t) => /cannot deliver this order/i.test(t))
+  && !t2.texts.some((t) => /cannot deliver this order/i.test(t)),
+  "telling a buyer we cannot do it because the archive blinked would be a lie");
+
+/* ── AND THE ANNOTATION BUDGET, WHICH IS EIGHT ─────────────────────────────
+   Six identical warnings for one order is six slots spent saying one thing. */
+say("the same stall is not reported twice in one wake",
+  new Set(bad1.stalled).size === bad1.stalled.length, JSON.stringify(bad1.stalled));

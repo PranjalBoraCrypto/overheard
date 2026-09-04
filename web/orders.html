@@ -597,6 +597,10 @@ async function load() {
   paint();
 }
 
+/* The shop's own identity. Used only to recognise what IT said in a deal
+   room: a stranger can copy the words, and only this key can post as us. */
+const SHOP = "did:key:z6MkiuhfekPgiihLWarPAzhuvoMjg86F8dqmLiCTmtQgMrR3";
+
 /* ── painting ─────────────────────────────────────────────────────────────*/
 const isOpen = (o) => isFinite(o.expiresMs) && o.expiresMs > Date.now();
 
@@ -768,6 +772,34 @@ function itemFor(o) {
   return wrap;
 }
 
+/* ── WHEN THE MONEY COMES BACK, IN WORDS AND NOT IN A PROTOCOL FIELD ──────
+   `refundAfterMs` is on every offer and has never been shown to anybody. It
+   is the answer to the only question a buyer with a locked payment actually
+   has — when do I get it back — and the shop cannot answer it by doing
+   anything, because a refund is the PAYER's move. Saying nothing left a
+   person watching a locked payment with no idea whether it was gone.
+   Local time, because the deadline is a moment in the reader's day. */
+function refundLine(o, lead) {
+  const at = Number(o.refundAfterMs);
+  if (!Number.isFinite(at) || at <= 0) return "";
+  const d = new Date(at);
+  if (Number.isNaN(d.getTime())) return "";
+  const when = d.toLocaleString(undefined,
+    { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+  return at <= Date.now()
+    ? `${lead} — that moment has passed, so it is refundable now.`
+    : `${lead} on ${when}.`;
+}
+
+/* The shop's own sentence, trimmed of the part the line above already says.
+   Quoting it whole would repeat "no payment has been taken" twice in one
+   paragraph, which reads as a page arguing with itself. */
+const shopSaid = (t) =>
+  String(t).replace(/^Overheard cannot deliver this order:\s*/, "")
+    .replace(/\s*No payment has been taken[\s\S]*$/, "")
+    .replace(/\.?\s*$/, ".")
+    .replace(/^./, (c) => c.toUpperCase());
+
 /* The four figures at the top are counted from the same statusOf(), so they
    move when a row does. Called after each deal resolves rather than once at
    paint, because at paint nothing is known yet. */
@@ -815,11 +847,13 @@ function actionFor(o, pill = null) {
      Four outcomes, and only one of them is a button. The common case by far
      is `locked` — the checkout does this automatically — so that is the one
      phrased as reassurance rather than as a step. */
-  const show = (state) => {
+  const show = (r) => {
+    const state = r?.state ?? null;
     /* Recorded on the order, so the pill, the filter tabs and the four
        figures at the top all read one answer rather than three. */
     if (state) {
       o.dealState = state;
+      o.cannot = r.cannot ?? null;
       if (pill) {
         const st = statusOf(o);
         pill.className = "hstate " + st.cls;
@@ -828,8 +862,23 @@ function actionFor(o, pill = null) {
       restat();
     }
     if (state === "locked") {
+      /* ── THE ONE ORDER THAT WILL NEVER FINISH ──────────────────────────
+         Some briefs cannot be filled at all — a room nobody has recorded, a
+         day with nothing in it. The shop says so once in the deal's own room
+         and stops trying, and it must never open the lock, so the money can
+         only come back the one way the protocol allows: the payer refunds it
+         at their own deadline. A page that showed this as "the shop owes you
+         the work" would be telling somebody to wait for something that is
+         not coming. */
+      if (r.cannot) {
+        b.textContent = "This order cannot be filled";
+        p.textContent = shopSaid(r.cannot) + refundLine(o, " Your payment unlocks itself");
+        box.classList.add("done");
+        return;
+      }
       b.textContent = "Paid — the shop owes you the work";
-      p.textContent = "Your payment is locked in escrow. The shop delivers on its next wake and then opens the lock; you do not need to do anything.";
+      p.textContent = "Your payment is locked in escrow. The shop delivers on its next wake and then opens the lock; you do not need to do anything."
+        + refundLine(o, " If it is not delivered, your payment unlocks itself");
       box.classList.add("done");
       return;
     }
@@ -865,7 +914,7 @@ function actionFor(o, pill = null) {
      paint is the cost this whole design is arranged to avoid. An answer
      already on the order is used straight away, so a repaint is free and the
      budget is spent only on deals nobody has looked up yet. */
-  if (o.dealState) show(o.dealState);
+  if (o.dealState) show({ state: o.dealState, cannot: o.cannot ?? null });
   else if (!queueCheck(() => dealState(o.accept.room, o.accept.contract).then(show))) {
     /* More answered orders on one page than the budget allows. Hiding is the
        same choice as an unreadable room: say nothing rather than guess, and
@@ -888,7 +937,7 @@ function actionFor(o, pill = null) {
          delivered. Posting a second lock would be a frame the state machine
          refuses — harmless, but it would sit on the public board looking like
          a buyer who did not know what they were doing. */
-      const state = await dealState(o.accept.room, o.accept.contract);
+      const { state } = await dealState(o.accept.room, o.accept.contract);
       if (state === "locked" || state === "claimed") {
         tell("Already funded — the shop owes you the work now.", "ok");
         go.remove(); return;
@@ -991,12 +1040,21 @@ async function dealState(room, contract) {
     } catch { return null; }
   };
   const msgs = await grab(room);
-  if (msgs === null) return null;
+  if (msgs === null) return { state: null, cannot: null };
 
   const frames = [];
+  /* ── THE ONE THING IN THAT ROOM THAT IS NOT A FRAME ──────────────────────
+     When the shop cannot fill an order at all — a room nobody ever recorded,
+     a day with nothing in it — it says so once, in plain words, in this room.
+     That sentence is the only explanation the buyer will ever get, and a
+     reader that only parses frames walks straight past it and reports the
+     deal as an ordinary unfinished one. */
+  let cannot = null;
   const eat = (list) => {
     for (const m of list ?? []) {
-      const f = readFrame(String(m.text ?? ""));
+      const raw = String(m.text ?? "");
+      if (m.from === SHOP && /^Overheard cannot deliver this order/.test(raw)) cannot = raw;
+      const f = readFrame(raw);
       if (!f.ok) continue;
       if (contract && String(f.body?.contract ?? "") !== String(contract)) continue;
       frames.push({ ...f, ...f.body, body: f.body, type: f.type, from: m.from, at: Date.parse(m.ts ?? "") || null });
@@ -1015,7 +1073,7 @@ async function dealState(room, contract) {
      reading somebody else's business as our own. */
   if (!frames.length && contract) {
     const board = await grab("tclk-offers");
-    if (board === null) return null;      // unknown, and the caller must not guess
+    if (board === null) return { state: null, cannot: null };   // unknown; the caller must not guess
     eat(board);
   }
   /* The accept lives in the offers room, not in here, so a deal room holding
@@ -1024,11 +1082,12 @@ async function dealState(room, contract) {
      that would move it IS in here, so the fragment answers that question
      even though it cannot reconstruct the whole deal. */
   const seen = new Set(frames.map((f) => f.type));
-  if (seen.has("reveal")) return "claimed";
-  if (seen.has("refund")) return "refunded";
-  if (seen.has("cancel")) return "cancelled";
-  if (seen.has("lock")) return "locked";
-  return "accepted";
+  const state = seen.has("reveal") ? "claimed"
+    : seen.has("refund") ? "refunded"
+    : seen.has("cancel") ? "cancelled"
+    : seen.has("lock") ? "locked"
+    : "accepted";
+  return { state, cannot };
 }
 
 function rowFor(o) {

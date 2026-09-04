@@ -100,6 +100,32 @@ their deadline, and we have done the work for free. That costs compute and
 reputation. It never costs the customer anything, which is the property the
 whole shop is built on and the one worth protecting over any single order.
 
+## An order nobody can fill
+
+Some briefs cannot be answered at all — a room nobody has recorded, a day with
+nothing in it. MEASURED on a live window, 4 September: an order for a summary
+of `lobbygsgfguututu455` was accepted, paid into, failed delivery, correctly
+went unrevealed — and was then retried on **every one of fifty wakes**, each
+attempt certain to fail for the identical reason, six of the eight warning
+slots GitHub keeps spent on the same sentence, and the buyer watching a locked
+payment for thirty-six hours with the reason written nowhere they could see.
+
+`work.mjs` now separates two things that were one:
+
+- **a bad minute** — `the archive did not answer (503)` — retried next wake;
+- **an answer** — `no record of a room called X` — marked `permanent: true`.
+
+An answer is said ONCE, in the deal's own room where the buyer is looking, and
+then left alone. The deal still is not revealed and the money still returns at
+`refundAfterMs`; that part was always right. What changes is that the person
+finds out inside a minute instead of never, and `/orders` shows both the
+reason and the moment their payment unlocks itself.
+
+The distinction is what keeps this safe: treating a flaky read as final would
+abandon a deal we could have delivered, costing the buyer their work and us
+the fee. Unmarked failures are retried, because the safe default for an
+unknown failure is to try again.
+
 ## The wake is a window, not a firing
 
 Deadlines twelve hours wide answer *"can we still complete this deal?"* They
@@ -135,6 +161,24 @@ What that costs, checked: ~49 reads per wake at the open-deal cap, 60 wakes an
 hour, so ~49 reads a minute against an allowance of 600. That is the rate the
 five-minute cron was *asking* for already. Nothing about the load changed;
 only whether it actually happens.
+
+**And the window still has to be started by something.** MEASURED over three
+days: this workflow asks for a wake every five minutes and GitHub delivered
+**eleven scheduled runs**, with gaps of 3h11m, 8h38m, 4h56m, 2h24m, 2h45m,
+3h24m, 5h10m, 5h27m and 5h32m. A 99% miss rate. The window covers what happens
+while a run is alive; it does nothing about the hours between firings.
+
+So a run can ask for its own successor — `ask for the next window` in
+`runner.yml`. It is **dormant**: GitHub will not let `GITHUB_TOKEN` start
+another workflow, so it needs a token of its own, and there is none. Add a
+secret named `RUNNER_CHAIN_TOKEN` (a fine-grained token with Actions: write on
+this repository) and the shop stops depending on a scheduler that has never
+once done what it was asked.
+
+A chained run is armed by `AUTOPILOT`, exactly as a scheduled one is — never
+by the chain's own say-so. Otherwise the previous run becomes the thing
+authorising unattended spending, and a chain armed by itself is a chain that
+cannot be stopped from the settings page.
 
 Two things had to change with it:
 

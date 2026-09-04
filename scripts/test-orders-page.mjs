@@ -730,6 +730,65 @@ console.log("\n=== K. the buyer can actually pay — and is never asked to pay t
   ok("the strip stops looking like a call to action",
     await pg.$$eval(".hact.done", (n) => n.length) === 1);
   ok("and nothing was posted merely by looking", posts.length === 0, `${posts.length} posts`);
+  /* ── WHEN THE MONEY COMES BACK ────────────────────────────────────────
+     `refundAfterMs` is on every offer and had never been shown to anybody.
+     It is the answer to the only question a buyer with a locked payment
+     actually has, and the shop cannot answer it by acting — a refund is the
+     PAYER's move. Saying nothing left a person watching a locked payment
+     with no idea whether it was gone. */
+  const words2 = await pg.$eval(".hactwords span", (e) => e.textContent);
+  ok("a locked payment says when it unlocks itself",
+    /unlocks itself on /i.test(words2), words2);
+  ok("as a moment in the reader's own day, not a protocol field",
+    /\d{1,2}:\d{2}/.test(words2), words2);
+  await ctx.close();
+}
+{
+  /* ══════════════════════════════════════════════════════════════════════
+   * THE ORDER THAT WILL NEVER FINISH
+   *
+   * MEASURED, 4 September: somebody ordered a summary of a room nobody has
+   * ever recorded. The shop accepted it, took the lock, could not do the
+   * work, and correctly refused to open it — so the money can only come back
+   * the one way the protocol allows, at the payer's own deadline, 36 hours
+   * later. Meanwhile this page said "Paid — the shop owes you the work",
+   * which is telling somebody to wait for something that is not coming.
+   * ═══════════════════════════════════════════════════════════════════*/
+  roomReads = []; posts = [];
+  const SHOPDID = "did:key:z6MkiuhfekPgiihLWarPAzhuvoMjg86F8dqmLiCTmtQgMrR3";
+  dealFrames = [
+    { seq: 1, ts: new Date().toISOString(), from: DID,
+      text: "tclk1 " + JSON.stringify({ type: "lock", from: DID, contract: CONTRACT, rail: "paper", ref: "aa" }) },
+    { seq: 2, ts: new Date().toISOString(), from: SHOPDID,
+      text: "Overheard cannot deliver this order: the archive has no record of a room called "
+          + "lobbygsgfguututu455. No payment has been taken and none can be — the lock is not opened, "
+          + "so the escrow returns it to you at the refund deadline on this offer. "
+          + "Nothing further is needed from this shop." },
+  ];
+  const { ctx, pg } = await open();
+  await pg.goto("http://localhost:9441/orders.html", { waitUntil: "domcontentloaded" });
+  await pg.waitForTimeout(1600);
+  const head = await pg.$eval(".hactwords b", (e) => e.textContent);
+  const body = await pg.$eval(".hactwords span", (e) => e.textContent);
+  ok("it says the order cannot be filled, not that work is coming",
+    /cannot be filled/i.test(head), head);
+  ok("with the shop's own reason", /no record of a room called/i.test(body), body);
+  ok("and when the payment unlocks itself", /unlocks itself on /i.test(body), body);
+  ok("without repeating the same sentence twice in one paragraph",
+    (body.match(/no payment has been taken/gi) ?? []).length === 0, body);
+  ok("and it offers nothing to press", await pg.$$eval(".hbtn:not([hidden])", (n) => n.length) === 0);
+  ok("nothing was posted", posts.length === 0, `${posts.length} posts`);
+  /* Only the shop can say this. A stranger can copy the words into the room;
+     they cannot post as us, and the page must read the transport, not the
+     text. */
+  dealFrames[1].from = DID;
+  const c2 = await open();
+  await c2.pg.goto("http://localhost:9441/orders.html", { waitUntil: "domcontentloaded" });
+  await c2.pg.waitForTimeout(1600);
+  ok("a stranger cannot fake that message",
+    /owes you the work/i.test(await c2.pg.$eval(".hactwords b", (e) => e.textContent)),
+    await c2.pg.$eval(".hactwords b", (e) => e.textContent));
+  await c2.ctx.close();
   await ctx.close();
 }
 {

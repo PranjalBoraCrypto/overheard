@@ -920,9 +920,32 @@ const group = (n) => String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
  * letting it through costs a deal.
  *
  * The checks are deliberately loose at the edges — a did:key we cannot
- * resolve is still a did:key, and a room that does not exist is a fair
- * question to ask about — so they catch the WRONG SHAPE, which is the mistake
- * people actually make, and nothing else.
+ * resolve is still a did:key — so they catch the WRONG SHAPE, which is the
+ * mistake people actually make.
+ *
+ * ── AND WHY SHAPE IS NOT ENOUGH FOR A ROOM ────────────────────────────────
+ *
+ * This block used to say "a room that does not exist is a fair question to
+ * ask about". It is not, and somebody proved it by typing
+ * `fjuttdttytreuyetuteu` into the field and getting a green tick.
+ *
+ * That is a perfectly well-formed room name, so the shape check passes, so
+ * the order is signed, posted, accepted, and the buyer's payment is locked.
+ * Then summariseRoom() answers `the archive has no record of a room called
+ * fjuttdttytreuyetuteu`, the runner refuses to reveal over failed work — which
+ * is correct, and is why no money can be taken for it — and the deal sits
+ * locked until the buyer refunds it thirty-six hours later.
+ *
+ * Nobody loses anything except the thing that matters: a person spent a
+ * signature and a day and a half to learn a fact this page could have told
+ * them in one request. The archive is served from this very origin.
+ *
+ * TWO RULES, and the second is the one that keeps this safe:
+ *   · Block only on a DEFINITE no — a 404 for the room, or a day the room's
+ *     own record does not list. Say what we do have.
+ *   · An answer we could not get is NOT a no. If the lookup fails, the form
+ *     stays exactly as it was. A shape-valid order still works; the failure
+ *     mode of this check must never be a shop that cannot be ordered from.
  */
 const SHAPES = {
   "overheard-agent-profile": {
@@ -943,6 +966,105 @@ const SHAPES = {
   },
 };
 
+/* ── DOES THE ARCHIVE ACTUALLY HOLD IT ────────────────────────────────────
+ * Static files from this origin — the same shards the site serves and the
+ * archiver writes — so this costs no upstream read and nothing of the shared
+ * technocore allowance. Answers are `null` for "cannot tell", which every
+ * caller treats as "carry on".
+ */
+const metaCache = new Map();
+async function roomMeta(room) {
+  if (metaCache.has(room)) return metaCache.get(room);
+  let out = null;                                   // null = could not tell
+  try {
+    const r = await fetch(`/data/${encodeURIComponent(room)}/_meta.json`, { cache: "no-store" });
+    if (r.status === 404) out = false;              // definitely not held
+    else if (r.ok) out = await r.json();
+  } catch { /* stays null */ }
+  metaCache.set(room, out);
+  return out;
+}
+
+/* ── A RANGE, NOT A LIST ───────────────────────────────────────────────────
+   The first version printed the days themselves. Six of them is already a
+   long line, and this archive gains one every day for ever — so a message
+   that fits today wraps next week and overflows its box the week after. A
+   count and two dates is the same information at a length that never changes.
+   The COUNT is what keeps it honest: days are not guaranteed contiguous, and
+   "12 days, 26 Aug to 12 Sep" tells a reader there are gaps in a way that a
+   bare range would hide. */
+function heldSpan(days) {
+  const d = [...new Set(days ?? [])].sort();
+  if (!d.length) return "nothing";
+  if (d.length === 1) return d[0];
+  return `${d.length} days, ${d[0]} to ${d[d.length - 1]}`;
+}
+
+const HAVE = {
+  "overheard-room-summary": async (v) => {
+    const [roomRaw, day] = String(v).split("@");
+    const room = roomRaw.trim();
+    const meta = await roomMeta(room);
+    if (meta === null) return null;                 // cannot tell: do not block
+    if (meta === false)
+      return `Nothing is recorded for a room called “${room}”. This shop sells its own archive, `
+           + `so it can only summarise rooms it has been recording. Try one of the names below.`;
+    if (!meta.days?.length)
+      return `“${room}” is followed but nothing has been stored for it yet.`;
+    if (day && !meta.days.includes(day.trim()))
+      return `Nothing was recorded in ${room} on ${day.trim()}. The archive holds ${heldSpan(meta.days)}.`;
+    return "";                                      // "" = held, go ahead
+  },
+  "overheard-daily-digest": async (v) => {
+    /* The digest is network-wide, so there is no single room to ask. lobby
+       and technocore are the two busiest and are always followed, so the
+       union of their days is a close enough answer to "was anything recorded
+       that day" — and a wrong date is almost always a date nobody recorded
+       anything on, not a subtle edge. */
+    const metas = await Promise.all([roomMeta("lobby"), roomMeta("technocore")]);
+    if (metas.every((m) => m === null)) return null;
+    const days = new Set();
+    for (const m of metas) for (const d of (m && m.days) || []) days.add(d);
+    if (!days.size) return null;
+    if (days.has(v)) return "";
+    return `Nothing was recorded anywhere on ${v}. The archive holds ${heldSpan([...days])}.`;
+  },
+  /* A did:key with no history is a real answer and a deliverable one: the
+     profile says so, in as many words. Nothing to check. */
+};
+
+/* What the last completed check said about the value in the box. "" means
+   held; a string means we know it is not; null means we do not know. */
+let briefHeld = null;
+let briefFor = "";
+let briefTimer = null;
+
+function checkBrief() {
+  const job = chosen.dataset.job;
+  const v = $("brief").value.trim();
+  const key = job + "|" + v;
+  if (key === briefFor) return;
+  clearTimeout(briefTimer);
+  /* Only after the shape is right — an unfinished room name is not a missing
+     one, and telling somebody their half-typed word does not exist while they
+     are still typing it is worse than saying nothing. */
+  if (!v || !SHAPES[job].ok(v) || !HAVE[job]) {
+    briefFor = key; briefHeld = null; repaint();
+    return;
+  }
+  /* Debounced: a person types a room name one character at a time and each
+     of those is a request. */
+  briefTimer = setTimeout(async () => {
+    const answer = await HAVE[job](v);
+    /* Only if they have not moved on — an answer about a value that is no
+       longer in the box would block a field it was never about. */
+    if ($("brief").value.trim() !== v || chosen.dataset.job !== job) return;
+    briefFor = key;
+    briefHeld = answer;
+    repaint();
+  }, 400);
+}
+
 let ID = null;
 let posted = false;
 const picks = [...document.querySelectorAll(".pick")];
@@ -962,9 +1084,11 @@ function choose(btn, focusField = true) {
   $("sumDeliv").textContent = btn.dataset.deliv;
   $("sumPrice").textContent = group(btn.dataset.price);
   /* Changing the job changes what the field MEANS, so anything already typed
-     is re-judged against the new shape rather than silently carried over as
+     is re-judged against the new shape — and against the new question of
+     whether the archive holds it — rather than silently carried over as
      though it still made sense. */
   repaint();
+  checkBrief();
   paintTries();
   if (focusField && $("brief").value === "") $("brief").focus({ preventScroll: true });
 }
@@ -1090,6 +1214,7 @@ async function paintTries() {
     b.addEventListener("click", () => {
       $("brief").value = item.value;
       repaint();
+      checkBrief();
       $("brief").focus({ preventScroll: true });
     });
     row.append(b);
@@ -1131,17 +1256,25 @@ function repaint() {
   $("s2").classList.toggle("done", valid);
   $("s3").classList.toggle("done", Boolean(ID));
 
-  $("fieldwrap").classList.toggle("good", valid);
+  /* A brief the archive definitely does not hold. `briefHeld` is "" for held
+     and null for "we could not tell", and only a STRING is a refusal — see
+     the HAVE block for why an unknown answer must never block. */
+  const missing = typeof briefHeld === "string" && briefHeld !== "" && briefFor === chosen.dataset.job + "|" + v
+    ? briefHeld : "";
+
+  $("fieldwrap").classList.toggle("good", valid && !missing);
   const hint = $("briefhint");
-  if (!filled || valid) { hint.className = "hint"; hint.textContent = ""; }
+  if (missing) { hint.className = "hint bad"; hint.textContent = missing; }
+  else if (!filled || valid) { hint.className = "hint"; hint.textContent = ""; }
   else { hint.className = "hint bad"; hint.textContent = shape.say(v); }
 
-  const ready = valid && Boolean(ID) && !posted && !SHOP_FULL;
+  const ready = valid && !missing && Boolean(ID) && !posted && !SHOP_FULL;
   $("send").disabled = !ready;
   $("whynot").textContent = posted ? ""
     : !ID ? "Create an identity first — step 3."
     : !filled ? "Fill in step 2."
     : !valid ? "Step 2 does not look right yet."
+    : missing ? "This shop has nothing recorded for that — see step 2."
     : SHOP_FULL ? "Every slot is taken right now. This clears in a few minutes."
     : "";
 
@@ -1297,7 +1430,7 @@ function paintWho(s) {
   readCapacity();
 }
 
-$("brief").addEventListener("input", repaint);
+$("brief").addEventListener("input", () => { repaint(); checkBrief(); });
 
 /* ── placing it ───────────────────────────────────────────────────────────*/
 const say = (t, cls = "busy") => { $("msg").textContent = t; $("msg").className = "msg on " + cls; };

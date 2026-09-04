@@ -1210,6 +1210,40 @@ console.log("\n=== R. staying awake for a window");
     ok("and the loop is passed the same live switch as the single wake",
       /--loop \$\{\{ steps\.mode\.outputs\.live \}\}/.test(wf),
       "an unconditional --live here would post on every dry run");
+
+    /* ── THE CHAIN, WHICH IS DORMANT AND MUST STAY SAFE WHILE IT IS ────────
+       MEASURED, 2-4 September: this workflow asks for a wake every five
+       minutes and GitHub delivered ELEVEN scheduled runs in three days —
+       gaps of 3h11m, 8h38m, 4h56m, 2h24m, 2h45m, 3h24m, 5h10m, 5h27m and
+       5h32m. The window covers what happens while a run is alive; it does
+       nothing about the hours between one firing and the next, and a buyer
+       who has already paid waits through every one of them. */
+    ok("a run can ask for the next window, since cron will not",
+      /workflows\/runner\.yml\/dispatches/.test(wf),
+      "11 scheduled firings in 3 days against a */10 request");
+    ok("it does nothing at all without a token, so this is safe to merge now",
+      /no RUNNER_CHAIN_TOKEN/.test(wf) && /exit 0/.test(wf));
+    ok("a run too short to be real does not ask for another",
+      /ELAPSED.*-lt 600|too short to chain/.test(wf), "otherwise a fast failure is a hot loop");
+    ok("it fires even when the run failed, which is when it matters most",
+      /ask for the next window[\s\S]{0,200}always\(\)/.test(wf));
+    ok("the token is never printed", !/echo[^\n]*\$\{?CHAIN_TOKEN/.test(wf));
+    ok("and shell tracing is never turned on in that step",
+      !/^\s*set -x/m.test(wf), "set -x would put the header in the log");
+
+    /* ── AND THE PART THAT KEEPS THE STOP BUTTON A STOP BUTTON ─────────────
+       The successor could simply be dispatched with live=true. That would
+       make the PREVIOUS RUN the thing authorising unattended spending, and a
+       chain armed by itself is a chain that cannot be stopped from the
+       settings page. A chained run asks AUTOPILOT the same question a
+       scheduled one does, so turning that variable off still stops
+       everything — one field, no commit, no deploy. */
+    ok("a chained run does not arm itself",
+      !/inputs":\{"chained":"true","live":"true"|"live":true/.test(wf),
+      "the chain must not be able to authorise spending");
+    ok("it is armed by the repository variable, exactly as a scheduled one is",
+      /inputs\.chained \}\}" = "true" \] && \[ "\$AUTOPILOT" = "on" \]/.test(wf),
+      "AUTOPILOT off has to stop the chain too, or it is not a stop button");
   }
 }
 

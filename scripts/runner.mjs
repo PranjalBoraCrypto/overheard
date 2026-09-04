@@ -144,6 +144,12 @@ const MAX_FULL_NOTES = envCount("MAX_FULL_NOTES", 3);
 const TOLD_FULL = new Set();
 const TOLD_FULL_MAX = 5000;
 
+/* Contracts we have already told the buyer we cannot deliver. Same memo, same
+   reason: a window is fifty wakes long and the answer does not change between
+   them. Bounded, and clearing it costs at most one repeated explanation. */
+const TOLD_UNDELIVERABLE = new Set();
+const TOLD_UNDELIVERABLE_MAX = 5000;
+
 /* The least time we will accept between now and claimByMs. A profile is built
    from the archive in seconds, but the runner wakes on a schedule and a
    window shorter than the gap between wakes is one we could miss entirely
@@ -1042,7 +1048,11 @@ export async function wake(opts = {}) {
      is a buyer's money locked, no work, and no way to find out why without
      another round trip. Each one is collected and annotated below. */
   const stalled = [];
-  const stall = (why) => { log(`  ${why}`); stalled.push(why); };
+  /* DEDUPED BY MESSAGE. Six identical warnings for one undeliverable order is
+     six of the eight slots GitHub keeps — the annotation budget problem again,
+     in different clothes. The same sentence twice tells a reader nothing the
+     first one did not. */
+  const stall = (why) => { log(`  ${why}`); if (!stalled.includes(why)) stalled.push(why); };
   for (const d of p.owed) {
     const job = d.offer.body?.job?.id;
     const contract = d.accept?.body?.contract;
@@ -1088,6 +1098,39 @@ export async function wake(opts = {}) {
     }
     const done = madeThisWake.get(key);
     if (!done.ok) {
+      /* ── A FAILURE THAT WAITING WILL NOT FIX ────────────────────────────
+         MEASURED on a live window: an order for a summary of a room nobody
+         has ever recorded was retried on every one of fifty wakes, each
+         attempt certain to fail for the identical reason, each one spending
+         a warning slot out of the eight GitHub keeps. Meanwhile the buyer
+         watched a locked payment for a day and a half with no explanation
+         anywhere, because "we cannot do this" was never said out loud.
+         work.mjs now separates a bad minute from an answer. An answer is
+         said ONCE, in the deal's own room where the buyer is looking, and
+         then left alone. The deal is still not revealed and the money still
+         comes back at refundAfterMs — that part was always right. */
+      if (done.permanent && contract) {
+        if (!TOLD_UNDELIVERABLE.has(contract)) {
+          stall(`${job}: CANNOT BE DELIVERED (${done.why}) — telling the buyer, then leaving it to refund`);
+          if (!no.length) {
+            const room = safeRoom(contract) ?? OFFERS_ROOM;
+            const note = sweep(
+              `Overheard cannot deliver this order: ${done.why}. `
+              + `No payment has been taken and none can be — the lock is not opened, `
+              + `so the escrow returns it to you at the refund deadline on this offer. `
+              + `Nothing further is needed from this shop.`);
+            const put = await settled(room, note, "cannot-deliver");
+            /* Remembered on SUCCESS only. A note the venue refused was never
+               sent, and marking it told would lose the buyer the one
+               explanation they were ever going to get. */
+            if (/^ok/.test(put)) {
+              if (TOLD_UNDELIVERABLE.size >= TOLD_UNDELIVERABLE_MAX) TOLD_UNDELIVERABLE.clear();
+              TOLD_UNDELIVERABLE.add(contract);
+            }
+          }
+        }
+        continue;
+      }
       stall(`${job}: DELIVERY FAILED (${done.why}) — leaving it locked so the buyer can refund`);
       continue;
     }

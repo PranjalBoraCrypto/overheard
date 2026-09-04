@@ -249,6 +249,31 @@ The through-line, again: **a bound that drops the newest thing to protect a
 budget, and reports nothing.** In every case the fix is the same shape — say
 what was dropped, and never drop the thing the shop exists to do.
 
+## Two more from one nonsense order
+
+Somebody typed `fjuttdttytreuyetuteu` into the order form and got a green tick,
+then ordered a summary of `lobbygsgfguututu455` for real. Both were well-formed
+room names, and shape was the only check there was.
+
+- **The form now asks the archive.** A room with no `_meta.json`, or a day the
+  room has no record of, is refused before anything is signed — with a range
+  and a count of what IS held, never a list, because a list of days grows by
+  one every day and overflows its own box within a fortnight. A lookup that
+  FAILS is not a refusal: the form stays exactly as it was, because a
+  shape-valid order still works and the failure mode of a nice-to-have check
+  must never be a shop nobody can order from.
+- **The shop stops retrying what it cannot do.** The order that got through
+  was accepted, paid into, failed delivery, correctly went unrevealed — and
+  was retried on every one of fifty wakes in one window. `work.mjs` now marks
+  the difference between a bad minute and an answer; an answer is said once,
+  in the deal's own room, and then left alone.
+
+`/orders` shows both: the shop's own reason, and the moment the payment
+unlocks itself. `refundAfterMs` was on every offer from the start and had
+never been shown to anybody — it is the only question a buyer with a locked
+payment actually has, and the shop cannot answer it by acting, because a
+refund is the payer's move.
+
 ## The schedule was never a schedule
 
 Cron on this repository asked for a wake every five minutes and delivered one
@@ -271,6 +296,14 @@ are the only channel out of a run this network can read, so window length is
 not a coverage decision — it is how long nobody can see what the shop did.
 Coverage never depended on it, because the concurrency group always has the
 next run queued.
+
+It also has to be STARTED by something, and that is not fixed. MEASURED over
+three days: `runner.yml` asks for a wake every five minutes and GitHub
+delivered **eleven** scheduled runs — gaps of 3h11m, 8h38m, 4h56m, 2h24m,
+2h45m, 3h24m, 5h10m, 5h27m and 5h32m. The window covers the fifty minutes a
+run is alive; nothing covers the hours between firings. `runner.yml` carries a
+dormant chain step that fixes it the moment a `RUNNER_CHAIN_TOKEN` secret
+exists — see RUNNER.md.
 
 One consequence had to be handled with it. GitHub keeps the first **ten**
 notices and ten warnings *per step*; a window of three hundred wakes emitting
