@@ -669,6 +669,10 @@ if (!chromium) {
     await pg.click("#send");
     await pg.waitForTimeout(1500);
     const msg = await pg.$eval("#msg", (e) => ({ text: e.textContent, cls: e.className }));
+    /* The checklist is read out alongside the message, because the two
+       disagreeing is exactly what the first real order surfaced. */
+    msg.done = await pg.$$eval(".trackrow.done", (n) => n.map((e) => e.dataset.s ?? ""));
+    msg.track = await pg.$eval(".track", (e) => e.textContent);
     await ctx.close();
     return msg;
   };
@@ -703,7 +707,20 @@ if (!chromium) {
     ok("in the room derived from it", lock?.body.room === dealRoom(CONTRACT), String(lock?.body.room));
     ok("signed by the buyer over room, nonce and text",
       Boolean(lock) && lock.body.sig === `sig:${lock.body.room}|${lock.body.nonce}|${lock.body.text}`);
-    ok("and the page says nothing else is needed",
+    /* ── THE CHECKLIST HAS TO AGREE WITH THE SENTENCE ABOVE IT ──────────────
+     The first real order through this path finished with "Ordered, accepted
+     and funded" printed directly above a checklist that still read "then,
+     without you: the shop accepts it on its next wake", unticked. Both cannot
+     be true, and a visitor believes the CHECKLIST — a checklist is a state,
+     a message is only a sentence. The list was written for the two-visit flow
+     and nobody had told it that flow was gone. */
+  ok("every step the press completed is ticked, not just described",
+    ["sign", "post", "accept", "lock"].every((k) => msg.done.includes(k)),
+    `ticked: ${msg.done.join(",") || "none"} — one press does four things`);
+  ok("and nothing still promises the shop will answer later",
+    !/accepts it on its next wake/i.test(msg.track),
+    "that line described the flow this replaced");
+  ok("and the page says nothing else is needed",
       /nothing else is needed/i.test(msg.text) && /ok/.test(msg.cls), msg.text);
   }
   {

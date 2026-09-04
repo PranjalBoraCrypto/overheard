@@ -826,9 +826,21 @@ input[type=text]:focus{outline:none;border-color:var(--blue);background:rgba(0,0
             <span>Signed by you, in this browser</span></div>
           <div class="trackrow" data-s="post"><span class="tdot"><svg class="i"><use href="#i-check"/></svg></span>
             <span>Posted to the escrow board</span></div>
+          <!-- ── THIS LIST DESCRIBED THE OLD FLOW AND CONTRADICTED THE NEW ONE ──
+               The first real order through the instant path finished with
+               "Ordered, accepted and funded" printed directly above a
+               checklist that still read "then, without you: the shop accepts
+               it on its next wake", unticked. Both cannot be true, and a
+               visitor believes the checklist, because a checklist is a state
+               and a message is a sentence.
+               The three steps that now happen under one press each get a row
+               that lights, and the only thing left under "then, without you"
+               is the one thing that genuinely is. -->
+          <div class="trackrow" data-s="accept"><span class="tdot"><svg class="i"><use href="#i-check"/></svg></span>
+            <span>Answered by the shop</span></div>
+          <div class="trackrow" data-s="lock"><span class="tdot"><svg class="i"><use href="#i-check"/></svg></span>
+            <span>Your payment locked in escrow</span></div>
           <p class="tnext">then, without you</p>
-          <div class="trackrow"><span class="tdot"></span>
-            <span>The shop accepts it on its next wake</span></div>
           <div class="trackrow"><span class="tdot"></span>
             <span>The work is posted in public and the lock opens</span></div>
         </div>
@@ -1245,6 +1257,7 @@ async function finish(s, offerRef) {
 
   if (!a.contract) { say(STANDING, "ok"); afterOrder(); return; }
 
+  step("accept");
   say("The shop accepted. Locking your payment…");
   const body = { type: "lock", from: s.did, contract: a.contract, rail: "paper", ref: hex16() };
   const lock = sweep("tclk1 " + canon(body));
@@ -1279,7 +1292,7 @@ async function finish(s, offerRef) {
     return;
   }
 
-  step("post");
+  step("lock");
   say("Done. Ordered, accepted and funded — the work is published to the board, and nothing else is needed from you.", "ok");
   $("sendlabel").textContent = "Ordered";
   afterOrder();
