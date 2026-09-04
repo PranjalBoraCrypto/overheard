@@ -24,8 +24,8 @@ import { CAN_DO, doJob } from "./work.mjs";
 import { minterFor, recoverSecret } from "./secret.mjs";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
-import { RAILS, RAILS_WE_TAKE } from "./rail.mjs";
-import { WANTS, planBuys, wantFrame, lockFrame, refundFrame, wire, safeRoom } from "./buy.mjs";
+import { RAILS, RAILS_WE_TAKE, IS_REHEARSAL } from "./rail.mjs";
+import { WANTS, planBuys, wantFrame, lockFrame, refundFrame, cancelFrame, wire, safeRoom } from "./buy.mjs";
 
 /* The shop's public identity. The seed for it is in one secret store and is
    not in this repository, has never been, and must never be. */
@@ -64,11 +64,38 @@ export const JOBS = [
 ];
 /* The rail lives in one file so testnet day is one line — see rail.mjs. */
 
-/* Not a FLOP reserve — we cannot read a balance from anywhere, and a reserve
-   figure we cannot check would be a decoration. What we CAN count is how many
-   deals are open at once, so that is what is capped until a balance is
-   readable. SELLING.md has the reserve rule this stands in for. */
-export const MAX_OPEN_DEALS = 3;
+/* ── HOW MANY DEALS MAY BE OPEN AT ONCE, AND WHY THAT DEPENDS ON THE RAIL ──
+   This is a stand-in for a FLOP reserve rule: we cannot read a balance from
+   anywhere, so instead of "never commit more than X FLOP" the shop enforces
+   the thing it CAN count — how many deals are in flight. SELLING.md has the
+   reserve rule this substitutes for.
+
+   The number was 3 on every rail, which is wrong in both directions at once.
+
+   ON `paper` NOTHING IS AT RISK. The rail holds no value, so a concurrency
+   cap protects no money; it only bounds how much work one wake does. The real
+   limit there is the workflow's own 10-minute timeout, and a delivery is a
+   read of the archive and some composition — so the honest number is "as many
+   as a wake can actually finish", not 3. Three was quietly capping a rehearsal
+   at roughly 36 orders a day for the sake of a reserve that does not exist.
+
+   ON A RAIL THAT MOVES VALUE the cap is doing real work and 3 is a guess. It
+   should come from a balance, and the day there is a balance to read this
+   becomes a function of it rather than a constant. Until then it stays
+   deliberately small, because the failure it guards against is committing to
+   more work than the shop can pay to settle.
+
+   Overridable by env for the same reason MIN_WORK_MS is: an incident wants a
+   number changed without a deploy. */
+/* `?? default` is not enough and the Q section caught it on its first run: an
+   env var set to "" is not nullish, so Number("") is 0, and a shop whose cap
+   is 0 accepts nothing at all while every log line reads normally. An
+   override has to parse to a positive number or it is not an override. */
+const envCount = (name, fallback) => {
+  const n = Number(process.env[name]);
+  return Number.isFinite(n) && n > 0 ? n : fallback;
+};
+export const MAX_OPEN_DEALS = envCount("MAX_OPEN_DEALS", IS_REHEARSAL ? 24 : 3);
 
 /* The least time we will accept between now and claimByMs. A profile is built
    from the archive in seconds, but the runner wakes on a schedule and a
@@ -377,7 +404,41 @@ export async function buildAccept(offer, id, now = Date.now(), mint) {
  */
 export function plan(frames, now = Date.now()) {
   const deals = ourDeals(frames);
-  const open = deals.filter((d) => !d.deal.terminal && d.accept);
+
+  /* ── DEALS THAT CAN NEVER FINISH, WHICH THE CAP USED TO COUNT FOR EVER ──
+     TERMINAL is {claimed, refunded, cancelled} and nothing else. A deal we
+     accepted and the buyer never funded therefore sits in `accepted` with no
+     expiry of any kind: not terminal, so counted against the open-deal cap,
+     so holding one of the shop's slots for ever. Three abandoned orders shut
+     the shop permanently — and from outside that looks exactly like a shop
+     which is open and simply is not being offered anything. Every buyer
+     abandons today, because until the lock button shipped there was no way
+     for one to pay. This block is what makes that survivable.
+
+     WHY refundAfterMs AND NOT claimByMs, which is the tempting line. A lock
+     arriving after claimByMs is late but still workable: reveal is refused
+     only at `at >= refundAfter` (tclk.js guard), so we could still deliver
+     and claim. Reaping at claimByMs would cancel deals a slow buyer was about
+     to fund. At refundAfterMs nothing can happen in either direction any
+     more — reveal is refused, and refund needs a lock that never came — so
+     the deal is dead by the protocol's own rules rather than by our opinion.
+
+     BELT AND BRACES, ON PURPOSE. The cancel makes the PUBLIC record honest;
+     this filter makes the CAP self-healing whether or not the cancel ever
+     lands. If posting fails for a week the shop still trades. */
+  const abandoned = (d) => {
+    if (d.deal.state !== "accepted") return false;
+    const refundAfter = ms(d.offer?.body?.refundAfterMs);
+    return refundAfter !== null && now >= refundAfter;
+  };
+
+  const open = deals.filter((d) => !d.deal.terminal && d.accept && !abandoned(d));
+
+  /* Only the ones WE accepted. A dead deal on our BUY side is our own failure
+     to fund, and buy.mjs owns that path; cancelling it from here would be two
+     pieces of code writing to one deal on the same wake. */
+  const reap = deals.filter((d) => abandoned(d) && d.accept?.body?.from === US);
+
   const live = new Set();
   for (const d of deals) {
     if (d.accept) continue;
@@ -395,7 +456,20 @@ export function plan(frames, now = Date.now()) {
   const take = [], passed = [];
   const atCapacity = open.length >= MAX_OPEN_DEALS;
   for (const f of frames) {
-    if (!f.ok || f.type !== "offer" || !f.id) continue;
+    if (!f.ok || f.type !== "offer") continue;
+    /* AN OFFER WITH NO ID USED TO VANISH HERE. It was `|| !f.id` on the line
+       above, so a well-formed, affordable, perfectly takeable offer that
+       simply omitted its own id landed in neither `take` nor `passed` — and
+       the wake's log, which reports exactly those two lists, did not mention
+       it at all. Our own order form composed such offers for its whole life
+       and the suites stayed green, because they asked refuseTake() and this
+       drop happens before refuseTake() is ever called.
+       It is still not takeable: `answered` is keyed by id, so without one we
+       cannot tell an unanswered offer from one we accepted an hour ago, and
+       accepting twice is worse than not accepting. But it is now a REFUSAL
+       WITH A REASON, which is the difference between a bug you can see and a
+       bug you cannot. */
+    if (!f.id) { passed.push({ id: `seq:${f.seq}`, why: ["offer carries no id"] }); continue; }
     if (answered.has(f.id)) continue;
     const why = refuseTake(f, now);
     if (why.length) { passed.push({ id: f.id, why }); continue; }
@@ -410,7 +484,7 @@ export function plan(frames, now = Date.now()) {
   /* A deal that is locked is one somebody has paid into and is waiting on. It
      is the only state where we owe anybody anything. */
   const owed = deals.filter((d) => d.deal.state === "locked");
-  return { take, passed, owed, unbuilt, open: open.length, atCapacity, deals };
+  return { take, passed, owed, reap, unbuilt, open: open.length, atCapacity, deals };
 }
 
 /* ── the refusals, which are the point ───────────────────────────────────── */
@@ -537,8 +611,38 @@ export async function wake(opts = {}) {
   try { mine = await ourArchive(US, opts); }
   catch { archiveOk = false; }
   const messages = mergeBySeq(fresh, mine);
-  const frames = framesFrom(messages);
-  const p = plan(frames, now);
+  let frames = framesFrom(messages);
+  let p = plan(frames, now);
+
+  /* ── THE BUYER'S LOCK IS NOT IN THIS ROOM, AND WE HAVE TO GO AND LOOK ────
+     Everything above reads ONE room: tclk-offers. Offers live there, and so
+     do accepts. Locks do not. A deal room is derived from the contract id and
+     both sides meet there — this shop already POSTS its deliveries and
+     reveals into one — but the sell side never read one back, so a lock sat
+     in a room nobody here opened. The deal stayed `accepted` for ever, `owed`
+     stayed empty, and the shop never delivered work that had been paid for.
+     The buy side has always done this correctly (see planBuys and openRooms);
+     this is the same read, in the direction that was missing it.
+
+     THE READ BUDGET, which is the reason this is not simply a room read per
+     deal on every wake: it is bounded by the deals we have accepted and not
+     finished, which MAX_OPEN_DEALS caps. Nothing here scales with the size of
+     the board — the mistake that once left the deals page rendering empty. */
+  const waiting = p.deals.filter((d) => d.deal.state === "accepted" && d.accept?.body?.from === US);
+  if (waiting.length) {
+    const extra = [];
+    for (const d of waiting.slice(0, MAX_OPEN_DEALS)) {
+      const room = safeRoom(d.accept.body.contract);
+      if (!room) continue;
+      try { extra.push(...framesFrom(await readAnyRoom(room, opts))); }
+      catch { log(`  could not read the deal room for ${d.offer.body?.job?.id}`); }
+    }
+    if (extra.length) {
+      log(`rooms: read ${waiting.length} deal room(s) awaiting a lock · ${extra.length} frames`);
+      frames = frames.concat(extra);
+      p = plan(frames, now);
+    }
+  }
 
   /* Said on every wake, in the plain log as well as the annotation, because
      "how many of our own offers can I see" is the number that decides whether
@@ -566,8 +670,28 @@ export async function wake(opts = {}) {
       `${p.passed.length} passed over`,
       `${p.owed.length} owed`,
       `${p.open} open`,
+      `${p.reap.length} stale to cancel`,
       no.length ? `holding: ${no.join("; ")}` : "nothing holding it",
     ].join(" · "), log);
+
+  /* ── CLOSING OUT WHAT WAS AGREED AND NEVER FUNDED ──────────────────────
+     Posted BEFORE the accepts below, for a reason worth stating: the slot
+     these free was already freed inside plan(), so this ordering buys no
+     capacity — it buys a readable log. "cancelled two, then took two" is a
+     wake anybody can follow; the reverse order reads as a shop taking work
+     while its book was full. */
+  for (const d of p.reap) {
+    const contract = d.accept?.body?.contract;
+    const job = d.offer?.body?.job?.id;
+    log(`STALE: ${job} was accepted and never funded — cancelling to free the slot`);
+    if (!contract) { log("  no contract id on the accept, so there is nothing to cancel"); continue; }
+    const text = wire(cancelFrame(US, contract));
+    if (!no.length) {
+      const put = await settle(agent, safeRoom(contract) ?? OFFERS_ROOM, text, opts, log);
+      wrote.push(`cancel:${/^ok/.test(put) ? "ok" : "FAILED"}`);
+      log(`  cancelled: ${put}`);
+    }
+  }
 
   /* Selling. We answer buyers' offers rather than posting our own — see the
      block above buildAccept for why the other direction cannot settle. */

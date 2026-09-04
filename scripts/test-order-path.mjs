@@ -124,6 +124,71 @@ for (const o of options) {
     no.length === 0, no.join("; ") || `${o.price} FLOP, ${Math.round((WINDOW?.claimBy ?? 0) / HOUR)}h to claim`);
 }
 
+/* ══════════════════════════════════════════════════════════════════════════
+ * C2. AND NOW THROUGH plan(), WHICH IS THE THING THAT ACTUALLY DECIDES
+ *
+ * Section C asked refuseTake() and got [] for every job. That was true, and
+ * the orders were still never taken: plan() drops an offer with no `id`
+ * BEFORE refuseTake() is consulted, into neither the taken list nor the
+ * passed list — so the wake's log, which prints exactly those two, did not
+ * mention it either. The form omitted the field for its whole life, and this
+ * suite, whose stated purpose is to guard this one seam, was green the entire
+ * time.
+ *
+ * The lesson is not "add an assertion". It is that a test stopping one
+ * function short of the decision is testing a function, not a path. This
+ * section goes all the way to plan(), on frames built the way the wire builds
+ * them.
+ * ═════════════════════════════════════════════════════════════════════════*/
+console.log("\n=== C2. and through plan(), which is what actually decides");
+{
+  const { plan, framesFrom } = await import("./runner.mjs");
+  const { canon, offerId } = await import("../web/tclk.js");
+  const wireUp = async (body, withId = true) => {
+    const full = withId ? { ...body, id: await offerId(body) } : body;
+    return framesFrom([{
+      text: "tclk1 " + canon(full), seq: 1, from: body.from,
+      ts: new Date(now).toISOString(), sig: "sig",
+    }]);
+  };
+  const sample = {
+    type: "offer", from: "did:key:z6MkBuyerNotUs00000000000000000000000000000000",
+    role: composed.role,
+    job: { id: options[0].id, proto: composed.proto, brief: "did:key:z6MkSomeone" },
+    amount: options[0].price, asset: composed.asset, lock: composed.lock,
+    rails: [composed.rails],
+    expiresMs: now + (WINDOW?.expires ?? 0),
+    claimByMs: now + (WINDOW?.claimBy ?? 0),
+    refundAfterMs: now + (WINDOW?.refundAfter ?? 0),
+    nonce: "0123456789abcdef",
+  };
+
+  const good = plan(await wireUp(sample), now);
+  ok("an order composed the way the form composes it is TAKEN",
+    good.take.length === 1,
+    `taken ${good.take.length}${good.take.length ? "" : ", passed " + JSON.stringify(good.passed)}`);
+
+  const bare = plan(await wireUp(sample, false), now);
+  ok("and one without an id is refused rather than vanishing",
+    bare.take.length === 0 && bare.passed.length === 1,
+    `taken ${bare.take.length}, passed ${bare.passed.length} — silence here is the bug that shipped`);
+  ok("  giving a reason a human could find in the log",
+    /no id/.test(bare.passed[0]?.why?.join("") ?? ""),
+    bare.passed[0]?.why?.join("; ") ?? "nothing said at all");
+
+  /* And the form itself must put it there, or everything above tests a body
+     this suite invented rather than the one hire.html posts. */
+  ok("the form puts the id on the wire",
+    /const text = sweep\("tclk1 " \+ canon\(\{ \.\.\.body, id: await offerId\(body\) \}\)\)/.test(page),
+    "the offer hire.html posts must carry its own id");
+  ok("and the developer's copy of the frame carries it too",
+    /id: await offerId\(body\)/.test(page.slice(page.indexOf("async function paintFrame"))),
+    "the JSON in that box is a route people use; without an id it is dead on arrival");
+  ok("and canon comes from tclk.js rather than a second copy",
+    /import \{[^}]*canon[^}]*\} from "\/tclk\.js"/.test(page) && !/^function canon\(/m.test(page),
+    "a second implementation of a hash input is a bug with a delay on it");
+}
+
 console.log("\n=== D. the price on the form is the price on the shelf");
 /* Underpricing is not refused loudly — refuseTake says "offers 250 for work
    priced at 500" and moves on. A form that quotes below the shelf therefore

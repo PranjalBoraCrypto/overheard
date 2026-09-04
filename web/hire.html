@@ -857,6 +857,7 @@ input[type=text]:focus{outline:none;border-color:var(--blue);background:rgba(0,0
 
 <script type="module">
 import { getSession, onSession, shortDid, signTextB64u } from "/session.js";
+import { canon, offerId } from "/tclk.js";
 
 const $ = (id) => document.getElementById(id);
 const HOUR = 3600000;
@@ -875,14 +876,14 @@ const WINDOW = { expires: 24 * HOUR, claimBy: 24 * HOUR, refundAfter: 48 * HOUR 
    signature will not verify against what the room actually holds. */
 const sweep = (t) => [...t].map((c) => /\p{Cc}|\p{Cf}|\p{Zl}|\p{Zp}/u.test(c) ? " " : c).join("").trim();
 
-/* Canonical JSON, byte-for-byte what tclk.js produces: sorted keys, no spaces.
-   The contract id is a hash over these bytes, so a different ordering is a
-   different deal. */
-function canon(v) {
-  if (v === null || typeof v !== "object") return JSON.stringify(v);
-  if (Array.isArray(v)) return "[" + v.map(canon).join(",") + "]";
-  return "{" + Object.keys(v).sort().map((k) => JSON.stringify(k) + ":" + canon(v[k])).join(",") + "}";
-}
+/* CANON AND THE OFFER ID COME FROM tclk.js, and a copy of either lives here
+   over my dead body. There WAS a copy here, eight lines, with a comment
+   promising it was "byte-for-byte what tclk.js produces". It was not: the
+   real one escapes strings through esc() and drops undefined keys, and the
+   brief is user-typed text, so the first buyer to put a non-ASCII character
+   in it would have signed different bytes than the id claimed to cover. A
+   second implementation of a hash input is not a shortcut, it is a bug with
+   a delay on it. */
 
 const hex16 = () => [...crypto.getRandomValues(new Uint8Array(8))]
   .map((b) => b.toString(16).padStart(2, "0")).join("");
@@ -1111,7 +1112,28 @@ function repaint() {
     : !valid ? "Step 2 does not look right yet."
     : "";
 
-  $("frame").textContent = JSON.stringify(offerBody(ID?.did ?? "<your did:key>", Date.now()), null, 2);
+  paintFrame();
+}
+
+/* ── THE DEVELOPER'S FRAME HAS TO CARRY THE ID, OR IT IS NOT AN OFFER ──────
+ * This box exists so somebody can copy the JSON and post it from their own
+ * agent instead of clicking. That route is only real if what it shows is what
+ * the shop would take — and plan() drops any offer with no `id` before it
+ * ever reaches refuseTake(), silently, into neither the taken list nor the
+ * passed list. A frame copied from here without an id would vanish.
+ *
+ * The id is a hash, so this is async, so a slow paint could land after a
+ * newer one. The token is the guard: only the most recent repaint may write.
+ */
+let framePaint = 0;
+async function paintFrame() {
+  const mine = ++framePaint;
+  const body = offerBody(ID?.did ?? "<your did:key>", Date.now());
+  let out;
+  try { out = { ...body, id: await offerId(body) }; }
+  catch { out = body; }
+  if (mine !== framePaint) return;
+  $("frame").textContent = JSON.stringify(out, null, 2);
 }
 
 /* ── who is ordering ──────────────────────────────────────────────────────*/
@@ -1170,7 +1192,14 @@ $("send").addEventListener("click", async () => {
   say("Signing…");
   try {
     const body = offerBody(s.did, Date.now());
-    const text = sweep("tclk1 " + canon(body));
+    /* THE FIELD WITHOUT WHICH NONE OF THIS HAPPENS. plan() reads the offer's
+       declared id — `if (!f.ok || f.type !== "offer" || !f.id) continue;` —
+       and an offer without one is dropped before refuseTake() is consulted.
+       Not refused: DROPPED. It appears in neither `take` nor `passed`, so the
+       wake's log does not mention it at all and the buyer sees their order
+       sitting open on the board until it expires, with nothing anywhere
+       saying why. Every order this form has ever composed was invisible. */
+    const text = sweep("tclk1 " + canon({ ...body, id: await offerId(body) }));
     /* The room, the nonce and the text, exactly as the compose box signs —
        the server checks the signature over all three. */
     const nonce = String(Date.now()) + String(Math.floor(Math.random() * 1000));

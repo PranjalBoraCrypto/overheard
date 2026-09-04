@@ -822,5 +822,84 @@ console.log("\n=== O. offers that scrolled out of sight");
   fs.rmSync(OUT, { recursive: true, force: true });
 }
 
+/* ══════════════════════════════════════════════════════════════════════════
+ * P. THE SLOT THAT NEVER CAME BACK
+ *
+ * TERMINAL is {claimed, refunded, cancelled}. A deal we accepted and nobody
+ * funded is `accepted`, which is none of those, so it counted against the
+ * open-deal cap for ever — no expiry, no timeout, nothing anywhere that ever
+ * gave it up. Three abandoned orders shut the shop permanently, and from
+ * outside that is indistinguishable from a shop nobody is ordering from.
+ *
+ * Not hypothetical: every buyer abandoned, because until the lock button
+ * shipped there was no way on this site for one to pay.
+ * ═════════════════════════════════════════════════════════════════════════*/
+console.log("\n=== P. deals that were agreed and never funded");
+{
+  const build = async (nonce, refundAfterMs) => {
+    const o = theirOffer(BUILT, { nonce, refundAfterMs });
+    const id = await offerId(o);
+    return [
+      msg(10, OTHER, "tclk1 " + canon({ ...o, id })),
+      msg(20, US, "tclk1 " + canon({
+        type: "accept", from: US, ref: id, statement: "0x" + "7c".repeat(32),
+        nonce: "acc" + nonce.slice(3), contract: "0x" + nonce.slice(-4) + "e".repeat(60),
+      })),
+    ];
+  };
+
+  const dead = await build("0000000000000101", NOW - HOUR_MS);
+  const alive = await build("0000000000000102", NOW + HOUR_MS);
+
+  const pDead = plan(framesFrom(dead), NOW);
+  ok("a deal past its refund deadline with no lock stops counting against the cap",
+    pDead.open === 0, `${pDead.open} open`);
+  ok("and is queued for a cancel", pDead.reap.length === 1, `${pDead.reap.length} to reap`);
+
+  const pAlive = plan(framesFrom(alive), NOW);
+  ok("one still inside its window is left entirely alone",
+    pAlive.open === 1 && pAlive.reap.length === 0,
+    `${pAlive.open} open, ${pAlive.reap.length} to reap — reaping early cancels a deal a slow buyer was about to fund`);
+
+  /* THE LINE THAT MATTERS MOST. A funded deal is money owed, and cancelling
+     one is walking away from work somebody paid for. */
+  const funded = [...dead, msg(30, OTHER, "tclk1 " + canon({
+    type: "lock", from: OTHER, contract: "0x" + "0101" + "e".repeat(60), rail: "paper", ref: "aabbccdd",
+  }))];
+  const pFunded = plan(framesFrom(funded), NOW);
+  ok("a FUNDED deal past the same deadline is never cancelled",
+    pFunded.reap.length === 0,
+    `${pFunded.reap.length} to reap — this would be walking away from work we were paid for`);
+  ok("  it is owed, and stays owed", pFunded.owed.length === 1, `${pFunded.owed.length} owed`);
+
+  /* Capacity, which is the whole reason any of this exists. */
+  const many = [];
+  for (let i = 0; i < MAX_OPEN_DEALS + 2; i++) {
+    many.push(...await build("000000000000" + String(200 + i), NOW - HOUR_MS));
+  }
+  const pMany = plan(framesFrom(many), NOW);
+  ok("a shop full of abandoned orders is not a shop that has stopped trading",
+    !pMany.atCapacity,
+    `${pMany.open} open of ${MAX_OPEN_DEALS} — before this, ${MAX_OPEN_DEALS} of them closed it for good`);
+}
+
+console.log("\n=== Q. the cap knows which rail it is on");
+{
+  /* On `paper` no value moves, so a concurrency cap protects no money; on a
+     rail that settles it is the only reserve rule this shop can enforce. One
+     number for both was wrong in both directions at once. */
+  const { execFileSync } = await import("node:child_process");
+  const read = (env) => Number(execFileSync(process.execPath,
+    ["-e", 'import("./scripts/runner.mjs").then(m=>console.log(m.MAX_OPEN_DEALS))'],
+    { encoding: "utf8", cwd: ROOT, env: { ...process.env, ...env }, stdio: ["ignore", "pipe", "ignore"] }).trim());
+  const paper = read({ TCLK_RAIL: "paper", MAX_OPEN_DEALS: "" });
+  const live = read({ TCLK_RAIL: "flop-htlc", MAX_OPEN_DEALS: "" });
+  ok("a rehearsal is not throttled as though it could lose money", paper > live, `paper ${paper} vs live ${live}`);
+  ok("and a rail that settles keeps the small number", live <= 3, String(live));
+  ok("and either can be moved without a deploy",
+    read({ TCLK_RAIL: "paper", MAX_OPEN_DEALS: "7" }) === 7,
+    "an incident wants a number changed now, not merged");
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

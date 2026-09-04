@@ -232,6 +232,16 @@ export const lockFrame = (us, contract, rail = RAIL) =>
 export const refundFrame = (us, contract) =>
   ({ type: "refund", from: us, contract, reason: "no reveal before refundAfterMs" });
 
+/* Sent by the SELL side, and living here only because this is where the frame
+   builders are and a second home for them is how two of them drift apart.
+   `cancel` is legal from `proposed` or `accepted` (tclk.js guard) and from
+   either party — it is the close-out for a deal that was agreed and then
+   never funded, which the state machine otherwise leaves open for ever.
+   The reason is written out because a bare cancel on a public board reads as
+   the shop changing its mind, which is the opposite of what happened. */
+export const cancelFrame = (us, contract) =>
+  ({ type: "cancel", from: us, contract, reason: "never funded before refundAfterMs" });
+
 export const wire = (body) => "tclk1 " + canon(body);
 
 /** The offer, with the id the protocol says it has. */

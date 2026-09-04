@@ -63,9 +63,20 @@ ok("no 64-hex string anywhere", !/[0-9a-f]{64}/i.test(page),
 ok("it never assigns markup",
   !/innerHTML|outerHTML|insertAdjacentHTML|document\.write/.test(code),
   "briefs and amounts are wire data; they go in as text");
-ok("and it does not sign anything either",
-  !/signTextB64u|signBytes|\/api\/post/.test(code),
-  "a record is a reader; signing belongs on the order page");
+/* THIS RULE USED TO READ "and it does not sign anything either — a record is
+   a reader". True, and correct, and also the reason no buyer could ever
+   finish a deal: the lock is the payer's frame, and there was nowhere on the
+   whole site to post one. The rule is no longer "does not sign". It is
+   "signs only that". */
+{
+  const types = [...strip(code).matchAll(/type:\s*"([a-z]+)"/g)].map((m) => m[1]);
+  ok("the only frame this page composes is a lock",
+    types.length > 0 && types.every((t) => t === "lock"),
+    types.join(",") || "none at all — then the button cannot work");
+}
+ok("and it posts that lock to the deal room, not to the offers room",
+  /room:\s*o\.accept\.room/.test(code) && !/room:\s*"tclk-offers"/.test(code),
+  "both sides meet in the room derived from the contract");
 
 console.log("\n=== B. it is the same site");
 const rule = (t, sel) => {
@@ -120,9 +131,27 @@ ok("it prefilters lines before parsing them",
 ok("it reports how much it actually read",
   /days_scanned/.test(api) && /days_available/.test(api) && /truncated/.test(api),
   "a bare array looks complete whatever happened");
-ok("and it does not follow deal rooms",
-  !/dealRoom|contract/.test(strip(api).replace(/contract id/g, "")),
-  "one upstream read per order is what once made the board render empty");
+/* THIS RULE USED TO READ "and it does not follow deal rooms", enforced by
+   grepping for the word `contract`. It now derives one, because an order the
+   shop accepted has to name somewhere the buyer can pay into — so the grep
+   would fail while the property it stood for is intact. The property was
+   never "never say contract". It was NO UPSTREAM READ PER ORDER, which is
+   the thing that once spent the shared allowance and left the deals board
+   rendering empty. So assert that instead, structurally: every network call
+   in this file goes through grabText, and grabText is reached from exactly
+   two places — the index, and a day shard. */
+{
+  const s = strip(api);
+  const fetches = [...s.matchAll(/\bfetch\(/g)].length;
+  const grabs = [...s.matchAll(/\bgrabText\(/g)].length;   // 1 definition + N calls
+  ok("every upstream read goes through one function", fetches === 1,
+    `${fetches} fetch call sites; more than one means a read this rule cannot see`);
+  ok("and that function is reached from exactly two places", grabs === 3,
+    `${grabs - 1} call sites: the archive index, and one day shard at a time`);
+  ok("so the accept hunt reads shards already in hand",
+    /for \(const text of recent\)/.test(s) && !/recent[\s\S]{0,80}await/.test(s),
+    "searching bytes we already paid for is free; fetching per order is not");
+}
 
 /* ══════════════════════════════════════════════════════════════════════════
  * THE BROWSER HALF
@@ -175,15 +204,53 @@ const SESSION = (did) => {
     shortDid: did ? '(d)=>String(d).slice(0,12)+"…"+String(d).slice(-4)' : "(d)=>String(d)",
     hueOf: "()=>200",
     PW_MIN: "6",
+    /* Echoes what it was asked to sign, so section K can assert the page
+       signed over the right three things rather than merely over something.
+       /api/post verifies the signature against room|nonce|text, so a page
+       that signed `tclk-offers|…` for a frame it posted to a deal room would
+       be rejected by the real server for a reason no stub returning a
+       constant could ever surface. */
+    signTextB64u: '(async (t) => "sig:" + t)',
   };
   return EXPORTED.map((n) =>
     `export const ${n} = ${overrides[n] ?? "(()=>{ const f = async () => null; return f; })()"};`
   ).join("\n");
 };
 
+/* ── THE ONE ORDER THE SHOP HAS ANSWERED ──────────────────────────────────
+   FIXTURE[0] gets an accept, so exactly one row should grow a Pay strip and
+   the other twenty-two should not. Everything section K asserts hangs off
+   that asymmetry: a strip on every row would pass a test that only looked
+   for one. */
+const CONTRACT = "0x" + "ab12cd34ef5678900011223344556677889900aabbccddeeff00112233445566";
+const DEALROOM = "mb-p-tclk-ab12cd34ef567890";
+/* The list sorts by seq descending and pages ten at a time, so the order this
+   hangs off has to be one of the newest — on FIXTURE[0], which carries the
+   LOWEST seq, every assertion below failed for the entirely uninteresting
+   reason that the row was on page three. */
+const ANSWERED = FIXTURE.length - 1;
+const LATE = FIXTURE.length - 2;
+FIXTURE[ANSWERED].id = "0x" + "9".repeat(64);
+FIXTURE[ANSWERED].refundAfterMs = now + 172800000;
+FIXTURE[ANSWERED].accept = {
+  from: "did:key:z6MkiuhfekPgiihLWarPAzhuvoMjg86F8dqmLiCTmtQgMrR3",
+  ts: new Date(now - 600000).toISOString(),
+  contract: CONTRACT, statement: "0x" + "7".repeat(64), room: DEALROOM,
+};
+/* An order the shop also answered, but too late to matter: past its refund
+   deadline a lock buys nothing, so the strip must not appear. */
+FIXTURE[LATE].id = "0x" + "8".repeat(64);
+FIXTURE[LATE].refundAfterMs = now - 3600000;
+FIXTURE[LATE].accept = { ...FIXTURE[ANSWERED].accept, contract: "0x" + "cd".repeat(32), room: "mb-p-tclk-cdcdcdcdcdcdcdcd" };
+
 let signedInAs = DID;
 let archiveAnswers = true;
 let liveOverlap = 3;
+/* What the deal room contains when the page goes looking, and what the page
+   posted when it stopped. Both are the point of section K. */
+let dealFrames = [];
+let posts = [];
+let roomReads = [];
 /* Held open on purpose for the first-paint test — see section H. */
 let archiveDelayMs = 0;
 
@@ -202,8 +269,23 @@ const srv = http.createServer((q, r) => {
     if (archiveDelayMs) setTimeout(send, archiveDelayMs); else send();
     return;
   }
+  if (u === "/api/post") {
+    let raw = "";
+    q.on("data", (c) => { raw += c; });
+    q.on("end", () => {
+      try { posts.push(JSON.parse(raw)); } catch { posts.push({ unparseable: raw }); }
+      r.writeHead(200, { "content-type": "application/json" });
+      r.end(JSON.stringify({ ok: true }));
+    });
+    return;
+  }
   if (u === "/api/room") {
+    const room = new URL(q.url, "http://x").searchParams.get("room");
+    roomReads.push(room);
     r.writeHead(200, { "content-type": "application/json" });
+    /* A deal room is not the offers room and must not be answered with it —
+       returning the board here would have let a broken page look fine. */
+    if (room !== "tclk-offers") return r.end(JSON.stringify({ source: "live", messages: dealFrames }));
     /* The overlap is the point: these are the SAME orders the archive
        returned, arriving by the other road. */
     return r.end(JSON.stringify({ source: "live", messages: FIXTURE.slice(0, liveOverlap).map(asMessage) }));
@@ -383,6 +465,120 @@ console.log("\n=== I. it admits what it cannot know");
     await pg.evaluate((jobs) => jobs.every((j) => document.documentElement.outerHTML.includes(j)),
       [...CAN_DO]),
     "an order should never show a raw job id");
+  await ctx.close();
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+ * K. THE LOCK — the step the buyer takes, which nothing on this site could do
+ *
+ * A tclk deal is offer → accept → LOCK → deliver → reveal, and the lock is the
+ * payer's frame: the shop cannot post it, and until this section existed
+ * neither could anybody else. Every deal the shop accepted stalled there and
+ * died at its refund deadline while the buyer's own page said "open".
+ * ═════════════════════════════════════════════════════════════════════════*/
+console.log("\n=== K. the buyer can actually pay");
+{
+  roomReads = []; posts = []; dealFrames = [];
+  const { ctx, pg } = await open();
+  await pg.goto("http://localhost:9441/orders.html", { waitUntil: "domcontentloaded" });
+  await pg.waitForTimeout(1200);
+
+  const strips = await pg.$$eval(".hact", (n) => n.length);
+  ok("the answered order grows a Pay strip", strips === 1, `${strips} strips on page one`);
+  ok("and the twenty-two unanswered ones do not",
+    await pg.$$eval(".hrow", (n) => n.length) === 10 && strips === 1,
+    "a strip on every row would pass a test that only counted one");
+
+  /* THE BUDGET RULE, TESTED AS BEHAVIOUR RATHER THAN AS A GREP. One deal-room
+     read per row on every paint is precisely what once left the deals board
+     rendering empty — it had spent the shared upstream allowance on itself. */
+  ok("no deal room is read just to paint the page",
+    roomReads.filter((x) => x !== "tclk-offers").length === 0,
+    `read on paint: ${roomReads.filter((x) => x !== "tclk-offers").join(", ") || "none"}`);
+
+  await pg.click(".hbtn");
+  await pg.waitForTimeout(600);
+
+  const hit = roomReads.filter((x) => x !== "tclk-offers");
+  ok("pressing it reads that one deal room, once", hit.length === 1 && hit[0] === DEALROOM, hit.join(","));
+  ok("and posts exactly one frame", posts.length === 1, `${posts.length} posts`);
+
+  const sent = posts[0] ?? {};
+  const body = (() => { try { return JSON.parse(String(sent.text).slice(6)); } catch { return {}; } })();
+  ok("into the deal room, not the board", sent.room === DEALROOM, String(sent.room));
+  ok("signed by the buyer, who is the payer", sent.did === DID && body.from === DID);
+  ok("it is a lock", body.type === "lock", body.type);
+  ok("naming the contract the shop's accept named", body.contract === CONTRACT, String(body.contract));
+  ok("on the rail the offer named", body.rail === "paper", String(body.rail));
+  ok("and the signature covers room, nonce and text, in that order",
+    sent.sig === `sig:${sent.room}|${sent.nonce}|${sent.text}`,
+    "/api/post verifies over exactly those three; signing anything else is rejected");
+
+  ok("the button goes once it has been pressed",
+    await pg.$$eval(".hbtn", (n) => n.length) === 0,
+    "a second lock is a frame the state machine refuses");
+  ok("and the strip says what happened",
+    /funded/i.test(await pg.$eval(".hsaid", (e) => e.textContent)));
+  await ctx.close();
+}
+{
+  /* Between the archive read that painted the strip and the click, the deal
+     can move: somebody already locked it, or the reaper cancelled it. The
+     read on click is what catches that, and the only way to know it is
+     wired to anything is to make it come back different. */
+  roomReads = []; posts = [];
+  dealFrames = [{ seq: 1, ts: new Date().toISOString(), from: DID,
+    text: "tclk1 " + JSON.stringify({ type: "lock", from: DID, contract: CONTRACT, rail: "paper", ref: "aa" }) }];
+  const { ctx, pg } = await open();
+  await pg.goto("http://localhost:9441/orders.html", { waitUntil: "domcontentloaded" });
+  await pg.waitForTimeout(1200);
+  await pg.click(".hbtn");
+  await pg.waitForTimeout(600);
+  ok("a deal already funded is not funded twice", posts.length === 0, `${posts.length} posts`);
+  ok("and it says so plainly",
+    /already funded/i.test(await pg.$eval(".hsaid", (e) => e.textContent)));
+  await ctx.close();
+}
+{
+  roomReads = []; posts = [];
+  dealFrames = [{ seq: 1, ts: new Date().toISOString(), from: "did:key:z6MkiuhfekPgiihLWarPAzhuvoMjg86F8dqmLiCTmtQgMrR3",
+    text: "tclk1 " + JSON.stringify({ type: "cancel", from: "did:key:z6MkiuhfekPgiihLWarPAzhuvoMjg86F8dqmLiCTmtQgMrR3", contract: CONTRACT, reason: "never funded before refundAfterMs" }) }];
+  const { ctx, pg } = await open();
+  await pg.goto("http://localhost:9441/orders.html", { waitUntil: "domcontentloaded" });
+  await pg.waitForTimeout(1200);
+  await pg.click(".hbtn");
+  await pg.waitForTimeout(600);
+  ok("a deal the reaper closed cannot be paid into", posts.length === 0, `${posts.length} posts`);
+  ok("and nothing implies money moved",
+    /nothing was charged/i.test(await pg.$eval(".hsaid", (e) => e.textContent)));
+  await ctx.close();
+}
+{
+  /* FIXTURE[LATE] is accepted too, and past refundAfterMs. A lock there buys
+     nothing: reveal is refused at `at >= refundAfter`, and a refund needs a
+     lock that never came. It sits on page one of the closed filter. */
+  dealFrames = [];
+  const { ctx, pg } = await open();
+  await pg.goto("http://localhost:9441/orders.html", { waitUntil: "domcontentloaded" });
+  await pg.waitForTimeout(1200);
+  const late = await pg.evaluate(() => {
+    const rows = [...document.querySelectorAll(".hitem")];
+    return rows.length;
+  });
+  ok("an accepted order past its refund deadline gets no button", late === 1,
+    `${late} strips — the expired one must not offer a payment that cannot buy anything`);
+  await ctx.close();
+}
+{
+  /* Signed out there is no key to sign with, so the strip must not be a
+     button that fails on click. */
+  signedInAs = null;
+  const { ctx, pg } = await open();
+  await pg.goto("http://localhost:9441/orders.html", { waitUntil: "domcontentloaded" });
+  await pg.waitForTimeout(900);
+  ok("signed out, no Pay button is offered at all",
+    await pg.$$eval(".hbtn", (n) => n.length) === 0);
+  signedInAs = DID;
   await ctx.close();
 }
 

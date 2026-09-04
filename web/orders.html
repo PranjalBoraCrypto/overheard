@@ -210,6 +210,39 @@ h1{font-weight:800;font-size:clamp(30px,5vw,42px);line-height:1;letter-spacing:-
   .hrow:hover .hgo{transform:translateX(3px);color:var(--blue)}
 }
 .hrow:focus-visible{outline:2px solid var(--blue);outline-offset:3px}
+/* ── the one row that is asking for something ─────────────────────────────
+   Attached to the row above rather than floating beside it: the strip is a
+   continuation of that order, and a detached card would read as a second
+   thing to understand. Hence the negative top margin and the flat top edge —
+   they are one object with a seam. */
+.hitem{display:flex;flex-direction:column}
+.hact{display:flex;align-items:center;gap:var(--s3);flex-wrap:wrap;
+  margin-top:-1px;padding:14px var(--s4);
+  border:1px solid rgba(88,233,255,.3);border-top-color:transparent;
+  border-radius:0 0 14px 14px;
+  background:linear-gradient(180deg,rgba(88,233,255,.055),rgba(88,233,255,.015))}
+.hitem .hrow{border-bottom-left-radius:0;border-bottom-right-radius:0;
+  border-bottom-color:rgba(88,233,255,.16)}
+@media (hover:hover) and (pointer:fine){ .hitem .hrow:hover{transform:none} }
+.hactwords{flex:1 1 240px;min-width:0}
+.hactwords b{display:block;color:var(--white);font-size:14px;font-weight:700;letter-spacing:-.01em}
+.hactwords span{display:block;color:var(--faint);font-size:12.5px;line-height:1.5;margin-top:3px}
+.hbtn{flex:none;font:inherit;font-weight:650;font-size:14px;cursor:pointer;
+  padding:11px 18px;border-radius:11px;color:var(--void);
+  border:1px solid rgba(88,233,255,.5);
+  background:linear-gradient(180deg,#7ff0ff,var(--blue));
+  transition:transform .16s var(--ease),filter .16s var(--ease)}
+@media (hover:hover) and (pointer:fine){ .hbtn:hover{filter:brightness(1.08);transform:translateY(-1px)} }
+.hbtn:focus-visible{outline:2px solid var(--blue);outline-offset:3px}
+.hbtn:disabled{cursor:default;filter:grayscale(.5) brightness(.8);transform:none}
+.hsaid{flex:1 1 100%;margin:2px 0 0;font-size:12.5px;line-height:1.5;color:var(--faint)}
+.hsaid.ok{color:var(--mint)}
+.hsaid.bad{color:var(--warn)}
+@media (max-width:620px){
+  .hact{padding:13px 15px}
+  .hbtn{flex:1 1 100%;padding:12px 18px}
+}
+
 .hem{width:42px;height:42px;flex:none;border-radius:12px;
   background:linear-gradient(155deg,rgba(88,233,255,.09),rgba(0,180,215,.02) 62%);
   border:1px solid rgba(88,233,255,.16)}
@@ -451,7 +484,8 @@ h1{font-weight:800;font-size:clamp(30px,5vw,42px);line-height:1;letter-spacing:-
 </div>
 
 <script type="module">
-import { getSession, onSession, shortDid } from "/session.js";
+import { getSession, onSession, shortDid, signTextB64u } from "/session.js";
+import { canon, readFrame } from "/tclk.js";
 
 const $ = (id) => document.getElementById(id);
 const PER_PAGE = 10;
@@ -516,11 +550,13 @@ async function readLive(did) {
       out.push({
         seq: Number(m.seq) || 0,
         ts: m.ts ?? null,
+        id: String(body.id ?? ""),
         job: String(body.job?.id ?? ""),
         brief: String(body.job?.brief ?? ""),
         amount: String(body.amount ?? ""),
         asset: String(body.asset ?? ""),
         expiresMs: Number(body.expiresMs) || null,
+        refundAfterMs: Number(body.refundAfterMs) || null,
         nonce: String(body.nonce ?? ""),
       });
     }
@@ -534,10 +570,17 @@ async function load() {
   meta = arch;
   const seen = new Map();
   /* Live first so its copy wins on a tie — same order, but read a moment
-     closer to now. */
+     closer to now.
+     THE MERGE IS A MERGE, not a pick. Only the archive knows whether the shop
+     answered: finding the accept means searching frames the live window is
+     far too short to hold. A straight "live wins" would therefore delete the
+     accept from every order recent enough to appear in both — which is every
+     order that still has a button worth pressing. */
   for (const o of [...live, ...(arch?.orders ?? [])]) {
     const key = o.nonce || `${o.seq}`;
-    if (!seen.has(key)) seen.set(key, o);
+    const had = seen.get(key);
+    if (!had) { seen.set(key, { ...o }); continue; }
+    for (const [k, v] of Object.entries(o)) if (had[k] == null || had[k] === "") had[k] = v;
   }
   orders = [...seen.values()].sort((a, b) => b.seq - a.seq);
   page = 0;
@@ -611,12 +654,148 @@ function paint() {
 
   const list = $("hlist");
   list.replaceChildren();
-  for (const o of slice) list.append(rowFor(o));
+  for (const o of slice) list.append(itemFor(o));
 
   $("pwhere").textContent = `${page + 1} of ${pages}`;
   $("prev").disabled = page === 0;
   $("next").disabled = page >= pages - 1;
   paintFoot();
+}
+
+/* ── THE ONE STEP THAT IS THE BUYER'S TO TAKE ─────────────────────────────
+ * A tclk deal runs offer → accept → LOCK → deliver → reveal, and the lock is
+ * the payer's frame. The shop cannot post it; nothing in the protocol lets it.
+ * Until this existed the site could compose an order and could show it in a
+ * list, and there was no button anywhere that let the person who placed it
+ * finish it — so every deal the shop accepted stalled at "awaiting lock" and
+ * died at its refund deadline, with the buyer's own page reporting "open".
+ *
+ * WHY THE DEAL ROOM IS READ ON CLICK AND NEVER ON PAINT. One read per row on
+ * every paint is the exact cost that once rendered the deals board empty: it
+ * spent the shared upstream allowance on itself. A page of ten orders would
+ * be ten reads before anybody had asked for anything. So the strip renders
+ * from what /api/orders already knew, and the room is read once, when a
+ * person presses the button, to check the deal has not moved since.
+ */
+function itemFor(o) {
+  const row = rowFor(o);
+  const act = actionFor(o);
+  if (!act) return row;
+  const wrap = document.createElement("div");
+  wrap.className = "hitem";
+  wrap.append(row, act);
+  return wrap;
+}
+
+/** The strip under a row, or null when there is nothing for the buyer to do. */
+function actionFor(o) {
+  if (!o.accept?.room || !o.accept?.contract) return null;
+  /* Past refundAfterMs a lock leads nowhere: reveal is refused at
+     `at >= refundAfter` and a refund needs a lock that never came. Offering
+     the button there would be offering a payment that cannot buy anything. */
+  if (o.refundAfterMs && Date.now() >= o.refundAfterMs) return null;
+
+  const box = document.createElement("div");
+  box.className = "hact";
+
+  const words = document.createElement("div");
+  words.className = "hactwords";
+  const b = document.createElement("b");
+  b.textContent = "The shop accepted — your move";
+  const p = document.createElement("span");
+  p.textContent = "Nothing starts until the payment is locked. On the paper rail this moves no value; it is the signal that the work may begin.";
+  words.append(b, p);
+
+  const go = document.createElement("button");
+  go.type = "button";
+  go.className = "hbtn";
+  go.textContent = "Pay into the lock";
+
+  const said = document.createElement("p");
+  said.className = "hsaid";
+  said.hidden = true;
+
+  const tell = (t, cls) => { said.hidden = false; said.textContent = t; said.className = "hsaid " + (cls || ""); };
+
+  go.addEventListener("click", async () => {
+    const s = getSession();
+    if (!s) return tell("Sign in first — the lock is a frame only your key can sign.", "bad");
+    go.disabled = true;
+    const was = go.textContent;
+    go.textContent = "Checking…";
+    try {
+      /* THE CHECK BEFORE THE WRITE. The strip was painted from an archive
+         read that is a collector pass behind, so between paint and click the
+         deal may have been locked already, cancelled by the reaper, or even
+         delivered. Posting a second lock would be a frame the state machine
+         refuses — harmless, but it would sit on the public board looking like
+         a buyer who did not know what they were doing. */
+      const state = await dealState(o.accept.room);
+      if (state === "locked" || state === "claimed") {
+        tell("Already funded — the shop owes you the work now.", "ok");
+        go.remove(); return;
+      }
+      if (state === "cancelled" || state === "refunded") {
+        tell("This deal closed before it was funded. Nothing was charged — nothing can be.", "bad");
+        go.remove(); return;
+      }
+      if (state && state !== "accepted") { tell(`This deal is ${state} — there is nothing to pay into.`, "bad"); go.remove(); return; }
+
+      go.textContent = "Signing…";
+      const body = { type: "lock", from: s.did, contract: o.accept.contract, rail: "paper", ref: hex16() };
+      const text = "tclk1 " + canon(body);
+      const nonce = String(Date.now()) + String(Math.floor(Math.random() * 1000));
+      const sig = await signTextB64u(`${o.accept.room}|${nonce}|${text}`);
+
+      go.textContent = "Posting…";
+      const r = await fetch("/api/post", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ kind: "message", did: s.did, room: o.accept.room, sig, nonce, text }),
+      });
+      const d = await r.json().catch(() => ({}));
+      if (!d.ok) {
+        tell(d.error || d.why || "The network would not take the lock. Nothing was charged.", "bad");
+        go.disabled = false; go.textContent = was; return;
+      }
+      tell("Funded. The shop delivers on its next wake, then opens the lock to claim.", "ok");
+      go.remove();
+    } catch {
+      tell("Could not post the lock. Nothing was charged.", "bad");
+      go.disabled = false; go.textContent = was;
+    }
+  });
+
+  box.append(words, go, said);
+  return box;
+}
+
+const hex16 = () => [...crypto.getRandomValues(new Uint8Array(8))]
+  .map((x) => x.toString(16).padStart(2, "0")).join("");
+
+/** Fold one deal room into its state. Null when it cannot be read, which is
+ *  deliberately NOT treated as "safe to post" by the caller's own check. */
+async function dealState(room) {
+  const r = await fetch(`/api/room?room=${encodeURIComponent(room)}&limit=200`, { cache: "no-store" });
+  if (!r.ok) return null;
+  const j = await r.json();
+  if (j.error) return null;
+  const frames = [];
+  for (const m of j.messages ?? []) {
+    const f = readFrame(String(m.text ?? ""));
+    if (!f.ok) continue;
+    frames.push({ ...f, ...f.body, body: f.body, type: f.type, from: m.from, at: Date.parse(m.ts ?? "") || null });
+  }
+  /* The accept lives in the offers room, not in here, so a deal room holding
+     only a lock folds to "proposed" — runDeal is being handed a fragment. The
+     caller only ever asks "has this moved past accepted", and every frame
+     that would move it IS in here, so the fragment answers that question
+     even though it cannot reconstruct the whole deal. */
+  const seen = new Set(frames.map((f) => f.type));
+  if (seen.has("reveal")) return "claimed";
+  if (seen.has("refund")) return "refunded";
+  if (seen.has("cancel")) return "cancelled";
+  if (seen.has("lock")) return "locked";
+  return "accepted";
 }
 
 function rowFor(o) {
