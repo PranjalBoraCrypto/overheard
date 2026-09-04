@@ -1162,10 +1162,42 @@ export async function wake(opts = {}) {
          then left alone. The deal is still not revealed and the money still
          comes back at refundAfterMs — that part was always right. */
       if (done.permanent && contract) {
+        /* ── THE MEMO IS NOT ENOUGH, AND A LIVE WINDOW PROVED IT ───────────
+           MEASURED on the window of 4 September 21:15: this note went out
+           TWICE. The memo below is per-process and the workflow runs two —
+           one single wake, then the loop — so each told the buyer once. And
+           the fallback dedupe reads the BOARD, while this note goes to the
+           DEAL ROOM, so it could never see the earlier copy however long it
+           looked.
+           Two per window sounds harmless until you multiply it by the
+           thirty-six hours until the refund deadline: about eighty-six copies
+           of one sentence in one buyer's room. That is the write storm the
+           memo exists to prevent, arriving slowly.
+           So before giving up on a deal we ask the room whether we have
+           already given up on it. One read, only for a deal that is about to
+           be abandoned, only once per process — and unlike the memo it
+           survives the process ending, which is the whole problem. */
+        const room = safeRoom(contract) ?? OFFERS_ROOM;
+        const gaveUp = (m) =>
+          m?.from === US && /^Overheard cannot deliver this order/.test(String(m.text ?? ""));
+        if (!TOLD_UNDELIVERABLE.has(contract)) {
+          let said = false;
+          try {
+            /* A contract that yields no safe room name settles on the board,
+               and the board we already hold in `messages` — no second read
+               for the case that needs none. */
+            const look = room === OFFERS_ROOM ? messages : await readAnyRoom(room, opts);
+            for (const m of look) if (gaveUp(m)) { said = true; break; }
+          } catch {
+            /* Could not look. Saying it again is the safe direction here: a
+               buyer hearing twice is noise, a buyer never hearing is the bug
+               this was written for. */
+          }
+          if (said) TOLD_UNDELIVERABLE.add(contract);
+        }
         if (!TOLD_UNDELIVERABLE.has(contract)) {
           stall(`${job}: CANNOT BE DELIVERED (${done.why}) — telling the buyer, then leaving it to refund`);
           if (!no.length) {
-            const room = safeRoom(contract) ?? OFFERS_ROOM;
             const note = sweep(
               `Overheard cannot deliver this order: ${done.why}. `
               + `No payment has been taken and none can be — the lock is not opened, `

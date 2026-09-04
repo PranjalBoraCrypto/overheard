@@ -231,6 +231,46 @@ say("and posts nothing about that deal at all",
   bad2.texts.every((t) => t.startsWith("tclk1 ") && /"type":"offer"/.test(t)),
   bad2.texts.map((t) => t.slice(0, 40)).join(" | ") || "nothing");
 
+/* ── AND IT SURVIVES THE PROCESS ENDING, WHICH THE MEMO DOES NOT ───────────
+ * MEASURED on the live window of 4 September 21:15: this note went out TWICE.
+ * The workflow runs two processes — one single wake, then the loop — and the
+ * memo is per-process, so each told the buyer once. The fallback dedupe reads
+ * the BOARD, while the note goes to the DEAL ROOM, so it could never see the
+ * earlier copy however long it looked.
+ * Two per window sounds harmless until it is multiplied by the thirty-six
+ * hours until the refund deadline: about eighty-six copies of one sentence in
+ * one buyer's room. The same write storm, arriving slowly.
+ */
+{
+  const fresh = await import("./runner.mjs?told2=" + Math.random());
+  const room = (await import("../scripts/buy.mjs")).safeRoom(badAcc.body.contract);
+  /* A NEW process, with an empty memo, looking at a room that already holds
+     the note a previous process posted. */
+  const seenIt = [{
+    seq: "99", ts: new Date(NOW).toISOString(), from: US, sig: "s",
+    text: "Overheard cannot deliver this order: that is not a canonical did:key. "
+        + "No payment has been taken and none can be.",
+  }];
+  const posted = [];
+  const stub = async (url) => {
+    const u = String(url);
+    if (u.includes("say-signed")) {
+      posted.push(decodeURIComponent(u.split("/").pop().split("?")[0]));
+      return { ok: true, status: 200, text: async () => "{}" };
+    }
+    if (u.includes(`/r/${room}?`)) return { ok: true, status: 200, json: async () => ({ messages: seenIt }) };
+    if (u.includes("/api/profile")) return { ok: false, status: 503, json: async () => ({}) };
+    return { ok: true, status: 200, json: async () => ({ messages: badFrames }) };
+  };
+  await fresh.wake({ fetch: stub, base: "http://stub", log: () => {}, now: NOW, seed: SEED, live: true });
+  say("a new process does not repeat a note already in the deal room",
+    !posted.some((t) => /^Overheard cannot deliver this order/.test(t)),
+    posted.map((t) => t.slice(0, 34)).join(" | ") || "silent, correctly");
+  say("which is the only dedupe that outlives the process that wrote it",
+    room && room !== "tclk-offers",
+    "the board dedupe cannot see a note that went to a deal room");
+}
+
 /* ── THE DISTINCTION THAT MAKES THIS SAFE ──────────────────────────────────
    A 503 from the archive is a bad minute, not an answer. Treating the two the
    same would mean one flaky read permanently abandoning a deal we could have
