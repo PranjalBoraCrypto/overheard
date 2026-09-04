@@ -260,9 +260,17 @@ survivable now: the accept is on demand and the browser locks in the same
 click, so from the moment somebody orders they have already paid.
 
 Asking cron more often is not the fix — twelve requests an hour is what
-produced the two-hour gap. A firing now opens a **five-hour window** and
-`runner.mjs --loop` wakes once a minute inside it, with the next run queued
-behind it by the concurrency group. Worst case for a buyer: **about a minute**.
+produced the two-hour gap. A firing now opens a **window** and `runner.mjs
+--loop` wakes once a minute inside it, with the next run queued behind it by
+the concurrency group. Worst case for a buyer: **about a minute**.
+
+The window is **fifty minutes**, and it was five hours until one measurement
+changed it: the check-run API reports `annotations_count: 0` for a job that
+has already emitted them. **Annotations do not exist until the job ends.** They
+are the only channel out of a run this network can read, so window length is
+not a coverage decision — it is how long nobody can see what the shop did.
+Coverage never depended on it, because the concurrency group always has the
+next run queued.
 
 One consequence had to be handled with it. GitHub keeps the first **ten**
 notices and ten warnings *per step*; a window of three hundred wakes emitting

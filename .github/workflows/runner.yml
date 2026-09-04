@@ -62,11 +62,13 @@ on:
     # cron cadence nearly irrelevant: whenever the window ends, the run queued
     # behind it by the concurrency group starts immediately.
     #
-    # Fifteen minutes rather than five because every firing that lands while a
-    # window is open is CANCELLED by the concurrency group, and sixty
-    # cancelled runs per window buries the real ones in the Actions tab —
-    # which is where a person goes to find out whether the shop is alive.
-    - cron: "*/15 * * * *"
+    # Ten minutes rather than five because every firing that lands while a
+    # window is open is CANCELLED by the concurrency group, and cancelled runs
+    # bury the real ones in the Actions tab — which is where a person goes to
+    # find out whether the shop is alive. Ten is frequent enough that a run is
+    # always queued behind the open window, so the moment one ends the next
+    # starts, and cron's unreliability stops mattering.
+    - cron: "*/10 * * * *"
   workflow_dispatch:
     inputs:
       live:
@@ -84,10 +86,25 @@ concurrency:
 jobs:
   wake:
     runs-on: ubuntu-latest
-    # 5.5 hours: the window below is five, and the rest is the first wake and
-    # the suites in front of it. Under Actions' six-hour job ceiling with room
-    # to spare, and the same shape archive.yml has run at for days.
-    timeout-minutes: 330
+    # ── WHY THIS IS AN HOUR AND NOT FIVE AND A HALF ─────────────────────
+    #
+    # The window was five hours first, because the archiver runs that long and
+    # a longer window means fewer gaps. Then I checked something I should have
+    # checked before writing it: MEASURED against a live run, the check-run
+    # API reports `annotations_count: 0` for a job that has already emitted
+    # them. Annotations do not exist until the JOB ends.
+    #
+    # Annotations are the only channel out of a run this network can read —
+    # the log endpoint is outside the egress allowlist. So a five-hour window
+    # is five hours in which nobody can find out what the shop did. That is
+    # the same blindness as every bug fixed today, bought with a fix for a
+    # different one.
+    #
+    # An hour is the trade: continuous coverage AND a readable report every
+    # time a window closes. Coverage does not depend on the window being long,
+    # because the concurrency group always has the next run queued behind this
+    # one — it starts within seconds of this ending.
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
 
@@ -205,5 +222,7 @@ jobs:
         env:
           OVERHEARD_SEED: ${{ secrets.OVERHEARD_SEED }}
           WAKE_EVERY_SECONDS: "60"
-          WAKE_WINDOW_SECONDS: "18000"
+          # 50 minutes, inside the 60-minute job timeout with room for the
+          # steps in front of it. See the timeout comment for why not longer.
+          WAKE_WINDOW_SECONDS: "3000"
         run: node scripts/runner.mjs --loop ${{ steps.mode.outputs.live }}

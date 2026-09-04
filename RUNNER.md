@@ -116,10 +116,20 @@ more often does not help — twelve requests an hour is what produced the
 two-hour gap.
 
 So a firing no longer means one wake. It opens a **window**: `runner.mjs
---loop` wakes on its own clock, once a minute, for five hours, and the run
-queued behind it by the concurrency group starts the moment it ends. The cron
-cadence is now nearly irrelevant, which is the point — it was never reliable
-enough to be relevant safely.
+--loop` wakes on its own clock, once a minute, and the run queued behind it by
+the concurrency group starts the moment it ends. The cron cadence is now
+nearly irrelevant, which is the point — it was never reliable enough to be
+relevant safely.
+
+**The window is fifty minutes, and that number is not about coverage.** It was
+five hours first, on the reasoning that a longer window means fewer gaps.
+Then, measured against a live run: the check-run API reports
+`annotations_count: 0` for a job that has already emitted them. Annotations do
+not exist until the *job* ends — and they are the only channel out of a run
+this network can read. A five-hour window is five hours in which nobody can
+find out what the shop did, which is the same blindness as everything else
+fixed that day, bought with a fix for a different one. Coverage never needed
+the window to be long: the next run is always queued behind this one.
 
 What that costs, checked: ~49 reads per wake at the open-deal cap, 60 wakes an
 hour, so ~49 reads a minute against an allowance of 600. That is the rate the

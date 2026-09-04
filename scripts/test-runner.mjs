@@ -1161,10 +1161,24 @@ console.log("\n=== R. staying awake for a window");
     ok("after the single wake and the suites, not instead of them",
       wf.indexOf("--loop") > wf.indexOf("test-checkout.mjs"),
       "a red suite must mean no window");
-    ok("the window is shorter than the job timeout",
-      Number(/WAKE_WINDOW_SECONDS: "(\d+)"/.exec(wf)?.[1] ?? 0)
-        < Number(/timeout-minutes: (\d+)/.exec(wf)?.[1] ?? 0) * 60,
-      "otherwise the job is killed mid-deal instead of ending cleanly"),
+    const windowS = Number(/WAKE_WINDOW_SECONDS: "(\d+)"/.exec(wf)?.[1] ?? 0);
+    const timeoutS = Number(/timeout-minutes: (\d+)/.exec(wf)?.[1] ?? 0) * 60;
+    ok("the window is shorter than the job timeout", windowS > 0 && windowS < timeoutS,
+      `${windowS}s window in a ${timeoutS}s job — otherwise it is killed mid-deal, not ended cleanly`);
+    /* ── THE WINDOW IS ALSO HOW LONG WE ARE BLIND ────────────────────────
+       MEASURED against a live run: the check-run API reports
+       `annotations_count: 0` for a job that has already emitted them.
+       Annotations do not exist until the JOB ends — and they are the only
+       channel out of a run this network can read, since the log endpoint is
+       outside the egress allowlist. So the window length is not only a
+       coverage decision, it is how long nobody can find out what the shop
+       did. This was five and a half hours when I first wrote it: the same
+       blindness as every bug fixed today, bought with a fix for another one.
+       Coverage does not need a long window — the concurrency group keeps the
+       next run queued behind this one and it starts within seconds. */
+    ok("and short enough that a report arrives while the day is still going",
+      timeoutS > 0 && timeoutS <= 3600,
+      `${timeoutS / 60} minutes — annotations only exist once the job ends`);
     ok("and the loop is passed the same live switch as the single wake",
       /--loop \$\{\{ steps\.mode\.outputs\.live \}\}/.test(wf),
       "an unconditional --live here would post on every dry run");
