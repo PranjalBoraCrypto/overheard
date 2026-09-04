@@ -283,7 +283,28 @@ const json = (body, status = 200) =>
     },
   });
 
-export default async function handler(request) {
+/* ── THE EXPORT SHAPE, WHICH IS NOT A DETAIL ─────────────────────────────
+ * Vercel's Node runtime accepts exactly three shapes for a file in /api:
+ *
+ *     export default { fetch(request) { … } }      ← this one
+ *     export function GET(request) { … }
+ *     export default (req, res) => { … }           ← the Node signature
+ *
+ * This file shipped as `export default async function handler(request)`,
+ * which is NONE of them. Vercel read a bare default-exported function as the
+ * Node signature and called it with (IncomingMessage, ServerResponse). The
+ * body then did what it says: read `request.method` — which an IncomingMessage
+ * happens to have, so nothing complained — and then `await request.json()`,
+ * which it does not have. The rejection escaped, `res.end()` was never
+ * reached, and the request HUNG until the platform timed it out. No error
+ * page, no 500, no log line at the top: just a fetch that never settles.
+ *
+ * The suite did not catch it because the suite imported `.default` and called
+ * it as a function — which is to say, it called the handler the way the
+ * handler expected to be called, and Vercel is the only thing whose opinion
+ * on that mattered. Section A now asserts the shape itself.
+ */
+async function handler(request) {
   if (request.method !== "POST") return json({ ok: false, why: "POST an offer id" }, 405);
 
   let want = "";
@@ -452,3 +473,7 @@ export default async function handler(request) {
     next: "lock",
   });
 }
+
+/* The shape Vercel's Node runtime actually dispatches to. See the block above
+   `handler` for what shipping the wrong one looked like from outside. */
+export default { fetch: handler };

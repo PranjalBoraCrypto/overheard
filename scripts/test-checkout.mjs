@@ -65,7 +65,14 @@ process.env.ACCEPT_BOOK_TTL_MS = "0";
 
 const { canon, offerId, dealRoom } = await import("../web/tclk.js");
 const { JOBS } = await import("./runner.mjs");
-const acceptHandler = (await import("../api/accept.mjs")).default;
+const acceptModule = (await import("../api/accept.mjs"));
+/* Called the way VERCEL calls it, not the way the file happens to export it —
+   see section A's shape assertions for why that distinction cost a day. */
+const acceptHandler = (req) => {
+  const f = acceptModule.default?.fetch;
+  if (typeof f !== "function") throw new Error("the module exports no fetch handler — see the shape assertions above");
+  return f(req);
+};
 
 const BUYER = "did:key:z6MkngD8RZKCgJQCkJvHfGyYoCcNCG5rz9Tc7yRmWrMZExaz";
 const HOUR = 3600000;
@@ -90,6 +97,34 @@ const rowOf = async (b, seq = 1, from = BUYER) =>
  * code made rather than something the network happened to do.
  * ═════════════════════════════════════════════════════════════════════════*/
 console.log("=== A. the shop answers on demand");
+
+{
+  /* ── THE SHAPE VERCEL DISPATCHES TO, WHICH IS NOT A STYLE CHOICE ─────────
+     Vercel's Node runtime accepts exactly three shapes for a file in /api:
+     `export default { fetch(request) }`, per-method exports (`export function
+     POST`), or the Node `(req, res)` signature. This file shipped as
+     `export default async function handler(request)`, which is none of them.
+     Vercel read a bare default-exported function as the NODE signature and
+     called it with (IncomingMessage, ServerResponse). `request.method` exists
+     on an IncomingMessage so nothing complained; `request.json()` does not,
+     the rejection escaped, res.end() was never reached, and the request HUNG
+     until the platform timed it out. From a browser: a fetch that never
+     settles. No status, no error, no log line.
+
+     EVERY ASSERTION IN THIS SECTION PASSED THROUGHOUT, because the suite
+     imported `.default` and called it as a function — which is to say it
+     called the handler the way the handler expected, and Vercel's opinion was
+     the only one that mattered. */
+  const m = await import("../api/accept.mjs");
+  ok("the default export is an object with a fetch method",
+    m.default !== null && typeof m.default === "object" && typeof m.default.fetch === "function",
+    `default is ${typeof m.default}` + (typeof m.default === "function"
+      ? " — Vercel will call this with (req, res) and the request will hang" : ""));
+  ok("and it is not a bare function, which Vercel reads as (req, res)",
+    typeof m.default !== "function");
+  ok("the runtime is declared, because the signing chain needs node:crypto",
+    m.config?.runtime === "nodejs", String(m.config?.runtime));
+}
 
 let BOARD = [];          // what the stubbed board returns (the LIVE read)
 let ARCHIVE = [];        // and what the archived shards hold (rows, not frames)
@@ -410,7 +445,7 @@ const call = async (offer) => {
   const keep = process.env.ACCEPT_BOOK_TTL_MS;
   process.env.ACCEPT_BOOK_TTL_MS = "30000";
   const mod = await import(`../api/accept.mjs?cache=${Date.now()}`);
-  const hit = async (id) => mod.default(new Request("http://x/api/accept", {
+  const hit = async (id) => mod.default.fetch(new Request("http://x/api/accept", {
     method: "POST", headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ offer: id }),
   }));

@@ -11,7 +11,12 @@ process.env.SHOP_DID = shopDid;
 process.env.OVERHEARD_SEED = seed;
 process.env.ACCEPT_BOOK_TTL_MS = "0";
 
-const { canon, offerId } = await import("/tmp/oh/web/tclk.js");
+import { fileURLToPath } from "node:url";
+import path from "node:path";
+/* Resolved relative to THIS file. The first version hardcoded /tmp/oh, which
+   worked exactly where it was written and nowhere else — including CI. */
+const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
+const { canon, offerId } = await import(new URL("../web/tclk.js", import.meta.url));
 const now = Date.now();
 const BUYER = "did:key:z6MkngD8RZKCgJQCkJvHfGyYoCcNCG5rz9Tc7yRmWrMZExaz";
 const body = {
@@ -45,7 +50,7 @@ globalThis.fetch = async (url) => {
   throw new Error("unexpected " + u);
 };
 
-const handler = (await import("/tmp/oh/api/accept.mjs")).default;
+const handler = (await import(new URL("../api/accept.mjs", import.meta.url))).default.fetch;
 const res = await handler(new Request("http://x/api/accept", {
   method: "POST", headers: { "Content-Type": "application/json" },
   body: JSON.stringify({ offer: id }),
