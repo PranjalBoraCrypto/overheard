@@ -156,7 +156,26 @@ jobs:
             # Collection is unaffected: the archiver still reads every room
             # on its own schedule and writes to disk continuously. This only
             # changes how often git is asked to remember it.
-            SMALL="web/data/cursors.json web/data/recent.json web/data/standings.json web/data/index.json web/data/owners.json web/data/roster.json"
+            #
+            # tclk-offers/tail.* joins this tier, and it is the only ROOM-level
+            # file that does. PROBED 4 September from a runner, because nothing
+            # else can reach the venue: the live room is capped at 200 messages
+            # BY TECHNOCORE (limit=5000 returns 200), cannot be paged backwards
+            # (`since` returns the same newest 200), and runs at ~2,600 frames
+            # an hour. So a live read reaches back FIVE MINUTES. The day shard
+            # covers the rest but is published every twelfth pass, and on that
+            # day had not been written since 08:46.
+            #
+            # In the gap between them, a real order — offer, accept and payment
+            # lock, all on the board — was invisible to the shop's own runner,
+            # which reported "0 owed" and went back to sleep while the buyer's
+            # money sat locked.
+            #
+            # The tail is BOUNDED — a window, not a log — so it stays a few
+            # hundred KB while the day shard grows past seven megabytes. That
+            # size difference is the entire argument for why this file may be
+            # committed every pass and the shard may not.
+            SMALL="web/data/cursors.json web/data/recent.json web/data/standings.json web/data/index.json web/data/owners.json web/data/roster.json web/data/tclk-offers/tail.ndjson web/data/tclk-offers/tail.json"
             # A function, because the retry below has to stage EXACTLY these
             # same tiers again after it moves onto the remote tip. Two copies
             # of this list would drift, and the copy that drifted would be the

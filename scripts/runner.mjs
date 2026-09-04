@@ -162,18 +162,100 @@ export async function ourArchive(us = US, opts = {}) {
   const out = [];
   const day = (d) => new Date(d).toISOString().slice(0, 10);
   const now = opts.now ?? Date.now();
+
+  /* ── OUR FRAMES ARE NOT THE SAME THING AS OUR DEALS ──────────────────────
+     This returned only rows we SENT, and that was enough while the live read
+     supplied everything else. It is not enough now: a live read reaches back
+     five minutes, so for any deal older than that the buyer's OFFER and the
+     buyer's LOCK are gone too — and ourDeals() pairs an accept to its offer
+     and drops an accept it cannot pair.
+     So recovering our own accept and nothing else recovers nothing at all:
+     the deal still does not form, `owed` is still zero, and the shop still
+     sleeps through work it has been paid for. The first version of this fix
+     did exactly that and the suite caught it.
+     Two passes, therefore. Ours first, and then the frames that belong to the
+     deals ours name — the buyer's offer by its id, and anything carrying a
+     contract we accepted. */
+  const texts = [];
+  const eat = (txt) => { texts.push(txt); };
+
+  /* ── THE TAIL FIRST, BECAUSE THE SHARDS ARE HOURS OLD ────────────────────
+     The comment above says the archive "holds everything the ring buffer
+     forgot". That was true of the DATA and false of the FILE: day shards are
+     committed on every twelfth archiver pass, so the copy in this checkout
+     can be hours stale — on 4 September it had not been written since 08:46.
+
+     Meanwhile the live read reaches back five minutes, PROBED and not
+     assumed: technocore caps `limit` at 200 whatever you ask for, `since`
+     will not page backwards, and the room runs at ~2,600 frames an hour.
+
+     So there was a gap of hours between "too old for the room" and "young
+     enough to be missing from the shard", and a deal that fell in it was
+     invisible to this shop. That is not a hypothetical — a real order at
+     12:20 was unseen by a live wake at 12:52, which reported `0 owed` and
+     slept while the buyer's money sat locked.
+
+     tail.ndjson is the archiver's bounded window over the same room, written
+     on EVERY pass. It is read first and costs almost nothing; the shards
+     still supply everything older than it. */
+  try { eat(await readFile(path.join(dir, OFFERS_ROOM, "tail.ndjson"), "utf8")); }
+  catch { /* no tail yet: the shards below are the whole answer, as before */ }
+
   for (let i = 0; i < ARCHIVE_DAYS; i++) {
     const f = path.join(dir, OFFERS_ROOM, `${day(now - i * 86400000)}.ndjson`);
     let txt = null;
     try { txt = await readFile(f, "utf8"); } catch { continue; }
+    eat(txt);
+  }
+  /* PASS ONE: what we sent, and the ids and contracts it points at. */
+  const wanted = new Set();
+  for (const txt of texts) {
     for (const line of txt.split("\n")) {
       /* Cheap reject before JSON.parse: these shards run to thousands of
          lines a day and all but a handful are somebody else's. */
       if (!line || !line.includes(us)) continue;
-      try { const r = JSON.parse(line); if (r.from === us) out.push(r); } catch { /* half-written line */ }
+      let r; try { r = JSON.parse(line); } catch { continue; }
+      if (r.from !== us) continue;
+      out.push(r);
+      const t = String(r.text ?? "");
+      if (!t.startsWith("tclk1 ")) continue;
+      let b; try { b = JSON.parse(t.slice(6)); } catch { continue; }
+      /* An accept names the offer it answers and the contract it opens.
+         Both are 66 characters of hex, which is selective enough to stay a
+         substring test and — the part that matters — cannot be the empty
+         string, which would make the scan below match every line. */
+      for (const v of [b.ref, b.contract, b.id]) {
+        if (typeof v === "string" && /^0x[0-9a-f]{64}$/.test(v)) wanted.add(v);
+      }
     }
   }
-  return out;
+
+  /* PASS TWO: the other half of our own deals. Bounded by `wanted`, which is
+     bounded by how many deals we have open. */
+  if (wanted.size) {
+    for (const txt of texts) {
+      for (const line of txt.split("\n")) {
+        if (!line || line.includes(us)) continue;      // already taken in pass one
+        let hit = false;
+        for (const id of wanted) { if (line.includes(id)) { hit = true; break; } }
+        if (!hit) continue;
+        try { out.push(JSON.parse(line)); } catch { /* half-written line */ }
+      }
+    }
+  }
+
+  /* The tail and the shards overlap by design, so the same frame arrives
+     twice. mergeBySeq is newest-wins on seq and collapses them — but only if
+     nothing downstream counts rows, so `mine.length` in the log would be a
+     count of rows READ rather than of distinct frames. Deduped here instead,
+     so the number a human reads means what it says. */
+  const seen = new Set();
+  return out.filter((r) => {
+    const k = String(r?.seq ?? "");
+    if (!k || seen.has(k)) return false;
+    seen.add(k);
+    return true;
+  });
 }
 
 /** Live plus our own history, newest-wins, one entry per seq. */

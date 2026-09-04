@@ -128,6 +128,7 @@ console.log("=== A. the shop answers on demand");
 
 let BOARD = [];          // what the stubbed board returns (the LIVE read)
 let ARCHIVE = [];        // and what the archived shards hold (rows, not frames)
+let TAIL = [];           // and the archiver's fresh window over the same room
 let ARCHIVE_UP = true;   // or whether the repository can be reached at all
 let SHARDS_DOWN = false; // _meta names a day whose shard the CDN has not got
 let ARCHIVE_DAYS = ["2026-09-02"];
@@ -147,6 +148,14 @@ globalThis.fetch = async (url, init) => {
     RAWHITS++;
     if (!ARCHIVE_UP) return new Response("no", { status: 500 });
     if (u.endsWith("_meta.json")) return new Response(JSON.stringify({ days: ARCHIVE_DAYS }), { status: 200 });
+    if (u.endsWith("tail.ndjson")) {
+      /* 404 and 500 are DIFFERENT ANSWERS and the endpoint must treat them
+         so: absent is "not published yet", failed is an outage over the only
+         fresh source there is. */
+      if (TAIL === null) return new Response("no", { status: 404 });
+      if (TAIL === "fail") return new Response("no", { status: 500 });
+      return new Response(TAIL.map((r) => JSON.stringify(r)).join("\n"), { status: 200 });
+    }
     if (SHARDS_DOWN) return new Response("no", { status: 404 });
     return new Response(ARCHIVE.map((r) => JSON.stringify(r)).join("\n"), { status: 200 });
   }
@@ -338,6 +347,108 @@ const call = async (offer) => {
     JSON.stringify(r.body).includes(evil) === false,
     "the buyer would have locked into a deal whose payee is the attacker");
   ok("and we do not sign a second accept either", POSTED.length === 0);
+}
+{
+  /* ── THE HOUR THE SHARDS CANNOT SEE ──────────────────────────────────────
+     Day shards are committed on every twelfth archiver pass — on 4 September
+     the day's had not been rewritten since 08:46 — and the live read this
+     book merges reaches back FIVE MINUTES (probed: the venue caps limit at
+     200 whatever is asked, and `since` will not page backwards).
+     Deals accepted in between exist only in tail.ndjson. If the book does not
+     read it, the capacity check under-counts by however many deals the shop
+     agreed to in the last few hours, and signs on top of them. */
+  const { MAX_OPEN_DEALS } = await import("./runner.mjs");
+  const fresh = [];
+  for (let i = 0; i < MAX_OPEN_DEALS; i++) {
+    const b = offerBody({ nonce: "tl" + String(i).padStart(14, "0") });
+    const id = await offerId(b);
+    fresh.push(await rowOf(b, 200 + i));
+    fresh.push({
+      seq: String(300 + i), ts: new Date(now).toISOString(), from: shop.did, sig: "s",
+      text: "tclk1 " + canon({
+        type: "accept", from: shop.did, ref: id, statement: "0x" + "7c".repeat(32),
+        nonce: "tla" + String(i).padStart(13, "0"),
+        contract: "0x" + String(i).padStart(4, "0") + "f".repeat(60) }),
+    });
+  }
+  const mine = offerBody({ nonce: "ffff000000000001" });
+  ARCHIVE = []; TAIL = fresh; BOARD = [await rowOf(mine, 900)]; POSTED = [];
+  const r = await call(await offerId(mine));
+  ok("deals that exist only in the tail still bind the cap",
+    r.body.ok === false && r.body.full === true,
+    r.body.ok ? "SIGNED ON TOP OF A FULL BOOK — the shards are hours old and the room is five minutes" : r.body.why);
+  ok("and nothing is signed", POSTED.length === 0);
+
+  /* THE CONTROL, which is the bug: no tail, same board, and the shop signs. */
+  TAIL = [];
+  POSTED = [];
+  const r2 = await call(await offerId(mine));
+  ok("without the tail it cannot see them, which is what went wrong",
+    r2.body.ok === true,
+    "stated as the control so the assertion above cannot pass for another reason");
+  TAIL = []; ARCHIVE = [];
+}
+{
+  /* ── 404 AND 500 ARE NOT THE SAME ANSWER ─────────────────────────────────
+     A tail that is ABSENT is the first archiver pass after this ships, and
+     the shards alone are exactly the old behaviour. A tail that FAILS is an
+     outage over the only fresh source there is — and treating the pair alike
+     silently reverted this endpoint to signing on a full book, which is the
+     failure it exists to prevent. This file's own rule for shards is that
+     "cannot tell" must never resolve to "go ahead"; the tail gets it too. */
+  const b = offerBody({ nonce: "ffff000000000002" });
+  ARCHIVE = [await rowOf(b)]; BOARD = [await rowOf(b)];
+
+  TAIL = null; POSTED = [];
+  const missing = await call(await offerId(b));
+  ok("a tail that is not there yet is not an outage", missing.body.ok === true, missing.body.why ?? "");
+
+  TAIL = "fail"; POSTED = [];
+  const broken = await call(await offerId(b));
+  ok("but a tail that will not load is refused, not shrugged off",
+    broken.body.ok === false && broken.body.pending === true,
+    broken.body.ok ? "SIGNED on a book missing its only fresh source" : broken.body.why);
+  ok("and nothing is signed on a book we could not complete", POSTED.length === 0);
+  TAIL = [];
+}
+{
+  /* ── THE TAIL MUST BE REACHED EVEN BY A SHOP WITH A LONG HISTORY ─────────
+     Pass one of the book scan stops at MAX_WANTED, and `wanted` fills from
+     our own accepts across three days of shards. With the tail read LAST, a
+     shop with two hundred accepts behind it never reached the tail at all —
+     and the correlation is the worst available: only a shop trading enough to
+     sit at its cap accumulates that many accepts, so the tail went dark
+     exactly when the cap it feeds mattered. Measured before the fix: 199
+     prior accepts and the book was right, 200 and the shop signed. */
+  const { MAX_OPEN_DEALS } = await import("./runner.mjs");
+  const noise = [];
+  for (let i = 0; i < 260; i++) {
+    const b = offerBody({ nonce: "nz" + String(i).padStart(14, "0") });
+    const id = await offerId(b);
+    noise.push(await rowOf(b, 1000 + i));
+    noise.push({ seq: String(5000 + i), ts: new Date(now).toISOString(), from: shop.did, sig: "s",
+      text: "tclk1 " + canon({ type: "accept", from: shop.did, ref: id,
+        statement: "0x" + "7c".repeat(32), nonce: "nza" + String(i).padStart(13, "0"),
+        contract: "0x" + String(i).padStart(4, "0") + "a".repeat(60) }) });
+  }
+  const live = [];
+  for (let i = 0; i < MAX_OPEN_DEALS; i++) {
+    const b = offerBody({ nonce: "lv" + String(i).padStart(14, "0") });
+    const id = await offerId(b);
+    live.push(await rowOf(b, 8000 + i));
+    live.push({ seq: String(9000 + i), ts: new Date(now).toISOString(), from: shop.did, sig: "s",
+      text: "tclk1 " + canon({ type: "accept", from: shop.did, ref: id,
+        statement: "0x" + "7c".repeat(32), nonce: "lva" + String(i).padStart(13, "0"),
+        contract: "0x" + String(i).padStart(4, "0") + "b".repeat(60) }) });
+  }
+  const mine = offerBody({ nonce: "ffff000000000003" });
+  ARCHIVE = noise; TAIL = live; BOARD = [await rowOf(mine, 9900)]; POSTED = [];
+  const r = await call(await offerId(mine));
+  ok("260 older accepts in the shards do not starve the tail",
+    r.body.ok === false && r.body.full === true,
+    r.body.ok ? "SIGNED ON A FULL BOOK — the tail was never reached" : r.body.why);
+  ok("and nothing is signed", POSTED.length === 0);
+  ARCHIVE = []; TAIL = [];
 }
 {
   /* ── THE SPINS, RUN IN A CHILD SO THEY CAN BE OBSERVED AT ALL ────────────

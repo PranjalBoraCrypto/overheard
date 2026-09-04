@@ -101,6 +101,8 @@ Measured, not assumed.
 | upstream reads | 600/min, shared | `README.md`, measured 2026-08-26 |
 | upstream writes | 300/min, shared | same |
 | a complete sale | ~6 calls | 1 board read, 1 accept, 1 deal-room read, delivery, reveal, plus a wake's own read |
+| the offers board | **2,587 frames/hour** | probed 2026-09-04 — it was 4,192 a DAY on 2026-09-03 |
+| one live read | **200 messages ≈ 5 min** | the venue's cap, not ours; `limit=5000` returns 200 |
 | a room summary | 829 ms | measured |
 | a daily digest | **16.5 s** | measured |
 | a wake | 10 min | workflow timeout |
@@ -140,6 +142,73 @@ real reason behind the 52-accepts-7-locks measurement above. Nothing in the
 state machine reads a room name — `runDeal` folds by contract — so both the
 shop and the buyer now try the deal room and fall back to the board. Deals
 that complete on this network are the ones that stayed put.
+
+### The five-minute window, and the correction it forced
+
+This document said a 200-message read covers "about an hour". **That was wrong
+by a factor of twelve**, computed from a day the board carried 4,192 frames.
+
+Probed from a runner, since neither a laptop nor the cloud container can reach
+the venue:
+
+```
+limit=500 / 1000 / 2000 / 5000   ->  200 messages every time
+since=<older seq>                ->  the same newest 200, always
+pace                             ->  2,587 frames/hour
+```
+
+**200 messages is five minutes.** The cap is Technocore's, not ours, and the
+window cannot be walked backwards. The live room is not a source of truth for
+anything older than five minutes.
+
+That should have been survivable, because the archive covers the rest. It was
+not, for two reasons found in that order:
+
+**The day shard is committed on every twelfth archiver pass.** Deliberate — it
+is 7.4 MB and committing it every five minutes would put gigabytes a day into
+git.
+
+**And it had stopped growing entirely.** `DAY_BODY_MAX` is 12,000 bodies per
+room per day, which is right for 58,699 rooms and catastrophic for this one.
+From the live archive on 4 September:
+
+```
+body_cap        12000
+bodies_dropped  16225      <- more than half the day, never stored
+total           24546
+```
+
+The offers shard filled at 08:46 and every frame after it was counted and
+discarded. Not a publishing delay — a truncation, reported in a field nobody
+was reading.
+
+**What that cost.** A real order at 12:20 — offer, acceptance and payment lock,
+all three signed and on the public board — was invisible to the shop's own
+runner at 12:52, which reported `0 owed · 0 open` and went back to sleep while
+the buyer's money sat locked. The buyer's own orders page said "Nothing ordered
+yet".
+
+Three fixes, because there were three faults:
+
+- **the offers room gets its own body cap** (`TCLK_BODY_MAX`, 200,000). One
+  room at ~17 MB a day, against a cap that exists to stop forty rooms doing it
+  at once. Everywhere else a dropped body is a dropped sentence; here it is a
+  lost deal, and nobody else on the network records it.
+- **a bounded tail** — `tclk-offers/tail.ndjson`, the newest frames of that
+  room, rewritten every pass and committed with the small tier. It covers
+  between "still in the live window" and "already in a published shard". It is
+  capped in **bytes** as well as lines, because bytes are what a commit costs.
+- **the tail is fed from arriving frames, not from the shard.** The first
+  version read the shard's own text — the same string the body cap stops
+  appending to — so it would have frozen at the identical line, while
+  rewriting its own `updated` field every pass and looking current. An
+  adversarial review caught that before it shipped; at this room's rate it
+  would have been frozen for about nineteen hours in every twenty-four.
+
+And one more, found by the test written for the fix: recovering *our own*
+frames from the archive recovers nothing usable, because `ourDeals` pairs an
+accept to its offer and the buyer's offer and lock have scrolled out too. The
+archive read now recovers the whole deal.
 
 ---
 
@@ -221,6 +290,11 @@ brochure.
   49 to 144 minutes. Asking for twelve an hour raises the floor; it does not
   guarantee twelve. Nothing depends on any particular one arriving, which is
   why the deadlines stay twelve hours wide.
+- **The board's pace is not stable.** It went from 4,192 frames a day to
+  2,587 an hour inside forty-eight hours. Every number in this document that
+  divides by that rate has a shelf life, and the last time one went stale it
+  cost a buyer their order. If something here reads "about N minutes of
+  history", re-measure before trusting it.
 - **Nobody knows what settlement costs**, so the live-rail cap is still a
   guess wearing a seam. It stops being a guess when there is a balance to
   read, and not before.

@@ -211,13 +211,38 @@ export default async function handler(request) {
      days' worth of them would be paying for the whole archive to answer a
      question about yesterday. */
   const recent = [];
-  for (const day of days) {
-    if (orders.length >= MAX_ORDERS) break;
-    const text = await grabText(`${ROOM}/${day}.ndjson`);
-    if (text === null) continue;             // a missing shard is not an error
-    scanned++;
-    if (recent.length < ACCEPT_DAYS) recent.push(text);
+
+  /* ── THE TAIL, READ FIRST, BECAUSE THE SHARDS ARE NOT FRESH ──────────────
+     This endpoint told visitors the archive "trails the network by about one
+     collector pass". That was wrong: the every-five-minutes commits do not
+     write day shards — those land on every twelfth pass, and on 4 September
+     the day's shard had not been rewritten since 08:46.
+     The page merges a live room read to cover the gap, and that read reaches
+     back FIVE MINUTES (probed: technocore caps limit at 200 however much you
+     ask for, and `since` will not page backwards). So a buyer who ordered
+     between five minutes and several hours ago was told "Nothing ordered
+     yet" about an order that existed, was accepted, and was paid for.
+     tail.ndjson is the archiver's bounded window over the same room, written
+     every pass. Reading it first is what makes the three sources meet. */
+  const tail = await grabText(`${ROOM}/tail.ndjson`);
+  if (tail !== null) recent.push(tail);      // the accept hunt wants it too
+
+  /* ── SCANNED AS EACH ONE ARRIVES, NOT AFTER THEY ALL HAVE ────────────────
+     An earlier version collected every text first and scanned afterwards.
+     That quietly broke two things at once: `orders.length >= MAX_ORDERS`
+     became a test against an empty list, so every shard in the fourteen-day
+     window was FETCHED — 2.5 to 7.4 MB each, at the edge, which is precisely
+     the cost the header of this file says must never be paid per request —
+     and the scan itself then had no budget guard at the outer level.
+     Measured with 700 orders across three sources: 301 returned of 700, and
+     `truncated: false` asserted over the top of it.
+     Seen is by NONCE, so the deliberate overlap between the tail and the
+     newest shard costs one entry rather than two — and the budget is spent on
+     distinct orders rather than on duplicates. */
+  const seen = new Set();
+  const eat = (text) => {
     for (const line of text.split("\n")) {
+      if (orders.length >= MAX_ORDERS) return;
       if (!line) continue;
       /* THE PREFILTER IS THE WHOLE PERFORMANCE STORY. A day holds thousands
          of frames and JSON.parse on every one of them is most of the cost of
@@ -226,13 +251,30 @@ export default async function handler(request) {
          somewhere else — and those are thrown out by the real check below. */
       if (!line.includes(did)) continue;
       const o = orderFrom(line, did);
-      if (o) orders.push(o);
-      if (orders.length >= MAX_ORDERS) break;
+      if (!o) continue;
+      const k = o.nonce || `seq:${o.seq}`;
+      if (seen.has(k)) continue;
+      seen.add(k);
+      orders.push(o);
     }
+  };
+
+  /* The tail first: it is the only source that is minutes rather than hours
+     old, so a budget spent before reaching it would spend it on history. */
+  if (tail !== null) eat(tail);
+  for (const day of days) {
+    if (orders.length >= MAX_ORDERS) break;
+    const text = await grabText(`${ROOM}/${day}.ndjson`);
+    if (text === null) continue;             // a missing shard is not an error
+    scanned++;
+    if (recent.length < ACCEPT_DAYS) recent.push(text);
+    eat(text);
   }
 
   /* Newest first, by the server's own sequence number rather than by a
-     timestamp any sender could have written. */
+     timestamp any sender could have written.
+     Deduplication happens during the scan rather than after it, so the
+     MAX_ORDERS budget is spent on distinct orders — see `eat`. */
   orders.sort((a, b) => b.seq - a.seq);
 
   /* ── DID THE SHOP ANSWER? ────────────────────────────────────────────────
@@ -279,7 +321,18 @@ export default async function handler(request) {
     /* The archive trails the network by roughly one collector pass. An order
        placed in the last few minutes is genuinely not here yet, and the page
        merges a live read to cover exactly that gap. */
-    archive_lag: "about one collector pass, ~5 minutes",
+    /* WHAT WAS ACTUALLY READ, rather than a sentence about what usually is.
+       This said "about one collector pass, ~5 minutes" unconditionally, and
+       it was wrong twice over: day shards are committed every twelfth pass,
+       and on 4 September the offers shard had also hit its body cap and
+       stopped growing at 08:46. A caller could not tell any of that from the
+       answer. Now the tail's presence is a field, because whether the fresh
+       source was there is the single fact that decides how much to trust
+       this list. */
+    tail: tail !== null,
+    archive_lag: tail !== null
+      ? "the tail is rewritten every archiver pass, about five minutes"
+      : "no tail available; the newest day shard is committed roughly hourly, so this may be hours behind",
     checked: new Date().toISOString(),
   });
 }

@@ -253,6 +253,41 @@ const MAX_POSTERS = 40;
 const MAX_TEMPLATES = 6000;
 const ROSTER_SNAPSHOT = 120;
 const DAY_BODY_MAX = Number(process.env.DAY_BODY_MAX ?? 12000);
+/* ── EXCEPT FOR THE ONE ROOM WHERE A DROPPED BODY IS A LOST DEAL ──────────
+   The cap above is right for 58,699 rooms and catastrophic for this one, for
+   exactly the reason the polling ceiling already has an exception here:
+   elsewhere a missed message is a missed message, but in tclk-offers it is an
+   OFFER, an ACCEPT or a LOCK, and nobody else on the network records it.
+
+   MEASURED on the live archive, 4 September:
+
+       body_cap        12000
+       bodies_dropped  16225      <- more than half the day, thrown away
+       total           24546
+
+   The shard stopped growing at 08:46 — not because of the publishing
+   cadence, which is what I first blamed, but because it was FULL. Past the
+   cap the archiver keeps counting and stops keeping copies, so the file stops
+   changing, `git diff --staged --quiet` reports "no new messages", and the
+   day's shard looks published-and-quiet when it is actually truncated.
+
+   Everything downstream then reads a file that ends at breakfast. A real
+   order at 12:20 — offer, accept and payment lock all on the public board —
+   was invisible to the shop's own runner at 12:52, which reported `0 owed`
+   and slept while the buyer's money sat locked. It was never in the archive
+   to be found.
+
+   THE COST OF THE EXCEPTION, since the cap exists for a real reason: this
+   room averages 616 bytes a line and ran 28,000 frames on its busiest day, so
+   an uncapped day is ~17 MB. That is one room, once a day, against a cap that
+   exists to stop forty rooms doing it at once. The trade is not close.
+
+   Still bounded, because "no cap" is how a free repository dies: two hundred
+   thousand is an order of magnitude above anything this room has ever done,
+   so it is a backstop rather than a working limit — and if it is ever hit,
+   `bodies_dropped` will say so instead of the silence that cost us today. */
+const TCLK_BODY_MAX = Number(process.env.TCLK_BODY_MAX ?? 200000);
+const bodyCapFor = (room) => (room === OFFERS_ROOM ? TCLK_BODY_MAX : DAY_BODY_MAX);
 const MAX_GAPS_KEPT = 50;
 
 /**
@@ -334,6 +369,160 @@ const readJson = async (file, fallback) =>
 
 /** Written to a temp name and renamed, because the workflow runs `git add`
  *  on its own clock while this process is still writing. */
+/* ══════════════════════════════════════════════════════════════════════════
+ * THE TAIL — the last stretch of the offers room, small enough to publish
+ * every pass
+ *
+ * ── THE HOLE IT FILLS, MEASURED RATHER THAN GUESSED ──────────────────────
+ *
+ * Everything downstream reads the live room with `limit=200` and assumes that
+ * reaches back far enough. PROBED from a runner on 4 September, because
+ * neither a laptop nor the cloud container can reach the venue:
+ *
+ *     limit=500 / 1000 / 2000 / 5000   ->  200 messages every time
+ *     since=<older seq>                ->  the same newest 200, always
+ *     pace                             ->  2,587 frames/hour
+ *
+ * So 200 messages is FIVE MINUTES, the cap is the venue's and not ours, and
+ * the window cannot be walked backwards. The live room is not a source of
+ * truth for anything older than five minutes.
+ *
+ * The day shard covers the rest — but it is committed on every twelfth pass
+ * because it is 7.4 MB and growing, so it can be hours old. On 4 September it
+ * had not been written since 08:46.
+ *
+ * Between those two lies a gap of hours in which a fully formed deal is
+ * invisible to everyone, INCLUDING US. Proven, not theorised: a real order
+ * placed at 12:20 — offer, accept and payment lock all on the board — was
+ * unseen by a live wake at 12:52, which reported `0 owed · 0 open` and went
+ * back to sleep while the buyer's money sat locked.
+ *
+ * ── WHY A TAIL AND NOT MORE PUBLISHING ───────────────────────────────────
+ *
+ * Publishing the day shard every pass is the obvious fix and the wrong one:
+ * it is the thing the twelfth-pass tiering exists to prevent, and it would
+ * put gigabytes a day into git. What the readers actually need is not the
+ * whole day. It is the last hour or two — the stretch between "still in the
+ * live window" and "already in a published shard".
+ *
+ * So: one bounded file, a few hundred kilobytes, rewritten every pass. It is
+ * a WINDOW, not a log — the oldest lines fall off — which is what keeps its
+ * size flat while the day shard grows.
+ *
+ * ONE ROOM ONLY, deliberately. tclk-offers is where money is agreed. No other
+ * room's freshness is worth a commit every five minutes, and a tail per room
+ * would recreate the cost this avoids.
+ * ═════════════════════════════════════════════════════════════════════════*/
+
+/* ── HOW BIG THE TAIL MAY GET, IN BYTES AND NOT IN LINES ─────────────────
+   The first version capped it at 4,000 LINES and three separate comments
+   called that "a few hundred KB". At this room's measured 616 bytes a line
+   it is 2.5 MB, and a line may be up to MAX_TEXT (4,000 chars) — so the
+   worst case was 16 MB, LARGER than the shard the every-pass tiering exists
+   to keep out of git. The bound was on the wrong quantity, and the argument
+   for affordability was wrong by an order of magnitude.
+   Bytes are what the commit costs, so bytes are what is capped. 1.5 MB is
+   about forty minutes of this room at its busiest and comfortably more than
+   the gap the tail exists to cover. */
+const TAIL_MAX_BYTES = Number(process.env.TAIL_MAX_BYTES ?? 1_500_000);
+/* A line ceiling as well, because a room of tiny frames would otherwise put
+   a hundred thousand of them in here and make every reader's parse slow for
+   no extra coverage. Whichever binds first, binds. */
+const TAIL_MAX = Number(process.env.TAIL_MAX ?? 4000);
+
+/** One arriving record, appended to the rolling window. */
+function pushTail(state, r) {
+  if (!state.tail) state.tail = { rows: [], bytes: 0, seqs: new Set() };
+  const t = state.tail;
+  const k = String(r?.seq ?? "");
+  if (!k || t.seqs.has(k)) return;
+  const line = JSON.stringify(r);
+  t.rows.push(line);
+  t.seqs.add(k);
+  t.bytes += line.length + 1;
+  /* Trim from the FRONT: this is a window over the newest frames, and the
+     newest are the ones no other file has yet. */
+  while (t.rows.length > TAIL_MAX || (t.bytes > TAIL_MAX_BYTES && t.rows.length > 1)) {
+    const gone = t.rows.shift();
+    t.bytes -= gone.length + 1;
+    try { t.seqs.delete(String(JSON.parse(gone).seq)); } catch { /* torn: nothing to forget */ }
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+ * THE TAIL — the newest stretch of the offers room, small enough to publish
+ * every pass
+ *
+ * ── THE HOLE IT FILLS, MEASURED RATHER THAN GUESSED ──────────────────────
+ *
+ * Everything downstream reads the live room with `limit=200` and assumes that
+ * reaches back far enough. PROBED from a runner on 4 September, because
+ * neither a laptop nor the cloud container can reach the venue:
+ *
+ *     limit=500 / 1000 / 2000 / 5000   ->  200 messages every time
+ *     since=<older seq>                ->  the same newest 200, always
+ *     pace                             ->  2,587 frames/hour
+ *
+ * So 200 messages is FIVE MINUTES, the cap is the venue's and not ours, and
+ * the window cannot be walked backwards. The live room is not a source of
+ * truth for anything older than five minutes.
+ *
+ * The day shard is supposed to cover the rest. On 4 September it stopped at
+ * 08:46 — because it was FULL, not because of the publishing cadence, which
+ * is what I blamed first. See TCLK_BODY_MAX.
+ *
+ * Both holes are now closed. This file remains because closing them left a
+ * third one: the shard is still only COMMITTED every twelfth pass, so between
+ * a five-minute room and an hours-old commit there is a stretch nothing
+ * covers. That stretch is where a real order at 12:20 — offer, accept and
+ * payment lock all on the public board — became invisible to the shop's own
+ * runner at 12:52, which reported `0 owed` and slept while the money sat
+ * locked.
+ *
+ * ── WHY A TAIL AND NOT MORE PUBLISHING ───────────────────────────────────
+ *
+ * Publishing the day shard every pass is the obvious fix and the wrong one:
+ * it is what the twelfth-pass tiering exists to prevent, and it would put
+ * gigabytes a day into git. What the readers need is not the whole day. It is
+ * the last stretch — between "still in the live window" and "already in a
+ * published shard".
+ *
+ * ONE ROOM ONLY, deliberately. tclk-offers is where money is agreed. No other
+ * room's freshness is worth a commit every five minutes.
+ * ═════════════════════════════════════════════════════════════════════════*/
+async function writeTail(state) {
+  const t = state.tail;
+  if (!t?.rows.length) return;
+  const dir = path.join(OUT, OFFERS_ROOM);
+  await mkdir(dir, { recursive: true });
+
+  let firstSeq = null, lastSeq = null, firstTs = null, lastTs = null;
+  for (const line of t.rows) {
+    try {
+      const r = JSON.parse(line);
+      if (firstSeq === null) { firstSeq = r.seq; firstTs = r.ts ?? null; }
+      lastSeq = r.seq; lastTs = r.ts ?? null;
+    } catch { /* torn line: still bytes, just not a bound */ }
+  }
+
+  await writeAtomic(path.join(dir, "tail.ndjson"), t.rows.join("\n") + "\n");
+  /* first/last seq are stated so a reader can tell AT A GLANCE whether this
+     tail reaches its own live window, rather than assuming it does — which is
+     the assumption that caused all of this. `updated` is the time of THIS
+     write; `last_ts` is the age of the newest frame in it, and those two
+     being far apart is the shape of a tail that has stopped moving. */
+  await writeAtomic(path.join(dir, "tail.json"), JSON.stringify({
+    room: OFFERS_ROOM, updated: new Date().toISOString(),
+    lines: t.rows.length, bytes: t.bytes,
+    max_lines: TAIL_MAX, max_bytes: TAIL_MAX_BYTES,
+    first_seq: firstSeq, last_seq: lastSeq, first_ts: firstTs, last_ts: lastTs,
+    note: "The newest frames of the offers room, rewritten every archiver pass. "
+        + "The live room reaches back about five minutes and cannot be paged; "
+        + "the day shard is committed far less often. This covers between them. "
+        + "Compare last_ts with updated: far apart means this has stopped moving.",
+  }, null, 1) + "\n");
+}
+
 async function writeAtomic(file, text) {
   const tmp = `${file}.tmp`;
   await writeFile(tmp, text);
@@ -709,6 +898,9 @@ async function flush(state, rows, total, standings = false) {
     await mkdir(roomDir, { recursive: true });
     const metaFile = path.join(roomDir, "_meta.json");
     const meta = await readJson(metaFile, { room, days: [], total: 0, gaps: [] });
+    /* Per room, because tclk-offers is the one place a dropped body is a lost
+       deal rather than a lost sentence. See bodyCapFor. */
+    const cap = bodyCapFor(room);
 
     /* ── APPEND, NEVER REBUILD ────────────────────────────────────────────
        This used to read the whole day shard, push the new messages in, SORT
@@ -741,7 +933,19 @@ async function flush(state, rows, total, standings = false) {
       let add = "", capped = 0;
       for (const r of recs) {
         if (sh.seqs.has(r.seq)) continue;
-        if (sh.n >= DAY_BODY_MAX) { capped++; continue; }
+        /* ── THE TAIL IS FED HERE, BEFORE THE CAP, DELIBERATELY ────────────
+           The first version of the tail was built from `sh.text`, which is
+           the same string the cap stops appending to. So the moment a room
+           filled up, the tail froze at the identical line the shard did —
+           while still rewriting `tail.json.updated` every pass, which made a
+           frozen file look current. The reviewer demonstrated ~19 hours of
+           every 24 in that state at this room's measured rate.
+           A window whose whole purpose is "the newest frames, when nothing
+           else has them" must not be downstream of the thing that stops
+           recording newest frames. It is fed from the arriving records and
+           bounded by its own rules, so a capped shard cannot silence it. */
+        if (room === OFFERS_ROOM) pushTail(state, r);
+        if (sh.n >= cap) { capped++; continue; }
         sh.seqs.add(r.seq); sh.n++;
         add += JSON.stringify(r) + "\n";
       }
@@ -751,7 +955,7 @@ async function flush(state, rows, total, standings = false) {
         await writeAtomic(file, sh.text);
       }
       if (capped) {
-        meta.body_cap = DAY_BODY_MAX;
+        meta.body_cap = cap;
         meta.bodies_dropped = (meta.bodies_dropped ?? 0) + capped;
         meta.cap_note = "Past body_cap, messages are counted in profiles and templates but their text is not stored.";
       }
@@ -773,11 +977,14 @@ async function flush(state, rows, total, standings = false) {
     await writeAtomic(metaFile, JSON.stringify(meta) + "\n");
   }
 
+  await writeTail(state);
+
   await writeAtomic(path.join(OUT, "cursors.json"), JSON.stringify(state.cursors) + "\n");
 
   /* The index of deal rooms is itself worth publishing: it is the only list
      anywhere of where tclk settlements are happening, and it is what lets the
      next run pick up the deals this one was following. */
+  /* ── see writeTail() for the file that closes the five-minute hole ─────── */
   if (state.dealsDirty) {
     state.deals.updated = new Date().toISOString();
     await writeAtomic(path.join(OUT, "tclk-deals.json"), JSON.stringify(state.deals, null, 1) + "\n");
@@ -983,6 +1190,7 @@ async function writeReport(state, rows, total) {
     base: BASE,
     repeat_limit: REPEAT_LIMIT,
     body_cap_per_room_per_day: DAY_BODY_MAX,
+    body_cap_tclk_offers: TCLK_BODY_MAX,
     network_rooms: total,
     roster_listed: rows?.length ?? 0,
     rooms_tracked: Object.keys(state.cursors).length,

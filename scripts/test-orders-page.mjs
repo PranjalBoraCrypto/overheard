@@ -172,11 +172,143 @@ ok("it reports how much it actually read",
   const grabs = [...s.matchAll(/\bgrabText\(/g)].length;   // 1 definition + N calls
   ok("every upstream read goes through one function", fetches === 1,
     `${fetches} fetch call sites; more than one means a read this rule cannot see`);
-  ok("and that function is reached from exactly two places", grabs === 3,
-    `${grabs - 1} call sites: the archive index, and one day shard at a time`);
-  ok("so the accept hunt reads shards already in hand",
-    /for \(const text of recent\)/.test(s) && !/recent[\s\S]{0,80}await/.test(s),
-    "searching bytes we already paid for is free; fetching per order is not");
+  /* THREE call sites now, not two: the index, the TAIL, and a day shard. The
+     tail is what makes this endpoint able to see an order placed in the last
+     hour at all — day shards land on every twelfth archiver pass and the live
+     room the page merges reaches back five minutes, so between them a real
+     order was reported as "Nothing ordered yet".
+     The rule was never "exactly two reads". It is that the number of reads is
+     BOUNDED and none of them is per-order — that is what once spent the
+     shared allowance and left the deals board empty. */
+  ok("and every read it makes is one of three kinds", grabs === 4,
+    `${grabs - 1} call sites: the archive index, the tail, and one day shard at a time`);
+  ok("none of them sits inside a per-order loop",
+    !/for \(const o of live[\s\S]{0,400}?\bawait\b/.test(s),
+    "a read per order is what once made the deals board render empty");
+  ok("so the accept hunt reads bytes already in hand",
+    /for \(const text of recent\)/.test(s) &&
+    !/for \(const text of recent\)[\s\S]{0,300}?\bawait\b/.test(s),
+    "searching what we already paid for is free; fetching per order is not");
+}
+
+console.log("\n=== D2. the endpoint, driven for real, against the gap that hid an order");
+{
+  /* Section D reads this file as text. This runs it. The distinction earned
+     its keep today: a real order, offer and accept and payment lock all on
+     the board, was reported to its own buyer as "Nothing ordered yet".
+     Day shards are committed on every twelfth archiver pass — that day the
+     shard had not been rewritten since 08:46 — and the live room the page
+     merges reaches back FIVE MINUTES (probed: the venue caps limit at 200
+     however much is asked for, and `since` will not page backwards).
+     An order in between existed in tail.ndjson and nowhere else. */
+  process.env.SHOP_DID = "did:key:z6MkiuhfekPgiihLWarPAzhuvoMjg86F8dqmLiCTmtQgMrR3";
+  const handler = (await import("../api/orders.js")).default;
+  const { canon, offerId } = await import("../web/tclk.js");
+  const BUYER = "did:key:z6MkngD8RZKCgJQCkJvHfGyYoCcNCG5rz9Tc7yRmWrMZExaz";
+  const t = Date.now();
+
+  const offer = {
+    type: "offer", from: BUYER, role: "payer",
+    job: { id: "overheard-room-summary", proto: "overheard", brief: "technocore" },
+    amount: "250", asset: "FLOP", lock: "hash", rails: ["paper"],
+    expiresMs: t + 12 * 3600e3, claimByMs: t + 12 * 3600e3, refundAfterMs: t + 36 * 3600e3,
+    nonce: "abc123abc123abc1",
+  };
+  const id = await offerId(offer);
+  const row = JSON.stringify({ seq: 70001, ts: new Date(t).toISOString(), from: BUYER, sig: "s",
+    text: "tclk1 " + canon({ ...offer, id }) });
+
+  let TAILTEXT = row, SHARDTEXT = "";
+  const real = globalThis.fetch;
+  globalThis.fetch = async (u) => {
+    const s = String(u);
+    if (s.endsWith("_meta.json")) return new Response(JSON.stringify({ days: ["2026-09-04"] }), { status: 200 });
+    if (s.endsWith("tail.ndjson")) return TAILTEXT === null ? new Response("no", { status: 404 }) : new Response(TAILTEXT, { status: 200 });
+    if (s.endsWith(".ndjson")) return new Response(SHARDTEXT, { status: 200 });
+    throw new Error("unexpected fetch " + s);
+  };
+  const call = async () => (await handler(new Request(`http://x/api/orders?did=${BUYER}`))).json();
+
+  let r = await call();
+  ok("an order that exists only in the tail is returned", (r.orders || []).length === 1,
+    `${(r.orders || []).length} orders — this read 0 while the buyer's order was live and funded`);
+  ok("and it carries the id an accept points at", r.orders?.[0]?.id === id);
+
+  /* THE CONTROL. Same board, no tail: the bug exactly as the buyer met it. */
+  TAILTEXT = null;
+  r = await call();
+  ok("without the tail the buyer is told they have never ordered", (r.orders || []).length === 0,
+    "stated as the control, so the assertion above cannot pass for some other reason");
+
+  /* The tail overlaps the newest shard on purpose, so the same order arrives
+     twice and must be shown once. */
+  TAILTEXT = row; SHARDTEXT = row;
+  r = await call();
+  ok("an order in both the tail and the shard is listed once", (r.orders || []).length === 1,
+    `${(r.orders || []).length} — the overlap is deliberate; showing it twice is not`);
+
+  /* ── THE BUDGET, WHICH THE RESTRUCTURE QUIETLY BROKE ─────────────────────
+     Collecting every text before scanning any of it made `orders.length >=
+     MAX_ORDERS` a test against an empty list — so every shard in the
+     fourteen-day window was FETCHED (2.5 to 7.4 MB each, at the edge, which
+     is the exact cost this file's header says must never be paid per
+     request), and the scan then had no outer guard. Measured with 700 orders
+     across three sources: 301 came back, and `truncated: false` was asserted
+     over the top of it. */
+  {
+    const many = (n, from) => Array.from({ length: n }, (_, i) => JSON.stringify({
+      seq: from + i, ts: new Date(t).toISOString(), from: BUYER, sig: "s",
+      text: "tclk1 " + JSON.stringify({ ...offer, nonce: "n" + (from + i), id: "0x" + String(from + i).padStart(64, "0") }),
+    })).join("\n");
+    let fetched = 0;
+    globalThis.fetch = async (u) => {
+      const q = String(u);
+      if (q.endsWith("_meta.json")) return new Response(JSON.stringify({ days: ["2026-09-01", "2026-09-02", "2026-09-03", "2026-09-04"] }), { status: 200 });
+      fetched++;
+      if (q.endsWith("tail.ndjson")) return new Response(many(300, 1), { status: 200 });
+      return new Response(many(300, 1), { status: 200 });   // the SAME 300, overlapping
+    };
+    const r2 = await call();
+    ok("the overlap between tail and shard costs one entry, not two",
+      (r2.orders || []).length === 300,
+      `${(r2.orders || []).length} orders from 300 distinct, served three times over`);
+    /* Four shards are still fetched here and that is RIGHT: 300 distinct
+       orders is under the cap, so there is more to look for. The property is
+       that a SPENT budget stops the fetching — asserted next, because an
+       assertion that passes while the budget never binds is testing nothing. */
+
+    fetched = 0;
+    globalThis.fetch = async (u) => {
+      const q = String(u);
+      if (q.endsWith("_meta.json")) return new Response(JSON.stringify({ days: ["2026-09-01", "2026-09-02", "2026-09-03", "2026-09-04"] }), { status: 200 });
+      fetched++;
+      if (q.endsWith("tail.ndjson")) return new Response(many(600, 1), { status: 200 });
+      return new Response(many(600, 10000), { status: 200 });
+    };
+    const r2b = await call();
+    ok("a spent budget stops it fetching shards it cannot use",
+      fetched === 1, `${fetched} reads — the tail alone filled the cap, and each shard is megabytes at the edge`);
+    ok("and the answer says it was truncated", r2b.truncated === true);
+  }
+
+  /* The answer must say whether the fresh source was there. It used to assert
+     "about one collector pass, ~5 minutes" unconditionally — untrue when the
+     shard is committed hourly, and wildly untrue on the day the shard also
+     hit its body cap and stopped at 08:46. */
+  {
+    globalThis.fetch = async (u) => {
+      const q = String(u);
+      if (q.endsWith("_meta.json")) return new Response(JSON.stringify({ days: ["2026-09-04"] }), { status: 200 });
+      if (q.endsWith("tail.ndjson")) return new Response("no", { status: 404 });
+      return new Response("", { status: 200 });
+    };
+    const r3 = await call();
+    ok("with no tail, the answer says so rather than claiming freshness",
+      r3.tail === false && /hours behind/.test(String(r3.archive_lag)),
+      String(r3.archive_lag).slice(0, 60));
+  }
+
+  globalThis.fetch = real;
 }
 
 /* ══════════════════════════════════════════════════════════════════════════

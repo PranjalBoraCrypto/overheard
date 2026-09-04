@@ -201,10 +201,19 @@ function ourRecentRows() {
 
 async function readBook() {
   const raw = (p) => `https://raw.githubusercontent.com/${OWNER}/${REPO}/main/web/data/tclk-offers/${p}`;
+  /* THREE ANSWERS, NOT TWO. `null` used to mean both "404, not published"
+     and "500, could not read", and the tail treated the pair as absence — so
+     one bad minute at the CDN silently reverted this endpoint to the
+     behaviour that let it sign on a full book. This file's own doctrine
+     twenty lines down is that a failed shard is fatal precisely because
+     "cannot tell" must never resolve to "go ahead"; the tail gets the same
+     rule, minus the one case where absence is genuinely expected. */
+  const MISSING = Symbol("missing");
   const grab = async (p) => {
     try {
       const r = await fetch(raw(p), { headers: { "User-Agent": "overheard-accept/1.0" } });
-      return r.ok ? await r.text() : null;
+      if (r.ok) return await r.text();
+      return r.status === 404 ? MISSING : null;
     } catch { return null; }
   };
   const fail = () => { book = { at: Date.now(), rows: null, ok: false }; return null; };
@@ -214,6 +223,27 @@ async function readBook() {
   let days = [];
   try { days = JSON.parse(metaText)?.days ?? []; } catch { return fail(); }
   if (!Array.isArray(days) || !days.length) return fail();
+
+  /* ── AND THE TAIL, WHICH IS THE ONLY FRESH THING HERE ────────────────────
+     The shards are committed on every twelfth archiver pass, so they can be
+     HOURS old — on 4 September the day's shard had not been written since
+     08:46. The live read this book is merged with reaches back five minutes,
+     PROBED: technocore caps `limit` at 200 whatever is asked for, `since`
+     will not page backwards, and the room runs at ~2,600 frames an hour.
+     Five minutes and "some hours ago" do not meet, and a deal that lands in
+     the gap is invisible to the capacity check — which is the third time that
+     check has been wrong today, this time through the data rather than the
+     logic.
+     tail.ndjson is the archiver's bounded window over the same room, rewritten
+     every pass. A few hundred KB against the shard's seven megabytes, so it
+     is fetched alongside them and costs almost nothing.
+     A MISSING TAIL IS NOT FATAL: it has to be absent for the first archiver
+     pass after this ships, and the shards alone are exactly the old
+     behaviour. A missing SHARD still refuses, as before. */
+  /* Fetched WITH the shards below, not before them. An earlier version
+     awaited it on its own line — sixteen lines above the comment explaining
+     that serial fetches were a third of the 3,560 ms measured on the buyer's
+     click. */
 
   /* ── A SHARD THAT WILL NOT LOAD IS A BOOK WE DO NOT HAVE ─────────────────
      This used to skip a failed shard and carry on. `texts` could then end up
@@ -229,10 +259,26 @@ async function readBook() {
      in a loop was paying three round trips to do one thing's work — a third
      of the 3,560 ms measured on the deployed endpoint, for no reason beyond
      the shape of the loop that fetched them. */
-  const texts = await Promise.all(
-    [...days].sort().slice(-SHARD_DAYS).map((day) => grab(`${day}.ndjson`)),
-  );
-  if (texts.some((t) => t === null)) return fail();
+  const [tailText, ...shards] = await Promise.all([
+    grab("tail.ndjson"),
+    ...[...days].sort().slice(-SHARD_DAYS).map((day) => grab(`${day}.ndjson`)),
+  ]);
+  if (shards.some((t) => t === null || t === MISSING)) return fail();
+  /* A tail that 404s is the first archiver pass after this shipped, and the
+     shards alone are exactly the old behaviour. A tail that FAILS is an
+     outage over the only fresh source there is, and proceeding without it
+     means the capacity check silently stops counting the deals agreed in the
+     last few hours — which is the failure this file exists to prevent. */
+  if (tailText === null) return fail();
+
+  /* TAIL FIRST. Pass one below stops at MAX_WANTED, and `wanted` fills from
+     our accepts in three days of shards — so with the tail last, a shop with
+     two hundred accepts behind it never reached the tail at all. The
+     correlation is the worst possible: only a shop trading enough to sit at
+     its cap accumulates that many accepts, so the tail went dark exactly when
+     the cap it feeds mattered. Measured: 199 prior accepts and the book was
+     right; 200 and the shop signed on a full book. */
+  const texts = tailText === MISSING ? shards : [tailText, ...shards];
 
   /* ── TWO PASSES, BECAUSE ONE OF THEM RETURNS HALF A DEAL ─────────────────
      Pass one keeps lines mentioning our DID. That is our accepts — and NOT

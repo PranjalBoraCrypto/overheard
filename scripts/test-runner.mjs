@@ -23,7 +23,7 @@ import { createPublicKey, verify as edVerify, randomBytes } from "node:crypto";
 import { agentFromSeed, sweep, nextNonce, say } from "./agent.mjs";
 import {
   US, JOBS, WINDOW, MAX_OPEN_DEALS, buildAccept, refuseTake,
-  plan, refusals, framesFrom, ourDeals, wake, settle, annotate,
+  plan, refusals, framesFrom, ourDeals, wake, settle, annotate, ourArchive,
 } from "./runner.mjs";
 import { secretFor, recoverSecret, minterFor } from "./secret.mjs";
 import { RAIL, RAILS, RAILS_WE_TAKE, IS_REHEARSAL } from "./rail.mjs";
@@ -834,6 +834,102 @@ console.log("\n=== O. offers that scrolled out of sight");
  * Not hypothetical: every buyer abandoned, because until the lock button
  * shipped there was no way on this site for one to pay.
  * ═════════════════════════════════════════════════════════════════════════*/
+/* ══════════════════════════════════════════════════════════════════════════
+ * O2. THE GAP BETWEEN A FIVE-MINUTE ROOM AND AN HOURS-OLD SHARD
+ *
+ * Section O staged an offer that had scrolled out of the live window and was
+ * safe because the day shard held it. PROBED on 4 September, that safety was
+ * not real:
+ *
+ *   · the live room is capped at 200 messages BY THE VENUE (limit=5000
+ *     returns 200) and `since` will not page backwards;
+ *   · the room runs at ~2,600 frames an hour, so 200 messages is FIVE
+ *     MINUTES;
+ *   · the day shard is committed on every twelfth archiver pass — that day it
+ *     had not been written since 08:46.
+ *
+ * A deal landing between those is invisible. Not theory: a real order at
+ * 12:20, offer and accept and payment lock all on the board, was unseen by a
+ * live wake at 12:52 that reported `0 owed` and slept while the money sat
+ * locked.
+ *
+ * tail.ndjson is the archiver's bounded window over the same room, written on
+ * every pass. This is the test that the shop actually reads it.
+ * ═════════════════════════════════════════════════════════════════════════*/
+console.log("\n=== O2. the deal that is only in the tail");
+{
+  const OUT = fs.mkdtempSync(path.join(os.tmpdir(), "arch-tail-"));
+  const room = path.join(OUT, "tclk-offers");
+  fs.mkdirSync(room, { recursive: true });
+  const today = new Date(NOW).toISOString().slice(0, 10);
+
+  /* A funded deal: a buyer's offer, our accept, and their lock. All three are
+     in the TAIL and in no shard, which is exactly where a deal accepted since
+     the last twelfth pass lives. */
+  const o = theirOffer(BUILT, { nonce: "0000000000000501" });
+  const id = await offerId(o);
+  const contract = "0x" + "51".repeat(32);
+  const tail = [
+    { seq: 70001, from: OTHER, text: "tclk1 " + canon({ ...o, id }) },
+    { seq: 70002, from: US, text: "tclk1 " + canon({
+        type: "accept", from: US, ref: id, statement: "0x" + "7c".repeat(32),
+        nonce: "0000000000000502", contract }) },
+    { seq: 70003, from: OTHER, text: "tclk1 " + canon({
+        type: "lock", from: OTHER, contract, rail: "paper", ref: "aabbccdd" }) },
+  ].map((r) => JSON.stringify({ ...r, ts: new Date(NOW - 600000).toISOString(), sig: "s" }));
+
+  /* The day shard holds only older, unrelated business — the state the file is
+     in when it has not been rewritten for hours. */
+  fs.writeFileSync(path.join(room, `${today}.ndjson`), "");
+  fs.writeFileSync(path.join(room, "tail.ndjson"), tail.join("\n") + "\n");
+
+  const rowsWith = await ourArchive(US, { archive: OUT, now: NOW });
+  /* THREE, not one. Only the accept is ours, but recovering our accept alone
+     recovers nothing usable: ourDeals pairs an accept to its OFFER and drops
+     one it cannot pair, and the buyer's offer and lock have scrolled out of
+     the five-minute live window too. The first version of this fix returned
+     just the accept and the deal still did not form — `owed` stayed zero and
+     the shop still slept through work it had been paid for. */
+  ok("the archive read recovers the whole deal, not just our half",
+    rowsWith.length === 3,
+    `${rowsWith.length} rows — the buyer's offer and lock are as necessary as our accept`);
+
+  /* And the whole point: plan() must see the deal as OWED, because somebody
+     has paid for it and is waiting.
+     BUILT FROM WHAT ourArchive ACTUALLY RETURNED, not from the fixture array.
+     The first version of this assertion re-parsed the same in-memory rows it
+     had just written to disk, so it exercised no changed code at all and
+     passed with the tail read deleted. A test that constructs its own input
+     is testing the constructor. */
+  const p = plan(framesFrom(rowsWith), NOW);
+  ok("and a deal only the tail can see is owed, not invisible",
+    p.owed.length === 1,
+    `${p.owed.length} owed — this is the number that read 0 while a buyer's money sat locked`);
+
+  /* ── THE OVERLAP, WHICH IS DELIBERATE AND MUST COST NOTHING ──────────────
+     The tail is a window over the same room the shards hold, so a frame near
+     the boundary is in both files. Without a dedupe the shop counts its own
+     accept twice — and `open` feeds the capacity cap, so double-counting is a
+     shop that shuts itself at half its book. Staged by putting the same rows
+     in the shard as in the tail, which is the ordinary steady state. */
+  fs.writeFileSync(path.join(room, `${today}.ndjson`), tail.join("\n") + "\n");
+  const both = await ourArchive(US, { archive: OUT, now: NOW });
+  ok("a frame in both the tail and the shard is returned once",
+    both.length === 3,
+    `${both.length} rows from three frames duplicated across both files — the overlap is by design; counting it twice would halve the shop's book`);
+
+  /* THE CONTROL: the same board with no tail file is the bug, reproduced.
+     The shard is emptied too, or "nothing found" would be true for the
+     uninteresting reason that the shard still held it. */
+  fs.writeFileSync(path.join(room, `${today}.ndjson`), "");
+  fs.rmSync(path.join(room, "tail.ndjson"));
+  const rowsWithout = await ourArchive(US, { archive: OUT, now: NOW });
+  ok("without the tail the shop sees nothing at all", rowsWithout.length === 0,
+    "which is what a live wake reported while the deal was already funded");
+
+  fs.rmSync(OUT, { recursive: true, force: true });
+}
+
 console.log("\n=== P. deals that were agreed and never funded");
 {
   const build = async (nonce, refundAfterMs) => {
