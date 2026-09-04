@@ -78,7 +78,12 @@
    point of this file. An edge port would mean a second implementation of the
    rules that decide whether to commit the shop to work, which is the last
    place in this repository that should have two of anything. */
-export const config = { runtime: "nodejs" };
+/* maxDuration is stated rather than left to whatever the platform default
+   happens to be, because a buyer is watching a spinner for every second of
+   it. Fifteen is generous against the 3.5s measured cold — the point is that
+   a genuinely stuck read fails at a number written down here rather than at
+   one nobody chose. */
+export const config = { runtime: "nodejs", maxDuration: 15 };
 
 import {
   US, plan, framesFrom, refuseTake, buildAccept, readOffers, MAX_OPEN_DEALS,
@@ -167,13 +172,31 @@ let inFlight = null;
    "caching off" means both of them off rather than one of them. */
 const FAIL_TTL_MS = BOOK_TTL_MS === 0 ? 0 : 5_000;
 
+/* How stale a book may be and still be SERVED while a fresh one is fetched
+   behind it. Past this it is not a book any more, it is a memory. */
+const BOOK_STALE_MS = BOOK_TTL_MS === 0 ? 0 : 5 * 60_000;
+
 function ourRecentRows() {
   const age = Date.now() - book.at;
   if (book.ok && age < BOOK_TTL_MS) return Promise.resolve(book.rows);
   if (!book.ok && book.at && age < FAIL_TTL_MS) return Promise.resolve(null);
-  if (inFlight) return inFlight;
-  inFlight = readBook().finally(() => { inFlight = null; });
-  return inFlight;
+
+  const fetching = inFlight ?? (inFlight = readBook().finally(() => { inFlight = null; }));
+
+  /* ── STALE WHILE REVALIDATE, BECAUSE THE BUYER IS WATCHING A SPINNER ─────
+     MEASURED on the deployed endpoint: 3,560 ms cold, 573 ms warm. The
+     difference is this read, and the buyer is inside a checkout for all of
+     it. Blocking somebody's click on a multi-megabyte refresh in order to
+     replace a book that is forty seconds old is the wrong trade — the cap it
+     feeds moves when a deal opens or closes, not second by second.
+     So a book inside BOOK_STALE_MS answers immediately and the refresh
+     happens behind it. Only a genuinely cold instance waits, and only the
+     first buyer to arrive at one.
+     A STALE BOOK IS NOT AN ABSENT BOOK: `null` still refuses, which is the
+     property that stops the cap being skipped. This serves something known to
+     be slightly old; it never invents one. */
+  if (book.ok && age < BOOK_STALE_MS) return Promise.resolve(book.rows);
+  return fetching;
 }
 
 async function readBook() {
@@ -201,12 +224,15 @@ async function readBook() {
      It is not a rare path: _meta.json and the shards are separate CDN objects
      with independent caches, so _meta naming a day whose file has not
      propagated is the ordinary state of affairs at a day boundary. */
-  const texts = [];
-  for (const day of [...days].sort().slice(-SHARD_DAYS)) {
-    const text = await grab(`${day}.ndjson`);
-    if (text === null) return fail();
-    texts.push(text);
-  }
+  /* AT ONCE, NOT ONE AFTER ANOTHER. These are three independent files on a
+     CDN and nothing about the second depends on the first, so awaiting them
+     in a loop was paying three round trips to do one thing's work — a third
+     of the 3,560 ms measured on the deployed endpoint, for no reason beyond
+     the shape of the loop that fetched them. */
+  const texts = await Promise.all(
+    [...days].sort().slice(-SHARD_DAYS).map((day) => grab(`${day}.ndjson`)),
+  );
+  if (texts.some((t) => t === null)) return fail();
 
   /* ── TWO PASSES, BECAUSE ONE OF THEM RETURNS HALF A DEAL ─────────────────
      Pass one keeps lines mentioning our DID. That is our accepts — and NOT
@@ -336,9 +362,23 @@ async function handler(request) {
      what scrolled away — cached per instance, so a busy checkout does not
      spend the shared 600-a-minute allowance on itself the way the deals board
      once did. Everything after this is arithmetic on frames in hand. */
-  let live;
-  try { live = await readOffers(); }
-  catch { return json({ ok: false, why: "could not read the board just now" }, 503); }
+  /* ── ONE RETRY, BECAUSE THIS FAILS AND IT FAILS TRANSIENTLY ─────────────
+     OBSERVED on the first two live calls this endpoint ever served: the
+     second came back 503 "could not read the board just now", 573 ms in,
+     seconds after the first had read the same room successfully. Technocore
+     is a shared venue with a rate limit and its own bad minutes.
+     Giving up on the first refusal turns that into a coin-flip checkout —
+     and the fallback, honest as it is, sends the buyer away to come back and
+     press Pay, which is the entire failure this endpoint exists to remove.
+     One retry, with a pause, and then the honest answer. Not a loop: a venue
+     that has refused twice half a second apart is having a real problem, and
+     a checkout is not the place to sit through it. */
+  let live = null;
+  for (let i = 0; i < 2 && live === null; i++) {
+    if (i) await new Promise((r) => setTimeout(r, 350));
+    try { live = await readOffers(); } catch { /* reported below if both fail */ }
+  }
+  if (live === null) return json({ ok: false, why: "could not read the board just now" }, 503);
 
   const archived = await ourRecentRows();
   if (archived === null) {

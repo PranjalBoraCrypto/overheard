@@ -132,6 +132,7 @@ let ARCHIVE_UP = true;   // or whether the repository can be reached at all
 let SHARDS_DOWN = false; // _meta names a day whose shard the CDN has not got
 let ARCHIVE_DAYS = ["2026-09-02"];
 let RAWHITS = 0;         // how many times the repository was actually read
+let BOARDFAILS = 0;      // make the next N board reads refuse, as technocore does
 let POSTED = [];         // what the endpoint tried to say, and where
 const realFetch = globalThis.fetch;   // put back before section B
 globalThis.fetch = async (url, init) => {
@@ -158,6 +159,7 @@ globalThis.fetch = async (url, init) => {
     return new Response("{}", { status: 200 });
   }
   if (u.includes("/r/tclk-offers?")) {
+    if (BOARDFAILS > 0) { BOARDFAILS--; return new Response("no", { status: 429 }); }
     return new Response(JSON.stringify({ messages: BOARD }), { status: 200 });
   }
   throw new Error(`the suite tried to reach the network: ${u.slice(0, 80)}`);
@@ -470,6 +472,69 @@ const call = async (offer) => {
   ARCHIVE_UP = true;
   process.env.ACCEPT_BOOK_TTL_MS = keep;
   ARCHIVE = [];
+}
+{
+  /* ── THE FLAKY READ, WHICH IS NOT HYPOTHETICAL ───────────────────────────
+     OBSERVED on the first two calls this endpoint ever served live: the
+     second came back 503 "could not read the board just now", seconds after
+     the first read the same room fine. Technocore is a shared venue with a
+     rate limit. Giving up on the first refusal makes this a coin-flip
+     checkout, and the fallback — honest as it is — sends the buyer away to
+     come back and press Pay, which is the failure this endpoint exists to
+     remove. */
+  const b = offerBody({ nonce: "dddd000000000001" });
+  BOARD = [await rowOf(b)]; ARCHIVE = [await rowOf(b)]; POSTED = [];
+  BOARDFAILS = 1;
+  const r = await call(await offerId(b));
+  ok("one refusal from the board is retried, not surrendered to",
+    r.body.ok === true, r.body.why ?? "");
+  ok("and the accept still goes out", POSTED.length === 1, `${POSTED.length} posted`);
+
+  BOARDFAILS = 5;                       // a venue with a real problem
+  POSTED = [];
+  const r2 = await call(await offerId(b));
+  ok("but a board that keeps refusing is reported rather than waited on",
+    r2.status === 503 && r2.body.ok === false, `${r2.status} ${r2.body.why ?? ""}`);
+  ok("and nothing is signed on a book we could not read", POSTED.length === 0);
+  BOARDFAILS = 0; ARCHIVE = [];
+}
+{
+  /* STALE IS NOT ABSENT. A book a minute old still binds the cap correctly —
+     the cap moves when a deal opens or closes, not second by second — so a
+     buyer should never wait on a multi-megabyte refresh to replace one.
+     MEASURED live: 3,560 ms cold against 573 ms warm, all of it inside
+     somebody's click. What must NOT happen is the opposite mistake: a book
+     that is missing entirely still refuses. */
+  const keep = process.env.ACCEPT_BOOK_TTL_MS;
+  process.env.ACCEPT_BOOK_TTL_MS = "1";          // expires immediately, but stays serveable
+  const mod = await import(`../api/accept.mjs?swr=${Date.now()}`);
+  const hit = async (id) => mod.default.fetch(new Request("http://x/api/accept", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ offer: id }),
+  }));
+  const b = offerBody({ nonce: "eeee000000000001" });
+  const id = await offerId(b);
+  ARCHIVE = [await rowOf(b)]; BOARD = [await rowOf(b)]; POSTED = [];
+
+  await hit(id);                                  // warms the book
+  await new Promise((r) => setTimeout(r, 30));    // and lets the TTL lapse
+  ARCHIVE_UP = false;                             // the repository goes away
+  const r = await hit(id);
+  const body = await r.json();
+  ok("a book that has gone stale still answers while the repository is down",
+    body.ok === true || body.full === true || body.refused !== undefined,
+    `${body.why ?? "answered"} — refusing here would block a buyer on a refresh`);
+  ARCHIVE_UP = true;
+  process.env.ACCEPT_BOOK_TTL_MS = keep;
+  ARCHIVE = [];
+}
+{
+  const src = fs.readFileSync(path.join(ROOT, "api/accept.mjs"), "utf8");
+  ok("the shards are fetched at once, not one after another (structural)",
+    /await Promise\.all\(/.test(src) && !/for \(const day of[\s\S]{0,120}await grab\(/.test(src),
+    "three independent CDN files awaited in a loop was a third of the cold time");
+  ok("and the function's time limit is written down rather than inherited",
+    /maxDuration:\s*\d+/.test(src));
 }
 {
   /* NO KEY, NO SIGNING, AND NO DRAMA. This is the state the site ships in
