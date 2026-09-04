@@ -274,6 +274,58 @@ const call = async (offer) => {
     r.body.standing === true,
     "'full' with no 'standing' reads as a dead order; it is not one");
   ok("and signs nothing", POSTED.length === 0);
+
+  /* ── ASKING BEFORE COMMITTING, WHICH IS THE POINT OF THE GET ───────────
+     The capacity rule has only ever been discoverable by hitting it: compose
+     an order, sign it, post it to a public board, and then find out. Nothing
+     is lost, but a person has signed something to learn a fact the site
+     could have handed them for free. GET the same endpoint, and it says.
+     Same book, same plan(), so the number the page shows and the number that
+     decides cannot drift. */
+  const get = async () => {
+    const res = await acceptHandler(new Request("http://x/api/accept", { method: "GET" }));
+    return { status: res.status, body: await res.json(), head: res.headers };
+  };
+  const c = await get();
+  ok("GET says how full the shop is", c.body.ok === true, JSON.stringify(c.body).slice(0, 120));
+  ok("and says it is full, from the same book that just refused an order",
+    c.body.full === true && c.body.open >= MAX_OPEN_DEALS,
+    `${c.body.open} of ${c.body.capacity}`);
+  ok("the cap it reports is the cap that is enforced",
+    c.body.capacity === MAX_OPEN_DEALS,
+    "two numbers for one rule is how a page starts lying");
+  ok("no free slots when full", c.body.free === 0, String(c.body.free));
+  ok("and it splits work owed from buyers who have not paid",
+    c.body.working + c.body.awaiting_payment === c.body.open,
+    `${c.body.working} working + ${c.body.awaiting_payment} unpaid = ${c.body.open}`);
+  ok("asking costs no signature", POSTED.length === 0);
+
+  /* Cached, because this is read on every load of /hire and a live board read
+     per page view is exactly what once left the deals board rendering empty:
+     it spent the shared upstream allowance on itself. */
+  const before = RAWHITS;
+  const again = await get();
+  ok("a second look inside the window costs no upstream read",
+    RAWHITS === before && again.body.cached === true,
+    `${RAWHITS - before} reads, cached=${again.body.cached}`);
+  ok("and answers the same thing", again.body.full === c.body.full && again.body.open === c.body.open);
+}
+{
+  /* ── AN UNREADABLE BOOK IS NOT A FULL SHOP ─────────────────────────────
+     A page that renders "full" on a failed lookup turns a bad minute at the
+     venue into a closed shop; one that renders "open" invites an order the
+     checkout will refuse. So the endpoint says it does not know, and the page
+     leaves the form alone — the order works without this endpoint at all. */
+  const { default: mod } = await import("../api/accept.mjs?nocache=" + Math.random());
+  BOARDFAILS = 9; POSTED = [];
+  const res = await mod.fetch(new Request("http://x/api/accept", { method: "GET" }));
+  const body = await res.json();
+  BOARDFAILS = 0;
+  ok("a board that will not answer is reported as unknown, not as full",
+    body.ok === false && body.unknown === true && body.full !== true,
+    JSON.stringify(body).slice(0, 120));
+  ok("with a status that says upstream, not client error", res.status === 503, String(res.status));
+  ok("and it still signs nothing", POSTED.length === 0);
 }
 {
   /* ── THE CAPACITY CHECK HAS TO SEE DEALS THE LIVE WINDOW HAS FORGOTTEN ───
@@ -731,6 +783,9 @@ if (!chromium) {
   };
 
   let acceptReply = null;         // what /api/accept answers
+  /* What GET /api/accept answers — how full the shop is. Roomy by default so
+     every other case in this section exercises the ordinary path. */
+  let capacityReply = { ok: true, capacity: 50, open: 2, free: 48, full: false, working: 1, awaiting_payment: 1 };
   let postFails = () => false;    // (room, nth) -> should /api/post refuse it
   let calls = [];                 // everything the page asked for, in order
 
@@ -739,6 +794,15 @@ if (!chromium) {
     if (u === "/session.js") { r.writeHead(200, { "content-type": "text/javascript" }); return r.end(SESSION()); }
     if (u === "/api/room") { r.writeHead(200, { "content-type": "application/json" }); return r.end('{"source":"live","messages":[]}'); }
     if (u === "/data/tclk-offers/_meta.json") { r.writeHead(200, { "content-type": "application/json" }); return r.end('{"days":["2026-09-02","2026-09-03"]}'); }
+    /* ── THE CAPACITY READ, WHICH IS A GET AND NOT A STEP ─────────────────
+       /hire reads GET /api/accept on load to say how full the shop is. It is
+       deliberately NOT recorded below: `calls` is the record of what one
+       PRESS does, and mixing a page-load read into it makes the sequence
+       assertion a test of when the page happened to poll. */
+    if (u === "/api/accept" && q.method === "GET") {
+      r.writeHead(200, { "content-type": "application/json" });
+      return r.end(JSON.stringify(capacityReply));
+    }
     if (u === "/api/accept" || u === "/api/post") {
       let raw = "";
       q.on("data", (c) => { raw += c; });
@@ -786,6 +850,27 @@ if (!chromium) {
     msg.track = await pg.$eval(".track", (e) => e.textContent);
     await ctx.close();
     return msg;
+  };
+
+  /* Just load it and look — no press. Used for the capacity line, which is a
+     fact about the shop rather than a consequence of anything the visitor
+     did. */
+  const look = async () => {
+    calls = [];
+    const ctx = await browser.newContext({ viewport: { width: 1280, height: 1000 } });
+    const pg = await ctx.newPage();
+    pg.on("pageerror", (e) => errs.push(String(e).slice(0, 140)));
+    await pg.goto(`http://localhost:${PORT}/hire.html`, { waitUntil: "domcontentloaded" });
+    await pg.click('.pick[data-job="overheard-room-summary"]');
+    await pg.fill("#brief", "technocore");
+    await pg.waitForTimeout(900);
+    const out = {
+      cap: await pg.$eval("#cap", (e) => ({ text: e.textContent, hidden: e.hidden, cls: e.className })),
+      disabled: await pg.$eval("#send", (e) => e.disabled),
+      whynot: await pg.$eval("#whynot", (e) => e.textContent),
+    };
+    await ctx.close();
+    return out;
   };
 
   const CONTRACT = "0x" + "b7".repeat(32);
@@ -910,6 +995,54 @@ if (!chromium) {
     ok("if the lock cannot post at all, it sends them to the orders page",
       /orders page/i.test(msg.text), msg.text);
     ok("and never implies a charge", /nothing was charged/i.test(msg.text), msg.text);
+  }
+
+  /* ══════════════════════════════════════════════════════════════════════
+   * HOW FULL THE SHOP IS, SAID BEFORE ANYBODY SIGNS ANYTHING
+   *
+   * The cap has always existed and has only ever been discoverable by hitting
+   * it: compose an order, sign it, post it to a public board, and only then
+   * be told there was no room. Nothing is lost — the offer stands and the
+   * next free slot takes it — but a person has signed something to learn a
+   * fact the page could have given them for free.
+   * ═════════════════════════════════════════════════════════════════════*/
+  {
+    capacityReply = { ok: true, capacity: 50, open: 6, free: 44, full: false, working: 4, awaiting_payment: 2 };
+    const v = await look();
+    ok("the page says how much room there is", /44 of 50 slots free/.test(v.cap.text), v.cap.text);
+    ok("and splits work owed from buyers who have not paid",
+      /4 being worked on/.test(v.cap.text) && /2 awaiting payment/.test(v.cap.text),
+      "one combined figure makes a queue of unpaid orders look like a busy shop");
+    ok("room is not a warning", !/full/.test(v.cap.cls), v.cap.cls);
+    ok("and the button is left alone", v.disabled === false);
+  }
+  {
+    capacityReply = { ok: true, capacity: 50, open: 50, free: 0, full: true, working: 40, awaiting_payment: 10 };
+    const v = await look();
+    ok("at capacity it says so", /Every slot is taken/.test(v.cap.text), v.cap.text);
+    ok("with the numbers, not just the word",
+      /50 of 50 orders in flight/.test(v.cap.text), v.cap.text);
+    ok("and says it clears on its own, because it does",
+      /clears on its own/.test(v.cap.text), v.cap.text);
+    ok("the order button is disabled", v.disabled === true,
+      "letting them sign an order the checkout will refuse is the thing this removes");
+    ok("and the reason is stated where the other refusals are",
+      /Every slot is taken right now/.test(v.whynot), v.whynot);
+  }
+  {
+    /* ── AN UNREADABLE BOOK MUST NOT CLOSE THE SHOP ──────────────────────
+       The order works without this endpoint at all: it goes on the board and
+       a wake takes it. So a failed lookup costs the NUMBER and never the
+       sale. Rendering "full" on a 503 would turn a bad minute at the venue
+       into a closed shop. */
+    capacityReply = { ok: false, unknown: true, why: "could not read the book just now" };
+    const v = await look();
+    ok("an unknown answer shows nothing rather than something wrong", v.cap.hidden === true,
+      JSON.stringify(v.cap));
+    ok("and the shop stays open", v.disabled === false,
+      "the order still works — it goes on the board and a wake takes it");
+    ok("with no capacity excuse in the way", !/slot/i.test(v.whynot), v.whynot);
+    capacityReply = { ok: true, capacity: 50, open: 2, free: 48, full: false, working: 1, awaiting_payment: 1 };
   }
 
   ok("no script errors anywhere in this", errs.length === 0, errs.join(" | "));

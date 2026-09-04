@@ -345,6 +345,13 @@ input[type=text]:focus{outline:none;border-color:var(--blue);background:rgba(0,0
 .whynot{font-size:12.5px;color:var(--gold);margin-top:var(--s2);text-align:center;
   line-height:1.5}
 .whynot:empty{display:none}
+/* How full the shop is. Quiet by default — this is a fact about the queue,
+   not a warning — and gold only when it is the reason the button is dead. */
+.cap{font-size:12.5px;line-height:1.5;color:var(--faint);margin:var(--s2) 0 0;
+  text-align:center}
+.cap b{color:var(--white);font-weight:650}
+.cap.full{color:var(--gold)}
+.cap.full b{color:var(--gold)}
 .msg{margin-top:var(--s3);padding:12px 14px;border-radius:11px;font-size:13.5px;
   line-height:1.55;display:none}
 .msg.on{display:block}
@@ -815,6 +822,8 @@ input[type=text]:focus{outline:none;border-color:var(--blue);background:rgba(0,0
           <b>Refunds itself</b></div>
         <div class="cartrow total"><span>Price</span><b><span id="sumPrice">500</span><i>FLOP</i></b></div>
 
+        <p class="cap" id="cap" hidden></p>
+
         <button class="go" id="send" type="button" disabled>
           <span id="sendlabel">Place the order</span><svg class="i"><use href="#i-caret"/></svg>
         </button>
@@ -1127,15 +1136,105 @@ function repaint() {
   if (!filled || valid) { hint.className = "hint"; hint.textContent = ""; }
   else { hint.className = "hint bad"; hint.textContent = shape.say(v); }
 
-  const ready = valid && Boolean(ID) && !posted;
+  const ready = valid && Boolean(ID) && !posted && !SHOP_FULL;
   $("send").disabled = !ready;
   $("whynot").textContent = posted ? ""
     : !ID ? "Create an identity first — step 3."
     : !filled ? "Fill in step 2."
     : !valid ? "Step 2 does not look right yet."
+    : SHOP_FULL ? "Every slot is taken right now. This clears in a few minutes."
     : "";
 
   paintFrame();
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+ * HOW FULL THE SHOP IS, SAID BEFORE ANYBODY SIGNS ANYTHING
+ *
+ * The shop takes a fixed number of deals at once. That rule has always been
+ * here and has only ever been discoverable by hitting it: you compose an
+ * order, sign it, post it to a public board, and only then find out there was
+ * no room. Nothing is lost — the offer stands and the next free slot takes
+ * it — but a person has signed something to learn a fact the site could have
+ * told them for free.
+ *
+ * GET /api/accept answers it from the same book and the same plan() the shop
+ * enforces with, so the number here and the number that decides cannot drift.
+ *
+ * THREE ANSWERS, and the middle one is the one worth getting right:
+ *   · room      → say how much, leave the button alone.
+ *   · full      → say so, disable the button, and keep asking, because this
+ *                 clears on its own and a person should not have to reload.
+ *   · unknown   → say NOTHING and leave the button enabled. A failed lookup
+ *                 must not close the shop: the order still works without this
+ *                 endpoint (it goes on the board and a wake takes it), so the
+ *                 only thing a bad minute at the venue should cost is the
+ *                 number, never the sale.
+ * ═════════════════════════════════════════════════════════════════════════*/
+let SHOP_FULL = false;
+let capTimer = null;
+
+async function readCapacity() {
+  let d = null;
+  try {
+    const r = await fetch("/api/accept", { cache: "no-store" });
+    d = await r.json();
+  } catch { /* handled as unknown below */ }
+
+  const el = $("cap");
+  if (!d?.ok) {
+    /* Unknown. Not full — see the block above. */
+    SHOP_FULL = false;
+    el.hidden = true;
+    stopWatchingCapacity();
+    repaint();
+    return;
+  }
+
+  SHOP_FULL = Boolean(d.full);
+  el.hidden = false;
+  el.className = SHOP_FULL ? "cap full" : "cap";
+  /* Built from nodes rather than a string. Every number in here comes from
+     the network, and this is a page that already refuses to interpolate
+     anything it did not compute — see the frame box. */
+  const strong = (t) => { const b = document.createElement("b"); b.textContent = t; return b; };
+  el.replaceChildren();
+  if (SHOP_FULL) {
+    el.append("Every slot is taken: ", strong(`${d.open} of ${d.capacity} orders in flight`),
+      ". Orders finish in a minute or two, and this clears on its own.");
+    watchCapacity();
+  } else {
+    /* Both halves named, because they are different facts about the queue:
+       one is work this shop owes, the other is a buyer who has not paid yet.
+       One combined figure would make a queue of unpaid orders look busy. */
+    el.append(strong(`${d.free} of ${d.capacity} slots free`));
+    el.append(
+      d.open === 0 ? " · nothing in the queue"
+        : d.working && d.awaiting_payment
+          ? ` · ${d.working} being worked on, ${d.awaiting_payment} awaiting payment`
+          : d.working
+            ? ` · ${d.working} being worked on`
+            : ` · ${d.awaiting_payment} awaiting payment`,
+    );
+    stopWatchingCapacity();
+  }
+  repaint();
+}
+
+/* Only while full, and only while the tab is in front of somebody. A poll
+   that runs on a page nobody is looking at is a page spending the shared
+   upstream allowance on nothing. */
+function watchCapacity() {
+  if (capTimer) return;
+  capTimer = setInterval(() => {
+    if (document.hidden) return;
+    readCapacity();
+  }, 20000);
+}
+function stopWatchingCapacity() {
+  if (!capTimer) return;
+  clearInterval(capTimer);
+  capTimer = null;
 }
 
 /* ── THE DEVELOPER'S FRAME HAS TO CARRY THE ID, OR IT IS NOT AN OFFER ──────
@@ -1193,6 +1292,9 @@ function paintWho(s) {
   }
   repaint();
   loadHistory();
+  /* Read once on arrival, and never blocking anything: the form is usable
+     while this is in flight and stays usable if it never answers. */
+  readCapacity();
 }
 
 $("brief").addEventListener("input", repaint);
@@ -1307,6 +1409,10 @@ function afterOrder() {
   historyLoaded = false;
   boardOnce = null;
   setTimeout(loadHistory, 1500);
+  /* The order just took a slot. Long enough after for the endpoint's own
+     ten-second cache to have turned over, so the figure moves rather than
+     repeating the number from before the order. */
+  setTimeout(readCapacity, 12000);
 }
 const step = (name) => {
   const el = document.querySelector(`[data-s="${name}"]`);

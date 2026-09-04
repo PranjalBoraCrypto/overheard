@@ -24,7 +24,7 @@ import { CAN_DO, doJob } from "./work.mjs";
 import { minterFor, recoverSecret } from "./secret.mjs";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
-import { RAILS, RAILS_WE_TAKE, IS_REHEARSAL } from "./rail.mjs";
+import { RAILS, RAILS_WE_TAKE } from "./rail.mjs";
 import { WANTS, planBuys, wantFrame, lockFrame, refundFrame, cancelFrame, wire, safeRoom } from "./buy.mjs";
 
 /* The shop's public identity. The seed for it is in one secret store and is
@@ -64,29 +64,50 @@ export const JOBS = [
 ];
 /* The rail lives in one file so testnet day is one line — see rail.mjs. */
 
-/* ── HOW MANY DEALS MAY BE OPEN AT ONCE, AND WHY THAT DEPENDS ON THE RAIL ──
-   This is a stand-in for a FLOP reserve rule: we cannot read a balance from
-   anywhere, so instead of "never commit more than X FLOP" the shop enforces
-   the thing it CAN count — how many deals are in flight. SELLING.md has the
-   reserve rule this substitutes for.
-
-   The number was 3 on every rail, which is wrong in both directions at once.
-
-   ON `paper` NOTHING IS AT RISK. The rail holds no value, so a concurrency
-   cap protects no money; it only bounds how much work one wake does. The real
-   limit there is the workflow's own 10-minute timeout, and a delivery is a
-   read of the archive and some composition — so the honest number is "as many
-   as a wake can actually finish", not 3. Three was quietly capping a rehearsal
-   at roughly 36 orders a day for the sake of a reserve that does not exist.
-
-   ON A RAIL THAT MOVES VALUE the cap is doing real work and 3 is a guess. It
-   should come from a balance, and the day there is a balance to read this
-   becomes a function of it rather than a constant. Until then it stays
-   deliberately small, because the failure it guards against is committing to
-   more work than the shop can pay to settle.
-
-   Overridable by env for the same reason MIN_WORK_MS is: an incident wants a
-   number changed without a deploy. */
+/* ══════════════════════════════════════════════════════════════════════════
+ * HOW MANY DEALS MAY BE OPEN AT ONCE
+ *
+ * This was 3 on every rail, then 24 on `paper` and 3 on anything that
+ * settles. Both of those were answering the wrong question.
+ *
+ * ── WHY IT WAS A MONEY NUMBER, AND WHY IT IS NOT ─────────────────────────
+ *
+ * It was written as a stand-in for a FLOP reserve rule: we cannot read a
+ * balance anywhere, so instead of "never commit more than X FLOP" the shop
+ * counted deals in flight. That reasoning is backwards on this side of the
+ * book, and SELLING.md already said so while the code did not:
+ *
+ *     Selling is FLOP-positive… the reserve is not "can we afford these
+ *     orders" — the customer pays us — it is "can we afford the FEES to
+ *     settle them". The honest expectation is that the live cap, once
+ *     computable, is considerably larger than 3.
+ *
+ * SELLING DOES NOT SPEND OUR BALANCE, IT FILLS IT. The buyer locks their own
+ * FLOP; we spend compute, which costs no FLOP, and a claim fee. Capping sales
+ * to protect a balance throttles the thing that replenishes it. The reserve
+ * rule belongs on the BUY side, where we commit our own money, and that side
+ * has its own limits in buy.mjs.
+ *
+ * ── WHAT ACTUALLY BINDS, MEASURED ────────────────────────────────────────
+ *
+ * Three real constraints, none of them a balance:
+ *
+ *   · READS. A wake reads the board once and then one room per unfinished
+ *     deal, and the buy side does the same again — about `1 + 2n`. At a wake
+ *     a minute and n = 50 that is ~101 reads a minute against a documented
+ *     600 per IP. Headroom, and it is the constraint that binds first.
+ *   · TIME. A room summary is 0.8s, a profile ~1s, a daily digest 16.5s.
+ *     Fifty distinct digests is ~14 minutes, which fits a 50-minute window,
+ *     and identical briefs are computed once per wake anyway.
+ *   · THE FEE, which is the one we genuinely cannot compute. Claiming a
+ *     `flop-htlc` lock costs something and we have never paid it. That is a
+ *     reason for 50 rather than 300, and not a reason for 3.
+ *
+ * One number on both rails now, because the thing that differed was the money
+ * argument and the money argument was wrong. It moves up when a testnet day
+ * has been watched, or down in one field during an incident — env, so it
+ * changes without a deploy, the same reason MIN_WORK_MS is.
+ * ═════════════════════════════════════════════════════════════════════════*/
 /* `?? default` is not enough and the Q section caught it on its first run: an
    env var set to "" is not nullish, so Number("") is 0, and a shop whose cap
    is 0 accepts nothing at all while every log line reads normally. An
@@ -95,7 +116,7 @@ const envCount = (name, fallback) => {
   const n = Number(process.env[name]);
   return Number.isFinite(n) && n > 0 ? n : fallback;
 };
-export const MAX_OPEN_DEALS = envCount("MAX_OPEN_DEALS", IS_REHEARSAL ? 24 : 3);
+export const MAX_OPEN_DEALS = envCount("MAX_OPEN_DEALS", 50);
 
 /* Closing out abandoned deals is bounded per wake for the same reason
    everything else here is: a backlog must never turn one wake into a write
@@ -104,6 +125,24 @@ export const MAX_OPEN_DEALS = envCount("MAX_OPEN_DEALS", IS_REHEARSAL ? 24 : 3);
    is bookkeeping on the public record rather than something a person waits
    for. At twelve wakes an hour this clears 96 an hour. */
 const MAX_REAP_PER_WAKE = envCount("MAX_REAP_PER_WAKE", 8);
+
+/* How many "we are full" notes one wake may post. Bounded for the same reason
+   the reaper is: a backlog must never turn one wake into a write storm, and
+   this one writes to a room other people are trying to use. Deduped for ever
+   per offer, so a small number here only delays the note, never drops it. */
+const MAX_FULL_NOTES = envCount("MAX_FULL_NOTES", 3);
+
+/* ── AND A MEMO, BECAUSE THE ARCHIVE HAS A HOLE THE SIZE OF THIS WINDOW ────
+   The dedupe below reads what we have already said from the merged board:
+   the live room (five minutes) plus the archive in this checkout. The
+   checkout is fixed when the job starts, so by minute 50 of a window the
+   archive half is 50 minutes stale — and a note posted at minute 6 is in
+   neither half. Without this, one offer gets told once a wake for the rest
+   of the window, which is the write storm the bound above exists to prevent.
+   Bounded because a process lives fifty minutes and this must not grow
+   without one; clearing it costs at most one repeated note. */
+const TOLD_FULL = new Set();
+const TOLD_FULL_MAX = 5000;
 
 /* The least time we will accept between now and claimByMs. A profile is built
    from the archive in seconds, but the runner wakes on a schedule and a
@@ -857,6 +896,73 @@ export async function wake(opts = {}) {
       wrote.push(`cancel:${put.ok ? "ok" : "FAILED"}`);
       log(`  cancelled: ${put.ok ? "ok" : `FAILED · ${put.why ?? put.status}`}`);
     }
+  }
+
+  /* ══════════════════════════════════════════════════════════════════════
+   * SAYING NO OUT LOUD, BECAUSE SILENCE IS NOT AN ANSWER
+   *
+   * When the shop is full, `plan()` puts the offer in `passed` with the
+   * reason "able and willing, but full" — and that is the end of it. Nothing
+   * reaches the board.
+   *
+   * A buyer who ordered through /hire does at least see something: the
+   * checkout endpoint answers `full: true` and the page says so. But this
+   * shop deliberately supports the OTHER route — a developer whose agent
+   * composes the offer itself and posts it straight to tclk-offers, which is
+   * the route that makes this agentic commerce rather than a web form. That
+   * buyer gets nothing at all: no accept, no refusal, no signal of any kind.
+   * They wait out a twelve-hour expiry for a reply that was never coming.
+   *
+   * That is the same fault as every other one fixed this week — a decision
+   * taken correctly and reported nowhere.
+   *
+   * FOUR RULES, because this writes to a public board:
+   *   · ONLY capacity. Every other reason to pass is either the offer being
+   *     malformed (their client will say so) or somebody else having answered
+   *     first (not our news to give).
+   *   · ONCE PER OFFER, EVER. Deduped against what we have already said,
+   *     from the same merged view of the board the rest of the wake uses.
+   *     Repeating it every minute for fifty offers is how a shop becomes the
+   *     thing ruining the room it archives.
+   *   · BOUNDED per wake, so a board full of orders cannot turn one wake into
+   *     a write storm.
+   *   · NOT A FRAME. It is not a protocol move — the offer is still live and
+   *     still takeable — so it must not look like one to anything parsing
+   *     frames. Plain text, naming the id so the sender can match it.
+   * ═════════════════════════════════════════════════════════════════════*/
+  const fullNote = (id) =>
+    `Overheard is at capacity: ${p.open} deals in flight, ${MAX_OPEN_DEALS} at once. `
+    + `Offer ${id} is not refused and has not expired — it stands, and this shop takes it `
+    + `when a slot frees. Nothing is owed and nothing was charged.`;
+  if (p.atCapacity && !no.length) {
+    /* What we have already said, from the frames this wake already holds —
+       no extra read. `said` is matched on the id, which is what the note
+       carries and what the sender can look for. */
+    const already = new Set(TOLD_FULL);
+    for (const m of messages) {
+      if (m?.from !== US) continue;
+      const t = String(m.text ?? "");
+      if (!t.startsWith("Overheard is at capacity")) continue;
+      const hit = /\b(0x[0-9a-f]{64})\b/.exec(t);
+      if (hit) already.add(hit[1]);
+    }
+    const owe = p.passed
+      .filter((x) => x.why.includes("able and willing, but full") && !already.has(x.id))
+      .slice(0, MAX_FULL_NOTES);
+    for (const x of owe) {
+      const note = sweep(fullNote(x.id));
+      log(`FULL: telling ${x.id.slice(0, 14)}… we cannot take it yet`);
+      const put = await say(agent, OFFERS_ROOM, note, { ...opts, exact: true });
+      wrote.push(`full-note:${put.ok ? "ok" : "FAILED"}`);
+      /* Remembered on SUCCESS only: a note the board refused was never sent,
+         and marking it told would lose the buyer their answer for good. */
+      if (put.ok) {
+        if (TOLD_FULL.size >= TOLD_FULL_MAX) TOLD_FULL.clear();
+        TOLD_FULL.add(x.id);
+      } else log(`  the board would not take the note (${put.why ?? put.status})`);
+    }
+    if (owe.length) ann("notice", "the shop is full and said so",
+      `${owe.length} buyer(s) told · ${p.open} of ${MAX_OPEN_DEALS} in flight`, log);
   }
 
   /* Selling. We answer buyers' offers rather than posting our own — see the

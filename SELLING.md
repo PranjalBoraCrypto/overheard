@@ -128,6 +128,20 @@ reserve rule will look like when it becomes real:
   live cap, once computable, is considerably larger than 3. Three is the
   number you choose when you can read nothing at all.
 
+**Since acted on.** The cap is **50 on every rail**, and the rail no longer
+changes it, because what differed between the rails was the money argument and
+the money argument was wrong on this side of the book. Three constraints
+remain, none of them a balance:
+
+| what binds | at 50 | ceiling |
+|---|---|---|
+| reads — `1 + 2n` per wake, a wake a minute | ~101/min | 600/min documented |
+| time — a daily digest is 16.5s, a summary 0.8s | ≤14 min a wake | the 50-minute window |
+| the claim fee, which we have never paid | unknown | the reason it is 50 and not 300 |
+
+It is an env var, so it moves in one field during an incident. It goes up when
+a real testnet day has been watched rather than reasoned about.
+
 `CAPACITY.md` has the whole analysis, including what happens on a launch day.
 
 **The one honest thing to keep saying:** we do not know the ratio. Three-for-

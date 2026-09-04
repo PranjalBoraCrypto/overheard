@@ -282,11 +282,32 @@ the budget, and the closing summary is written outside it.
 
 ## What still has to be decided, and by a person
 
-### The cap on a rail that moves value
+### The cap on a rail that moves value — decided
 
-On `paper` nothing is at risk, so the cap is a work-budget number and 24 is
-derived from a measurement. On a rail that settles it is the only reserve rule
-this shop can enforce, and it stays at 3 until there is a balance to read.
+**RESOLVED, 4 September.** It is 50 on every rail. The rail used to change it
+(24 on `paper`, 3 on anything that settles) and that distinction was the money
+argument, which is backwards here: the buyer locks *their* FLOP and we spend
+compute, so capping sales to protect a balance throttles the thing that fills
+it. The reserve rule belongs on the buy side, which has its own.
+
+What the number is actually derived from: reads (`1 + 2n` a wake, ~101 a
+minute at 50 against a documented 600), time (a daily digest is 16.5s, so 50
+distinct ones is ~14 minutes inside a 50-minute window), and the claim fee we
+have never paid — which is the reason it is 50 rather than 300.
+
+Two things went with it, because a limit nobody can see is a limit that reads
+as a broken shop:
+
+- **`GET /api/accept` says how full it is**, from the same book and the same
+  `plan()` that enforces it, so the figure on the page and the figure that
+  decides cannot drift. `/hire` shows it, and disables the order button when
+  full rather than letting somebody sign an order the checkout will refuse.
+- **The shop posts a refusal on the board when it is full.** A buyer through
+  /hire always saw *something*; an agent posting its own offer straight to
+  `tclk-offers` — the route that makes this agentic commerce rather than a web
+  form — got nothing at all, and waited out a twelve-hour expiry for a reply
+  that was never coming. One note per offer, ever, bounded per wake, and not a
+  frame: the offer is still live and still takeable.
 
 `SELLING.md` states the rule the number stands in for:
 

@@ -143,7 +143,7 @@ const SHARD_DAYS = 3;
    archived frames, which strangers can add to. The `from === US` filter is
    the first bound and this is the second, because a bound that depends on
    another check being correct is not a bound. Comfortably above any real
-   book: MAX_OPEN_DEALS is 24 on paper and 3 on a rail that settles. */
+   book: MAX_OPEN_DEALS is 50, and this is four times it. */
 const MAX_WANTED = 200;
 /* One shard fetch per warm instance per half minute. Overridable for the same
    reason MIN_WORK_MS and MAX_OPEN_DEALS are: it trades freshness against
@@ -355,6 +355,79 @@ const json = (body, status = 200) =>
     },
   });
 
+/* ══════════════════════════════════════════════════════════════════════════
+ * HOW FULL THE SHOP IS, ASKED BEFORE ANYBODY COMMITS TO ANYTHING
+ *
+ * The capacity rule has always existed and has only ever been discoverable by
+ * hitting it. You compose an order, sign it, post it to a public board — and
+ * only then find out the shop cannot take it. The order is not wasted (it
+ * stands until its expiry and the next free slot takes it) but the person has
+ * signed something and been told "no" by a system that could have told them
+ * "not right now" a second earlier, for free.
+ *
+ * So: GET the same endpoint that answers orders, and it says how full it is.
+ * Same book, same plan(), same arithmetic — a number the page shows and the
+ * number the shop enforces cannot drift, because they are one number.
+ *
+ * CACHED, and that is not a performance nicety. This is read on every load of
+ * /hire, and a live board read per page view is precisely the mistake that
+ * once left the deals board rendering empty: it spent the shared upstream
+ * allowance on itself. Ten seconds is fresh enough for a figure that moves
+ * when a deal completes, and it bounds this to six reads a minute per
+ * instance however hard the page is refreshed.
+ * ═════════════════════════════════════════════════════════════════════════*/
+const CAP_TTL_MS = Number(process.env.ACCEPT_CAP_TTL_MS ?? 10_000);
+let capCache = { at: 0, body: null };
+
+async function capacity() {
+  if (capCache.body && Date.now() - capCache.at < CAP_TTL_MS) {
+    return json({ ...capCache.body, cached: true });
+  }
+
+  let live = null;
+  for (let i = 0; i < 2 && live === null; i++) {
+    if (i) await new Promise((r) => setTimeout(r, 350));
+    try { live = await readOffers(); } catch { /* answered below */ }
+  }
+  const archived = live === null ? null : await ourRecentRows();
+  if (live === null || archived === null) {
+    /* ── UNKNOWN IS NOT FULL, AND IT IS NOT OPEN EITHER ────────────────────
+       A page that reads "full" on a failed lookup turns a bad minute at the
+       venue into a closed shop; one that reads "open" invites an order the
+       checkout will then refuse. So it says it does not know, and the page
+       shows the order form — because the order still works: it goes on the
+       board, and a wake takes it. The only thing lost is the number. */
+    return json({ ok: false, unknown: true, why: "could not read the book just now" }, 503);
+  }
+
+  const bySeq = new Map();
+  for (const m of [...archived, ...live]) {
+    if (m?.seq == null) continue;
+    bySeq.set(String(m.seq), m);
+  }
+  const frames = framesFrom(
+    [...bySeq.values()].sort((a, b) => (Number(a.seq) || 0) - (Number(b.seq) || 0)),
+  );
+  const p = plan(frames, Date.now());
+
+  /* The two halves of "in flight", kept apart because they mean different
+     things to the person reading them: one is work this shop owes, the other
+     is a buyer who has not paid yet. Collapsing them into one figure would
+     make a queue of unpaid orders look like a busy shop. */
+  const working = p.owed.length;
+  const body = {
+    ok: true,
+    capacity: MAX_OPEN_DEALS,
+    open: p.open,
+    free: Math.max(0, MAX_OPEN_DEALS - p.open),
+    full: Boolean(p.atCapacity),
+    working,
+    awaiting_payment: Math.max(0, p.open - working),
+  };
+  capCache = { at: Date.now(), body };
+  return json(body);
+}
+
 /* ── THE EXPORT SHAPE, WHICH IS NOT A DETAIL ─────────────────────────────
  * Vercel's Node runtime accepts exactly three shapes for a file in /api:
  *
@@ -377,7 +450,8 @@ const json = (body, status = 200) =>
  * on that mattered. Section A now asserts the shape itself.
  */
 async function handler(request) {
-  if (request.method !== "POST") return json({ ok: false, why: "POST an offer id" }, 405);
+  if (request.method === "GET") return capacity();
+  if (request.method !== "POST") return json({ ok: false, why: "GET capacity, or POST an offer id" }, 405);
 
   let want = "";
   try {

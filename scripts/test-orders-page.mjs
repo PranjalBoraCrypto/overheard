@@ -620,11 +620,18 @@ console.log("\n=== I. it admits what it cannot know");
   const s = await read(pg);
   ok("the footer says how far back it read",
     /archived day/.test(s.foot), s.foot.slice(0, 60) + "…");
-  /* The most important sentence on the page. "Open" is a fact about an
-     expiry, and letting it be read as "nobody has taken this" would be the
-     page inventing a status it never looked up. */
-  ok("and that \"open\" is about the expiry, not about acceptance",
-    /expiry has not passed, not that nobody has accepted/i.test(s.foot));
+  /* ── THE SENTENCE THAT HAD TO CHANGE WITH THE PILL ────────────────────
+     It used to read: "open" means this offer's expiry has not passed, not
+     that nobody has accepted it. That was honest while the page knew nothing
+     else — and it stopped being honest the moment the strip started reading
+     the deal's own room, because a delivered order then rendered as a green
+     OPEN pill directly above the words "this deal is finished". Small print
+     is not a defence for a label contradicting the sentence beside it, so
+     the pill changed and this had to follow it. */
+  ok("the footer says a row reflects its deal once the deal has been read",
+    /shows what its deal is once the deal's own room has been read/i.test(s.foot), s.foot.slice(-260));
+  ok("and still says what the fallback means when it has not",
+    /means only that this offer's expiry has not passed/i.test(s.foot), s.foot.slice(-200));
   ok("every job the shop can do has a readable name here",
     await pg.evaluate((jobs) => jobs.every((j) => document.documentElement.outerHTML.includes(j)),
       [...CAN_DO]),
@@ -715,6 +722,9 @@ console.log("\n=== K. the buyer can actually pay — and is never asked to pay t
     "this is the screenshot that started it");
   const words = await pg.$eval(".hactwords b", (e) => e.textContent);
   ok("it says the payment is in, in the buyer's words", /paid/i.test(words), words);
+  ok("and the row's own pill agrees with it",
+    (await pg.$eval(".hitem .hstate", (e) => e.textContent)) === "paid",
+    await pg.$eval(".hitem .hstate", (e) => e.textContent));
   ok("and that there is nothing for them to do",
     /do not need to do anything/i.test(await pg.$eval(".hactwords span", (e) => e.textContent)));
   ok("the strip stops looking like a call to action",
@@ -738,6 +748,21 @@ console.log("\n=== K. the buyer can actually pay — and is never asked to pay t
     /delivered/i.test(await pg.$eval(".hactwords b", (e) => e.textContent)),
     await pg.$eval(".hactwords b", (e) => e.textContent));
   ok("and offers nothing to press", await pg.$$eval(".hbtn:not([hidden])", (n) => n.length) === 0);
+  /* ── THE ROW THAT CONTRADICTED ITSELF ─────────────────────────────────
+     A finished deal rendered a green OPEN pill immediately above the words
+     "This deal is finished". Nobody reads that as "the offer's expiry has
+     not elapsed"; they read it as "this is not done yet", and the small
+     print at the bottom of the page is not a defence for a label that
+     contradicts the sentence next to it. */
+  ok("the pill says delivered, not open",
+    (await pg.$eval(".hitem .hstate", (e) => e.textContent)) === "delivered",
+    await pg.$eval(".hitem .hstate", (e) => e.textContent));
+  ok("and it does not read as still going",
+    (await pg.$$eval(".hitem .hstate.live", (n) => n.length)) === 0,
+    "green is the colour of a deal somebody is still waiting on");
+  ok("the counters stop calling a delivered order still open",
+    (await pg.$eval("#nOpen", (e) => e.textContent)) !== (await pg.$eval("#nAll", (e) => e.textContent)),
+    `${await pg.$eval("#nOpen", (e) => e.textContent)} still open of ${await pg.$eval("#nAll", (e) => e.textContent)} — one of them is finished`);
   await ctx.close();
 }
 {

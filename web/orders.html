@@ -270,6 +270,9 @@ h1{font-weight:800;font-size:clamp(30px,5vw,42px);line-height:1;letter-spacing:-
   padding:4px 10px;border-radius:999px;border:1px solid var(--edge);color:var(--dim);white-space:nowrap}
 .hstate.live{border-color:rgba(59,227,176,.45);color:var(--good);background:rgba(59,227,176,.08)}
 .hstate.gone{border-color:rgba(92,129,140,.4);color:var(--faint)}
+/* Finished, and finished WELL — distinct from both "still going" and "expired
+   unused", because those are the two things it kept being mistaken for. */
+.hstate.done{border-color:rgba(88,233,255,.45);color:var(--blue);background:rgba(88,233,255,.08)}
 .hwhen{font-family:var(--mono);font-size:11.5px;color:var(--faint);white-space:nowrap;min-width:66px;
   text-align:right}
 .hgo{width:16px;height:16px;color:var(--faint);flex:none;
@@ -596,7 +599,42 @@ async function load() {
 
 /* ── painting ─────────────────────────────────────────────────────────────*/
 const isOpen = (o) => isFinite(o.expiresMs) && o.expiresMs > Date.now();
-const matching = () => orders.filter((o) => filter === "all" ? true : filter === "open" ? isOpen(o) : !isOpen(o));
+
+/* ══════════════════════════════════════════════════════════════════════════
+ * WHAT A ROW SAYS IT IS, AND THE ROW THAT CONTRADICTED ITSELF
+ *
+ * "Open" meant one thing here: this OFFER's own expiry has not passed. That
+ * was honest while the page knew nothing else — following a deal costs an
+ * upstream read per order, which is what once left the deals board empty.
+ *
+ * It stopped being honest the moment the strip below the row started reading
+ * the deal's own room. A delivered order then rendered as a green OPEN pill
+ * sitting directly above the words "This deal is finished", on the same row,
+ * about the same deal. A person does not read that as "the offer's expiry has
+ * not elapsed"; they read it as "this is not done yet", and the small print at
+ * the bottom of the page is not a defence for a label that contradicts the
+ * sentence next to it.
+ *
+ * So the pill says what the DEAL is when the deal is known, and falls back to
+ * the offer's expiry when it is not. `o.dealState` is filled in by the same
+ * bounded check the strip already makes — no extra reads.
+ * ═════════════════════════════════════════════════════════════════════════*/
+function statusOf(o) {
+  switch (o.dealState) {
+    case "claimed":   return { word: "delivered", cls: "done", open: false };
+    case "locked":    return { word: "paid",      cls: "live", open: true };
+    case "refunded":  return { word: "refunded",  cls: "gone", open: false };
+    case "cancelled": return { word: "cancelled", cls: "gone", open: false };
+    default:
+      return isOpen(o)
+        ? { word: "open",   cls: "live", open: true }
+        : { word: "closed", cls: "gone", open: false };
+  }
+}
+/* Still open means still going, which is not the same as unexpired: a deal
+   that has been delivered is finished however long its offer had left. */
+const stillOpen = (o) => statusOf(o).open;
+const matching = () => orders.filter((o) => filter === "all" ? true : filter === "open" ? stillOpen(o) : !stillOpen(o));
 
 function paint() {
   $("skel").hidden = true;
@@ -624,7 +662,7 @@ function paint() {
   }
   $("empty").hidden = true;
 
-  const open = orders.filter(isOpen).length;
+  const open = orders.filter(stillOpen).length;
   const total = orders.reduce((s, o) => s + (Number(o.amount) || 0), 0);
   $("nAll").textContent = group(orders.length);
   $("nOpen").textContent = group(open);
@@ -718,7 +756,11 @@ function queueCheck(fn) {
 }
 function itemFor(o) {
   const row = rowFor(o);
-  const act = actionFor(o);
+  /* The pill is handed to the strip so the two cannot disagree: whatever the
+     deal-room read comes back with repaints BOTH, in one place, at one time.
+     A row that said OPEN above the words "this deal is finished" is what this
+     argument is settling. */
+  const act = actionFor(o, row.querySelector(".hstate"));
   if (!act) return row;
   const wrap = document.createElement("div");
   wrap.className = "hitem";
@@ -726,8 +768,20 @@ function itemFor(o) {
   return wrap;
 }
 
+/* The four figures at the top are counted from the same statusOf(), so they
+   move when a row does. Called after each deal resolves rather than once at
+   paint, because at paint nothing is known yet. */
+function restat() {
+  if (!orders.length) return;
+  const open = orders.filter(stillOpen).length;
+  $("nOpen").textContent = group(open);
+  $("nShut").textContent = group(orders.length - open);
+  $("cOpen").textContent = open;
+  $("cShut").textContent = orders.length - open;
+}
+
 /** The strip under a row, or null when there is nothing for the buyer to do. */
-function actionFor(o) {
+function actionFor(o, pill = null) {
   if (!o.accept?.room || !o.accept?.contract) return null;
   /* Past refundAfterMs a lock leads nowhere: reveal is refused at
      `at >= refundAfter` and a refund needs a lock that never came. Offering
@@ -761,8 +815,18 @@ function actionFor(o) {
      Four outcomes, and only one of them is a button. The common case by far
      is `locked` — the checkout does this automatically — so that is the one
      phrased as reassurance rather than as a step. */
-  const queued = queueCheck(async () => {
-    const state = await dealState(o.accept.room, o.accept.contract);
+  const show = (state) => {
+    /* Recorded on the order, so the pill, the filter tabs and the four
+       figures at the top all read one answer rather than three. */
+    if (state) {
+      o.dealState = state;
+      if (pill) {
+        const st = statusOf(o);
+        pill.className = "hstate " + st.cls;
+        pill.textContent = st.word;
+      }
+      restat();
+    }
     if (state === "locked") {
       b.textContent = "Paid — the shop owes you the work";
       p.textContent = "Your payment is locked in escrow. The shop delivers on its next wake and then opens the lock; you do not need to do anything.";
@@ -794,11 +858,20 @@ function actionFor(o) {
     b.textContent = "Your payment did not land";
     p.textContent = "Ordering normally locks the payment for you in the same click. That did not reach the network this time — one press finishes it. On the paper rail this moves no value; it is the signal that the work may begin.";
     go.hidden = false;
-  });
-  /* More answered orders on one page than the budget allows. Hiding is the
-     same choice as an unreadable room: say nothing rather than guess, and
-     never leave a row stuck mid-sentence. */
-  if (!queued) box.hidden = true;
+  };
+
+  /* ── ASKED ONCE PER DEAL, NOT ONCE PER PAINT ────────────────────────────
+     Paging, or switching tabs, rebuilds every row — and a read per row per
+     paint is the cost this whole design is arranged to avoid. An answer
+     already on the order is used straight away, so a repaint is free and the
+     budget is spent only on deals nobody has looked up yet. */
+  if (o.dealState) show(o.dealState);
+  else if (!queueCheck(() => dealState(o.accept.room, o.accept.contract).then(show))) {
+    /* More answered orders on one page than the budget allows. Hiding is the
+       same choice as an unreadable room: say nothing rather than guess, and
+       never leave a row stuck mid-sentence. */
+    box.hidden = true;
+  }
 
   const tell = (t, cls) => { said.hidden = false; said.textContent = t; said.className = "hsaid " + (cls || ""); };
 
@@ -989,9 +1062,9 @@ function rowFor(o) {
   unit.textContent = o.asset || "FLOP";
   price.append(unit);
   const state = document.createElement("span");
-  const open = isOpen(o);
-  state.className = "hstate " + (open ? "live" : "gone");
-  state.textContent = open ? "open" : "closed";
+  const st = statusOf(o);
+  state.className = "hstate " + st.cls;
+  state.textContent = st.word;
   const when = document.createElement("span");
   when.className = "hwhen";
   when.textContent = ago(o.ts);
@@ -1005,7 +1078,7 @@ function rowFor(o) {
 
   a.append(em, words, meta2, go);
   a.setAttribute("aria-label",
-    `${spec.name}, ${o.brief || "no brief"}, ${o.amount} ${o.asset}, ${open ? "open" : "closed"} — open the deals board`);
+    `${spec.name}, ${o.brief || "no brief"}, ${o.amount} ${o.asset}, ${st.word} — open the deals board`);
   return a;
 }
 
@@ -1029,7 +1102,7 @@ function paintFoot() {
   bits.push("merged with the live offers room so an order placed a moment ago is not missing");
   f.append(document.createTextNode(bits.join(", ") + ". "));
   f.append(document.createTextNode(
-    "“Open” means this offer's own expiry has not passed, not that nobody has accepted it — what happened after acceptance lives on the "));
+    "A row shows what its deal is once the deal's own room has been read; where that is not known, “open” means only that this offer's expiry has not passed. Everything is re-checked, signature by signature, on the "));
   const a = document.createElement("a");
   a.href = "/deals-preview-78cb4a1be923c6b4.html";
   a.textContent = "deals board";

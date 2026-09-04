@@ -979,20 +979,48 @@ console.log("\n=== P. deals that were agreed and never funded");
     `${pMany.open} open of ${MAX_OPEN_DEALS} — before this, ${MAX_OPEN_DEALS} of them closed it for good`);
 }
 
-console.log("\n=== Q. the cap knows which rail it is on");
+console.log("\n=== S. the shop is full and says so");
 {
-  /* On `paper` no value moves, so a concurrency cap protects no money; on a
-     rail that settles it is the only reserve rule this shop can enforce. One
-     number for both was wrong in both directions at once. */
+  /* Its own process, for the same reason section L has one: `US` is read at
+     import time and this path only exists where the key in the environment is
+     the shop's. See scripts/test-full.mjs. */
+  const { execFileSync } = await import("node:child_process");
+  const out = execFileSync(process.execPath,
+    [path.join(ROOT, "scripts/test-full.mjs")],
+    { encoding: "utf8", env: { ...process.env, SHOP_DID: agentFromSeed(SEED).did, TEST_SEED: SEED } });
+  for (const line of out.trim().split("\n")) {
+    if (!line.startsWith("RESULT ")) { console.log(line); continue; }
+    const r = JSON.parse(line.slice(7));
+    ok(r.name, r.pass, r.note);
+  }
+}
+
+console.log("\n=== Q. the cap is not a money number");
+{
+  /* ── WHY THE RAIL NO LONGER CHANGES IT ─────────────────────────────────
+     It was 3 everywhere, then 24 on `paper` and 3 on a rail that settles,
+     and both of those were answers to the wrong question. The cap was
+     written as a stand-in for a FLOP reserve — but SELLING BRINGS FLOP IN.
+     The buyer locks their own money; we spend compute and a claim fee.
+     Capping sales to protect a balance throttles the thing that fills it.
+     What actually binds is reads (~1 + 2n per wake against 600 a minute)
+     and time (a daily digest is 16.5s), and neither of those knows what
+     rail it is on. */
   const { execFileSync } = await import("node:child_process");
   const read = (env) => Number(execFileSync(process.execPath,
     ["-e", 'import("./scripts/runner.mjs").then(m=>console.log(m.MAX_OPEN_DEALS))'],
     { encoding: "utf8", cwd: ROOT, env: { ...process.env, ...env }, stdio: ["ignore", "pipe", "ignore"] }).trim());
   const paper = read({ TCLK_RAIL: "paper", MAX_OPEN_DEALS: "" });
   const live = read({ TCLK_RAIL: "flop-htlc", MAX_OPEN_DEALS: "" });
-  ok("a rehearsal is not throttled as though it could lose money", paper > live, `paper ${paper} vs live ${live}`);
-  ok("and a rail that settles keeps the small number", live <= 3, String(live));
-  ok("and either can be moved without a deploy",
+  ok("the rail does not change it any more", paper === live, `paper ${paper} vs live ${live}`);
+  ok("and testnet day does not silently shrink the shop", live >= 50,
+    `${live} — it used to drop from 24 to 3 the moment the rail changed, on the busiest day`);
+  /* The upper bound is not arbitrary either. A wake reads the board once and
+     then one room per unfinished deal, and the buy side does it again: about
+     1 + 2n. At a wake a minute, n must stay well inside 600 reads a minute. */
+  ok("and it is still inside the read allowance at a wake a minute",
+    1 + 2 * live <= 300, `${1 + 2 * live} reads a minute of a documented 600`);
+  ok("either way it moves without a deploy",
     read({ TCLK_RAIL: "paper", MAX_OPEN_DEALS: "7" }) === 7,
     "an incident wants a number changed now, not merged");
 }
