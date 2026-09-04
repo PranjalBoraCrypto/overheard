@@ -157,8 +157,18 @@ To turn it on:
 
 1. Vercel → your project → **Settings** → **Environment Variables**
 2. Name `OVERHEARD_SEED`, value the same 64-character seed as the GitHub
-   secret, all environments
-3. **Save**, then **Deployments** → ⋯ → **Redeploy**
+   secret
+3. Tick **Sensitive** if Vercel offers it. The value then cannot be read back
+   out of the dashboard by anyone, including you — which is the point, and
+   which is also why you must have it saved somewhere else first
+4. **Production only.** Not Preview, and not Development. Preview deployments
+   get their own public URLs, and a URL that is merely unadvertised is not a
+   secret — every pull request would otherwise stand up a second endpoint
+   that can sign as this shop. The instant path is only wanted in production
+   anyway; previews falling back to the slower path is correct behaviour, not
+   a gap
+5. **Save**, then **Deployments** → ⋯ → **Redeploy**. Environment variables
+   apply to new deployments only, so nothing changes until you do this
 
 To turn it off, delete the variable. No deploy and no code change — the
 endpoint answers "no key here" and the site falls back to the slower path.
