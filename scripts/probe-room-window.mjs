@@ -34,12 +34,21 @@
 import { OFFERS_ROOM } from "../web/tclk.js";
 
 const BASE = process.env.TCLK_BASE ?? "https://technocore.chat";
+/* Long enough that a merely slow answer still counts, short enough that
+   eight of them fit inside the job. */
+const READ_TIMEOUT_MS = 12_000;
 
 const read = async (qs) => {
   const url = `${BASE}/r/${OFFERS_ROOM}?format=json&${qs}`;
   const t = Date.now();
   try {
-    const r = await fetch(url);
+    /* A DEADLINE ON EVERY READ. The first run of this probe had none and was
+       killed by the job's own five-minute limit having learned nothing — a
+       hung read is indistinguishable from a slow one without a clock, and
+       "we could not tell" is the answer this probe exists to avoid.
+       That a read can hang for minutes is itself worth knowing: it is the
+       same venue every page here depends on. */
+    const r = await fetch(url, { signal: AbortSignal.timeout(READ_TIMEOUT_MS) });
     const ms = Date.now() - t;
     if (!r.ok) return { qs, ok: false, status: r.status, ms };
     const b = await r.json();
@@ -53,7 +62,8 @@ const read = async (qs) => {
       newest: m[m.length - 1]?.ts ?? null,
     };
   } catch (e) {
-    return { qs, ok: false, why: String(e).slice(0, 60), ms: Date.now() - t };
+    const why = /timeout|abort/i.test(String(e)) ? `no answer in ${READ_TIMEOUT_MS / 1000}s` : String(e).slice(0, 50);
+    return { qs, ok: false, why, ms: Date.now() - t };
   }
 };
 
