@@ -97,6 +97,14 @@ const envCount = (name, fallback) => {
 };
 export const MAX_OPEN_DEALS = envCount("MAX_OPEN_DEALS", IS_REHEARSAL ? 24 : 3);
 
+/* Closing out abandoned deals is bounded per wake for the same reason
+   everything else here is: a backlog must never turn one wake into a write
+   storm. Nothing is lost by going slowly — an abandoned deal is already dead
+   and plan() has already stopped counting it against the cap, so the cancel
+   is bookkeeping on the public record rather than something a person waits
+   for. At twelve wakes an hour this clears 96 an hour. */
+const MAX_REAP_PER_WAKE = envCount("MAX_REAP_PER_WAKE", 8);
+
 /* The least time we will accept between now and claimByMs. A profile is built
    from the archive in seconds, but the runner wakes on a schedule and a
    window shorter than the gap between wakes is one we could miss entirely
@@ -437,7 +445,13 @@ export function plan(frames, now = Date.now()) {
   /* Only the ones WE accepted. A dead deal on our BUY side is our own failure
      to fund, and buy.mjs owns that path; cancelling it from here would be two
      pieces of code writing to one deal on the same wake. */
-  const reap = deals.filter((d) => abandoned(d) && d.accept?.body?.from === US);
+  /* `d.accept.from` — the TRANSPORT's account of who signed it — and never
+     `d.accept.body.from`, which is the frame's claim about itself. framesFrom
+     re-asserts the transport value for exactly this reason, and ourDeals
+     already uses it. With the body's version, a stranger who wrote our DID
+     into the `from` of their own accept would put OUR BUY-SIDE deal into this
+     list, and the block below would cancel a deal buy.mjs owns. */
+  const reap = deals.filter((d) => abandoned(d) && d.accept?.from === US);
 
   const live = new Set();
   for (const d of deals) {
@@ -450,8 +464,10 @@ export function plan(frames, now = Date.now()) {
      on the deals page and the wire carries only what a buyer opened. An offer
      already answered by somebody's accept is not ours to take, and neither is
      one we have answered already. */
-  const answered = new Set();
-  for (const f of frames) if (f.ok && f.type === "accept" && f.body?.ref) answered.add(f.body.ref);
+  const answered = new Map();
+  for (const f of frames)
+    if (f.ok && f.type === "accept" && f.body?.ref && !answered.has(f.body.ref))
+      answered.set(f.body.ref, f.from === US ? "we answered it already" : "another agent answered it first");
 
   const take = [], passed = [];
   const atCapacity = open.length >= MAX_OPEN_DEALS;
@@ -470,10 +486,18 @@ export function plan(frames, now = Date.now()) {
        WITH A REASON, which is the difference between a bug you can see and a
        bug you cannot. */
     if (!f.id) { passed.push({ id: `seq:${f.seq}`, why: ["offer carries no id"] }); continue; }
-    if (answered.has(f.id)) continue;
+    /* ALSO A SILENT DROP UNTIL NOW, and a more interesting one. Anybody may
+       accept anybody's offer on a public board, so one junk frame carrying
+       nothing but `{"type":"accept","ref":"<their id>"}` permanently removes
+       a buyer from this shop's view — and it removed them INVISIBLY, into
+       neither list, so the wake could not report a customer it was refusing
+       to serve. The behaviour is still correct (the first accept wins under
+       tclk, and answering twice is worse than not answering); what changes is
+       that a griefed order now appears in the log with its reason. */
+    if (answered.has(f.id)) { passed.push({ id: f.id, why: [answered.get(f.id)] }); continue; }
     const why = refuseTake(f, now);
     if (why.length) { passed.push({ id: f.id, why }); continue; }
-    if (atCapacity) continue;              // able and willing, but full
+    if (atCapacity) { passed.push({ id: f.id, why: ["able and willing, but full"] }); continue; }
     take.push(f);
   }
 
@@ -628,17 +652,35 @@ export async function wake(opts = {}) {
      deal on every wake: it is bounded by the deals we have accepted and not
      finished, which MAX_OPEN_DEALS caps. Nothing here scales with the size of
      the board — the mistake that once left the deals page rendering empty. */
-  const waiting = p.deals.filter((d) => d.deal.state === "accepted" && d.accept?.body?.from === US);
+  /* ── WHICH ROOMS, AND IN WHAT ORDER, AND WHY BOTH MATTER ───────────────
+     `reap` is excluded, and the list is NEWEST FIRST. Neither is tidiness.
+
+     Abandoned deals never leave the `accepted` state, so they accumulate —
+     and they are by definition the OLDEST. A list in board order, sliced to
+     the cap, is therefore a list of exactly the deals that can never move,
+     and the one buyer who actually paid is at the far end of it, unread. The
+     shop would take the money, never see the lock, never deliver, and cancel
+     the deal at its refund deadline. That is the worst outcome available to
+     this code, and the difference between having it and not is a sort.
+
+     Newest first also matches what a buyer experiences: somebody who paid a
+     minute ago is waiting right now. */
+  const reaping = new Set(p.reap);
+  const waiting = p.deals
+    .filter((d) => d.deal.state === "accepted" && d.accept?.from === US && !reaping.has(d))
+    .sort((a, b) => (b.accept?.seq ?? 0) - (a.accept?.seq ?? 0));
   if (waiting.length) {
     const extra = [];
     for (const d of waiting.slice(0, MAX_OPEN_DEALS)) {
-      const room = safeRoom(d.accept.body.contract);
+      const room = safeRoom(d.accept.body?.contract);
       if (!room) continue;
       try { extra.push(...framesFrom(await readAnyRoom(room, opts))); }
       catch { log(`  could not read the deal room for ${d.offer.body?.job?.id}`); }
     }
+    if (waiting.length > MAX_OPEN_DEALS)
+      log(`rooms: ${waiting.length} deals await a lock, reading the newest ${MAX_OPEN_DEALS}`);
     if (extra.length) {
-      log(`rooms: read ${waiting.length} deal room(s) awaiting a lock · ${extra.length} frames`);
+      log(`rooms: read ${Math.min(waiting.length, MAX_OPEN_DEALS)} deal room(s) awaiting a lock · ${extra.length} frames`);
       frames = frames.concat(extra);
       p = plan(frames, now);
     }
@@ -680,16 +722,30 @@ export async function wake(opts = {}) {
      capacity — it buys a readable log. "cancelled two, then took two" is a
      wake anybody can follow; the reverse order reads as a shop taking work
      while its book was full. */
-  for (const d of p.reap) {
+  if (p.reap.length > MAX_REAP_PER_WAKE)
+    log(`stale: ${p.reap.length} to close out, doing ${MAX_REAP_PER_WAKE} this wake`);
+  for (const d of p.reap.slice(0, MAX_REAP_PER_WAKE)) {
     const contract = d.accept?.body?.contract;
     const job = d.offer?.body?.job?.id;
     log(`STALE: ${job} was accepted and never funded — cancelling to free the slot`);
     if (!contract) { log("  no contract id on the accept, so there is nothing to cancel"); continue; }
     const text = wire(cancelFrame(US, contract));
     if (!no.length) {
-      const put = await settle(agent, safeRoom(contract) ?? OFFERS_ROOM, text, opts, log);
-      wrote.push(`cancel:${/^ok/.test(put) ? "ok" : "FAILED"}`);
-      log(`  cancelled: ${put}`);
+      /* ── STRAIGHT TO THE BOARD, NOT THROUGH settle() ────────────────────
+         settle() prefers the deal room and falls back here, which is right
+         for a delivery: it is addressed to one counterparty who is watching
+         that room. A cancel is addressed to US. Its whole job is to make the
+         deal terminal so the next wake stops counting it — and the next wake
+         reads the BOARD. A cancel that landed in a deal room we do not read
+         back would leave the deal `accepted` for ever, so every wake would
+         see it as stale and sign a fresh cancel: once an hour before, once
+         every five minutes now, until the archive is made of them.
+         runDeal folds by contract and reads no room name, so the board is
+         not a downgrade — it is the only venue where this frame does its
+         job. */
+      const put = await say(agent, OFFERS_ROOM, text, { ...opts, exact: true });
+      wrote.push(`cancel:${put.ok ? "ok" : "FAILED"}`);
+      log(`  cancelled: ${put.ok ? "ok" : `FAILED · ${put.why ?? put.status}`}`);
     }
   }
 
@@ -760,6 +816,9 @@ export async function wake(opts = {}) {
   }
   for (const b of buys.waiting) log(`waiting on ${b.offer.body?.job?.id} — funded, not yet delivered`);
 
+  /* One wake's worth of finished work, keyed by job and brief. See the note
+     at the doJob call for why this is per-wake and never longer. */
+  const madeThisWake = new Map();
   for (const d of p.owed) {
     const job = d.offer.body?.job?.id;
     const contract = d.accept?.body?.contract;
@@ -775,7 +834,35 @@ export async function wake(opts = {}) {
        actually succeeded earns the reveal. A failed handler leaves the deal
        locked, which is the safe direction — the buyer gets their refund at
        refundAfterMs and we simply earned nothing. */
-    const done = await doJob(job, d.offer.body?.job?.brief ?? d.offer.body?.job?.subject, opts);
+    /* ── THE SAME JOB, ASKED FOR TWICE, IS DONE ONCE ─────────────────────
+       These deliverables are pure functions of the archive and the brief:
+       "the digest for 2026-09-02" is one document, whoever ordered it, and
+       two buyers who ask for it on the same wake get identical bytes.
+
+       MEASURED: a room summary takes 829 ms and a daily digest takes 16.5
+       SECONDS. In a wake with ten minutes to spend, thirty-six digests is
+       the entire budget — and on a launch day the orders that arrive
+       together are exactly the ones likely to name the same day or the same
+       room, because they were prompted by the same thing.
+
+       So the cost of a wake stops scaling with the number of ORDERS and
+       starts scaling with the number of DISTINCT BRIEFS, which is the number
+       that actually reflects how much work there is. The memo lives for one
+       wake only: across wakes the archive has moved, and serving a buyer a
+       yesterday's answer to save a second would be the one thing a shop
+       built on an archive must not do. */
+    /* JSON.stringify over a PAIR, not two values glued with a separator. A
+       brief is free text a stranger wrote: any separator character I pick,
+       they can also type, and then two different orders collide onto one
+       cached answer. (The first version of this line used a literal NUL,
+       which worked and made the file read as binary to git and grep.) */
+    const key = JSON.stringify([job, d.offer.body?.job?.brief ?? d.offer.body?.job?.subject ?? ""]);
+    if (!madeThisWake.has(key)) {
+      madeThisWake.set(key, await doJob(job, d.offer.body?.job?.brief ?? d.offer.body?.job?.subject, opts));
+    } else {
+      log("  the same brief was produced earlier in this wake — reusing it");
+    }
+    const done = madeThisWake.get(key);
     if (!done.ok) {
       log(`  DELIVERY FAILED: ${done.why} — leaving it locked so the buyer can refund`);
       continue;

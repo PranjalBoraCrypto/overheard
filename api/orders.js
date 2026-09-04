@@ -44,8 +44,12 @@
 
 export const config = { runtime: "edge" };
 
-const OWNER = "PranjalBoraCrypto";
-const REPO = "overheard";
+const OWNER = process.env.ARCHIVE_OWNER ?? process.env.VERCEL_GIT_REPO_OWNER ?? "PranjalBoraCrypto";
+const REPO = process.env.ARCHIVE_REPO ?? process.env.VERCEL_GIT_REPO_SLUG ?? "overheard";
+/* Whose accepts count as an answer. Must match scripts/runner.mjs's US — the
+   same environment override exists there for the same reason, so a fork or a
+   test can be a different shop without editing code. */
+const SHOP = process.env.SHOP_DID ?? "did:key:z6MkiuhfekPgiihLWarPAzhuvoMjg86F8dqmLiCTmtQgMrR3";
 const BRANCH = "main";
 const ROOM = "tclk-offers";
 
@@ -153,6 +157,18 @@ function acceptFrom(line, id) {
      some unrelated frame that quoted it, and treating that as an answer would
      put a Pay button on a deal nobody agreed to. */
   if (body.ref !== id) return null;
+  /* ── AND THE ANSWER HAS TO BE OURS ───────────────────────────────────────
+     Answering a stranger's offer is a legal move on a public board, so an
+     attacker can accept a buyer's offer seconds after it lands. Without this
+     line, that accept comes back from this endpoint as "the shop answered
+     you", the orders page paints its Pay button, and the buyer signs a lock
+     naming the ATTACKER's contract — under which the attacker is the payee,
+     reveals, and claims.
+     `row.from` is the transport's account of who signed the message, not the
+     body's claim about itself, and only the transport's is worth anything
+     here. The same hole was closed in api/accept.mjs; this is the other path
+     to the same button, and closing one without the other closes neither. */
+  if (row.from !== SHOP) return null;
   const room = roomFor(body.contract);
   if (!room) return null;
   return {

@@ -97,12 +97,38 @@ are the levers that change, in one place each:
 | `MAX_OPEN_BUYS` | 2 | we could not read a balance, so we capped count instead |
 | `WANTS` | 2 jobs | both things we genuinely want and can check the answer to |
 | `BUY_WINDOW` | 24h / 48h | a stranger needs time to read, work and post |
-| `MAX_OPEN_DEALS` | 3 | the reserve rule we can actually check |
+| `MAX_OPEN_DEALS` | 24 on `paper`, 3 otherwise | it stopped being one number — see below |
 
 Raising them is a decision to take deliberately once we can read a FLOP
 balance and know what locking costs — not before. Until the balance is
 readable, "how many deals are open at once" is the only reserve rule that is
 checkable, and an unreadable reserve figure would be a decoration.
+
+**Except that one of them was wrong in both directions at once.**
+`MAX_OPEN_DEALS` was 3 on every rail. On a rail that settles, that is the
+cautious number this table describes and it stays. On `paper` nothing is at
+risk — the rail holds no value — so the cap protected no money and was
+quietly capping a rehearsal at roughly 36 orders a day for the sake of a
+reserve that does not exist.
+
+What actually bounds a wake on `paper` is the WORK. Measured: a room summary
+takes 829 ms and a daily digest takes 16.5 seconds, against a ten-minute
+workflow timeout. Twenty-four is that budget with room to spare — a
+measurement, not a round number.
+
+Two things follow, and they belong in this file because they change what the
+reserve rule will look like when it becomes real:
+
+- The cap is now DERIVED from the rail, and overridable by environment
+  without a deploy. The day a balance is readable it becomes a function of
+  that balance and nothing else has to move.
+- **Selling is FLOP-positive**, as the top of this document says. So the
+  reserve is not "can we afford these orders" — the customer pays us — it is
+  "can we afford the FEES to settle them". The honest expectation is that the
+  live cap, once computable, is considerably larger than 3. Three is the
+  number you choose when you can read nothing at all.
+
+`CAPACITY.md` has the whole analysis, including what happens on a launch day.
 
 **The one honest thing to keep saying:** we do not know the ratio. Three-for-
 one is the owner's bet, not a modelled number, and this file should not start

@@ -178,8 +178,13 @@ console.log("\n=== C2. and through plan(), which is what actually decides");
 
   /* And the form itself must put it there, or everything above tests a body
      this suite invented rather than the one hire.html posts. */
+  /* Matched on the SHAPE rather than on one spelling of the line: the id was
+     hoisted into `offerRef` so the accept could be asked for by it, and a
+     rule pinned to the old text failed while the property was intact. What
+     must hold is that the thing signed and posted carries an id computed by
+     offerId — however that value is spelled on the way there. */
   ok("the form puts the id on the wire",
-    /const text = sweep\("tclk1 " \+ canon\(\{ \.\.\.body, id: await offerId\(body\) \}\)\)/.test(page),
+    /canon\(\{\s*\.\.\.body,\s*id:\s*(await offerId\(body\)|offerRef)\s*\}\)/.test(page),
     "the offer hire.html posts must carry its own id");
   ok("and the developer's copy of the frame carries it too",
     /id: await offerId\(body\)/.test(page.slice(page.indexOf("async function paintFrame"))),

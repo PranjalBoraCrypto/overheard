@@ -74,9 +74,20 @@ ok("it never assigns markup",
     types.length > 0 && types.every((t) => t === "lock"),
     types.join(",") || "none at all — then the button cannot work");
 }
-ok("and it posts that lock to the deal room, not to the offers room",
-  /room:\s*o\.accept\.room/.test(code) && !/room:\s*"tclk-offers"/.test(code),
-  "both sides meet in the room derived from the contract");
+/* The deal room FIRST, the board only if the network refuses it. "never the
+   offers room" was the rule until the measurement turned up: technocore is at
+   its room cap, so a deal room usually cannot be created, and 52 accepts on
+   this board produced 7 locks. runDeal folds by contract and reads no room
+   name, so a lock on the board counts exactly as much — and the shop's own
+   settle() has taken this fallback for months. A buyer held to the stricter
+   rule would fail seven times in eight. */
+{
+  const order = [...strip(code).matchAll(/await post\((.*?)\);/g)].map((m) => m[1]);
+  ok("the lock tries the deal room first",
+    /o\.accept\.room/.test(order[0] ?? ""), order[0] ?? "no post at all");
+  ok("and falls back to the board rather than giving up",
+    /"tclk-offers"/.test(order[1] ?? ""), order[1] ?? "no fallback — 7 buyers in 8 would fail here");
+}
 
 console.log("\n=== B. it is the same site");
 const rule = (t, sel) => {
@@ -128,6 +139,21 @@ ok("and caps one identity's list", /MAX_ORDERS/.test(api));
    rules out ~99.9% of lines before any of them is parsed. */
 ok("it prefilters lines before parsing them",
   /if \(!line\.includes\(did\)\) continue;/.test(api));
+/* ── AN ACCEPT IS ONLY AN ANSWER IF THE SHOP SENT IT ─────────────────────
+   This endpoint decides whether the orders page paints a Pay button, and it
+   matched any accept whose `ref` was the offer's id. Accepting a stranger's
+   offer is a legal move on a public board, so an attacker could answer a
+   buyer's offer, this endpoint would report it as the shop's answer, and the
+   buyer would sign a lock naming the ATTACKER's contract — under which the
+   attacker is the payee, reveals, and claims.
+   The same hole was closed in api/accept.mjs. This is the other path to the
+   same button, and closing one without the other closes neither. */
+ok("an accept only counts as an answer if the shop signed it",
+  /if \(row\.from !== SHOP\) return null;/.test(api),
+  "otherwise a stranger's accept paints a Pay button on their own contract");
+ok("and the shop's identity comes from the same place the runner's does",
+  /SHOP = process\.env\.SHOP_DID/.test(api),
+  "two spellings of who we are is one too many");
 ok("it reports how much it actually read",
   /days_scanned/.test(api) && /days_available/.test(api) && /truncated/.test(api),
   "a bare array looks complete whatever happened");
@@ -249,6 +275,7 @@ let liveOverlap = 3;
 /* What the deal room contains when the page goes looking, and what the page
    posted when it stopped. Both are the point of section K. */
 let dealFrames = [];
+let boardExtra = [];   // frames appended to the offers room
 let posts = [];
 let roomReads = [];
 /* Held open on purpose for the first-paint test — see section H. */
@@ -288,7 +315,8 @@ const srv = http.createServer((q, r) => {
     if (room !== "tclk-offers") return r.end(JSON.stringify({ source: "live", messages: dealFrames }));
     /* The overlap is the point: these are the SAME orders the archive
        returned, arriving by the other road. */
-    return r.end(JSON.stringify({ source: "live", messages: FIXTURE.slice(0, liveOverlap).map(asMessage) }));
+    return r.end(JSON.stringify({ source: "live",
+      messages: [...FIXTURE.slice(0, liveOverlap).map(asMessage), ...boardExtra] }));
   }
   const f = path.join(ROOT, "web", u);
   if (!fs.existsSync(f) || fs.statSync(f).isDirectory()) { r.writeHead(404); return r.end("no"); }
@@ -537,6 +565,25 @@ console.log("\n=== K. the buyer can actually pay");
   ok("a deal already funded is not funded twice", posts.length === 0, `${posts.length} posts`);
   ok("and it says so plainly",
     /already funded/i.test(await pg.$eval(".hsaid", (e) => e.textContent)));
+  await ctx.close();
+}
+{
+  /* THE LOCK THAT LANDED ON THE BOARD. technocore is at its room cap, so both
+     the shop and this page fall back to posting in tclk-offers — and a check
+     that only ever looked in the deal room would report "accepted" for a deal
+     already funded, and offer a Pay button for a payment already made. */
+  roomReads = []; posts = []; dealFrames = [];
+  boardExtra = [{ seq: 9001, ts: new Date().toISOString(), from: DID, nonce: "w1", sig: "s",
+    text: "tclk1 " + JSON.stringify({ type: "lock", from: DID, contract: CONTRACT, rail: "paper", ref: "bb" }) }];
+  const { ctx, pg } = await open();
+  await pg.goto("http://localhost:9441/orders.html", { waitUntil: "domcontentloaded" });
+  await pg.waitForTimeout(1200);
+  await pg.click(".hbtn");
+  await pg.waitForTimeout(700);
+  ok("a lock that fell back to the board is still found", posts.length === 0, `${posts.length} posts`);
+  ok("and the buyer is not asked to pay twice",
+    /already funded/i.test(await pg.$eval(".hsaid", (e) => e.textContent)));
+  boardExtra = [];
   await ctx.close();
 }
 {

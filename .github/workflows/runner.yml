@@ -24,7 +24,31 @@ name: runner
 
 on:
   schedule:
-    - cron: "17 * * * *"     # not :00 — everyone's cron is at :00
+    # ── WHY THIS WENT FROM HOURLY TO EVERY FIVE MINUTES ────────────────────
+    #
+    # The note below is still true about DEADLINES: they are twelve hours wide
+    # precisely because cron here is a request and not a promise. What changed
+    # is what the gap between wakes costs a PERSON.
+    #
+    # It used to cost nothing, because a buyer had to come back and press Pay
+    # anyway. The accept now happens on demand (api/accept.mjs) and the browser
+    # locks in the same click, so by the time a wake matters the buyer has
+    # already paid and is waiting for their work. An hour of silence after
+    # payment is not a schedule, it is an outage with a tidy explanation.
+    #
+    # THE COSTS, CHECKED RATHER THAN ASSUMED. A wake reads the offers room
+    # once, then one room per unfinished deal it is waiting on — and the buy
+    # side does the same again, which the first version of this note forgot.
+    # At the paper cap that is ~49 reads a wake, not ~25. Twelve wakes an hour
+    # is ~590 reads an HOUR, still inside a single MINUTE's allowance of 600,
+    # so the conclusion held even while the arithmetic did not.
+    # Actions minutes are free on a public repository, which this is.
+    #
+    # GitHub will still skip firings: measured on this repo at the hourly
+    # setting, the gaps ran 49 to 144 minutes. Asking for twelve an hour does
+    # not deliver twelve, it raises the floor. Nothing depends on any one of
+    # them arriving.
+    - cron: "*/5 * * * *"
   workflow_dispatch:
     inputs:
       live:
@@ -130,3 +154,13 @@ jobs:
       # on a deploy, because the half that changes underneath is this one.
       - name: the order form still composes offers this shop takes
         run: node scripts/test-order-path.mjs
+
+      # The only suite that answers the question the shop exists to answer:
+      # did somebody who pressed the button end up with a deal. It crosses
+      # four files and two runtimes — the page composes and signs, api/post
+      # forwards, api/accept signs as the shop, and the page signs again over
+      # a contract it could not have known beforehand — and nothing else here
+      # exercises those seams together. It runs on the RUNNER's wake because
+      # the half that drifts underneath is the runner's.
+      - name: a buyer can still complete an order in one visit
+        run: node scripts/test-checkout.mjs

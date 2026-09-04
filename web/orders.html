@@ -730,7 +730,7 @@ function actionFor(o) {
          delivered. Posting a second lock would be a frame the state machine
          refuses — harmless, but it would sit on the public board looking like
          a buyer who did not know what they were doing. */
-      const state = await dealState(o.accept.room);
+      const state = await dealState(o.accept.room, o.accept.contract);
       if (state === "locked" || state === "claimed") {
         tell("Already funded — the shop owes you the work now.", "ok");
         go.remove(); return;
@@ -739,20 +739,48 @@ function actionFor(o) {
         tell("This deal closed before it was funded. Nothing was charged — nothing can be.", "bad");
         go.remove(); return;
       }
-      if (state && state !== "accepted") { tell(`This deal is ${state} — there is nothing to pay into.`, "bad"); go.remove(); return; }
+      /* NULL IS NOT "FINE, GO AHEAD". It means the deal could not be read,
+         and the comment on dealState used to claim the caller treated it that
+         way while `state && state !== "accepted"` quietly let it through —
+         false for null, so it posted. Paying into a deal whose state is
+         unknown is the one thing this check was written to stop. */
+      if (state === null) {
+        tell("Could not check this deal just now — nothing was sent. Try again in a moment.", "bad");
+        go.disabled = false; go.textContent = was; return;
+      }
+      if (state !== "accepted") { tell(`This deal is ${state} — there is nothing to pay into.`, "bad"); go.remove(); return; }
 
       go.textContent = "Signing…";
       const body = { type: "lock", from: s.did, contract: o.accept.contract, rail: "paper", ref: hex16() };
       const text = "tclk1 " + canon(body);
-      const nonce = String(Date.now()) + String(Math.floor(Math.random() * 1000));
-      const sig = await signTextB64u(`${o.accept.room}|${nonce}|${text}`);
 
       go.textContent = "Posting…";
-      const r = await fetch("/api/post", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ kind: "message", did: s.did, room: o.accept.room, sig, nonce, text }),
-      });
-      const d = await r.json().catch(() => ({}));
+      /* ── WHY THIS TRIES TWICE, AND WHY THAT IS NOT BELT-AND-BRACES ────────
+         The spec says a deal moves into a room named after its contract. On
+         this network that room usually CANNOT BE CREATED: technocore is at
+         its room cap and answers a bare `400 room limit reached` that never
+         mentions it is the blocker. MEASURED on the board on 3 September:
+         52 accepts produced 7 locks. The lock is exactly where the network
+         stops nearly everyone, so a button that tried only the deal room
+         would fail for something like seven buyers in eight — and the first
+         thing anybody would blame is the button.
+
+         Nothing in the state machine reads a room name. runDeal folds by
+         CONTRACT, so a lock on the board counts exactly as much as one in the
+         deal room. The shop's own settle() has taken this fallback for
+         months; the buyer needs the identical one, or the two halves of the
+         same deal disagree about where they are allowed to stand. */
+      const post = async (room) => {
+        const nonce = String(Date.now()) + String(Math.floor(Math.random() * 1000));
+        const sig = await signTextB64u(`${room}|${nonce}|${text}`);
+        const r = await fetch("/api/post", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ kind: "message", did: s.did, room, sig, nonce, text }),
+        });
+        return await r.json().catch(() => ({}));
+      };
+      let d = await post(o.accept.room);
+      if (!d.ok) d = await post("tclk-offers");
       if (!d.ok) {
         tell(d.error || d.why || "The network would not take the lock. Nothing was charged.", "bad");
         go.disabled = false; go.textContent = was; return;
@@ -774,16 +802,63 @@ const hex16 = () => [...crypto.getRandomValues(new Uint8Array(8))]
 
 /** Fold one deal room into its state. Null when it cannot be read, which is
  *  deliberately NOT treated as "safe to post" by the caller's own check. */
-async function dealState(room) {
-  const r = await fetch(`/api/room?room=${encodeURIComponent(room)}&limit=200`, { cache: "no-store" });
-  if (!r.ok) return null;
-  const j = await r.json();
-  if (j.error) return null;
+async function dealState(room, contract) {
+  /* ── THREE ANSWERS, NOT TWO, AND CONFLATING ANY PAIR BREAKS SOMETHING ────
+     /api/room can mean "here are the messages", "there is no such room", or
+     "I could not read it" — and it spells the last two identically, as a 200
+     carrying `{source:"none", messages:[]}` with no `error` key.
+
+     Both conflations have now been shipped and both were wrong:
+       · treating "none" as EMPTY turns an unreadable room into an empty one,
+         an empty deal room folds to "accepted", and a buyer who has already
+         paid is offered a Pay button and posts a second lock;
+       · treating "none" as UNREADABLE bricks the common case instead. Deal
+         rooms mostly DO NOT EXIST — technocore is at its room cap, which is
+         why 52 accepts produced 7 locks and why the board fallback below was
+         written. Returning null on the deal room means never reaching it.
+
+     What separates them is which room was asked for. A deal room that says
+     "none" has almost certainly never been created, so the answer is "look on
+     the board". `tclk-offers` unquestionably exists and is read by every page
+     on this site, so "none" THERE is a genuine read failure and the only
+     honest answer is that we do not know. */
+  const grab = async (name) => {
+    try {
+      const r = await fetch(`/api/room?room=${encodeURIComponent(name)}&limit=200`, { cache: "no-store" });
+      if (!r.ok) return null;
+      const j = await r.json();
+      if (j.error) return null;
+      if (j.source === "none") return name === "tclk-offers" ? null : [];
+      return j.messages ?? [];
+    } catch { return null; }
+  };
+  const msgs = await grab(room);
+  if (msgs === null) return null;
+
   const frames = [];
-  for (const m of j.messages ?? []) {
-    const f = readFrame(String(m.text ?? ""));
-    if (!f.ok) continue;
-    frames.push({ ...f, ...f.body, body: f.body, type: f.type, from: m.from, at: Date.parse(m.ts ?? "") || null });
+  const eat = (list) => {
+    for (const m of list ?? []) {
+      const f = readFrame(String(m.text ?? ""));
+      if (!f.ok) continue;
+      if (contract && String(f.body?.contract ?? "") !== String(contract)) continue;
+      frames.push({ ...f, ...f.body, body: f.body, type: f.type, from: m.from, at: Date.parse(m.ts ?? "") || null });
+    }
+  };
+  eat(msgs);
+
+  /* ── AND THE BOARD, IF THE DEAL ROOM HAS NOTHING ─────────────────────────
+     A lock cannot always go where the spec says: technocore is at its room
+     cap, so both this page and the shop fall back to posting on the board.
+     A check that only ever looked in the deal room would therefore report
+     "accepted" for a deal that is already funded — and offer a Pay button
+     for a payment already made.
+     Only when the deal room is empty, and filtered by contract, because the
+     board carries every deal on the network and folding all of it would be
+     reading somebody else's business as our own. */
+  if (!frames.length && contract) {
+    const board = await grab("tclk-offers");
+    if (board === null) return null;      // unknown, and the caller must not guess
+    eat(board);
   }
   /* The accept lives in the offers room, not in here, so a deal room holding
      only a lock folds to "proposed" — runDeal is being handed a fragment. The

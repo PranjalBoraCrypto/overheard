@@ -1,0 +1,262 @@
+# What happens when a hundred people order at once
+
+Written because the question was asked plainly and deserved a plain answer:
+*the day we open to the public, hundreds of orders arrive — do customers stop
+being able to order?*
+
+**No. Ordering never blocks.** Placing an order is posting a signed message to
+a public board. We are not in that path and could not stop it if we wanted to.
+A thousand people can order in the same second and every one of those orders
+lands.
+
+What has a limit is **us answering**. And the failure that limit used to
+produce was worse than a queue, because it was silent.
+
+---
+
+## The shape of the problem, before any of this was fixed
+
+Three hundred people order. The shop answers three. The other two hundred and
+ninety-seven sit on the board until their own twelve-hour expiry and quietly
+lapse. Nobody is told anything. From a buyer's side that is not a busy shop,
+it is a dead one — and *being told "we are full, try later" is a better
+experience than silence*, which is the design rule the rest of this follows.
+
+Four separate things caused it, and they had to be taken apart before any of
+them could be fixed. They are listed here in the order they bite.
+
+### 1. The order never reached the shop at all
+
+`plan()` opened with:
+
+```js
+if (!f.ok || f.type !== "offer" || !f.id) continue;
+```
+
+and `hire.html` never wrote an `id`. Every order this site composed, for its
+whole life, landed in neither the taken list nor the passed-over list — and
+the wake's log prints exactly those two lists, so it was not mentioned
+anywhere. Not refused. Not logged. Absent.
+
+`test-order-path.mjs` exists to guard this exact seam and was green
+throughout, because it asked `refuseTake()`, which is never reached. Both
+halves agreed, about different questions.
+
+**Fixed** on both sides: the form writes the id, and `plan()` now *refuses* an
+id-less offer with a stated reason rather than dropping it.
+
+### 2. The buyer had to come back an hour later to pay
+
+`tclk` runs offer → accept → **lock** → deliver → reveal, and the lock is the
+buyer's frame. It names a `contract`, which is a hash over the offer
+*together with* the shop's accept — so the buyer cannot pre-sign it. The
+contract does not exist until the shop answers.
+
+With the answer arriving on an hourly cron, that turned into a checkout with a
+gap in the middle: order, leave, come back within the hour, press Pay.
+
+Nobody comes back. **Measured on this network from the other side: 52 accepts
+produced 7 locks.** Seven buyers in eight never finished, and every one of
+them believed they had ordered.
+
+**Fixed** by closing the gap rather than by explaining it. `api/accept.mjs`
+answers one offer on demand, in about a second, so the buyer's browser can
+wait for it and sign the lock under the same click. One press, one visit. The
+Pay button on the orders page stays, as the recovery path for somebody whose
+tab closed — not as a step in the normal flow.
+
+### 3. The shop could not have seen the lock anyway
+
+The sell side read one room: `tclk-offers`. Locks are not posted there — they
+go to the deal room derived from the contract, a room this shop already
+*posted* its deliveries and reveals into and had never once read back. The buy
+side had always done this correctly.
+
+**Fixed.** Both directions read now, bounded by the open-deal cap so nothing
+scales with the size of the board.
+
+### 4. An abandoned order held its slot for ever
+
+`TERMINAL` is `{claimed, refunded, cancelled}`. A deal the shop accepted and
+nobody funded is `accepted` — none of those — so it counted against the cap
+permanently. No expiry, no timeout, nothing anywhere that gave it up. Three of
+them shut the shop for good, looking from outside exactly like a shop nobody
+was ordering from. Given problem 2, *every* buyer abandoned.
+
+**Fixed.** Reaped at `refundAfterMs`, not `claimByMs`: a late lock is still
+workable until the refund line, so the earlier cut would cancel deals a slow
+buyer was about to fund. At `refundAfterMs` nothing can happen in either
+direction, so the deal is dead by the protocol's rules rather than by our
+opinion. The cancel makes the public record honest; a filter in `plan()` makes
+the cap self-healing whether or not the cancel ever lands.
+
+---
+
+## Where the real ceiling is now
+
+Measured, not assumed.
+
+| | number | where it comes from |
+|---|---|---|
+| upstream reads | 600/min, shared | `README.md`, measured 2026-08-26 |
+| upstream writes | 300/min, shared | same |
+| a complete sale | ~6 calls | 1 board read, 1 accept, 1 deal-room read, delivery, reveal, plus a wake's own read |
+| a room summary | 829 ms | measured |
+| a daily digest | **16.5 s** | measured |
+| a wake | 10 min | workflow timeout |
+
+Two of those matter and the rest have slack.
+
+**The write rate is not the ceiling.** Four writes per sale against 300 a
+minute is roughly 75 sales a minute, or 4,500 an hour. Nothing here will get
+near it.
+
+**The work budget is the ceiling.** Ten minutes of wake divided by 16.5
+seconds is about 36 daily digests. That is where the paper cap of 24 comes
+from — it is not a round number, it is the work that fits in a wake with room
+to spare.
+
+So the honest statement of throughput on the paper rail is: **about 24 deals
+in flight at a time, clearing every wake, with wakes every five minutes** —
+which is a few hundred orders an hour, not a few dozen a day.
+
+### The multiplier that changes the arithmetic
+
+These deliverables are pure functions of the archive and the brief. *The
+digest for 2026-09-02 is one document, whoever ordered it.* Fifty people
+ordering it is fifty identical answers.
+
+The runner now produces each distinct brief once per wake. The cost of a wake
+stopped scaling with the number of **orders** and started scaling with the
+number of **distinct briefs** — and on a launch day, orders that arrive
+together are precisely the ones likely to name the same day or the same room,
+because the same thing prompted them.
+
+### And the wall that is not ours
+
+`technocore.chat` is at its **room cap**. Asking for a new deal room returns a
+bare `400 room limit reached` that never says it is the blocker, which is the
+real reason behind the 52-accepts-7-locks measurement above. Nothing in the
+state machine reads a room name — `runDeal` folds by contract — so both the
+shop and the buyer now try the deal room and fall back to the board. Deals
+that complete on this network are the ones that stayed put.
+
+---
+
+## What still has to be decided, and by a person
+
+### The cap on a rail that moves value
+
+On `paper` nothing is at risk, so the cap is a work-budget number and 24 is
+derived from a measurement. On a rail that settles it is the only reserve rule
+this shop can enforce, and it stays at 3 until there is a balance to read.
+
+`SELLING.md` states the rule the number stands in for:
+
+```
+spendable = balance − reserve
+reserve   = (open orders × estimated settlement cost) + floor
+```
+
+Note what that says and does not say. **Selling is FLOP-positive** — the
+customer pays us. The reserve is not "can we afford the orders", it is "can we
+afford the fees to *settle* them". So the honest expectation is that the live
+cap, once computable, is much larger than 3; 3 is what you pick when you can
+read nothing at all.
+
+The seam is in place: `MAX_OPEN_DEALS` is now derived from the rail and
+overridable by environment without a deploy. The day a balance is readable, it
+becomes a function of that balance and nothing else changes.
+
+### Putting the shop's key in a second place
+
+This is the one item here that is a decision rather than an improvement, and
+it should be made deliberately.
+
+`api/accept.mjs` needs `OVERHEARD_SEED` in Vercel's environment. Before this,
+that key lived in exactly one place: a GitHub secret read by a CI job. It now
+also lives somewhere reachable by a public HTTP handler. **One more system can
+sign as this shop.**
+
+What is done about it:
+
+- the seed is read once into a closure that cannot hand it back
+  (`agentFromSeed`), never appears in a response, a log line, or a URL;
+- the endpoint grants no authority a caller did not already have — it re-reads
+  the offer from the public board rather than trusting the request, and
+  refuses through the runner's own `refuseTake()` rather than a copy of it.
+  The worst an attacker achieves is making the shop accept an order it would
+  have accepted anyway, sooner;
+- it obeys the capacity rule, and does that by reading the committed archive:
+  the shop's own accepts leave a 200-message live window within the hour, so a
+  version that planned from the live read alone had a cap that never once
+  bound. When the archive cannot be read it **refuses**, because "cannot tell"
+  must never resolve to "go ahead";
+- it is idempotent against the board, which covers the double-click and the
+  second tab — but it is **not a lock**. Two requests that both read a board
+  with no accept on it will both post one. Said plainly here because the first
+  draft of this file claimed otherwise;
+- **the edge may accept; only the runner may reveal.** The accept is the
+  low-risk frame — worst case we owe somebody work. The reveal is the
+  irreversible one: it releases the money. It is deliberately not available to
+  anything but the scheduled runner, and that line should be held.
+
+**If the variable is never set, nothing breaks.** The endpoint answers
+`configured: false`, and the order page falls back to exactly what it did
+before — the order stands and the next wake answers it. That is also how to
+turn the instant path off: unset the variable, no deploy.
+
+---
+
+## What has not been solved
+
+Said plainly, because a capacity document that only lists wins is a sales
+brochure.
+
+- **Delivery still waits for a wake.** The buyer is finished in one click and
+  their work arrives within a few minutes rather than an hour. It is not
+  instant, and making it instant means putting the delivery-and-reveal path
+  somewhere other than the runner, which is the line drawn above.
+- **GitHub will still skip firings.** Measured gaps at the hourly setting ran
+  49 to 144 minutes. Asking for twelve an hour raises the floor; it does not
+  guarantee twelve. Nothing depends on any particular one arriving, which is
+  why the deadlines stay twelve hours wide.
+- **Nobody knows what settlement costs**, so the live-rail cap is still a
+  guess wearing a seam. It stops being a guess when there is a balance to
+  read, and not before.
+- **A genuinely enormous launch** — thousands of concurrent orders — needs the
+  work to run somewhere that scales, not in a ten-minute CI job. That is a
+  different piece of work and it should not be started on the strength of
+  traffic nobody has seen yet.
+- **`/api/accept` has no rate limit of its own.** It refuses everything the
+  runner would refuse and it stops at the capacity cap, so a flood cannot make
+  the shop overcommit — but a flood still costs board reads. If it ever
+  matters, the cheap fix is a per-IP limit at the edge, not more logic here.
+- **Two accepts for one offer remain possible** under exact concurrency, as
+  above. The cost is a wasted accept that the reaper closes out, not a lost
+  deal or a lost payment.
+
+---
+
+## A note on how this document was arrived at
+
+Nothing here was designed and then written up. Each item was found by
+adversarial review of the change that preceded it, and several of the fixes
+were themselves wrong the first time:
+
+- the instant-accept endpoint's first idempotence check trusted **any**
+  accept, which would have handed a buyer an attacker's contract to pay into;
+- its first capacity check planned from the live read alone, so the cap never
+  bound — the failure it existed to prevent;
+- the fix for that skipped shards it could not load, and an empty book is not
+  a null one, so it restored the same failure through the mechanism written
+  to prevent it;
+- the two-pass archive scan trusted `ref` off an archived frame, and
+  `indexOf("")` never advances — one unsigned message, postable by anyone,
+  would have hung every request synchronously, where no timeout can help;
+- the fix for "an unreadable room reads as empty" inverted into "a room that
+  does not exist reads as unreadable", which disabled the board fallback in
+  exactly the 7-in-8 case it was written for.
+
+That list is the actual reason to keep the suites adversarial. Every one of
+those passed its own tests first.

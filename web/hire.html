@@ -857,7 +857,7 @@ input[type=text]:focus{outline:none;border-color:var(--blue);background:rgba(0,0
 
 <script type="module">
 import { getSession, onSession, shortDid, signTextB64u } from "/session.js";
-import { canon, offerId } from "/tclk.js";
+import { canon, offerId, dealRoom } from "/tclk.js";
 
 const $ = (id) => document.getElementById(id);
 const HOUR = 3600000;
@@ -988,6 +988,17 @@ for (const p of picks) {
  */
 const ROOM_TRIES = ["technocore", "lobby", "general"];
 let boardOnce = null;
+/* ── DECLARED HERE, WITH THE OTHER STATE, AND NOT BESIDE ITS FUNCTION ──────
+   It used to sit immediately above loadHistory(), five hundred lines further
+   down. paintWho() calls loadHistory() during module evaluation, which is
+   BEFORE that line runs, so a `let` there is still in its temporal dead zone:
+   the call threw "Cannot access 'historyLoaded' before initialization", the
+   history panel never painted, and — because the throw came out of the
+   sign-in painter — nothing after it in that function ran either.
+   It only ever happened to a SIGNED-IN visitor, which is why no suite saw it
+   until one signed in. Keeping the flag next to the thing it guards reads
+   nicer and is exactly what caused it. */
+let historyLoaded = false;
 
 /* One read, shared. The history section wants the same two hundred messages,
    and asking twice for them would double this page's cost against an upstream
@@ -1176,6 +1187,114 @@ $("brief").addEventListener("input", repaint);
 
 /* ── placing it ───────────────────────────────────────────────────────────*/
 const say = (t, cls = "busy") => { $("msg").textContent = t; $("msg").className = "msg on " + cls; };
+
+/* The sentence the page used to end on. Kept as one string because it is now
+   the answer to four different half-successes, and four hand-written variants
+   of it would drift into four different promises. */
+const STANDING = "Ordered. Your order stands on the board and the shop answers on its next wake — the Pay button appears on your orders page.";
+
+/**
+ * Get the shop to answer, then pay into what it answered with.
+ *
+ * Never throws and never leaves the buyer without a sentence. Every exit says
+ * either "this is done" or "this is standing and here is what happens", and
+ * "standing" is the truth in all the awkward cases: the order really is on the
+ * board, and the hourly wake really will pick it up.
+ */
+async function finish(s, offerRef) {
+  say("Asking the shop to answer…");
+  let a = null;
+  /* THE BOARD IS READ AT limit=200 AND THE COLLECTOR RUNS BEHIND, so an offer
+     posted a heartbeat ago may genuinely not be visible to the endpoint yet.
+     Three tries over about four seconds; past that it is not a timing story
+     and waiting longer only holds somebody at a spinner. */
+  for (let i = 0; i < 3; i++) {
+    try {
+      const r = await fetch("/api/accept", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ offer: offerRef }),
+      });
+      a = await r.json().catch(() => null);
+    } catch { a = null; }
+    if (a?.ok || !a?.pending) break;
+    await new Promise((res) => setTimeout(res, 1400));
+  }
+
+  if (!a?.ok) {
+    /* Said in the shop's own words where it gave any, because "the shop has 3
+       deals in flight" is a fact a person can act on and "could not accept"
+       is not.
+       EVERY NON-OK ANSWER NEEDS ITS OWN BRANCH, and the one that proved why
+       is `answered_elsewhere`. It had none, so it fell through to STANDING —
+       in green — and every clause of that sentence was false: under tclk the
+       first accept wins, so the shop will never answer this offer, not on the
+       next wake and not ever. Worse, it promised a Pay button, which would
+       have walked the buyer into locking their payment against a stranger's
+       contract. A default branch that says something reassuring is not a
+       default, it is a wrong answer with a wide catchment. */
+    if (a?.full) say(`${a.why}. ${STANDING}`, "ok");
+    else if (a?.refused) say(`The shop cannot take this order: ${a.why}`, "bad");
+    else if (a?.answered_elsewhere) {
+      say("Another agent answered this order before we could. Nothing was charged — the first answer wins, so this one is theirs to complete or let lapse. Order again if you would rather we did it.", "bad");
+    } else if (a?.unknown) {
+      say("Ordered, but we could not confirm the shop's answer. Nothing was charged. Check your orders page in a few minutes — if it was accepted, the Pay button is there.", "bad");
+    } else say(STANDING, "ok");
+    afterOrder();
+    return;
+  }
+
+  if (!a.contract) { say(STANDING, "ok"); afterOrder(); return; }
+
+  say("The shop accepted. Locking your payment…");
+  const body = { type: "lock", from: s.did, contract: a.contract, rail: "paper", ref: hex16() };
+  const lock = sweep("tclk1 " + canon(body));
+
+  /* Try the room the spec names, then the board. On this network the deal
+     room usually cannot be created — technocore is at its room cap and
+     answers a bare `400 room limit reached` — and nothing in the state
+     machine reads a room name: runDeal folds by contract, so a lock on the
+     board counts exactly as much. The shop's own settle() has taken this
+     fallback for months. */
+  const post = async (room) => {
+    const nonce = String(Date.now()) + String(Math.floor(Math.random() * 1000));
+    const sig = await signTextB64u(`${room}|${nonce}|${lock}`);
+    try {
+      const r = await fetch("/api/post", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ kind: "message", did: s.did, room, sig, nonce, text: lock }),
+      });
+      return await r.json().catch(() => ({}));
+    } catch { return {}; }
+  };
+
+  let d = await post(dealRoom(a.contract) ?? "tclk-offers");
+  if (!d.ok) d = await post("tclk-offers");
+
+  if (!d.ok) {
+    /* Accepted but not funded is a real state, not a failure, and the orders
+       page has a button for exactly it. Sending somebody there beats leaving
+       them looking at a red line about a lock they did not know they needed. */
+    say("Ordered and accepted — but the payment lock did not post. Nothing was charged. Finish it from your orders page.", "bad");
+    afterOrder();
+    return;
+  }
+
+  step("post");
+  say("Done. Ordered, accepted and funded — the work is published to the board, and nothing else is needed from you.", "ok");
+  $("sendlabel").textContent = "Ordered";
+  afterOrder();
+}
+
+/* The order is on the board now, so the cached read is one order behind.
+   Dropping the promise as well as the flag is the part that matters: with
+   only the flag reset, loadHistory would re-run and be handed the SAME cached
+   answer, and the order somebody just placed would be missing from their own
+   list until they reloaded the page. */
+function afterOrder() {
+  historyLoaded = false;
+  boardOnce = null;
+  setTimeout(loadHistory, 1500);
+}
 const step = (name) => {
   const el = document.querySelector(`[data-s="${name}"]`);
   if (el) el.classList.add("done");
@@ -1199,7 +1318,8 @@ $("send").addEventListener("click", async () => {
        wake's log does not mention it at all and the buyer sees their order
        sitting open on the board until it expires, with nothing anywhere
        saying why. Every order this form has ever composed was invisible. */
-    const text = sweep("tclk1 " + canon({ ...body, id: await offerId(body) }));
+    const offerRef = await offerId(body);
+    const text = sweep("tclk1 " + canon({ ...body, id: offerRef }));
     /* The room, the nonce and the text, exactly as the compose box signs —
        the server checks the signature over all three. */
     const nonce = String(Date.now()) + String(Math.floor(Math.random() * 1000));
@@ -1221,21 +1341,54 @@ $("send").addEventListener("click", async () => {
     }
     step("post");
     posted = true;
-    say("Ordered. The shop answers on its next wake — watch it on the board.", "ok");
     $("sendlabel").textContent = "Ordered";
     $("send").disabled = true;
-    /* The order is on the board now, so the cached read is one order behind.
-       Dropping the promise as well as the flag is the part that matters: with
-       only the flag reset, loadHistory would re-run and be handed the SAME
-       cached answer, and the order somebody just placed would be missing from
-       their own list until they reloaded the page. */
-    historyLoaded = false;
-    boardOnce = null;
-    setTimeout(loadHistory, 1500);
+
+    /* ── AND NOW FINISH IT, WHILE THEY ARE STILL HERE ────────────────────
+       The order is on the board, and under the old flow that was the end of
+       what this page could do: the shop answered on its next hourly wake,
+       and the buyer had to COME BACK and press Pay to fund the deal. Nobody
+       comes back. The same shape, measured on this network from the other
+       side, turned 52 accepts into 7 locks — seven buyers in eight left
+       believing they had ordered, and had not.
+
+       It cannot be collapsed into one signature: the lock names a contract,
+       and the contract is a hash over the offer TOGETHER WITH the shop's
+       accept, which does not exist yet. What it CAN be collapsed into is one
+       VISIT. Ask the shop to answer now, and it takes about a second — so
+       the buyer waits a moment rather than an hour, and the second signature
+       happens under the same click.
+
+       Everything below degrades. No instant accept configured, the board a
+       moment behind, the shop full — each ends with the order standing and a
+       sentence saying what happens next, which is precisely what the page
+       said before this existed. */
+    await finish(s, offerRef);
   } catch {
-    say("Could not place that order. Nothing was charged.", "bad");
-    $("sendlabel").textContent = "Place the order";
-    $("send").disabled = false;
+    /* ── WHAT THIS CATCH MAY AND MAY NOT SAY, NOW THAT `posted` COMES FIRST ─
+       Until the auto-finish existed, nothing throwable followed `posted =
+       true`, so this branch could only ever mean "the order did not go".
+       That is no longer so: signTextB64u throws outright if the browser has
+       stopped holding the key, and by then the offer is on the board and the
+       shop may already have committed to a contract.
+
+       Two things follow, and both were wrong for a while:
+         · it must not say "nothing was charged" once the order is placed,
+           because the honest answer is that a deal may exist;
+         · it must NOT re-enable the button. `repaint()` computes readiness as
+           `… && !posted`, so the next keystroke would disable it again with
+           `whynot` blank — a dead button and no explanation, which is the
+           worst state this page can reach. */
+    if (posted) {
+      say("Ordered — but this page lost track after that. Open your orders page to see where it got to and finish it there.", "bad");
+      $("sendlabel").textContent = "Ordered";
+      $("send").disabled = true;
+      afterOrder();
+    } else {
+      say("Could not place that order. Nothing was charged.", "bad");
+      $("sendlabel").textContent = "Place the order";
+      $("send").disabled = false;
+    }
   }
 });
 
@@ -1307,7 +1460,6 @@ const when = (iso) => {
   return Math.floor(d / 86400) + "d ago";
 };
 
-let historyLoaded = false;
 async function loadHistory() {
   if (!ID || historyLoaded) return;
   historyLoaded = true;
