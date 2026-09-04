@@ -100,6 +100,47 @@ their deadline, and we have done the work for free. That costs compute and
 reputation. It never costs the customer anything, which is the property the
 whole shop is built on and the one worth protecting over any single order.
 
+## The wake is a window, not a firing
+
+Deadlines twelve hours wide answer *"can we still complete this deal?"* They
+do not answer *"how long does a buyer who has already paid sit and wait?"*,
+and that is now a different question: since `api/accept.mjs`, the shop answers
+an order in about three seconds and the browser posts the payment lock in the
+same click. From that moment the buyer has spent their money and is waiting on
+us.
+
+Cron does not support that. Measured on this repository on 4 September: the
+runner asked to fire every five minutes and fired at 14:34, then not again
+until **16:42**. `archive.yml`'s own log has gaps of 49 to 295 minutes. Asking
+more often does not help — twelve requests an hour is what produced the
+two-hour gap.
+
+So a firing no longer means one wake. It opens a **window**: `runner.mjs
+--loop` wakes on its own clock, once a minute, for five hours, and the run
+queued behind it by the concurrency group starts the moment it ends. The cron
+cadence is now nearly irrelevant, which is the point — it was never reliable
+enough to be relevant safely.
+
+What that costs, checked: ~49 reads per wake at the open-deal cap, 60 wakes an
+hour, so ~49 reads a minute against an allowance of 600. That is the rate the
+five-minute cron was *asking* for already. Nothing about the load changed;
+only whether it actually happens.
+
+Two things had to change with it:
+
+- **Every write is counted.** `wrote` existed so a run that posted nothing
+  could not look like a run that posted everything, and it was wired to
+  exactly two writes — accepts and cancels. Deliveries, reveals, locks and
+  refunds reported to the log, which this network cannot download. The first
+  real order this shop ever delivered annotated itself *"nothing was written —
+  1 owed"*, and I read that as a failure to deliver.
+- **The annotation budget is ten.** GitHub keeps the first ten notices and ten
+  warnings *per step*. Three hundred wakes emitting two apiece would spend the
+  whole budget on the first five, and the wake four hours in that delivered
+  somebody's order would be dropped. So `loop()` filters: the repeated tick is
+  never annotated, events get the budget, and the closing summary is written
+  outside it so it always exists.
+
 ## Delivering the work
 
 The deliverable goes in the deal's own room, in public, before the reveal.

@@ -407,6 +407,9 @@ let liveOverlap = 3;
 /* What the deal room contains when the page goes looking, and what the page
    posted when it stopped. Both are the point of section K. */
 let dealFrames = [];
+/* A deal room that cannot be read at all — a 500, not an empty room. The
+   difference decides whether a buyer is offered a second payment. */
+let roomBroken = false;
 let boardExtra = [];   // frames appended to the offers room
 let posts = [];
 let roomReads = [];
@@ -441,6 +444,7 @@ const srv = http.createServer((q, r) => {
   if (u === "/api/room") {
     const room = new URL(q.url, "http://x").searchParams.get("room");
     roomReads.push(room);
+    if (roomBroken) { r.writeHead(500, { "content-type": "application/json" }); return r.end("{}"); }
     r.writeHead(200, { "content-type": "application/json" });
     /* A deal room is not the offers room and must not be answered with it —
        returning the board here would have let a broken page look fine. */
@@ -636,33 +640,48 @@ console.log("\n=== I. it admits what it cannot know");
  * neither could anybody else. Every deal the shop accepted stalled there and
  * died at its refund deadline while the buyer's own page said "open".
  * ═════════════════════════════════════════════════════════════════════════*/
-console.log("\n=== K. the buyer can actually pay");
+console.log("\n=== K. the buyer can actually pay — and is never asked to pay twice");
 {
+  /* ── THE STRIP TELLS THE TRUTH BEFORE IT ASKS FOR ANYTHING ──────────────
+     What this page said on a real order: "The shop accepted — your move" and
+     a button reading "Pay into the lock", to a buyer whose payment was
+     already locked, whose work had already been delivered, and whose deal had
+     already been revealed. It said that because the strip was painted from
+     /api/orders, which reads the OFFERS room, and a lock is not in the offers
+     room — it is in the deal room.
+     So the strip now reads that room before it offers anything, and there is
+     no button at all until the answer says the payment is genuinely missing.
+     The cost rule that used to forbid this still holds and is asserted below:
+     bounded, one at a time, and only for rows that would show a button. */
   roomReads = []; posts = []; dealFrames = [];
   const { ctx, pg } = await open();
   await pg.goto("http://localhost:9441/orders.html", { waitUntil: "domcontentloaded" });
-  await pg.waitForTimeout(1200);
+  await pg.waitForTimeout(1600);
 
   const strips = await pg.$$eval(".hact", (n) => n.length);
-  ok("the answered order grows a Pay strip", strips === 1, `${strips} strips on page one`);
+  ok("the answered order grows a strip", strips === 1, `${strips} strips on page one`);
   ok("and the twenty-two unanswered ones do not",
     await pg.$$eval(".hrow", (n) => n.length) === 10 && strips === 1,
     "a strip on every row would pass a test that only counted one");
 
-  /* THE BUDGET RULE, TESTED AS BEHAVIOUR RATHER THAN AS A GREP. One deal-room
-     read per row on every paint is precisely what once left the deals board
-     rendering empty — it had spent the shared upstream allowance on itself. */
-  ok("no deal room is read just to paint the page",
-    roomReads.filter((x) => x !== "tclk-offers").length === 0,
-    `read on paint: ${roomReads.filter((x) => x !== "tclk-offers").join(", ") || "none"}`);
+  /* THE BUDGET RULE, still tested as behaviour. One read per ROW on every
+     paint is what once left the deals board rendering empty. One read for the
+     one row that would otherwise ask somebody for money is not that. */
+  const painted = roomReads.filter((x) => x !== "tclk-offers");
+  ok("only the rows that would ask for money read a room",
+    painted.length === 1 && painted[0] === DEALROOM,
+    `read on paint: ${painted.join(", ") || "none"} — ten rows, one read`);
+
+  ok("with no lock anywhere, the button does appear", 
+    await pg.$$eval(".hbtn:not([hidden])", (n) => n.length) === 1);
+  ok("and it says the automatic payment did not land, not that this is a step",
+    /did not land/i.test(await pg.$eval(".hactwords b", (e) => e.textContent)),
+    await pg.$eval(".hactwords b", (e) => e.textContent));
 
   await pg.click(".hbtn");
-  await pg.waitForTimeout(600);
+  await pg.waitForTimeout(700);
 
-  const hit = roomReads.filter((x) => x !== "tclk-offers");
-  ok("pressing it reads that one deal room, once", hit.length === 1 && hit[0] === DEALROOM, hit.join(","));
-  ok("and posts exactly one frame", posts.length === 1, `${posts.length} posts`);
-
+  ok("posts exactly one frame", posts.length === 1, `${posts.length} posts`);
   const sent = posts[0] ?? {};
   const body = (() => { try { return JSON.parse(String(sent.text).slice(6)); } catch { return {}; } })();
   ok("into the deal room, not the board", sent.room === DEALROOM, String(sent.room));
@@ -682,21 +701,43 @@ console.log("\n=== K. the buyer can actually pay");
   await ctx.close();
 }
 {
-  /* Between the archive read that painted the strip and the click, the deal
-     can move: somebody already locked it, or the reaper cancelled it. The
-     read on click is what catches that, and the only way to know it is
-     wired to anything is to make it come back different. */
+  /* THE CASE THAT WAS BROKEN IN FRONT OF A PERSON. The lock is in the deal
+     room, exactly where /hire puts it in the same click as the order. Nothing
+     on this page may suggest another payment. */
   roomReads = []; posts = [];
   dealFrames = [{ seq: 1, ts: new Date().toISOString(), from: DID,
     text: "tclk1 " + JSON.stringify({ type: "lock", from: DID, contract: CONTRACT, rail: "paper", ref: "aa" }) }];
   const { ctx, pg } = await open();
   await pg.goto("http://localhost:9441/orders.html", { waitUntil: "domcontentloaded" });
-  await pg.waitForTimeout(1200);
-  await pg.click(".hbtn");
-  await pg.waitForTimeout(600);
-  ok("a deal already funded is not funded twice", posts.length === 0, `${posts.length} posts`);
-  ok("and it says so plainly",
-    /already funded/i.test(await pg.$eval(".hsaid", (e) => e.textContent)));
+  await pg.waitForTimeout(1600);
+  ok("an order already paid for offers no button at all",
+    await pg.$$eval(".hbtn:not([hidden])", (n) => n.length) === 0,
+    "this is the screenshot that started it");
+  const words = await pg.$eval(".hactwords b", (e) => e.textContent);
+  ok("it says the payment is in, in the buyer's words", /paid/i.test(words), words);
+  ok("and that there is nothing for them to do",
+    /do not need to do anything/i.test(await pg.$eval(".hactwords span", (e) => e.textContent)));
+  ok("the strip stops looking like a call to action",
+    await pg.$$eval(".hact.done", (n) => n.length) === 1);
+  ok("and nothing was posted merely by looking", posts.length === 0, `${posts.length} posts`);
+  await ctx.close();
+}
+{
+  /* Delivered and revealed: the end of the deal. */
+  roomReads = []; posts = [];
+  dealFrames = [
+    { seq: 1, ts: new Date().toISOString(), from: DID,
+      text: "tclk1 " + JSON.stringify({ type: "lock", from: DID, contract: CONTRACT, rail: "paper", ref: "aa" }) },
+    { seq: 2, ts: new Date().toISOString(), from: "did:key:z6MkiuhfekPgiihLWarPAzhuvoMjg86F8dqmLiCTmtQgMrR3",
+      text: "tclk1 " + JSON.stringify({ type: "reveal", from: "did:key:z6MkiuhfekPgiihLWarPAzhuvoMjg86F8dqmLiCTmtQgMrR3", contract: CONTRACT, secret: "c".repeat(64) }) },
+  ];
+  const { ctx, pg } = await open();
+  await pg.goto("http://localhost:9441/orders.html", { waitUntil: "domcontentloaded" });
+  await pg.waitForTimeout(1600);
+  ok("a finished deal says it is finished",
+    /delivered/i.test(await pg.$eval(".hactwords b", (e) => e.textContent)),
+    await pg.$eval(".hactwords b", (e) => e.textContent));
+  ok("and offers nothing to press", await pg.$$eval(".hbtn:not([hidden])", (n) => n.length) === 0);
   await ctx.close();
 }
 {
@@ -709,12 +750,13 @@ console.log("\n=== K. the buyer can actually pay");
     text: "tclk1 " + JSON.stringify({ type: "lock", from: DID, contract: CONTRACT, rail: "paper", ref: "bb" }) }];
   const { ctx, pg } = await open();
   await pg.goto("http://localhost:9441/orders.html", { waitUntil: "domcontentloaded" });
-  await pg.waitForTimeout(1200);
-  await pg.click(".hbtn");
-  await pg.waitForTimeout(700);
-  ok("a lock that fell back to the board is still found", posts.length === 0, `${posts.length} posts`);
+  await pg.waitForTimeout(1600);
+  ok("a lock that fell back to the board is found on paint too",
+    await pg.$$eval(".hbtn:not([hidden])", (n) => n.length) === 0,
+    "the deal room is empty here; only the board knows");
   ok("and the buyer is not asked to pay twice",
-    /already funded/i.test(await pg.$eval(".hsaid", (e) => e.textContent)));
+    /paid/i.test(await pg.$eval(".hactwords b", (e) => e.textContent)));
+  ok("nothing was posted", posts.length === 0, `${posts.length} posts`);
   boardExtra = [];
   await ctx.close();
 }
@@ -724,12 +766,30 @@ console.log("\n=== K. the buyer can actually pay");
     text: "tclk1 " + JSON.stringify({ type: "cancel", from: "did:key:z6MkiuhfekPgiihLWarPAzhuvoMjg86F8dqmLiCTmtQgMrR3", contract: CONTRACT, reason: "never funded before refundAfterMs" }) }];
   const { ctx, pg } = await open();
   await pg.goto("http://localhost:9441/orders.html", { waitUntil: "domcontentloaded" });
-  await pg.waitForTimeout(1200);
-  await pg.click(".hbtn");
-  await pg.waitForTimeout(600);
-  ok("a deal the reaper closed cannot be paid into", posts.length === 0, `${posts.length} posts`);
+  await pg.waitForTimeout(1600);
+  ok("a deal the reaper closed cannot be paid into",
+    await pg.$$eval(".hbtn:not([hidden])", (n) => n.length) === 0);
   ok("and nothing implies money moved",
-    /nothing was charged/i.test(await pg.$eval(".hsaid", (e) => e.textContent)));
+    /nothing was charged/i.test(await pg.$eval(".hactwords span", (e) => e.textContent)));
+  ok("no post was made", posts.length === 0, `${posts.length} posts`);
+  await ctx.close();
+}
+{
+  /* ── AN UNREADABLE DEAL IS NOT AN UNPAID ONE ────────────────────────────
+     The old code's failure mode was to assume "no lock seen" meant "not
+     paid". When the room cannot be read at all, the honest answer is to say
+     nothing rather than to invite a second payment on a guess. */
+  roomReads = []; posts = []; dealFrames = [];
+  roomBroken = true;
+  const { ctx, pg } = await open();
+  await pg.goto("http://localhost:9441/orders.html", { waitUntil: "domcontentloaded" });
+  await pg.waitForTimeout(1600);
+  ok("a deal we could not read offers no payment",
+    await pg.$$eval(".hbtn:not([hidden])", (n) => n.length) === 0,
+    "guessing here is guessing with somebody's money");
+  ok("and the strip removes itself rather than saying something wrong",
+    await pg.$$eval(".hact:not([hidden])", (n) => n.length) === 0);
+  roomBroken = false;
   await ctx.close();
 }
 {
@@ -739,12 +799,9 @@ console.log("\n=== K. the buyer can actually pay");
   dealFrames = [];
   const { ctx, pg } = await open();
   await pg.goto("http://localhost:9441/orders.html", { waitUntil: "domcontentloaded" });
-  await pg.waitForTimeout(1200);
-  const late = await pg.evaluate(() => {
-    const rows = [...document.querySelectorAll(".hitem")];
-    return rows.length;
-  });
-  ok("an accepted order past its refund deadline gets no button", late === 1,
+  await pg.waitForTimeout(1600);
+  const late = await pg.evaluate(() => document.querySelectorAll(".hitem").length);
+  ok("an accepted order past its refund deadline gets no strip", late === 1,
     `${late} strips — the expired one must not offer a payment that cannot buy anything`);
   await ctx.close();
 }
@@ -754,9 +811,9 @@ console.log("\n=== K. the buyer can actually pay");
   signedInAs = null;
   const { ctx, pg } = await open();
   await pg.goto("http://localhost:9441/orders.html", { waitUntil: "domcontentloaded" });
-  await pg.waitForTimeout(900);
+  await pg.waitForTimeout(1400);
   ok("signed out, no Pay button is offered at all",
-    await pg.$$eval(".hbtn", (n) => n.length) === 0);
+    await pg.$$eval(".hbtn:not([hidden])", (n) => n.length) === 0);
   signedInAs = DID;
   await ctx.close();
 }

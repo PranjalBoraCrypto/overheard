@@ -212,6 +212,66 @@ archive read now recovers the whole deal.
 
 ---
 
+## 4 September, later: the same shape, three more times
+
+The fixes above worked. A real order at 16:45 was on the board, accepted in
+three seconds, and paid. Then it took an hour to establish whether it had been
+delivered — and the reason it took an hour is that **three separate bounds
+were silently discarding the thing that mattered**, which is the same fault as
+the body cap wearing three more costumes.
+
+- **The deal-room list had been full since the day before.** `MAX_DEAL_ROOMS`
+  is 120 and `noteDeal` read `>= MAX_DEAL_ROOMS` and returned. So it was not a
+  budget, it was **a queue that closed**: `tclk-deals.json` reached 120 rooms
+  on 3 September at 03:50 and its `updated` field never moved again. The first
+  120 contracts on a busy public board held every slot for ever, and this
+  shop's own settlement — the lock, the delivery, the reveal, all of it in a
+  room derived from the contract — was never followed. The archive whose only
+  product is being the sole record of tclk settlements was dropping its own.
+  Now: **ours are never capped**, and a stranger's **evicts the oldest
+  stranger** rather than being refused. An accept answering an offer *we*
+  posted counts as ours too, which needs the offer ids we published to be
+  remembered — the accept frame does not say who asked.
+- **The tail started empty on every run.** A hosted run ends after ~5½ hours;
+  the next process began with `state.tail` empty, so its first pass *replaced*
+  `tail.ndjson` with the five minutes it had seen. A hole at every run
+  boundary, in the file that exists to have none. It is seeded from the tail on
+  disk now, back through the same bounds.
+- **Deliveries were not counted as writes.** `wrote` exists so that a run which
+  posted nothing cannot look like one that posted everything. It was wired to
+  accepts and cancels only, because those go through `post()`; deliveries,
+  reveals, locks and refunds go through `settle()`, which reports to a CI log
+  this network is not allowed to download. The first wake that ever delivered a
+  paid order annotated itself **`nothing was written — 1 owed`**. I read that
+  as a failed delivery and went looking for a bug in a path that was working.
+
+The through-line, again: **a bound that drops the newest thing to protect a
+budget, and reports nothing.** In every case the fix is the same shape — say
+what was dropped, and never drop the thing the shop exists to do.
+
+## The schedule was never a schedule
+
+Cron on this repository asked for a wake every five minutes and delivered one
+at 14:34 and the next at **16:42**. That two-hour gap is exactly where the
+paid order sat. `archive.yml`'s log has gaps of 49 to 295 minutes.
+
+That was survivable while a buyer had to come back and press Pay. It is not
+survivable now: the accept is on demand and the browser locks in the same
+click, so from the moment somebody orders they have already paid.
+
+Asking cron more often is not the fix — twelve requests an hour is what
+produced the two-hour gap. A firing now opens a **five-hour window** and
+`runner.mjs --loop` wakes once a minute inside it, with the next run queued
+behind it by the concurrency group. Worst case for a buyer: **about a minute**.
+
+One consequence had to be handled with it. GitHub keeps the first **ten**
+notices and ten warnings *per step*; a window of three hundred wakes emitting
+two apiece would spend the budget on the first five and drop the one that
+mattered. `loop()` filters — the repeated tick is never annotated, events get
+the budget, and the closing summary is written outside it.
+
+---
+
 ## What still has to be decided, and by a person
 
 ### The cap on a rail that moves value

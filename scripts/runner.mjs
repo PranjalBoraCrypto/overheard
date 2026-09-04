@@ -686,6 +686,16 @@ export async function wake(opts = {}) {
   const log = opts.log ?? console.log;
   const now = opts.now ?? Date.now();
   const live = Boolean(opts.live);
+  /* ── WHO GETS TO SPEND THE ANNOTATION BUDGET ────────────────────────────
+     GitHub keeps only the first TEN notices and TEN warnings PER STEP and
+     silently drops the rest. That is fine for a step that wakes once. It is
+     ruinous for a step that wakes three hundred times: the first five wakes
+     would spend the whole budget on "nothing to do", and the wake four hours
+     in that actually delivered somebody's work — the only one worth reading —
+     would be discarded.
+     So a wake does not decide how loud it is. Its caller does. loop() hands
+     in a filter that spends the budget on events instead of on ticks. */
+  const ann = opts.annotate ?? annotate;
   const seed = opts.seed ?? process.env.OVERHEARD_SEED ?? "";
 
   let agent = null;
@@ -705,6 +715,24 @@ export async function wake(opts = {}) {
     /* Only our own short reason strings and a status code. Never the URL — it
        carries the signature, which is why say() keeps it out of errors. */
     wrote.push(`${what}:${r.ok ? "ok" : "FAILED(" + (r.status ?? r.why ?? "?") + ")"}`);
+    return r;
+  };
+
+  /* ── EVERY WRITE IS COUNTED, NOT ONLY THE TWO THAT WERE ──────────────────
+     `wrote` exists so that a run which posted nothing cannot look like a run
+     which posted everything. It was then wired up to exactly two writes:
+     accepts and cancels, both of which go through post(). Deliveries,
+     reveals, locks and refunds go through settle(), which reports to the
+     LOG — and the log is the one channel this network cannot read back.
+
+     So the first wake that ever delivered a real order and revealed its
+     preimage annotated itself "nothing was written — 1 owed". The half of
+     the shop that moves money was invisible in the only channel there is,
+     and I read that annotation as a failure to deliver. Anything that
+     reaches the wire is counted here, whichever helper put it there. */
+  const settled = async (room, text, what) => {
+    const r = await settle(agent, room, text, opts, log);
+    wrote.push(`${what}:${/^ok/.test(r) ? "ok" : "FAILED"}`);
     return r;
   };
 
@@ -784,7 +812,7 @@ export async function wake(opts = {}) {
   /* The one line a human can retrieve without the logs. Emitted on every
      wake, live or not, because "it refused and here is why" is exactly the
      fact that was invisible when a live run quietly did nothing. */
-  annotate(no.length ? "warning" : "notice",
+  ann(no.length ? "warning" : "notice",
     no.length ? "the shop held" : "the shop is open",
     [
       live ? "LIVE" : "dry run",
@@ -856,8 +884,7 @@ export async function wake(opts = {}) {
     }
     log("  recovery checked: the statement can be reopened from the frame alone");
     if (!no.length) {
-      const put = await settle(agent, OFFERS_ROOM, text, opts, log);
-      wrote.push(`accept:${/^ok/.test(put) ? "ok" : "FAILED"}`);
+      const put = await settled(OFFERS_ROOM, text, "accept");
       log(`  accepted: ${put}`);
     }
   }
@@ -889,24 +916,33 @@ export async function wake(opts = {}) {
   for (const b of buys.lock) {
     const text = wire(lockFrame(US, b.accept.contract));
     log(`would fund ${b.offer.body?.job?.id} in ${b.room}`);
-    if (!no.length) log(`  locked: ${await settle(agent, b.room, text, opts, log)}`);
+    if (!no.length) log(`  locked: ${await settled(b.room, text, "lock")}`);
   }
   for (const b of buys.refund) {
     const text = wire(refundFrame(US, b.accept.contract));
     log(`would refund ${b.offer.body?.job?.id} — nobody revealed before the deadline`);
-    if (!no.length) log(`  refunded: ${await settle(agent, b.room, text, opts, log)}`);
+    if (!no.length) log(`  refunded: ${await settled(b.room, text, "refund")}`);
   }
   for (const b of buys.waiting) log(`waiting on ${b.offer.body?.job?.id} — funded, not yet delivered`);
 
   /* One wake's worth of finished work, keyed by job and brief. See the note
      at the doJob call for why this is per-wake and never longer. */
   const madeThisWake = new Map();
+  /* ── A PAID DEAL THAT DID NOT MOVE HAS TO SAY SO WHERE WE CAN READ IT ────
+     Every exit from this loop below was a log() line and nothing else. So a
+     wake could report "1 owed" and "nothing was written" and the reason —
+     no key, an unknown job, a handler that threw, a delivery the venue
+     refused — sat in a CI log this network is not allowed to download. That
+     is a buyer's money locked, no work, and no way to find out why without
+     another round trip. Each one is collected and annotated below. */
+  const stalled = [];
+  const stall = (why) => { log(`  ${why}`); stalled.push(why); };
   for (const d of p.owed) {
     const job = d.offer.body?.job?.id;
     const contract = d.accept?.body?.contract;
     log(`OWED: ${job} is locked and waiting on delivery`);
-    if (!CAN_DO.has(job)) { log("  nothing here can deliver it — it should never have been accepted"); continue; }
-    if (!seed) { log("  no seed, so nothing can be delivered or revealed this wake"); continue; }
+    if (!CAN_DO.has(job)) { stall(`${job}: nothing here can deliver it — it should never have been accepted`); continue; }
+    if (!seed) { stall(`${job}: no seed, so nothing can be delivered or revealed this wake`); continue; }
 
     /* ── DELIVERY, THEN REVEAL, IN THAT ORDER AND NEVER THE OTHER WAY ──────
        The reveal is what lets the payer's money move. Posting it before the
@@ -946,7 +982,7 @@ export async function wake(opts = {}) {
     }
     const done = madeThisWake.get(key);
     if (!done.ok) {
-      log(`  DELIVERY FAILED: ${done.why} — leaving it locked so the buyer can refund`);
+      stall(`${job}: DELIVERY FAILED (${done.why}) — leaving it locked so the buyer can refund`);
       continue;
     }
 
@@ -970,8 +1006,8 @@ export async function wake(opts = {}) {
     const delivery = sweep(done.text.replace(/\n+/g, " · "));
     log(`  delivering ${delivery.length} chars`);
     if (!no.length) {
-      const put = await settle(agent, room, delivery, opts, log);
-      if (!/^ok/.test(put)) { log(`  delivery did not land (${put}) — NOT revealing`); continue; }
+      const put = await settled(room, delivery, "deliver");
+      if (!/^ok/.test(put)) { stall(`${job}: the delivery did not land (${put}) — NOT revealing`); continue; }
       log(`  delivered: ${put}`);
     }
 
@@ -980,11 +1016,11 @@ export async function wake(opts = {}) {
     const secret = await recoverSecret(seed, d.accept.body);
     const opens = await checkReveal(d.offer.body?.lock ?? "hash", d.accept.body.statement, secret);
     if (!opens.ok) {
-      log("  REFUSED to reveal: the secret does not open the statement");
+      stall(`${job}: REFUSED to reveal — the secret does not open the statement`);
       continue;
     }
     const reveal = wire({ type: "reveal", from: US, contract, secret });
-    if (!no.length) log(`  revealed: ${await settle(agent, room, reveal, opts, log)}`);
+    if (!no.length) log(`  revealed: ${await settled(room, reveal, "reveal")}`);
     else log("  would reveal once the work is on the wire");
   }
 
@@ -992,7 +1028,7 @@ export async function wake(opts = {}) {
      decided. A green run that wrote nothing and a green run that wrote
      everything are otherwise identical from outside, which is exactly the
      hole the first live wake fell into. */
-  annotate(wrote.some((w) => w.includes("FAILED")) ? "warning" : "notice",
+  ann(wrote.some((w) => w.includes("FAILED")) ? "warning" : "notice",
     wrote.length ? "what reached the wire" : "nothing was written",
     wrote.length
       ? wrote.join(" · ")
@@ -1001,7 +1037,127 @@ export async function wake(opts = {}) {
           : `nothing to write — ${p.take.length} to take, ${p.owed.length} owed, ${buys.want.length} wanted, ${buys.lock.length} to fund`),
     log);
 
-  return { plan: p, buys, refusals: no, wrote, agent: agent?.did ?? null };
+  /* ── PAID, AND STILL WAITING: ITS OWN LINE, AT WARNING ────────────────────
+     Deliberately separate from the line above, and deliberately louder. A
+     deal that was accepted and funded and did not get its work is the only
+     failure here that costs somebody else money, and it must not be
+     something you have to infer by comparing two counts in a sentence. */
+  /* Only when the shop was actually open. A dry run cannot deliver by
+     definition, and the line above already says why it held — repeating it
+     here at warning level would train a reader to scroll past the one
+     annotation that must never be scrolled past. */
+  if (stalled.length && !no.length)
+    ann("warning", `${stalled.length} paid deal(s) did not get their work`,
+      stalled.slice(0, 6).join(" · ")
+        + (stalled.length > 6 ? ` · …and ${stalled.length - 6} more` : ""), log);
+
+  return { plan: p, buys, refusals: no, wrote, stalled, agent: agent?.did ?? null };
+}
+
+/* Only when run directly, so importing this in a test never touches a wire.
+ *
+ * A board we could not read is NOT a failed run. Technocore has bad minutes,
+ * and a scheduled job that turns each one into a red cross and an email
+ * teaches its owner to ignore red crosses — which is the state you want to be
+ * in least on the day something is actually broken. Upstream trouble exits 0
+ * and says so. A fault in this code exits 1, where it belongs. */
+/* ══════════════════════════════════════════════════════════════════════════
+ * STAYING AWAKE, BECAUSE THE SCHEDULE IS NOT A SCHEDULE
+ *
+ * cron here asks for a wake every five minutes. MEASURED on this repository
+ * on 4 September, the runner actually fired at 14:34 and then not again until
+ * 16:42 — and archive.yml's own log has gaps of 49 to 295 minutes. GitHub
+ * drops scheduled firings under load and owes nobody an explanation.
+ *
+ * That cost nothing while a buyer had to come back and press Pay. It costs
+ * everything now: the accept happens on demand and the browser locks in the
+ * same click, so from the moment somebody orders they have PAID and are
+ * waiting for work. Two hours of silence after payment is not a cadence, it
+ * is an outage with a tidy explanation.
+ *
+ * The fix is not to ask cron more often — asking twelve times an hour is
+ * already what produced a two-hour gap. It is to stop treating a firing as
+ * one wake. A firing opens a WINDOW and wakes on our own clock inside it, so
+ * a schedule that fires once every few hours still gives a shop that answers
+ * within a minute. Exactly what archive.yml does, for exactly this reason.
+ *
+ * Bounds, so this cannot become the problem it fixes:
+ *   · the window is finite and shorter than the job timeout, so the process
+ *     ends by itself and the next firing is a clean checkout;
+ *   · one wake at a time, never overlapping, whatever a wake costs;
+ *   · a wake that throws is logged and the loop continues — an unreadable
+ *     board for one minute must not end the window;
+ *   · reads: ~49 per wake at the open-deal cap, 60 wakes an hour, so ~49 a
+ *     minute against an allowance of 600. The rate is unchanged from what
+ *     the cron-only setting asked for; only the reliability differs.
+ * ═════════════════════════════════════════════════════════════════════════*/
+/* ── THE ANNOTATION BUDGET IS TEN, AND A WINDOW HAS THREE HUNDRED WAKES ────
+   GitHub keeps the first TEN notices and TEN warnings per STEP and silently
+   drops everything after. A wake emits two annotations of its own, so five
+   uneventful wakes would spend the entire budget — and the wake four hours
+   later that actually delivered a stranger's order, the only line anybody
+   would ever want, would be thrown away before it was written.
+
+   Since annotations are the only channel out of a run this network can read
+   back, that is the difference between a shop we can see and a green tick.
+
+   So the loop filters. `nothing was written` and `the shop is open` are ticks:
+   they are the same sentence three hundred times and they are already in the
+   log. Everything else — anything that reached the wire, anything holding the
+   shop, a paid deal that did not get its work — is an EVENT, and events get
+   the budget, oldest first, with a couple of slots held back so the closing
+   summary can always be written. */
+const TICKS = [/^nothing was written$/, /^the shop is open$/];
+function budget({ notices = 8, warnings = 8 } = {}) {
+  let n = 0, w = 0, droppedTicks = 0, droppedEvents = 0;
+  return {
+    ann(kind, title, message, out) {
+      if (TICKS.some((re) => re.test(title))) { droppedTicks++; return null; }
+      const cap = kind === "warning" ? warnings : notices;
+      const used = kind === "warning" ? w : n;
+      if (used >= cap) { droppedEvents++; return null; }
+      if (kind === "warning") w++; else n++;
+      return annotate(kind, title, message, out);
+    },
+    get dropped() { return { ticks: droppedTicks, events: droppedEvents }; },
+  };
+}
+
+export async function loop({ live = false, everyMs, forMs, wakeFn = wake, log = console.log } = {}) {
+  const every = everyMs ?? Number(process.env.WAKE_EVERY_SECONDS ?? 60) * 1000;
+  const until = Date.now() + (forMs ?? Number(process.env.WAKE_WINDOW_SECONDS ?? 18000) * 1000);
+  const b = budget();
+  let n = 0, upstream = 0, failed = 0, wrote = 0, stalled = 0;
+  while (Date.now() < until) {
+    const started = Date.now();
+    n++;
+    try {
+      const r = await wakeFn({ live, annotate: b.ann });
+      if (r?.wrote?.length) wrote += r.wrote.length;
+      if (r?.stalled?.length) stalled += r.stalled.length;
+      if (r?.refusals?.length) log("nothing was written.");
+    } catch (e) {
+      if (e?.upstream) { upstream++; log(`board unreadable: ${e.message} — nothing to do this wake`); }
+      /* A fault in OUR code inside a long window is not a reason to leave the
+         shop dark for hours; it is a reason to say so on every wake and keep
+         answering the ones that work. The exit code still carries it. */
+      else { failed++; console.error(`wake ${n} failed: ${e.message}`); }
+    }
+    /* From the START of the wake, not the end: a wake that took 40 seconds
+       should not push the next one out to a minute and forty. */
+    const rest = every - (Date.now() - started);
+    if (rest > 0 && Date.now() + rest < until) await new Promise((r) => setTimeout(r, rest));
+    else if (Date.now() + Math.max(rest, 0) >= until) break;
+  }
+  const said = `${n} wake(s), ${wrote} frame(s) written`
+    + (stalled ? `, ${stalled} paid deal(s) STALLED` : "")
+    + (upstream ? `, ${upstream} with an unreadable board` : "")
+    + (failed ? `, ${failed} FAILED` : "");
+  log(`window closed after ${said}`);
+  /* Written with annotate() directly and NOT through the budget, because this
+     is the one line that must exist whatever else the window did. */
+  annotate(failed || stalled ? "warning" : "notice", "the window closed", said, log);
+  return { wakes: n, upstream, failed, wrote, stalled, dropped: b.dropped };
 }
 
 /* Only when run directly, so importing this in a test never touches a wire.
@@ -1012,11 +1168,16 @@ export async function wake(opts = {}) {
  * in least on the day something is actually broken. Upstream trouble exits 0
  * and says so. A fault in this code exits 1, where it belongs. */
 if (import.meta.url === `file://${process.argv[1]}`) {
-  wake({ live: process.argv.includes("--live") })
-    .then((r) => { if (r.refusals.length) console.log("\nnothing was written."); })
-    .catch((e) => {
-      if (e.upstream) { console.log(`board unreadable: ${e.message} — nothing to do this wake`); return; }
-      console.error("runner failed:", e.message);
-      process.exit(1);
-    });
+  const live = process.argv.includes("--live");
+  if (process.argv.includes("--loop")) {
+    loop({ live }).then((r) => { if (r.failed) process.exit(1); });
+  } else {
+    wake({ live })
+      .then((r) => { if (r.refusals.length) console.log("\nnothing was written."); })
+      .catch((e) => {
+        if (e.upstream) { console.log(`board unreadable: ${e.message} — nothing to do this wake`); return; }
+        console.error("runner failed:", e.message);
+        process.exit(1);
+      });
+  }
 }

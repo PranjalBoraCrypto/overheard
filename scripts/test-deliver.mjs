@@ -75,9 +75,9 @@ async function run(profileOk) {
         : { ok: false, status: 503, json: async () => ({}) };
     return { ok: true, status: 200, json: async () => ({ messages: frames }) };
   };
-  await wake({ fetch: stub, base: "http://stub", log: (l) => lines.push(l),
-               now: NOW, seed: SEED, live: true });
-  return { posted, lines, out: lines.join("\n") };
+  const r = await wake({ fetch: stub, base: "http://stub", log: (l) => lines.push(l),
+                         now: NOW, seed: SEED, live: true });
+  return { posted, lines, out: lines.join("\n"), wrote: r.wrote ?? [], stalled: r.stalled ?? [] };
 }
 
 const good = await run(true);
@@ -107,3 +107,54 @@ say("no 64-hex string reaches the log, even on the path that reveals one",
   !/[0-9a-f]{64}/.test(good.out),
   good.lines.find((l) => /[0-9a-f]{64}/.test(l))?.slice(0, 70) ?? "clean");
 say("nor does the seed", !good.out.includes(SEED));
+
+/* ── THE HALF OF THE SHOP THAT MOVES MONEY WAS NOT BEING COUNTED ──────────
+ * `wrote` exists so that a run which posted nothing cannot look like a run
+ * which posted everything, and the annotation built from it is the only
+ * channel out of a wake this network can read. It was wired up to exactly two
+ * writes — accepts and cancels — because those go through post(); deliveries,
+ * reveals, locks and refunds go through settle(), which reports to a CI log
+ * we are not allowed to download.
+ *
+ * MEASURED, on the first real order this shop ever delivered: the wake posted
+ * the work and the reveal and annotated itself `nothing was written — 1 owed`.
+ * I read that as a failure to deliver and went looking for a bug in the
+ * delivery path. There wasn't one. The bug was in the sentence.
+ */
+say("a delivery is counted as a write", good.wrote.some((w) => w.startsWith("deliver:")),
+  good.wrote.join(" · ") || "nothing counted");
+say("and so is the reveal", good.wrote.some((w) => w.startsWith("reveal:")),
+  good.wrote.join(" · ") || "nothing counted");
+say("so the wake cannot report 'nothing was written' having delivered",
+  good.wrote.length > 0,
+  "this is the exact sentence a real paid order produced while it worked");
+say("nothing it counted is marked failed on the happy path",
+  !good.wrote.some((w) => w.includes("FAILED")), good.wrote.join(" · "));
+
+/* ── AND A PAID DEAL THAT DID NOT MOVE SAYS SO, LOUDLY ────────────────────
+ * Every exit from the delivery loop was a log() line, so "somebody's money is
+ * locked and they got nothing, and here is why" was unreadable from outside.
+ */
+say("a failed delivery is recorded as a stalled deal, not only logged",
+  bad.stalled.length === 1, JSON.stringify(bad.stalled));
+say("and the reason travels with it",
+  /DELIVERY FAILED/.test(bad.stalled[0] ?? ""), bad.stalled[0] ?? "");
+say("it names the job, so a reader knows which one",
+  /overheard-agent-profile/.test(bad.stalled[0] ?? ""), bad.stalled[0] ?? "");
+say("a wake that delivered everything reports no stalls",
+  good.stalled.length === 0, JSON.stringify(good.stalled));
+/* Annotations are emitted only inside Actions, which is the one place this
+   has to work, so the run that proves it is made there. */
+process.env.GITHUB_ACTIONS = "true";
+const inCI = await run(false);
+delete process.env.GITHUB_ACTIONS;
+say("the stall is annotated, because a log line is not readable from here",
+  inCI.lines.some((l) => /^::warning/.test(l) && /did not get their work/.test(l)),
+  inCI.lines.filter((l) => l.startsWith("::")).join(" | ").slice(0, 200));
+say("at warning level, not notice — it is the one line that must not be scrolled past",
+  inCI.lines.some((l) => /^::warning title=1 paid deal/.test(l)),
+  inCI.lines.filter((l) => l.startsWith("::")).map((l) => l.split("::")[1]).join(" | "));
+say("and the annotation carries no 64-hex string either",
+  !inCI.lines.filter((l) => l.startsWith("::")).some((l) => /[0-9a-f]{64}/.test(l)));
+say("and no preimage rides along in it", !/[0-9a-f]{64}/.test(bad.stalled.join(" ")),
+  bad.stalled.join(" "));

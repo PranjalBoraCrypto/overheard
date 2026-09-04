@@ -48,7 +48,25 @@ on:
     # setting, the gaps ran 49 to 144 minutes. Asking for twelve an hour does
     # not deliver twelve, it raises the floor. Nothing depends on any one of
     # them arriving.
-    - cron: "*/5 * * * *"
+    #
+    # ── AND WHY IT WENT BACK DOWN FROM EVERY FIVE MINUTES ──────────────────
+    #
+    # Asking twelve times an hour did not produce twelve wakes an hour. On
+    # 4 September this workflow fired at 14:34 and then not again until 16:42.
+    # A buyer who ordered at 16:45 had already PAID — the accept is on demand
+    # now and the browser locks in the same click — and would have waited for
+    # a firing that cron had no intention of delivering.
+    #
+    # So a firing no longer means one wake. It opens a WINDOW and the process
+    # wakes on its own clock inside it (runner.mjs loop()), which makes the
+    # cron cadence nearly irrelevant: whenever the window ends, the run queued
+    # behind it by the concurrency group starts immediately.
+    #
+    # Fifteen minutes rather than five because every firing that lands while a
+    # window is open is CANCELLED by the concurrency group, and sixty
+    # cancelled runs per window buries the real ones in the Actions tab —
+    # which is where a person goes to find out whether the shop is alive.
+    - cron: "*/15 * * * *"
   workflow_dispatch:
     inputs:
       live:
@@ -66,7 +84,10 @@ concurrency:
 jobs:
   wake:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    # 5.5 hours: the window below is five, and the rest is the first wake and
+    # the suites in front of it. Under Actions' six-hour job ceiling with room
+    # to spare, and the same shape archive.yml has run at for days.
+    timeout-minutes: 330
     steps:
       - uses: actions/checkout@v4
 
@@ -164,3 +185,25 @@ jobs:
       # the half that drifts underneath is the runner's.
       - name: a buyer can still complete an order in one visit
         run: node scripts/test-checkout.mjs
+
+      # ── AND THEN STAY AWAKE ────────────────────────────────────────────
+      #
+      # Everything above happens ONCE: one wake, then the suites that would
+      # rather fail here than in production. This step is the rest of the
+      # window — a wake a minute for five hours, on our own clock rather than
+      # GitHub's.
+      #
+      # It is LAST on purpose. The suites run in front of it, so a commit that
+      # breaks the order path or leaks the key stops the shop before it spends
+      # five hours acting on the break. And `if: success()` is the default, so
+      # a red suite means no window, which is the safe direction: the single
+      # wake above has already delivered anything owed.
+      #
+      # A wake that throws does not end the window (see loop()); the step
+      # fails at the end if any did, so a real fault is still a red run.
+      - name: stay awake for the rest of the window
+        env:
+          OVERHEARD_SEED: ${{ secrets.OVERHEARD_SEED }}
+          WAKE_EVERY_SECONDS: "60"
+          WAKE_WINDOW_SECONDS: "18000"
+        run: node scripts/runner.mjs --loop ${{ steps.mode.outputs.live }}

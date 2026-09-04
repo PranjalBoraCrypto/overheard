@@ -125,6 +125,50 @@ const CORE = (process.env.ROOMS ?? "lobby,technocore,nano,meta,tclk-offers")
 const DEAL_ROOM_RE = /^mb-p-tclk-[0-9a-f]{16}$/;
 const MAX_DEAL_ROOMS = Number(process.env.MAX_DEAL_ROOMS ?? 120);
 
+/* ── THE CAP FILLED UP WITH STRANGERS AND STAYED THAT WAY ──────────────────
+ *
+ * MEASURED: tclk-deals.json reached exactly 120 rooms on 3 September at
+ * 03:50 and its `updated` field never changed again. The cap was written as
+ * a guard against a board full of accepts spending the read allowance, and
+ * it does that — but `return` on a full list means the list is not a budget,
+ * it is a QUEUE THAT CLOSED. First hundred and twenty contracts to appear on
+ * a busy public board win the slots for ever; everything after them, this
+ * shop's own deals included, is dropped in silence.
+ *
+ * That is what happened. A real order was placed, accepted and paid on
+ * 4 September, and its deal room — where the lock, the delivery and the
+ * reveal all live — was never followed, because 120 strangers' contracts
+ * from the day before were still holding every slot. The settlements this
+ * archive exists to be the only record of were the exact thing being
+ * dropped.
+ *
+ * Two rules, and the first one is the one that matters:
+ *
+ *   · OUR OWN DEALS ARE NEVER CAPPED. A room we are a party to is not
+ *     discretionary and does not compete with strangers for a slot. The
+ *     budget argument was always about a stranger flooding the board, and a
+ *     flood of OUR accepts is not something a stranger can cause.
+ *   · Otherwise EVICT, don't refuse. A deal room is only interesting while
+ *     its deal can still move. When the list is full the oldest stranger's
+ *     room is the least interesting thing in it, and the newest is the most
+ *     — so the newest takes its place. The read allowance is unchanged; what
+ *     changes is which rooms it is spent on.
+ */
+const SHOP_DID = process.env.SHOP_DID
+  ?? "did:key:z6MkiuhfekPgiihLWarPAzhuvoMjg86F8dqmLiCTmtQgMrR3";
+/* Offer ids we posted ourselves, so an accept ANSWERING one is recognised as
+   ours. Bounded: this is written into a published file, and an offer old
+   enough to fall off this list is old enough that its accept is not coming. */
+const OUR_OFFERS_KEPT = Number(process.env.OUR_OFFERS_KEPT ?? 200);
+/* Ours skip the strangers' cap; they do not skip HAVING one. Every followed
+   room is polled for the life of the run and written into a published file, so
+   "never capped" would be a slow leak — a shop that does a thousand deals
+   would be reading a thousand rooms, nearly all of them long settled. The
+   oldest of ours is by definition the one whose lock and reveal are already in
+   the archive, so it is the safe one to let go. Larger than the strangers'
+   number because these are the rooms this archive exists for. */
+const MAX_OUR_DEAL_ROOMS = Number(process.env.MAX_OUR_DEAL_ROOMS ?? 300);
+
 const RUN_MS = Number(process.env.RUN_SECONDS ?? 270) * 1000;
 const FLUSH_MS = Number(process.env.FLUSH_SECONDS ?? 55) * 1000;
 const ROSTER_MS = Number(process.env.ROSTER_SECONDS ?? 120) * 1000;
@@ -449,6 +493,37 @@ function pushTail(state, r) {
   }
 }
 
+/* ── THE TAIL IS SEEDED FROM THE LAST ONE, NOT STARTED EMPTY ──────────────
+   A hosted run lasts about five and a half hours and then the job ends. The
+   next run starts a fresh process, and `state.tail` starts empty — so its
+   first pass REPLACES tail.ndjson with the handful of frames that arrived in
+   those five minutes, and every frame the previous run had in its window
+   disappears in one write. That is a hole at every run boundary, in the one
+   file whose entire job is not to have holes, and it is the same shape of
+   hole (a reader looks, sees a healthy-looking file, and the frame it needs
+   is not in it) that made the shop report `0 owed` over a real locked
+   payment.
+   The previous tail is already checked out on disk. Start from it. Every
+   line goes back through pushTail, so the dedupe, the byte bound and the
+   line bound are the ones in force NOW — a tail written when the caps were
+   larger is trimmed to today's caps on the way in rather than smuggled
+   past them. */
+async function loadTail() {
+  const seed = { rows: [], bytes: 0, seqs: new Set() };
+  const file = path.join(OUT, OFFERS_ROOM, "tail.ndjson");
+  if (!existsSync(file)) return seed;
+  let text;
+  try { text = await readFile(file, "utf8"); } catch { return seed; }
+  const holder = { tail: seed };
+  for (const line of text.split("\n")) {
+    if (!line.trim()) continue;
+    let r;
+    try { r = JSON.parse(line); } catch { continue; }   // torn last line: skip it
+    pushTail(holder, r);
+  }
+  return holder.tail;
+}
+
 /* ══════════════════════════════════════════════════════════════════════════
  * THE TAIL — the newest stretch of the offers room, small enough to publish
  * every pass
@@ -547,8 +622,29 @@ async function loadState() {
     /* Deal rooms found in accepts. Persisted because an accept scrolls past
        and is never read again — without this, a restart forgets every deal it
        was following and the room goes dark mid-settlement. */
-    deals: await readJson(path.join(OUT, "tclk-deals.json"), { updated: null, rooms: {} }),
+    deals: trimDeals(await readJson(path.join(OUT, "tclk-deals.json"), { updated: null, rooms: {} })),
+    /* Carried over the run boundary — see loadTail(). */
+    tail: await loadTail(),
   };
+}
+
+/* ── THE CAPS APPLY TO WHAT WAS ALREADY THERE, NOT ONLY TO ARRIVALS ────────
+   Eviction happens when a room arrives, so a list that is already over its cap
+   would sit there until the next accept — and the moment a cap most needs to
+   bind is when somebody has just lowered it because the run allowance is being
+   eaten. Enforced once at load, before anything is tracked, so an over-cap
+   room is never read at all rather than read once and then dropped. */
+function trimDeals(deals) {
+  const rooms = deals?.rooms ?? {};
+  for (const [ours, cap] of [[true, MAX_OUR_DEAL_ROOMS], [false, MAX_DEAL_ROOMS]]) {
+    const pool = Object.entries(rooms)
+      .filter(([, v]) => (v?.ours === true) === ours)
+      .sort((a, b) => String(a[1]?.seen ?? "").localeCompare(String(b[1]?.seen ?? "")));
+    const over = pool.length - cap;
+    for (let i = 0; i < over; i++) delete rooms[pool[i][0]];   // oldest first
+    if (over > 0) console.log(`  deal rooms: dropped ${over} over the ${ours ? "our" : "strangers'"} cap of ${cap}`);
+  }
+  return deals;
 }
 
 async function profileShard(state, shard) {
@@ -693,20 +789,78 @@ function noteDeal(state, m, text) {
   if (!isFrameText(text)) return;
   let f;
   try { f = readFrame(text); } catch { return; }
-  if (!f?.ok || f.type !== "accept") return;
+  if (!f?.ok) return;
+
+  /* ── REMEMBERING OUR OWN OFFERS, SO WE RECOGNISE THE ANSWERS TO THEM ─────
+     An accept says who answered. It does not say who asked. So on the BUY
+     side — where the shop posts the offer and a stranger accepts it — the
+     accept looks like any other stranger's frame, and the deal room holding
+     our own money would have queued behind 120 of theirs.
+     The offer ids we posted are kept here, and persisted with the deal list,
+     because a hosted run ends every five and a half hours and the accept to
+     an offer we made before the restart is exactly the one worth catching. */
+  if (f.type === "offer") {
+    if (m.from !== SHOP_DID) return;
+    const id = f.body?.id;
+    if (typeof id !== "string") return;
+    const ours = (state.deals.our_offers ??= []);
+    if (ours.includes(id)) return;
+    ours.push(id);
+    while (ours.length > OUR_OFFERS_KEPT) ours.shift();   // oldest first
+    state.dealsDirty = true;
+    return;
+  }
+  if (f.type !== "accept") return;
   const contract = f.body?.contract;
   if (typeof contract !== "string") return;
   let name;
   try { name = dealRoom(contract); } catch { return; }
   if (!DEAL_ROOM_RE.test(name)) return;
   if (state.deals.rooms[name]) return;
-  if (Object.keys(state.deals.rooms).length >= MAX_DEAL_ROOMS) return;
+
+  /* Who ANSWERED, from the transport rather than the body — the same rule the
+     page follows, for the same reason. A stranger can put our DID in a body;
+     they cannot post as us. */
+  const by = m.from ?? null;
+  const ours = by === SHOP_DID
+    || (typeof f.body?.ref === "string" && (state.deals.our_offers ?? []).includes(f.body.ref));
+
+  /* See MAX_DEAL_ROOMS. A new room takes the oldest slot in ITS OWN class
+     rather than being turned away at the door — and the two classes are
+     separate lists that never compete, which is the whole point: a busy board
+     cannot crowd out this shop's own settlements, and this shop cannot crowd
+     out its own oldest by trading. */
+  const mine = Object.entries(state.deals.rooms).filter(([, v]) => v?.ours === true);
+  const theirs = Object.entries(state.deals.rooms).filter(([, v]) => v?.ours !== true);
+  const pool = ours ? mine : theirs;
+  const cap = ours ? MAX_OUR_DEAL_ROOMS : MAX_DEAL_ROOMS;
+  /* WHILE, not IF. Evicting exactly one never converges on a list that is
+     already over its cap — which is the state a lowered cap leaves behind, and
+     a lowered cap during an incident is exactly when this has to work. */
+  while (pool.length >= cap) {
+    let oldest = null, oldestAt = null, at_i = -1;
+    for (let i = 0; i < pool.length; i++) {
+      const at = String(pool[i][1]?.seen ?? "");
+      if (oldestAt === null || at < oldestAt) { oldest = pool[i][0]; oldestAt = at; at_i = i; }
+    }
+    if (oldest === null) break;                    // an empty pool cannot be over its cap
+    pool.splice(at_i, 1);
+    delete state.deals.rooms[oldest];
+    /* Stop READING it too. Deal rooms are tracked without a `rosterAt`, so
+       the schedule's "gone quiet" sweep deliberately never expires them —
+       which means an evicted room would keep spending the read budget the
+       cap exists to protect for the rest of the run. */
+    state.sched?.delete(oldest);
+    console.log(`  deal room: ${name} takes the slot of ${oldest} (seen ${oldestAt})`);
+  }
+
   state.deals.rooms[name] = {
     contract,
-    /* Who ANSWERED, from the transport rather than the body — the same rule
-       the page follows, for the same reason. */
-    accepted_by: m.from ?? null,
+    accepted_by: by,
     seen: m.ts ?? new Date().toISOString(),
+    /* Recorded, not recomputed: this is what keeps a slot ours across the
+       restart that reloads this file, when the accept frame is long gone. */
+    ...(ours ? { ours: true } : {}),
   };
   state.dealsDirty = true;
   if (state.sched) track(state.sched, name);

@@ -15,8 +15,12 @@ on:
       probe:
         description: "Which probe to run"
         type: choice
-        options: [room-window]
+        options: [room-window, deal-room]
         default: room-window
+      deal:
+        description: "For deal-room: the contract id (0x…) or the room name (mb-p-tclk-…)"
+        type: string
+        required: false
 
 permissions:
   contents: read
@@ -37,3 +41,14 @@ jobs:
       - name: how far back can we see
         if: ${{ inputs.probe == 'room-window' }}
         run: node scripts/probe-room-window.mjs
+
+      # "Did that order actually get delivered?" — the question a deal room is
+      # the only place to answer, and the one nothing outside a runner can ask.
+      # The input goes in through the ENVIRONMENT, never interpolated into the
+      # shell line: `${{ inputs.deal }}` in a run: block is free text a
+      # dispatcher wrote, pasted into bash before bash sees it.
+      - name: what happened to one deal
+        if: ${{ inputs.probe == 'deal-room' }}
+        env:
+          PROBE_DEAL: ${{ inputs.deal }}
+        run: node scripts/probe-deal-room.mjs

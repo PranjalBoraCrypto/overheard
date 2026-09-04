@@ -23,7 +23,7 @@ import { createPublicKey, verify as edVerify, randomBytes } from "node:crypto";
 import { agentFromSeed, sweep, nextNonce, say } from "./agent.mjs";
 import {
   US, JOBS, WINDOW, MAX_OPEN_DEALS, buildAccept, refuseTake,
-  plan, refusals, framesFrom, ourDeals, wake, settle, annotate, ourArchive,
+  plan, refusals, framesFrom, ourDeals, wake, settle, annotate, ourArchive, loop,
 } from "./runner.mjs";
 import { secretFor, recoverSecret, minterFor } from "./secret.mjs";
 import { RAIL, RAILS, RAILS_WE_TAKE, IS_REHEARSAL } from "./rail.mjs";
@@ -995,6 +995,180 @@ console.log("\n=== Q. the cap knows which rail it is on");
   ok("and either can be moved without a deploy",
     read({ TCLK_RAIL: "paper", MAX_OPEN_DEALS: "7" }) === 7,
     "an incident wants a number changed now, not merged");
+}
+
+
+/* ── R. the window, because cron is a request and not a promise ───────────
+ *
+ * MEASURED on this repository: the runner asked to fire every five minutes
+ * and fired at 14:34 and then not again until 16:42 — and archive.yml's log
+ * has gaps of 49 to 295 minutes. That was survivable while a buyer had to
+ * come back and press Pay. It is not survivable now: the accept is on demand
+ * and the browser locks in the same click, so somebody who ordered at 16:45
+ * had already PAID and was waiting on a firing cron had no intention of
+ * delivering.
+ *
+ * So a firing opens a window and the process wakes on its own clock inside
+ * it. What has to hold: it keeps waking, it stops on time, one wake at a
+ * time, and a bad minute on the venue does not end the window.
+ * ─────────────────────────────────────────────────────────────────────── */
+console.log("\n=== R. staying awake for a window");
+{
+  const quiet = () => {};
+
+  {
+    let n = 0, overlapping = 0, inside = 0;
+    const r = await loop({
+      everyMs: 20, forMs: 260, log: quiet,
+      wakeFn: async () => {
+        n++;
+        inside++; if (inside > 1) overlapping++;
+        await new Promise((d) => setTimeout(d, 5));
+        inside--;
+        return { refusals: [] };
+      },
+    });
+    ok("one firing produces many wakes, not one", n > 3, `${n} wakes in 260ms at 20ms`);
+    ok("and the count it reports is the count it did", r.wakes === n, `${r.wakes} vs ${n}`);
+    ok("never two at once, whatever a wake costs", overlapping === 0, `${overlapping} overlaps`);
+  }
+
+  {
+    /* The bound that stops this becoming the outage it fixes: the process has
+       to end by itself, well inside the job timeout, so the next firing is a
+       clean checkout rather than a queue that never drains. */
+    const started = Date.now();
+    await loop({ everyMs: 30, forMs: 150, log: quiet, wakeFn: async () => ({ refusals: [] }) });
+    const took = Date.now() - started;
+    ok("the window closes on time rather than running on", took < 600, `${took}ms for a 150ms window`);
+  }
+
+  {
+    /* Technocore has bad minutes. One of them must not take the shop off the
+       air for the remaining five hours — which is exactly what a throw at the
+       top level used to do. */
+    let n = 0;
+    const r = await loop({
+      everyMs: 15, forMs: 200, log: quiet,
+      wakeFn: async () => {
+        n++;
+        if (n === 1) { const e = new Error("board unreadable"); e.upstream = true; throw e; }
+        return { refusals: [] };
+      },
+    });
+    ok("an unreadable board does not end the window", n > 2, `${n} wakes after the first one threw`);
+    ok("and is counted as the venue's, not ours", r.upstream === 1 && r.failed === 0,
+      `upstream ${r.upstream}, failed ${r.failed}`);
+  }
+
+  {
+    /* A fault in OUR code is different: the window still runs, because five
+       dark hours is worse than five noisy ones, but the run must go red so
+       somebody looks. */
+    const r = await loop({
+      everyMs: 15, forMs: 120, log: quiet,
+      wakeFn: async () => { throw new Error("a real bug"); },
+    });
+    ok("a fault in our own code keeps the shop answering", r.wakes > 1, `${r.wakes} wakes`);
+    ok("but is reported so the run can go red", r.failed === r.wakes, `${r.failed} of ${r.wakes} failed`);
+  }
+
+  {
+    /* The switch that decides whether anything is posted has to survive the
+       trip through the loop. A window of live wakes that all ran dry would be
+       the quietest possible failure. */
+    const seen = [];
+    await loop({ live: true, everyMs: 40, forMs: 60, log: quiet,
+                 wakeFn: async (o) => { seen.push(o.live); return { refusals: [] }; } });
+    ok("live carries through to every wake in the window",
+      seen.length > 0 && seen.every((v) => v === true), JSON.stringify(seen));
+    const dry = [];
+    await loop({ everyMs: 40, forMs: 60, log: quiet,
+                 wakeFn: async (o) => { dry.push(o.live); return { refusals: [] }; } });
+    ok("and so does a dry run — the default is never accidentally live",
+      dry.every((v) => v === false), JSON.stringify(dry));
+  }
+
+  {
+    /* The window's own line in the only channel out of a run. */
+    const had = process.env.GITHUB_ACTIONS;
+    process.env.GITHUB_ACTIONS = "true";
+    const out = [];
+    await loop({ everyMs: 30, forMs: 80, log: (l) => out.push(l),
+                 wakeFn: async () => ({ refusals: [] }) });
+    if (had === undefined) delete process.env.GITHUB_ACTIONS; else process.env.GITHUB_ACTIONS = had;
+    ok("the window says how many times it woke, where we can read it",
+      out.some((l) => /^::notice title=the window closed/.test(l)),
+      out.filter((l) => l.startsWith("::")).join(" | ").slice(0, 120));
+  }
+
+  {
+    /* ── THE BUDGET, WHICH IS TEN AND NOT THREE HUNDRED ───────────────────
+       GitHub keeps the first ten notices and ten warnings PER STEP and drops
+       the rest in silence. A wake emits two of its own, so five uneventful
+       wakes spend the whole budget — and since annotations are the only
+       channel out of a run this network can read back, the wake four hours in
+       that delivered somebody's order would be discarded before it was
+       written. The tick has to lose to the event. */
+    const had = process.env.GITHUB_ACTIONS;
+    process.env.GITHUB_ACTIONS = "true";
+    const out = [];
+    let i = 0;
+    await loop({
+      everyMs: 1, forMs: 300, log: (l) => out.push(l),
+      wakeFn: async (o) => {
+        i++;
+        /* What an ordinary wake says: two lines, the same two, every time. */
+        o.annotate("notice", "the shop is open", `wake ${i}`, (l) => out.push(l));
+        o.annotate("notice", "nothing was written", `wake ${i}`, (l) => out.push(l));
+        /* And once, late, the line that is the whole point of the channel. */
+        if (i === 12) o.annotate("notice", "what reached the wire", "deliver:ok · reveal:ok", (l) => out.push(l));
+        if (i === 13) o.annotate("warning", "1 paid deal(s) did not get their work", "why", (l) => out.push(l));
+        return { refusals: [], wrote: i === 12 ? ["deliver:ok", "reveal:ok"] : [], stalled: i === 13 ? ["x"] : [] };
+      },
+    });
+    if (had === undefined) delete process.env.GITHUB_ACTIONS; else process.env.GITHUB_ACTIONS = had;
+    const anns = out.filter((l) => l.startsWith("::"));
+    ok("many wakes ran, so the budget was genuinely under pressure", i > 20, `${i} wakes`);
+    ok("the repeated tick is never annotated at all",
+      !anns.some((l) => /title=the shop is open|title=nothing was written/.test(l)),
+      anns.length + " annotations for " + i + " wakes");
+    ok("and the one wake that wrote something survived", 
+      anns.some((l) => /what reached the wire/.test(l)),
+      "this is the line the budget existed to lose");
+    ok("as did the paid deal that stalled",
+      anns.some((l) => /did not get their work/.test(l)));
+    ok("inside GitHub's ten-per-step ceiling, with room for the summary",
+      anns.filter((l) => l.startsWith("::notice")).length <= 10
+      && anns.filter((l) => l.startsWith("::warning")).length <= 10,
+      anns.filter((l) => l.startsWith("::notice")).length + " notices, "
+        + anns.filter((l) => l.startsWith("::warning")).length + " warnings");
+    ok("the closing summary is always written, budget or no budget",
+      anns.some((l) => /title=the window closed/.test(l)), anns[anns.length - 1]?.slice(0, 90));
+    ok("and it counts what the window actually did, not just that it ran",
+      /1 paid deal\(s\) STALLED/.test(anns.find((l) => /the window closed/.test(l)) ?? ""),
+      anns.find((l) => /the window closed/.test(l)) ?? "");
+    ok("a window with a stalled deal closes at warning, not notice",
+      /^::warning title=the window closed/.test(anns.find((l) => /the window closed/.test(l)) ?? ""),
+      "somebody paid and got nothing — that is not a notice");
+  }
+
+  {
+    /* And the workflow actually asks for one. A loop nothing calls is a
+       comment. */
+    const wf = fs.readFileSync(path.join(ROOT, ".github/workflows/runner.yml"), "utf8");
+    ok("the workflow runs the loop", /runner\.mjs --loop/.test(wf));
+    ok("after the single wake and the suites, not instead of them",
+      wf.indexOf("--loop") > wf.indexOf("test-checkout.mjs"),
+      "a red suite must mean no window");
+    ok("the window is shorter than the job timeout",
+      Number(/WAKE_WINDOW_SECONDS: "(\d+)"/.exec(wf)?.[1] ?? 0)
+        < Number(/timeout-minutes: (\d+)/.exec(wf)?.[1] ?? 0) * 60,
+      "otherwise the job is killed mid-deal instead of ending cleanly"),
+    ok("and the loop is passed the same live switch as the single wake",
+      /--loop \$\{\{ steps\.mode\.outputs\.live \}\}/.test(wf),
+      "an unconditional --live here would post on every dry run");
+  }
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);

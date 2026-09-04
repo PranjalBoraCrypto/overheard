@@ -235,6 +235,13 @@ h1{font-weight:800;font-size:clamp(30px,5vw,42px);line-height:1;letter-spacing:-
 @media (hover:hover) and (pointer:fine){ .hbtn:hover{filter:brightness(1.08);transform:translateY(-1px)} }
 .hbtn:focus-visible{outline:2px solid var(--blue);outline-offset:3px}
 .hbtn:disabled{cursor:default;filter:grayscale(.5) brightness(.8);transform:none}
+/* A settled deal is not an action. It keeps the seam with its row — the two
+   are one object — but drops the call-to-action blue for something quiet, so
+   a list of finished orders does not read as a list of things to do. */
+.hact.done{border-color:rgba(255,255,255,.09);border-top-color:transparent;
+  background:linear-gradient(180deg,rgba(255,255,255,.028),rgba(255,255,255,.008))}
+.hitem:has(.hact.done) .hrow{border-bottom-color:rgba(255,255,255,.07)}
+.hact.done .hactwords b{color:var(--mint)}
 .hsaid{flex:1 1 100%;margin:2px 0 0;font-size:12.5px;line-height:1.5;color:var(--faint)}
 .hsaid.ok{color:var(--mint)}
 .hsaid.bad{color:var(--warn)}
@@ -653,6 +660,8 @@ function paint() {
   $("pager").hidden = rows.length <= PER_PAGE;
 
   const list = $("hlist");
+  /* A fresh budget for the rows about to be painted — see queueCheck. */
+  checksLeft = MAX_CHECKS;
   list.replaceChildren();
   for (const o of slice) list.append(itemFor(o));
 
@@ -670,13 +679,43 @@ function paint() {
  * finish it — so every deal the shop accepted stalled at "awaiting lock" and
  * died at its refund deadline, with the buyer's own page reporting "open".
  *
- * WHY THE DEAL ROOM IS READ ON CLICK AND NEVER ON PAINT. One read per row on
- * every paint is the exact cost that once rendered the deals board empty: it
- * spent the shared upstream allowance on itself. A page of ten orders would
- * be ten reads before anybody had asked for anything. So the strip renders
- * from what /api/orders already knew, and the room is read once, when a
- * person presses the button, to check the deal has not moved since.
+ * ── AND WHY IT NOW READS ON PAINT AFTER ALL ──────────────────────────────
+ *
+ * The rule above — never read a room to paint a row — was written when the
+ * buyer genuinely had to come back and press this. It is wrong now, and it
+ * was wrong on a real order: the checkout locks the payment in the same click
+ * as the order (see /hire), so by the time anybody opens this page they have
+ * ALREADY PAID. The strip was painted from /api/orders, which reads the
+ * offers room, and the lock is not in the offers room — it is in the deal
+ * room. So a buyer who had paid, been delivered to and had the deal revealed
+ * was shown "The shop accepted — your move" and a button asking for money
+ * again. That is the single worst thing this page can say.
+ *
+ * The cost objection still stands, so it is bounded rather than ignored: the
+ * check runs only for rows that would otherwise show the button, only for the
+ * page in front of you, and at most MAX_CHECKS of them, one at a time. Ten
+ * reads on a board of hundreds is not what emptied the deals page; a read per
+ * row per paint on every list on the site was.
+ *
+ * Until the answer comes back there is NO BUTTON. An unknown state renders as
+ * nothing to do, never as "pay again".
  */
+/* One at a time, and only so many. A slow venue must not turn a page of ten
+   orders into ten simultaneous reads of the shared allowance.
+   The budget is PER PAINT and is reset there. A module-level counter that
+   only ever went down would leave every strip past the tenth stuck on
+   "Checking your payment…" for the life of the tab — the second page of a
+   busy buyer's orders would simply never resolve. */
+const MAX_CHECKS = 10;
+let checksLeft = MAX_CHECKS, checkQueue = Promise.resolve();
+/** Returns false when the budget is spent, so the caller can say so rather
+ *  than leaving a promise nobody is waiting on. */
+function queueCheck(fn) {
+  if (checksLeft <= 0) return false;
+  checksLeft--;
+  checkQueue = checkQueue.then(fn, fn);
+  return true;
+}
 function itemFor(o) {
   const row = rowFor(o);
   const act = actionFor(o);
@@ -701,19 +740,65 @@ function actionFor(o) {
   const words = document.createElement("div");
   words.className = "hactwords";
   const b = document.createElement("b");
-  b.textContent = "The shop accepted — your move";
+  b.textContent = "Checking your payment…";
   const p = document.createElement("span");
-  p.textContent = "Nothing starts until the payment is locked. On the paper rail this moves no value; it is the signal that the work may begin.";
+  p.textContent = "Reading the deal's own room to see where this got to.";
   words.append(b, p);
 
   const go = document.createElement("button");
   go.type = "button";
   go.className = "hbtn";
   go.textContent = "Pay into the lock";
+  /* Hidden until we KNOW the payment is missing. The button existing before
+     the answer is what asked a buyer who had already paid to pay again. */
+  go.hidden = true;
 
   const said = document.createElement("p");
   said.className = "hsaid";
   said.hidden = true;
+
+  /* ── WHAT THE ANSWER MEANS, IN THE BUYER'S WORDS ────────────────────────
+     Four outcomes, and only one of them is a button. The common case by far
+     is `locked` — the checkout does this automatically — so that is the one
+     phrased as reassurance rather than as a step. */
+  const queued = queueCheck(async () => {
+    const state = await dealState(o.accept.room, o.accept.contract);
+    if (state === "locked") {
+      b.textContent = "Paid — the shop owes you the work";
+      p.textContent = "Your payment is locked in escrow. The shop delivers on its next wake and then opens the lock; you do not need to do anything.";
+      box.classList.add("done");
+      return;
+    }
+    if (state === "claimed") {
+      b.textContent = "Delivered";
+      p.textContent = "The work is on the wire and the shop has opened the lock. This deal is finished.";
+      box.classList.add("done");
+      return;
+    }
+    if (state === "cancelled" || state === "refunded") {
+      b.textContent = state === "refunded" ? "Refunded" : "Closed before it was funded";
+      p.textContent = "Nothing was charged — on the paper rail nothing could have been.";
+      box.classList.add("done");
+      return;
+    }
+    if (state === null) {
+      /* We could not read it. Saying nothing is the honest answer and the
+         safe one: the alternative is inviting a second payment on a guess. */
+      box.hidden = true;
+      return;
+    }
+    /* state === "accepted": the shop answered and no lock reached either the
+       deal room or the board. The checkout normally posts that lock in the
+       same click, so this is the rare path where it did not land — and the
+       words have to say so, or it reads as a step everyone is meant to take. */
+    b.textContent = "Your payment did not land";
+    p.textContent = "Ordering normally locks the payment for you in the same click. That did not reach the network this time — one press finishes it. On the paper rail this moves no value; it is the signal that the work may begin.";
+    go.hidden = false;
+  });
+  /* More answered orders on one page than the budget allows. Hiding is the
+     same choice as an unreadable room: say nothing rather than guess, and
+     never leave a row stuck mid-sentence. */
+  if (!queued) box.hidden = true;
 
   const tell = (t, cls) => { said.hidden = false; said.textContent = t; said.className = "hsaid " + (cls || ""); };
 
