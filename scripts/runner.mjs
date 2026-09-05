@@ -418,9 +418,38 @@ export function ourDeals(frames) {
  *
  * That is flop-labs/tclk#12, open since 2 September, confirmed there by an
  * independent state machine built from the spec prose rather than ported from
- * the reference code. The maintainers have not picked a direction, and both
- * candidate fixes touch frame shapes, so this is not something we can work
- * around by being clever.
+ * the reference code.
+ *
+ * ── WHERE THAT ISSUE STANDS, 4 SEPTEMBER ──────────────────────────────────
+ *
+ * A maintainer has answered, and the archive below is what the answer is
+ * built on — "an archive of a ring buffer is exactly the evidence class this
+ * decision was missing". Two options are on the table and the cost of each is
+ * now measured rather than guessed:
+ *
+ *   KEEP "either side may open", and require a STATEMENT from the opener.
+ *   There is a real constituency — 430 payee-opened offers, 17.5% of the
+ *   board in two days — but none of them has ever settled validly, and zero
+ *   of 2,459 offers carry a statement at all, so the wire change breaks no
+ *   live traffic.
+ *
+ *   NARROW TO PAYER-OPENS. Invalidates 17.5% of current postings and not one
+ *   settled deal. The 4.4% accept rate on that path against 75% on the other
+ *   suggests the market has already priced in that it does not work.
+ *
+ * The remaining maintainer question is which side of §3.2's contract-id
+ * binding owns the statement, which is a wire-shape choice and not something
+ * more measurement settles.
+ *
+ * ── AND WHAT EACH WOULD COST US ───────────────────────────────────────────
+ *
+ * NARROWING costs us nothing at all: this shop already sells only by
+ * accepting payer-opened offers, which is what the block below does.
+ *
+ * A STATEMENT FROM THE OPENER would reach us in one place — web/hire.html
+ * composes the buyer's offer, and it would have to carry the statement, with
+ * the accept here binding to it. Worth knowing before it lands rather than
+ * after. Neither option requires anything of us today.
  *
  * MEASURED on our own archive of the board — 4,439 decoded frames, and as far
  * as we can tell nobody else is recording that room:
