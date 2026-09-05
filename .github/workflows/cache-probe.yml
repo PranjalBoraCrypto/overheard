@@ -51,8 +51,10 @@ jobs:
         run: |
           set -uo pipefail
           # The inputs go in through the ENVIRONMENT and are never interpolated
-          # into the shell line: ${{ }} in a run: block is free text a
-          # dispatcher wrote, pasted into bash before bash sees it.
+          # into the shell line. A workflow expression in a run: block is free
+          # text a dispatcher wrote, pasted into bash before bash sees it --
+          # and note that Actions parses those expressions even inside a shell
+          # COMMENT, which is what rejected the first version of this file.
           say() { echo "::notice title=cache-probe::$*"; }
 
           # status | x-vercel-cache | seconds | bytes | the source field
