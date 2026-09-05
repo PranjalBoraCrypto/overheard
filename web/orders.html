@@ -50,8 +50,14 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/sky.css">
 <link rel="stylesheet" href="/deal.css">
 <style>
+/* The ground — the wash, the wafer grid and the pointer spotlight — is
+   /sky.css and /sky.js now, shared with every other page. This page carried
+   its own copy of all of it, as nine others did, and the numbers had already
+   drifted: the spotlight was 520px here and 560px there, at three different
+   opacities, because nobody chose that — it is what ten copies become. */
 /* ── THE TOKENS MOVED ──────────────────────────────────────────────────────
    This block was a verbatim third copy of the same twenty-six declarations,
    and the file said so: "there is no shared stylesheet to prevent that, so
@@ -64,15 +70,6 @@
 /* ── THE ATMOSPHERE, VERBATIM FROM rooms.html ─────────────────────────────*/
 body{background:var(--void);color:var(--white);font-family:var(--display);
   font-size:16px;line-height:1.6;-webkit-font-smoothing:antialiased;overflow-x:hidden}
-.sky{position:fixed;inset:0;z-index:0;pointer-events:none;overflow:hidden}
-.sky i{position:absolute;display:block;border-radius:50%;filter:blur(90px);opacity:.45}
-.sky i:nth-child(1){width:520px;height:520px;left:-160px;top:-160px;background:radial-gradient(circle,#00B4D7,transparent 62%);animation:d1 26s ease-in-out infinite}
-.sky i:nth-child(2){width:460px;height:460px;right:-130px;top:20%;background:radial-gradient(circle,#0077A0,transparent 64%);animation:d2 31s ease-in-out infinite}
-@keyframes d1{50%{transform:translate(110px,80px) scale(1.15)}}
-@keyframes d2{50%{transform:translate(-80px,130px) scale(1.1)}}
-@media (max-width:900px){ .sky i:nth-child(n){animation:none} }
-.spot{position:fixed;inset:0;z-index:0;pointer-events:none;
-  background:radial-gradient(520px circle at var(--px,50%) var(--py,30%),rgba(0,180,215,.1),transparent 62%)}
 @media (hover:none),(pointer:coarse){}
 
 .shell{position:relative;z-index:1;max-width:1080px;margin:0 auto;
@@ -415,10 +412,10 @@ h1{font-weight:800;font-size:clamp(30px,5vw,42px);line-height:1;letter-spacing:-
      earlier attempts at "one bar" were copies and both rotted. It lives in a
      shadow root, so this page's CSS cannot reach into it and nothing needed
      adjusting to make it fit. -->
+<script src="/sky.js" type="module"></script>
 <script src="/bar.js" type="module"></script>
 </head>
 <body>
-<div class="sky" aria-hidden="true"><i></i><i></i></div>
 <div class="spot" aria-hidden="true"></div>
 
 <svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
@@ -1490,22 +1487,9 @@ onSession(begin);
 /* The light follows the pointer; the pointer stays the one the OS drew.
    Lifted verbatim from rooms.html so every page feels identical under the
    hand — the easing constant is what makes it glide rather than snap. */
-(() => {
-  if (!matchMedia("(hover: hover) and (pointer: fine)").matches) return;
-  if (matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-  let x = innerWidth / 2, y = innerHeight / 2, cx = x, cy = y, running = false;
-  addEventListener("pointermove", (e) => {
-    x = e.clientX; y = e.clientY;
-    if (!running) { running = true; requestAnimationFrame(paintSpot); }
-  }, { passive: true });
-  function paintSpot() {
-    cx += (x - cx) * .16; cy += (y - cy) * .16;
-    document.documentElement.style.setProperty("--px", `${(cx / innerWidth) * 100}%`);
-    document.documentElement.style.setProperty("--py", `${(cy / innerHeight) * 100}%`);
-    if (Math.abs(x - cx) > .5 || Math.abs(y - cy) > .5) requestAnimationFrame(paintSpot); else running = false;
-  }
-  requestAnimationFrame(paintSpot);
-})();
+/* The spotlight is /sky.js now - one definition for the whole site. This page
+   had its own, as seven others did, and they had drifted to three different
+   sizes and opacities between them. */
 </script>
 </body>
 </html>

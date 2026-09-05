@@ -20,8 +20,14 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/sky.css">
 <link rel="stylesheet" href="/deal.css">
 <style>
+/* The ground — the wash, the wafer grid and the pointer spotlight — is
+   /sky.css and /sky.js now, shared with every other page. This page carried
+   its own copy of all of it, as nine others did, and the numbers had already
+   drifted: the spotlight was 520px here and 560px there, at three different
+   opacities, because nobody chose that — it is what ten copies become. */
 :root{
   --navy-0:#000000; --navy-1:#02090C; --navy-2:#04141A;
   --edge:#0E3A47; --edge-lit:#1B6478;
@@ -135,19 +141,10 @@
  */
 body{background:var(--void);color:var(--white);font-family:var(--display);
   font-size:16px;line-height:1.6;-webkit-font-smoothing:antialiased;overflow-x:hidden}
-.sky{position:fixed;inset:0;z-index:0;pointer-events:none;overflow:hidden}
-.sky i{position:absolute;display:block;border-radius:50%;filter:blur(90px);opacity:.45}
-.sky i:nth-child(1){width:520px;height:520px;left:-160px;top:-160px;background:radial-gradient(circle,#00B4D7,transparent 62%);animation:d1 26s ease-in-out infinite}
-.sky i:nth-child(2){width:460px;height:460px;right:-130px;top:20%;background:radial-gradient(circle,#0077A0,transparent 64%);animation:d2 31s ease-in-out infinite}
-@keyframes d1{50%{transform:translate(110px,80px) scale(1.15)}}
-@keyframes d2{50%{transform:translate(-80px,130px) scale(1.1)}}
 /* An animated 90px blur cannot be rasterised once and reused; it is what
    makes a phone hot. It stops moving and looks the same. */
-@media (max-width:900px){ .sky i:nth-child(n){animation:none} }
 /* The spotlight that tracks the pointer — the thing this page was missing,
    and the reason it read as printed while the others read as lit. */
-.spot{position:fixed;inset:0;z-index:0;pointer-events:none;
-  background:radial-gradient(520px circle at var(--px,50%) var(--py,30%),rgba(0,180,215,.1),transparent 62%)}
 @media (hover:none),(pointer:coarse){}
 
 .i{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.9;
@@ -260,36 +257,9 @@ header.hero{position:relative;margin-top:var(--s5);margin-bottom:var(--s4);
  * thing that made it read as a box. It cannot live on the hero at all while
  * the hero clips, and the hero has to clip, because a 520px glow hanging off
  * its right edge is 94px of horizontal scroll on a phone. */
-body::before{content:"";position:absolute;top:0;left:0;right:0;
-  height:clamp(560px,96vh,940px);pointer-events:none;z-index:0;
-  background-image:
-    radial-gradient(70% 100% at 6% 0%,rgba(88,233,255,.10),transparent 60%),
-    radial-gradient(rgba(147,182,192,.13) 1px,transparent 1.2px);
-  background-size:auto,22px 22px;
-  /* ── AND IT FADES SIDEWAYS TOO, WHICH IS WHY THERE IS NO EDGE ──────────
-     Reported twice: a strip down the right-hand side. It is the scrollbar
-     gutter. MEASURED at 1512 and at 1280, with the scrollbar hidden and with
-     the page not scrolling at all: html and body are ten pixels narrower than
-     the window every time, because the gutter is reserved whether or not
-     anything is drawn in it. `right:0` is the edge of that box, so the field
-     ended there and the gutter stayed bare.
-     Three fixes were tried and all three left the pixels identical: 100vw
-     (clipped by body{overflow-x:hidden}), hanging the layer off the root
-     (then html needs overflow-x:clip, and clip is a clip), and moving the
-     whole thing into the canvas background (headless paints its own scrollbar
-     over it, so it cannot even be measured here).
-     So the field stops ENDING. It fades out horizontally before it gets
-     anywhere near the edge, which means there is no vertical boundary to see
-     whether the gutter is ten pixels, fifteen, or — on a Mac with overlay
-     scrollbars — none at all. A fade cannot be wrong about a width it never
-     reaches. */
-  -webkit-mask-image:linear-gradient(#000 40%,rgba(0,0,0,.34) 72%,transparent),
-                     linear-gradient(90deg,#000 68%,rgba(0,0,0,.35) 88%,transparent);
-  -webkit-mask-composite:source-in;
-  mask-image:linear-gradient(#000 40%,rgba(0,0,0,.34) 72%,transparent),
-             linear-gradient(90deg,#000 68%,rgba(0,0,0,.35) 88%,transparent);
-  mask-composite:intersect}
-/* ── THE GLOW WAS PUSHING THE PAGE SIDEWAYS ────────────────────────────────
+/* The field is /sky.css now, and so is the fade that keeps it off the
+   scrollbar gutter - the whole argument for that fade was worked out on this
+   page and it belongs where every page can have it. *//* ── THE GLOW WAS PUSHING THE PAGE SIDEWAYS ────────────────────────────────
    A 520px decorative circle hanging off the right edge is 94px of horizontal
    scroll on a 390px phone, and it was doing that before this redesign too —
    the page just never measured it. `overflow-x:clip` on the hero contains it.
@@ -1599,7 +1569,6 @@ footer a{color:var(--blue)}
 @media (prefers-reduced-motion:reduce){
   *,*::before,*::after{animation-duration:.001ms!important;animation-iteration-count:1!important;
     transition-duration:.001ms!important;scroll-behavior:auto!important}
-  .sky i{animation:none}
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
@@ -1705,10 +1674,10 @@ footer a{color:var(--blue)}
      component carries its own typeface. This page's own styles therefore
      cannot move a tab or restyle the wordmark, and nothing about the bar
      needed adjusting to sit here. -->
+<script src="/sky.js" type="module"></script>
 <script src="/bar.js" type="module"></script>
 </head>
 <body>
-<div class="sky" aria-hidden="true"><i></i><i></i></div>
 <div class="spot" aria-hidden="true"></div>
 
 <svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
@@ -3919,22 +3888,9 @@ schedule(BASE_POLL);
    hand — the easing constant is what makes it glide rather than snap, and a
    different one here would read as a different site. Fine pointers only, and
    off entirely under prefers-reduced-motion. */
-(() => {
-  if (!matchMedia("(hover: hover) and (pointer: fine)").matches) return;
-  if (matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-  let x = innerWidth / 2, y = innerHeight / 2, cx = x, cy = y, running = false;
-  addEventListener("pointermove", (e) => {
-    x = e.clientX; y = e.clientY;
-    if (!running) { running = true; requestAnimationFrame(paint); }
-  }, { passive: true });
-  function paint() {
-    cx += (x - cx) * .16; cy += (y - cy) * .16;
-    document.documentElement.style.setProperty("--px", `${(cx / innerWidth) * 100}%`);
-    document.documentElement.style.setProperty("--py", `${(cy / innerHeight) * 100}%`);
-    if (Math.abs(x - cx) > .5 || Math.abs(y - cy) > .5) requestAnimationFrame(paint); else running = false;
-  }
-  requestAnimationFrame(paint);
-})();
+/* The spotlight is /sky.js now - one definition for the whole site. This page
+   had its own, as seven others did, and they had drifted to three different
+   sizes and opacities between them. */
 
 window.addEventListener("hashchange", () => {
   readHash(); applyView();

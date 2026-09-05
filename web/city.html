@@ -32,7 +32,13 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/sky.css">
 <style>
+/* The ground — the wash, the wafer grid and the pointer spotlight — is
+   /sky.css and /sky.js now, shared with every other page. This page carried
+   its own copy of all of it, as nine others did, and the numbers had already
+   drifted: the spotlight was 520px here and 560px there, at three different
+   opacities, because nobody chose that — it is what ten copies become. */
 :root{
   --void:#00070A; --ink:#04141C; --ink-2:#072230;
   --edge:#10394A; --edge-lit:#1E6C85;
@@ -60,12 +66,6 @@ button{font-family:inherit}
    at the header reads as two pages stitched together. This is the same
    layer, the same colours and the same drift as /play and the card page,
    fixed behind everything so the bar is on the same ground everywhere. */
-.sky{position:fixed;inset:0;z-index:0;pointer-events:none;overflow:hidden}
-.sky i{position:absolute;display:block;border-radius:50%;filter:blur(90px);opacity:.42}
-.sky i:nth-child(1){width:540px;height:540px;left:-170px;top:-150px;background:radial-gradient(circle,#00B4D7,transparent 62%);animation:d1 26s ease-in-out infinite}
-.sky i:nth-child(2){width:470px;height:470px;right:-140px;top:22%;background:radial-gradient(circle,#0077A0,transparent 64%);animation:d2 31s ease-in-out infinite}
-@keyframes d1{50%{transform:translate(110px,80px) scale(1.15)}}
-@keyframes d2{50%{transform:translate(-80px,130px) scale(1.1)}}
 
 /* ── THE BLOOMS STOP DRIFTING ON A TOUCH DEVICE ──────────────────────────
    Reported as "my phone went very hot". These are three fixed layers up to
@@ -78,8 +78,6 @@ button{font-family:inherit}
    moving. The motion was 120px over 26 seconds behind a 90px blur, which is
    below the threshold of anybody noticing on a 390px screen, and it was
    costing more than everything else on the page combined. */
-@media (max-width:900px){ .sky i:nth-child(n){animation:none} }
-@media (prefers-reduced-motion:reduce){.sky i:nth-child(n){animation:none}}
 overheard-bar{position:relative;z-index:3}
 
 /* ══ the stage ═══════════════════════════════════════════════════════════
@@ -884,11 +882,13 @@ body:not(.inroom) .tr{top:22px;max-height:calc(100% - 168px)}
 @media (prefers-reduced-motion:reduce){*{animation-duration:.01ms!important;animation-iteration-count:1!important;
   transition-duration:.01ms!important}}
 </style>
+<script src="/sky.js" type="module"></script>
 <script src="/bar.js" type="module"></script>
 <script src="/foot.js" type="module"></script>
 <script src="/visits.js" type="module"></script>
 </head>
 <body>
+<div class="spot" aria-hidden="true"></div>
 
 <svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
   <symbol id="c-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
@@ -931,7 +931,6 @@ body:not(.inroom) .tr{top:22px;max-height:calc(100% - 168px)}
   <symbol id="c-caret" viewBox="0 0 24 24"><path d="m6.5 9.5 5.5 5.5 5.5-5.5"/></symbol>
 </defs></svg>
 
-<div class="sky" aria-hidden="true"><i></i><i></i></div>
 
 <overheard-bar></overheard-bar>
 

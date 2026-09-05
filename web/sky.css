@@ -1,0 +1,90 @@
+/**
+ * THE GROUND EVERY PAGE STANDS ON.
+ * ═══════════════════════════════════════════════════════════════════════════
+ *
+ * One field, one spotlight, one definition. Before this file there were ten:
+ * every page carried its own `.sky`, most carried their own copy of the same
+ * two @keyframes, seven carried their own `.spot`, and the numbers had
+ * already drifted apart — the spotlight was 520px on six pages and 560px on
+ * the card page, at .10, .12 and .13 opacity depending on which page you
+ * happened to be standing on. Nobody chose that. It is what ten copies of a
+ * thing become.
+ *
+ * WHAT CHANGED, AND WHY. The pages used to sit on two or three drifting
+ * blooms: fixed layers up to 700px across under filter:blur(90px), animated,
+ * which is the single most expensive thing this site did while apparently
+ * doing nothing — a blur that is being scaled cannot be rasterised once and
+ * reused, so it is recomputed every frame, on every page, forever. They were
+ * already frozen below 900px after somebody reported a hot phone.
+ *
+ * What replaces them is a wash and a wafer grid: two gradients on one
+ * pseudo-element, painted once, never animated, and nothing behind it.
+ * Cheaper on every machine and, unlike a bloom, it does not have to be
+ * apologised for on a phone.
+ *
+ * WHAT DID NOT CHANGE is the spotlight. It is the reason the site reads as
+ * lit rather than printed, and it costs one custom property write per frame
+ * while the pointer is actually moving. See sky.js.
+ *
+ * HOW TO USE IT:  <link rel="stylesheet" href="/sky.css">
+ *                 <div class="spot" aria-hidden="true"></div>
+ *                 <script src="/sky.js" type="module"></script>
+ * and the page's own shell needs `position:relative; z-index:1` so it sits
+ * above both layers.
+ */
+
+/* The wash takes its hue from here, so a page ABOUT one identity can tint its
+   own ground to that identity's colour by setting --sky-h — see profile.html,
+   where the hue is derived from the key itself. Everywhere else it is the
+   brand, because everywhere else there is no one identity to be about. */
+:root{ --sky-h:189; }
+
+/* ── THE FIELD ─────────────────────────────────────────────────────────────
+   A wash from the top-left and a wafer grid of dots over it. Absolute, not
+   fixed: it belongs to the top of the document and scrolls away, which is
+   what makes the page feel like it has a top rather than a permanent
+   backdrop.
+
+   THE MASK IS THE PART THAT MATTERS. A strip down the right-hand side was
+   reported twice before the cause was found: it is the scrollbar gutter.
+   html and body are about ten pixels narrower than the window whether or not
+   anything is drawn there, so `right:0` is not the edge of the window and a
+   field that stops at it leaves a visible boundary. Three fixes were tried
+   and all three left the pixels identical — 100vw (clipped by
+   overflow-x:hidden), hanging the layer off the root (needs overflow-x:clip,
+   and clip is a clip), and painting it into the canvas background (headless
+   draws its own scrollbar over it).
+
+   So the field stops ENDING. It fades out on both axes long before it
+   reaches an edge, and a fade cannot be wrong about a width it never gets
+   to — ten pixels, fifteen, or none at all on a Mac with overlay
+   scrollbars. */
+body::before{
+  content:"";position:absolute;top:0;left:0;right:0;
+  height:clamp(560px,96vh,940px);
+  pointer-events:none;z-index:0;
+  background-image:
+    radial-gradient(62% 90% at 12% 0%, hsl(var(--sky-h) 100% 60% / .085), transparent 62%),
+    radial-gradient(rgba(147,182,192,.12) 1px, transparent 1.2px);
+  background-size:auto, 26px 26px;
+  -webkit-mask-image:linear-gradient(#000 34%,rgba(0,0,0,.3) 70%,transparent),
+                     linear-gradient(90deg,#000 66%,rgba(0,0,0,.32) 87%,transparent);
+          mask-image:linear-gradient(#000 34%,rgba(0,0,0,.3) 70%,transparent),
+                     linear-gradient(90deg,#000 66%,rgba(0,0,0,.32) 87%,transparent);
+  -webkit-mask-composite:source-in;
+          mask-composite:intersect;
+}
+
+/* ── THE SPOTLIGHT ─────────────────────────────────────────────────────────
+   Fixed, so it is a light in the room rather than a mark on the page. The
+   position comes from --px/--py, written by sky.js while the pointer moves.
+
+   It is NOT hidden on a touch screen. With no pointer to follow it settles at
+   the default 50%/30% and reads as ambient light from above, which is the
+   right thing for it to be there — and it costs nothing, because nothing is
+   updating it. */
+.spot{
+  position:fixed;inset:0;z-index:0;pointer-events:none;
+  background:radial-gradient(520px circle at var(--px,50%) var(--py,30%),
+    rgba(0,180,215,.11), transparent 62%);
+}

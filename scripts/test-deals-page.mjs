@@ -605,44 +605,31 @@ ok("never assigns innerHTML", !/innerHTML|outerHTML|insertAdjacentHTML|document\
  * to look deliberate, different enough that arriving here from /rooms felt
  * like leaving the site.
  *
- * Nothing about that reads as broken, which is exactly why it needs a test
- * rather than a reviewer. There is no shared stylesheet to enforce it, so
- * the check is a comparison against the page that defines the shape every
- * inner page wears.
+ * This used to be checked by comparing this page's CSS against rooms.html's,
+ * character for character, because there was no shared stylesheet to enforce
+ * it. There is now: /sky.css and /sky.js. Ten pages carried their own copy
+ * and the numbers had already drifted apart — the spotlight ran at 520px on
+ * six pages and 560px on the card page, at three different opacities —
+ * which is the same bug this block was written for, one level up.
+ *
+ * So the check inverts. It is no longer "does this page's copy match" but
+ * "does this page have a copy at all". A page that declares none of it
+ * cannot drift from the site, because there is nothing of its own to drift.
  */
 {
-  const rooms = fs.readFileSync(path.join(ROOT, "rooms.html"), "utf8");
-  const rule = (text, sel) => {
-    const m = text.match(new RegExp(sel.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "\\{([^}]*)\\}"));
-    return m ? m[1].replace(/\s+/g, "") : null;
-  };
-  for (const sel of [".sky", ".sky i", ".sky i:nth-child(1)", ".sky i:nth-child(2)", ".spot"]) {
-    const mine = rule(src, sel), theirs = rule(rooms, sel);
-    ok(`${sel} is the site's, character for character`,
-      Boolean(theirs) && mine === theirs,
-      mine === theirs ? "" : `\n        here:  ${mine}\n        rooms: ${theirs}`);
-  }
+  const has = (re) => re.test(src);
+  ok("it stands on the site's ground rather than one of its own",
+    has(/<link rel="stylesheet" href="\/sky\.css">/) && has(/<script src="\/sky\.js" type="module">/),
+    "sky.css and sky.js");
+  ok("and declares no atmosphere of its own to drift with",
+    !/^\s*\.sky[\s{]/m.test(src) && !/^\s*\.spot\{/m.test(src) && !/body::before\{/.test(src),
+    "no local .sky, .spot or field");
+  ok("no second copy of the spotlight either",
+    !/setProperty\("--px"/.test(src), "sky.js is the only one");
+  ok("the light it is lit by is on the page", /<div class="spot"/.test(src));
   ok("the page ground is the site's --void, not a colour of its own",
     /body\{background:var\(--void\)/.test(src.replace(/\s+/g, "")),
     "a second black is a second site");
-  /* The spotlight is inert without something writing --px/--py, and a
-     spotlight frozen at 50%/30% is just a gradient — so the mover is part
-     of the contract, not an extra. */
-  ok("and something actually moves the spotlight",
-    /setProperty\("--px"/.test(src) && /setProperty\("--py"/.test(src) &&
-    /hover: hover\) and \(pointer: fine/.test(src),
-    "fine pointers only, as everywhere else");
-  /* Scoped to the spotlight's own function rather than matched loosely
-     against the whole file — this page has a second reduced-motion guard for
-     the emblem entrance, and a file-wide match would pass on that one while
-     the spotlight kept moving. */
-  {
-    const fn = src.slice(src.indexOf("The light follows the pointer"));
-    const body = fn.slice(0, fn.indexOf("})();") + 5);
-    ok("which stands down for anyone who asked for less motion",
-      /prefers-reduced-motion:\s*reduce/.test(body) && /\.matches\)\s*return/.test(body),
-      body ? "" : "the spotlight's own guard, not some other block's");
-  }
 }
 
 /* ── THE SITE'S BAR ────────────────────────────────────────────────────────
@@ -1836,13 +1823,14 @@ console.log("\n=== T. what the redesign has to keep true");
   await pM.waitForTimeout(250);
   const m = await pM.evaluate(() => ({
     scrollW: document.documentElement.scrollWidth, vw: innerWidth,
-    sky: getComputedStyle(document.querySelector(".sky")).display,
-    /* The blooms STAY on a phone and stop MOVING, which is what every other
-       page on the site does. The cost was never the blur; it was animating
-       it — a static blurred layer is rasterised once, an animated one is
-       recomputed every frame as it scales. */
-    skyMoves: [...document.querySelectorAll(".sky i")]
-      .some((e) => getComputedStyle(e).animationName !== "none"),
+    /* The blooms are gone from the whole site, so the question is no longer
+       whether they move on a phone. It is whether the ground that replaced
+       them is here, painted, and not animating anything. */
+    field: getComputedStyle(document.body, "::before").backgroundImage.startsWith("radial"),
+    spot: !!document.querySelector(".spot"),
+    moving: [...document.querySelectorAll("body, .spot")]
+      .some((e) => getComputedStyle(e).animationName !== "none") ||
+      getComputedStyle(document.body, "::before").animationName !== "none",
     steps: document.querySelectorAll(".flow .fstep").length,
     /* The timeline: node in column one, words in column two, and the text
        must NOT have wrapped into the 38px node column. */
@@ -1852,16 +1840,18 @@ console.log("\n=== T. what the redesign has to keep true");
       const r = b.getBoundingClientRect(); return Math.round(Math.min(r.width, r.height)); })(),
   }));
   ok("the page never scrolls sideways", m.scrollW <= m.vw, `${m.scrollW} vs ${m.vw}`);
-  /* THIS USED TO REQUIRE `display:none`, and that was the page drifting from
-     the site. Hiding the blooms on a phone is something NO other Overheard
-     page does, so the deals page looked like a different site on a phone
-     while the desktop view looked right — the kind of inconsistency nobody
-     reviewing it would call a bug. What is actually expensive is the
-     ANIMATION, and that is what has to be off. */
-  ok("the blooms are still there on a phone, exactly as on every other page",
-    m.sky !== "none", "display: " + m.sky);
-  ok("but they have stopped moving — an animated 90px blur is what makes a phone hot",
-    m.skyMoves === false, m.skyMoves ? "still animating" : "static, rasterised once");
+  /* THIS USED TO ASSERT THE BLOOMS. Two of them, up to 540px across under
+     filter:blur(90px), which had already had to be frozen below 900px after
+     a phone was reported getting hot — an animated blur cannot be rasterised
+     once, it is recomputed every frame as the layer scales.
+
+     They are gone from every page now, replaced by a wash and a wafer grid
+     painted once, which is what a background should cost. So the assertion
+     is what remains: the ground is here, and nothing on it moves. */
+  ok("the ground is painted on a phone, exactly as on every other page", m.field);
+  ok("and the light it is lit by is here too", m.spot);
+  ok("with nothing animating behind the page — that is what made a phone hot",
+    m.moving === false, m.moving ? "something is still animating" : "painted once");
   ok("every step survives the rebuild", m.steps === 8, m.steps);
   ok("and the step text is a readable column, not a ribbon",
     m.textX > 180, m.textX + "px wide");

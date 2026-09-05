@@ -32,7 +32,13 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/sky.css">
 <style>
+/* The ground — the wash, the wafer grid and the pointer spotlight — is
+   /sky.css and /sky.js now, shared with every other page. This page carried
+   its own copy of all of it, as nine others did, and the numbers had already
+   drifted: the spotlight was 520px here and 560px there, at three different
+   opacities, because nobody chose that — it is what ten copies become. */
 :root{
   --void:#00070A; --ink:#04141C; --ink-2:#072230; --ink-3:#0A2E3E;
   --edge:#10394A; --edge-lit:#1E6C85;
@@ -47,12 +53,6 @@
 *{box-sizing:border-box;margin:0;padding:0}
 [hidden]{display:none !important}
 body{background:var(--void);color:var(--txt);font-family:var(--display);font-size:16px;line-height:1.6;-webkit-font-smoothing:antialiased;overflow-x:hidden}
-.sky{position:fixed;inset:0;z-index:0;pointer-events:none;overflow:hidden}
-.sky i{position:absolute;display:block;border-radius:50%;filter:blur(90px);opacity:.45}
-.sky i:nth-child(1){width:520px;height:520px;left:-160px;top:-160px;background:radial-gradient(circle,#00B4D7,transparent 62%);animation:d1 26s ease-in-out infinite}
-.sky i:nth-child(2){width:460px;height:460px;right:-130px;top:20%;background:radial-gradient(circle,#0077A0,transparent 64%);animation:d2 31s ease-in-out infinite}
-@keyframes d1{50%{transform:translate(110px,80px) scale(1.15)}}
-@keyframes d2{50%{transform:translate(-80px,130px) scale(1.1)}}
 
 /* ── THE BLOOMS STOP DRIFTING ON A TOUCH DEVICE ──────────────────────────
    Reported as "my phone went very hot". These are three fixed layers up to
@@ -65,7 +65,6 @@ body{background:var(--void);color:var(--txt);font-family:var(--display);font-siz
    moving. The motion was 120px over 26 seconds behind a 90px blur, which is
    below the threshold of anybody noticing on a 390px screen, and it was
    costing more than everything else on the page combined. */
-@media (max-width:900px){ .sky i:nth-child(n){animation:none} }
 
 /* ── A FINGER IS NOT A CURSOR ────────────────────────────────────────────
    Measured across the whole site at 390px before changing anything: this
@@ -90,7 +89,6 @@ body{background:var(--void);color:var(--txt);font-family:var(--display);font-siz
      middle of it. Measured: label 300x280, input 300x42. */
   .ownform .nameline{flex:0 0 auto}
 }
-.spot{position:fixed;inset:0;z-index:0;pointer-events:none;background:radial-gradient(520px circle at var(--px,50%) var(--py,30%),rgba(0,180,215,.1),transparent 62%)}
 @media (hover:none),(pointer:coarse){}
 
 .shell{max-width:1180px;margin:0 auto;padding:0 26px 70px;position:relative;z-index:2}
@@ -603,12 +601,12 @@ footer a:hover{color:var(--cy-hi)}
 }
 
 </style>
+<script src="/sky.js" type="module"></script>
 <script src="/bar.js" type="module"></script>
 <script src="/foot.js" type="module"></script>
 <script src="/visits.js" type="module"></script>
 </head>
 <body>
-<div class="sky" aria-hidden="true"><i></i><i></i></div>
 <div class="spot" aria-hidden="true"></div>
 
 <!-- One sprite, referenced by <use> wherever an icon is needed. Drawn as
@@ -2527,26 +2525,9 @@ loadRooms(); switchRoom(room,false);
 /* The light follows the pointer; the pointer stays the one the OS drew.
    A dot-and-ring follower used to live here — dated, and a second thing
    chasing your hand while you are typing a passphrase is a distraction. */
-(()=>{
-  if(!matchMedia("(hover: hover) and (pointer: fine)").matches) return;
-  if(matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-  let x=innerWidth/2,y=innerHeight/2,cx=x,cy=y,running=false;
-  addEventListener("pointermove",e=>{
-    x=e.clientX;y=e.clientY;
-    const el=e.target.closest?.(".go,.keep,.rbtn");
-    if(el){ const r=el.getBoundingClientRect();
-      el.style.setProperty("--bx",`${((e.clientX-r.left)/r.width)*100}%`);
-      el.style.setProperty("--by",`${((e.clientY-r.top)/r.height)*100}%`); }
-    if(!running){ running=true; requestAnimationFrame(paint); }
-  },{passive:true});
-  function paint(){
-    cx+=(x-cx)*.16; cy+=(y-cy)*.16;
-    document.documentElement.style.setProperty("--px",`${(cx/innerWidth)*100}%`);
-    document.documentElement.style.setProperty("--py",`${(cy/innerHeight)*100}%`);
-    if(Math.abs(x-cx)>.5||Math.abs(y-cy)>.5) requestAnimationFrame(paint); else running=false;
-  }
-  requestAnimationFrame(paint);
-})();
+/* The spotlight is /sky.js now - one definition for the whole site. This page
+   had its own, as seven others did, and they had drifted to three different
+   sizes and opacities between them. */
 </script>
 </body>
 </html>

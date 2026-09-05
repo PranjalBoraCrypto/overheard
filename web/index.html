@@ -32,6 +32,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/sky.css">
 
 <style>
 /* ═══════════════════════════════════════════════════════════════════════
@@ -65,17 +66,16 @@ body{
 }
 
 /* ── atmosphere ───────────────────────────────────────────────────────────
-   Three drifting blooms and a wafer grid, then a spotlight that tracks the
-   pointer. The spotlight is the reason the page feels lit rather than
-   printed: --px/--py are written by JS on every frame. */
-.sky{position:fixed;inset:0;z-index:0;pointer-events:none;overflow:hidden}
-.sky i{position:absolute;display:block;border-radius:50%;filter:blur(90px);opacity:.55}
-.sky i:nth-child(1){width:620px;height:620px;left:-140px;top:-180px;background:radial-gradient(circle,#00B4D7,transparent 62%);animation:drift1 26s ease-in-out infinite}
-.sky i:nth-child(2){width:520px;height:520px;right:-120px;top:6%;background:radial-gradient(circle,#0077A0,transparent 64%);animation:drift2 31s ease-in-out infinite}
-.sky i:nth-child(3){width:700px;height:700px;left:38%;top:52%;background:radial-gradient(circle,#00506B,transparent 66%);animation:drift3 38s ease-in-out infinite}
-@keyframes drift1{50%{transform:translate(120px,90px) scale(1.15)}}
-@keyframes drift2{50%{transform:translate(-90px,140px) scale(1.1)}}
-@keyframes drift3{50%{transform:translate(70px,-110px) scale(1.18)}}
+   It is /sky.css and /sky.js now, shared with every other page. This page had
+   the most of it — three drifting blooms, a masked line grid, and its own
+   copy of the spotlight at 560px where six other pages ran it at 520. That
+   drift is the argument for one file: nobody chose to have two spotlights.
+
+   The blooms and the line grid are gone with them. What the site stands on is
+   one wash and one wafer grid, painted once and never animated — cheaper than
+   three 700px layers under a 90px blur that had already had to be frozen on
+   phones after somebody reported theirs getting hot. */
+
 
 /* ── THE BLOOMS STOP DRIFTING ON A TOUCH DEVICE ──────────────────────────
    Reported as "my phone went very hot". These are three fixed layers up to
@@ -88,7 +88,6 @@ body{
    moving. The motion was 120px over 26 seconds behind a 90px blur, which is
    below the threshold of anybody noticing on a 390px screen, and it was
    costing more than everything else on the page combined. */
-@media (max-width:900px){ .sky i:nth-child(n){animation:none} }
 
 /* ── A FINGER IS NOT A CURSOR ────────────────────────────────────────────
    The one standalone control on this page that missed 44px. The inline link
@@ -97,18 +96,6 @@ body{
    paragraph around it. */
 @media (max-width:620px){
   .newhere{min-height:44px}
-}
-.grid-l{
-  position:fixed;inset:0;z-index:0;pointer-events:none;
-  background:
-    repeating-linear-gradient(90deg,rgba(0,180,215,.07) 0 1px,transparent 1px 88px),
-    repeating-linear-gradient(0deg,rgba(0,180,215,.05) 0 1px,transparent 1px 88px);
-  mask-image:radial-gradient(1200px 800px at var(--px,50%) var(--py,30%),#000 0%,rgba(0,0,0,.25) 55%,transparent 80%);
-  -webkit-mask-image:radial-gradient(1200px 800px at var(--px,50%) var(--py,30%),#000 0%,rgba(0,0,0,.25) 55%,transparent 80%);
-}
-.spot{
-  position:fixed;inset:0;z-index:0;pointer-events:none;
-  background:radial-gradient(560px circle at var(--px,50%) var(--py,30%),rgba(0,180,215,.13),transparent 62%);
 }
 .shell{max-width:1180px;margin:0 auto;padding:0 26px;position:relative;z-index:2}
 
@@ -1228,6 +1215,7 @@ footer a:hover{color:var(--cy-hi)}
 @media (max-width:700px){.field{flex-direction:column}.field button{padding:16px}}
 
 </style>
+<script src="/sky.js" type="module"></script>
 <script src="/bar.js" type="module"></script>
 <script src="/foot.js" type="module"></script>
 <script src="/visits.js" type="module"></script>
@@ -1237,8 +1225,6 @@ footer a:hover{color:var(--cy-hi)}
 <!-- Atmosphere. Kept out of the flow entirely so nothing here can affect
      layout: three drifting blooms, a wafer grid masked to the pointer, and a
      spotlight that follows it. -->
-<div class="sky" aria-hidden="true"><i></i><i></i><i></i></div>
-<div class="grid-l" aria-hidden="true"></div>
 <div class="spot" aria-hidden="true"></div>
 
 <overheard-bar></overheard-bar>
@@ -5179,22 +5165,9 @@ const finePointer=matchMedia("(hover: hover) and (pointer: fine)").matches;
    button, a second thing chasing your hand is noise. The environment still
    answers the pointer — the spotlight, the grid mask, the lit surfaces, the
    magnetic buttons — but the cursor is the one the operating system drew. */
-(()=>{
-  if(!finePointer) return;
-  let x=innerWidth/2, y=innerHeight/2, cx=x, cy=y, running=false;
-  addEventListener("pointermove",(e)=>{
-    x=e.clientX; y=e.clientY;
-    if(!running){ running=true; requestAnimationFrame(paint); }
-  },{passive:true});
-  function paint(){
-    // eased, so the light glides instead of snapping frame to frame
-    cx+=(x-cx)*.16; cy+=(y-cy)*.16;
-    document.documentElement.style.setProperty("--px",`${(cx/innerWidth)*100}%`);
-    document.documentElement.style.setProperty("--py",`${(cy/innerHeight)*100}%`);
-    if(Math.abs(x-cx)>.5||Math.abs(y-cy)>.5) requestAnimationFrame(paint); else running=false;
-  }
-  requestAnimationFrame(paint);
-})();
+/* The spotlight is /sky.js now - one definition for the whole site. This page
+   had its own, as seven others did, and they had drifted to three different
+   sizes and opacities between them. */
 
 /* Every raised surface lights up under the cursor, and buttons lean toward it
    by a few pixels. Small enough to feel physical, small enough not to make a

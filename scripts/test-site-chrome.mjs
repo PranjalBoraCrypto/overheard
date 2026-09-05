@@ -495,6 +495,57 @@ console.log("\n=== 9. a pasted link arrives with a picture");
   }
 }
 
+/* ── ONE GROUND UNDER EVERY PAGE ───────────────────────────────────────────
+ *
+ * Reported twice, a month apart, in almost the same words: "the deals page is
+ * using a different background and different mouse movement to the rest of
+ * the Overheard pages", and then "background and environment is different
+ * from the rest of the pages" about the profile page.
+ *
+ * Both times the cause was the same and it was not the page — it was that
+ * there was nothing to copy FROM. Ten pages carried their own atmosphere, and
+ * by the time anybody looked the numbers had drifted on their own: the
+ * spotlight ran at 520px on six of them and 560px on the card page, at .10,
+ * .12 and .13 opacity depending which one you were standing on. Nobody chose
+ * that. It is what ten copies of a thing become.
+ *
+ * /sky.css and /sky.js are the one copy now. This block is what stops an
+ * eleventh appearing: it does not check that the pages MATCH — matching is
+ * what kept failing — it checks that no page has anything of its own to
+ * match with.
+ */
+{
+  console.log("\n=== 6. every page stands on the same ground");
+  const fsmod = await import("node:fs");
+  const files = fsmod.readdirSync(ROOT).filter((f) => f.endsWith(".html"));
+  for (const f of files) {
+    const src = fsmod.readFileSync(path.join(ROOT, f), "utf8");
+    const linked = /<link rel="stylesheet" href="\/sky\.css">/.test(src)
+                && /<script src="\/sky\.js" type="module">/.test(src);
+    const own = /^\s*\.sky[\s{]/m.test(src) || /^\s*\.spot\{/m.test(src)
+             || /body::before\{/.test(src) || /setProperty\("--px"/.test(src);
+    const lit = /<div class="spot"/.test(src);
+    check(`${f} links the shared ground`, linked);
+    check(`${f} declares none of its own`, !own,
+      own ? "a local .sky, .spot, field or spotlight" : "");
+    check(`${f} has the light on it`, lit);
+  }
+  /* And the shared files have to actually contain the thing. A link to an
+     empty stylesheet passes every check above. */
+  const sky = fsmod.readFileSync(path.join(ROOT, "sky.css"), "utf8");
+  check("sky.css carries the field and the spotlight",
+    /body::before\{/.test(sky) && /\.spot\{/.test(sky) && /--px/.test(sky));
+  /* Comments stripped first: this file EXPLAINS at length why nothing in it
+     is animated, and matching the prose was the assertion failing on its own
+     rationale. */
+  const rules = sky.replace(/\/\*[\s\S]*?\*\//g, "");
+  check("and nothing in it is animated — that is the point of replacing the blooms",
+    !/animation\s*:|@keyframes/.test(rules), "painted once");
+  const js = fsmod.readFileSync(path.join(ROOT, "sky.js"), "utf8");
+  check("sky.js moves the light for a real pointer only",
+    /hover:hover\) and \(pointer:fine/.test(js) && /prefers-reduced-motion/.test(js));
+}
+
 console.log("\nerrors:", errs);
 if (errs.length) bad++;
 await browser.close(); srv.close();

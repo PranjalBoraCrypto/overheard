@@ -15,6 +15,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/sky.css">
 <link rel="stylesheet" href="/deal.css">
 
 <!-- ═══════════════════════════════════════════════════════════════════════
@@ -89,7 +90,9 @@
   root.dataset.mode = !who ? "out" : (who === mine ? "me" : "them");
 
   if (who) {
-    root.style.setProperty("--me", hueOf(who).toFixed(1));
+    const h = hueOf(who).toFixed(1);
+    root.style.setProperty("--me", h);
+    root.style.setProperty("--sky-h", h);   /* the ground under a profile is that identity's colour */
     window.__who = who;
     /* Resolves to null rather than rejecting. A page that renders "could not
        reach the archive" is a page; an unhandled rejection is a blank one. */
@@ -119,29 +122,15 @@ body{
 }
 :root{--me:189}                          /* until the head script says otherwise */
 .you{color:hsl(var(--me) 88% 66%)}
-.shell{max-width:1180px;margin:0 auto;padding:0 var(--gutter) var(--s6)}
+.shell{position:relative;z-index:1;max-width:1180px;margin:0 auto;padding:0 var(--gutter) var(--s6)}
 a{color:inherit}
 h1,h2,h3{font-weight:700;letter-spacing:-.02em}
 
-/* ── THE PAGE TEXTURE ──────────────────────────────────────────────────────
-   One layer, on body::before, masked so it never reaches an edge it would
-   have to stop dead on. The deals page learned this the expensive way: a
-   field that ends on a straight line reads as a background somebody forgot
-   to remove. Fixed, rasterised once, and pointer-events:none so it can never
-   eat a click. */
-body::before{
-  content:"";position:absolute;inset:0 0 40px 0;z-index:-1;pointer-events:none;
-  background:
-    radial-gradient(62% 90% at 12% 0%, hsl(var(--me) 100% 60% / .085), transparent 62%),
-    radial-gradient(rgba(147,182,192,.12) 1px, transparent 1.2px);
-  background-size:auto, 26px 26px;
-  -webkit-mask-image:linear-gradient(#000 34%,rgba(0,0,0,.3) 70%,transparent),
-                     linear-gradient(90deg,#000 66%,rgba(0,0,0,.32) 87%,transparent);
-          mask-image:linear-gradient(#000 34%,rgba(0,0,0,.3) 70%,transparent),
-                     linear-gradient(90deg,#000 66%,rgba(0,0,0,.32) 87%,transparent);
-  -webkit-mask-composite:source-in;
-          mask-composite:intersect;
-}
+/* The ground — the field and the spotlight — is /sky.css, linked above and
+   shared with every other page. This page is the one that tints it: --sky-h
+   is set by the head script from the identity's own key, so the wash under
+   a profile is that identity's colour. Everywhere else it stays the brand's,
+   because everywhere else there is no one identity to be about. */
 
 /* ── LAYOUT ────────────────────────────────────────────────────────────────
    Two columns on a desktop: identity pinned on the left because it is what
@@ -407,6 +396,8 @@ html[data-mode="them"] [data-mine]{display:none}
 </style>
 
 <body>
+<div class="spot" aria-hidden="true"></div>
+
 <overheard-bar></overheard-bar>
 
 <main class="shell">
@@ -543,6 +534,7 @@ html[data-mode="them"] [data-mine]{display:none}
   <overheard-foot></overheard-foot>
 </main>
 
+<script src="/sky.js" type="module"></script>
 <script src="/bar.js" type="module"></script>
 <script src="/foot.js" type="module"></script>
 <script src="/visits.js" type="module"></script>

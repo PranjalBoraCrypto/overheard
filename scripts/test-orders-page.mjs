@@ -90,19 +90,21 @@ ok("it never assigns markup",
 }
 
 console.log("\n=== B. it is the same site");
-const rule = (t, sel) => {
-  const m = t.match(new RegExp(sel.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "\\{([^}]*)\\}"));
-  return m ? m[1].replace(/\s+/g, "") : null;
-};
-for (const sel of [".sky", ".sky i", ".sky i:nth-child(1)", ".sky i:nth-child(2)", ".spot"]) {
-  const mine = rule(page, sel), theirs = rule(rooms, sel);
-  ok(`${sel} matches rooms.html character for character`,
-    Boolean(theirs) && mine === theirs,
-    mine === theirs ? "" : `\n        here:  ${mine}\n        rooms: ${theirs}`);
+/* This compared three pages' atmosphere against rooms.html, character for
+   character, because there was no shared stylesheet to compare against. There
+   is now — /sky.css and /sky.js — and the check inverts with it: not "does
+   this page's copy match" but "does this page have a copy at all". A page
+   holding nothing of its own cannot drift from the site. */
+for (const [name, file] of [["orders", page], ["the order form", hire], ["the board", board]]) {
+  ok(`${name} stands on the shared ground`,
+    /<link rel="stylesheet" href="\/sky\.css">/.test(file) &&
+    /<script src="\/sky\.js" type="module">/.test(file));
+  ok(`${name} declares no atmosphere of its own`,
+    !/^\s*\.sky[\s{]/m.test(file) && !/^\s*\.spot\{/m.test(file) &&
+    !/body::before\{/.test(file) && !/setProperty\("--px"/.test(file));
+  ok(`${name} has the light on it`, /<div class="spot"/.test(file));
 }
 ok("the ground is the site's --void", /body\{background:var\(--void\)/.test(page.replace(/\s+/g, "")));
-ok("and something moves the spotlight",
-  /setProperty\("--px"/.test(page) && /hover: hover\) and \(pointer: fine/.test(page));
 
 console.log("\n=== C. the bar, and with it every identity state");
 /* The three states the visitor asked for are all bar.js's, and mounting it is
