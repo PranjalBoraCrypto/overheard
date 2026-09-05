@@ -3,8 +3,21 @@
 <head>
 <meta charset="utf-8">
 <title>og</title>
-<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
+/* THE FONTS ARE LOCAL, AND THAT IS THE POINT.
+   This used to pull Outfit and IBM Plex Mono from Google. It worked until it
+   was run somewhere without access to fonts.googleapis.com — and then it did
+   not fail, it quietly rendered every share image in the fallback font, which
+   is the kind of break nobody notices until the images are already published.
+   The three subsets in scripts/og-fonts are 43KB together, they are served by
+   make-og.mjs's own server, and this render now produces the same picture on
+   any machine with or without a network. */
+@font-face{font-family:"Outfit";font-weight:400;font-style:normal;font-display:block;
+  src:url("/f/outfit-400.woff2") format("woff2")}
+@font-face{font-family:"Outfit";font-weight:800;font-style:normal;font-display:block;
+  src:url("/f/outfit-800.woff2") format("woff2")}
+@font-face{font-family:"IBM Plex Mono";font-weight:400;font-style:normal;font-display:block;
+  src:url("/f/plex-mono-400.woff2") format("woff2")}
 /* The share image, 1200×630, rendered by scripts/make-og.mjs.
    ─────────────────────────────────────────────────────────────────────────
    One template, one per page, so a link to any part of this site arrives
@@ -22,14 +35,18 @@ body{
     #00070A;
   color:#EDFAFE;font-family:"Outfit",system-ui,sans-serif;-webkit-font-smoothing:antialiased;
 }
-/* the trace grid, the same one the site draws behind its hero */
+/* THE SAME GROUND THE PAGES STAND ON. It was a 60px line grid, which was the
+   site's texture at the time; the site now uses a wafer grid of dots at 26px
+   from /sky.css, so this follows it. A share image is the first thing anybody
+   sees of this site and the page is the second — they should be the same
+   place. Scaled up a little here, because 26px dots on an image that gets
+   shown at 500px wide in a timeline disappear. */
 .grid{
-  position:absolute;inset:0;opacity:.5;
-  background-image:
-    linear-gradient(rgba(0,180,215,.07) 1px,transparent 1px),
-    linear-gradient(90deg,rgba(0,180,215,.07) 1px,transparent 1px);
-  background-size:60px 60px;
-  mask-image:radial-gradient(120% 100% at 30% 40%,#000 30%,transparent 78%);
+  position:absolute;inset:0;
+  background-image:radial-gradient(rgba(147,182,192,.16) 1.4px,transparent 1.6px);
+  background-size:34px 34px;
+  mask-image:radial-gradient(120% 100% at 30% 40%,#000 30%,transparent 80%);
+  -webkit-mask-image:radial-gradient(120% 100% at 30% 40%,#000 30%,transparent 80%);
 }
 .edge{position:absolute;left:0;right:0;top:0;height:5px;
   background:linear-gradient(90deg,#5FEBFF,#00B4D7 45%,rgba(0,180,215,0))}

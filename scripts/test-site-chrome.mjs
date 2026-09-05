@@ -33,13 +33,14 @@ let REGISTERED = true, MESSAGES = 0, PROOF = false;
 const srv = http.createServer((req, res) => {
   const u = new URL(req.url, "http://x");
   let p = u.pathname;
+  /* WHAT VERCEL ACTUALLY DOES, rather than a list of the pages that existed
+     when this was written. cleanUrls:true in vercel.json means an
+     extensionless path is served by the .html file of that name — so that is
+     the rule here too. It was seven hard-coded lines, and the three pages
+     added since were all missing from it, which made the share-image check
+     read as "these pages have no og:image" when what they had was no route. */
   if (p === "/") p = "/index.html";
-  if (p === "/what") p = "/what.html";
-  if (p === "/city") p = "/city.html";
-  if (p === "/play") p = "/play.html";
-  if (p === "/v") p = "/v.html";
-  if (p === "/rooms") p = "/rooms.html";
-  if (p === "/create") p = "/create.html";
+  else if (!path.extname(p) && fs.existsSync(path.join(ROOT, p + ".html"))) p += ".html";
   const J = (o) => { res.writeHead(200, { "content-type": "application/json" }); res.end(JSON.stringify(o)); };
 
   if (p === "/api/note") return J({ did: DID, registered: REGISTERED, known: true, fingerprint: "ab".repeat(8), note: "a note" });
@@ -468,8 +469,31 @@ console.log("\n=== 8. a phone");
 /* ── 9. the share images ────────────────────────────────────────────────── */
 console.log("\n=== 9. a pasted link arrives with a picture");
 {
+  /* Every page the site has. The four at the bottom had no picture at all —
+     a link to any of them arrived as a bare grey rectangle, which is what a
+     link nobody has looked after looks like.
+
+     THE LAST TWO ARE noindex AND STILL LISTED HERE, on purpose. Robots and
+     link previews are two different questions: a page can be kept out of a
+     search index and still be a page somebody sends to somebody, which is
+     exactly what these two are for.
+
+     ── STILL TO COME: THE TESTNET PAGE ────────────────────────────────────
+     There is no testnet page yet — the bar carries a "Testnet · soon" pill
+     which is deliberately a label and not a link. When that page exists, it
+     needs the same three things as everything above it, in this order:
+       1. an entry in IMAGES in scripts/make-og.mjs, and a re-render;
+       2. the og:/twitter: block in its own <head>, copied from any page here;
+       3. a row in this list, which is what stops it being forgotten.
+     Its picture cannot be made now and should not be: every line in these
+     images is true on the PAPER RAIL, where nothing of value moves, and a
+     testnet image would have to say something about real value to be worth
+     having. Written down here rather than remembered, because this list is
+     the thing somebody will be looking at. */
   const PAIRS = [["/", "home"], ["/rooms", "rooms"], ["/create", "create"], ["/v", "verify"],
-                 ["/play", "play"], ["/city", "city"], ["/what", "what"]];
+                 ["/play", "play"], ["/city", "city"], ["/what", "what"],
+                 ["/hire", "hire"], ["/orders", "orders"], ["/profile", "profile"],
+                 ["/deals-preview-78cb4a1be923c6b4.html", "deals"]];
   for (const [route, img] of PAIRS) {
     await pg.goto("http://localhost:8971" + route);
     const m = await pg.evaluate(() => ({
@@ -492,6 +516,21 @@ console.log("\n=== 9. a pasted link arrives with a picture");
     const there = fsmod.existsSync(f);
     check(`og/${img}.png exists`, there && fsmod.statSync(f).size > 20000,
       there ? `${(fsmod.statSync(f).size / 1024) | 0}KB` : "missing");
+  }
+  /* NOTHING IN /og THAT NOTHING POINTS AT. An orphan is either a page that
+     lost its tag or an image somebody forgot to wire up, and both are quiet. */
+  const named = new Set(PAIRS.map(([, i]) => `${i}.png`));
+  const orphans = fsmod.readdirSync(path.join(ROOT, "og")).filter((f) => !named.has(f));
+  check("and no picture in /og that no page claims", orphans.length === 0, orphans.join(", "));
+
+  /* THE FONTS THE PICTURES ARE DRAWN IN. make-og.mjs used to fetch Outfit and
+     IBM Plex Mono from Google, which does not fail when it cannot reach them
+     — it renders every image in the fallback face and says nothing. The
+     subsets live beside the script now, and the script refuses to run without
+     them; this is the check that they are still in the repository. */
+  for (const f of ["outfit-400.woff2", "outfit-800.woff2", "plex-mono-400.woff2"]) {
+    const p2 = path.join(ROOT, "..", "scripts", "og-fonts", f);
+    check(`the renderer still has ${f}`, fsmod.existsSync(p2) && fsmod.statSync(p2).size > 5000);
   }
 }
 
