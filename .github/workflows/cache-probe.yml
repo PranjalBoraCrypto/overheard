@@ -65,9 +65,14 @@ jobs:
                   ${extra:+-H "$extra"} "$url")
             local cache
             cache=$(grep -i '^x-vercel-cache:' /tmp/h | tr -d '\r' | awk '{print $2}')
-            local src
-            src=$(python3 -c "import json;print(json.load(open('/tmp/b')).get('source','?'))" 2>/dev/null || echo '-')
-            echo "$out ${cache:--} $src"
+            # `source` is live/snapshot/none. `collapsed` is the CDN state of
+            # the endpoint's OWN internal hop to its canonical URL, which is
+            # the number this whole probe exists to read: the outer response
+            # is deliberately no-store, so the outer x-vercel-cache is MISS by
+            # design and says nothing about whether anything was collapsed.
+            local fields
+            fields=$(python3 -c "import json;d=json.load(open('/tmp/b'));print(d.get('source','?'),d.get('collapsed','absent'))" 2>/dev/null || echo '- -')
+            echo "$out ${cache:--} $fields"
           }
 
           echo "== A. the SAME url four times (this is the case the claim is about)"
@@ -104,4 +109,4 @@ jobs:
           say "B distinct since x4: $B"
           say "C same url, no-store header x2: $C"
           say "D no-since [$D1] vs since=0 [$D2]"
-          say "columns: http | seconds | bytes | x-vercel-cache | source"
+          say "columns: http | seconds | bytes | outer-cache | source | collapsed(inner-cache)"
