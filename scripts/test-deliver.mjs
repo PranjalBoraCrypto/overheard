@@ -96,7 +96,8 @@ async function run(profileOk, useFrames = frames, mod = null) {
   const w = mod?.wake ?? wake;
   const r = await w({ fetch: stub, base: "http://stub", log: (l) => lines.push(l),
                       now: NOW, seed: SEED, live: true });
-  return { posted, lines, texts, out: lines.join("\n"), wrote: r.wrote ?? [], stalled: r.stalled ?? [] };
+  return { posted, lines, texts, out: lines.join("\n"), wrote: r.wrote ?? [],
+           stalled: r.stalled ?? [], declined: r.declined ?? [] };
 }
 
 const good = await run(true);
@@ -231,6 +232,29 @@ say("and posts nothing about that deal at all",
   bad2.texts.every((t) => t.startsWith("tclk1 ") && /"type":"offer"/.test(t)),
   bad2.texts.map((t) => t.slice(0, 40)).join(" | ") || "nothing");
 
+/* ── SILENT TO THE BUYER IS NOT THE SAME AS SILENT TO US ───────────────────
+ * MEASURED on 5 September. A buyer ordered a summary of `lobbygsgfguututu455`,
+ * a room that has never existed. The shop refused, explained once, and went
+ * quiet — every line of which is correct. For the next twenty hours every
+ * wake then annotated `1 owed` and `nothing was written` and nothing else,
+ * which is exactly what a shop that had silently swallowed an order would
+ * also say. Telling the two apart took a purpose-built probe, a handler run
+ * and a deal-room read.
+ *
+ * So the quiet wakes now report the deal as DECLINED. Two properties, and the
+ * second matters as much as the first: it must appear, and it must not appear
+ * as a stall — a warning here would train a reader to scroll past the warning
+ * that means somebody paid and got nothing.
+ * ───────────────────────────────────────────────────────────────────────── */
+say("a wake that stays quiet still says the deal was declined",
+  bad2.declined.some((x) => /declined/.test(x)), JSON.stringify(bad2.declined));
+say("and does NOT report it as a stalled deal",
+  bad2.stalled.length === 0,
+  bad2.stalled.length ? JSON.stringify(bad2.stalled) : "nothing stalled, correctly");
+say("while the wake that actually did the refusing reports it as a stall, once",
+  bad1.stalled.length === 1 && bad1.declined.length === 0,
+  `stalled ${JSON.stringify(bad1.stalled).slice(0, 60)} · declined ${JSON.stringify(bad1.declined)}`);
+
 /* ── AND IT SURVIVES THE PROCESS ENDING, WHICH THE MEMO DOES NOT ───────────
  * MEASURED on the live window of 4 September 21:15: this note went out TWICE.
  * The workflow runs two processes — one single wake, then the loop — and the
@@ -262,7 +286,10 @@ say("and posts nothing about that deal at all",
     if (u.includes("/api/profile")) return { ok: false, status: 503, json: async () => ({}) };
     return { ok: true, status: 200, json: async () => ({ messages: badFrames }) };
   };
-  await fresh.wake({ fetch: stub, base: "http://stub", log: () => {}, now: NOW, seed: SEED, live: true });
+  const rr = await fresh.wake({ fetch: stub, base: "http://stub", log: () => {}, now: NOW, seed: SEED, live: true });
+  say("a new process reports the deal as declined rather than as nothing at all",
+    (rr.declined ?? []).length === 1 && (rr.stalled ?? []).length === 0,
+    `declined ${JSON.stringify(rr.declined ?? [])} · stalled ${JSON.stringify(rr.stalled ?? [])}`);
   say("a new process does not repeat a note already in the deal room",
     !posted.some((t) => /^Overheard cannot deliver this order/.test(t)),
     posted.map((t) => t.slice(0, 34)).join(" | ") || "silent, correctly");
@@ -385,3 +412,43 @@ say("the same stall is not reported twice in one wake",
 say("on the paper rail the shop still delivers",
   good.posted.includes("delivery") && good.posted.includes("reveal"),
   good.posted.join(" → "));
+
+
+/* ── A FAILED WRITE HAS TO SAY WHY ─────────────────────────────────────────
+ * MEASURED on 5 September: six locks failed across ten windows, and the whole
+ * surviving record of all six is the word FAILED. Not which room refused, not
+ * whether the board fallback was tried, not the status code. settle() knew all
+ * of it and returned it; the line that recorded the result replaced it with
+ * one word.
+ *
+ * This is the third time on this project that the reason for a failure existed
+ * and was discarded on the way to the only channel that can be read back. The
+ * assertion is therefore not "it failed" — that was never in doubt — but that
+ * the record of the failure is worth reading.
+ * ───────────────────────────────────────────────────────────────────────── */
+{
+  const fresh = await import("./runner.mjs?whyfail=" + Math.random());
+  const stub = async (url) => {
+    const u = String(url);
+    /* The venue takes nothing today, in either room, and says why. */
+    if (u.includes("say-signed")) return { ok: false, status: 429, text: async () => "slow down" };
+    if (u.includes("/api/profile"))
+      return { ok: true, status: 200, json: async () => ({
+        profile: { did: OTHER, count: 5, unique: 5, rooms: ["lobby"], first: "2026-09-01", last: "2026-09-03" } }) };
+    return { ok: true, status: 200, json: async () => ({ messages: frames }) };
+  };
+  const r = await fresh.wake({ fetch: stub, base: "http://stub", log: () => {},
+                               now: NOW, seed: SEED, live: true });
+  const failed = (r.wrote ?? []).filter((w) => /FAILED/.test(w));
+  say("a refused write is recorded at all", failed.length > 0, JSON.stringify(r.wrote ?? []));
+  say("and records more than the bare word FAILED",
+    failed.length > 0 && failed.every((w) => w.replace(/^[a-z-]+:/, "").trim() !== "FAILED"),
+    failed.join(" · "));
+  say("and names the status the venue actually returned",
+    failed.some((w) => /429/.test(w)), failed.join(" · "));
+  /* `wrote` is joined with " · " to build the annotation, so a field carrying
+     that separator would split one event into two in the only place anybody
+     reads it. */
+  say("without a separator that would split one event into two",
+    failed.every((w) => !w.includes(" · ")), failed.join(" | "));
+}

@@ -812,7 +812,21 @@ export async function wake(opts = {}) {
      reaches the wire is counted here, whichever helper put it there. */
   const settled = async (room, text, what) => {
     const r = await settle(agent, room, text, opts, log);
-    wrote.push(`${what}:${/^ok/.test(r) ? "ok" : "FAILED"}`);
+    /* ── THE REASON WAS ALREADY IN HAND, AND THIS LINE THREW IT AWAY ───────
+       settle() returns one of four things: "ok", "ok, on the board instead of
+       <room>", "FAILED · <why>", or "FAILED in both rooms · <why>". Three of
+       them carry the answer. This reduced all four to "ok" or "FAILED".
+
+       MEASURED on 5 September: six locks failed across ten windows and the
+       entire surviving record of all six is the word FAILED — not which room
+       refused, not whether the board fallback was tried, not the status code.
+       post() has always kept its reason; settle() is the path everything that
+       moves money goes down, and it kept none.
+
+       Its own " · " is flattened first, because `wrote` is joined with " · "
+       to make the annotation and a separator inside a field turns one event
+       into two. */
+    wrote.push(`${what}:${r.replace(/ · /g, " — ").slice(0, 90)}`);
     return r;
   };
 
@@ -1111,6 +1125,21 @@ export async function wake(opts = {}) {
      in different clothes. The same sentence twice tells a reader nothing the
      first one did not. */
   const stall = (why) => { log(`  ${why}`); if (!stalled.includes(why)) stalled.push(why); };
+  /* ── A DEAL WE HAVE ALREADY REFUSED IS NOT A DEAL WE OWE ─────────────────
+     An order this shop cannot fill is declined ONCE, out loud, in the buyer's
+     own room, and then deliberately left alone until it refunds — repeating
+     it would put eighty-odd copies of one sentence in front of one person.
+     That silence is right. Being unable to tell it apart from a stall is not.
+
+     MEASURED on 5 September: a buyer ordered a summary of `lobbygsgfguututu455`,
+     a room that does not exist. The shop refused, explained, and went quiet —
+     correctly. For the next twenty hours every wake annotated `1 owed` and
+     `nothing was written` with no third line between them, which is precisely
+     what a shop that had silently eaten an order would also say. Reading that
+     pair took a purpose-built probe, a handler run and a room read.
+
+     So the quiet path gets its own line. Not a warning: nothing is wrong. */
+  const declined = [];
   for (const d of p.owed) {
     const job = d.offer.body?.job?.id;
     const contract = d.accept?.body?.contract;
@@ -1241,6 +1270,14 @@ export async function wake(opts = {}) {
               TOLD_UNDELIVERABLE.add(contract);
             }
           }
+        } else {
+          /* Already refused, already explained. The buyer has the only
+             message they are getting and their money comes back on its own.
+             Said here so that "we owe somebody work" and "we told somebody no
+             and the clock is running" stop looking identical from outside. */
+          const why = `${job}: declined (${done.why})`;
+          if (!declined.includes(why)) declined.push(why);
+          log(`  already declined and explained — leaving it to refund`);
         }
         continue;
       }
@@ -1313,7 +1350,17 @@ export async function wake(opts = {}) {
       stalled.slice(0, 6).join(" · ")
         + (stalled.length > 6 ? ` · …and ${stalled.length - 6} more` : ""), log);
 
-  return { plan: p, buys, refusals: no, wrote, stalled, agent: agent?.did ?? null };
+  /* NOTICE, NOT WARNING, AND THAT IS THE WHOLE POINT. These are orders the
+     shop correctly refused and correctly explained. Raising them to warning
+     would train a reader to scroll past the line above, which is the one that
+     must never be scrolled past. */
+  if (declined.length && !no.length)
+    ann("notice", `${declined.length} deal(s) declined and already explained`,
+      declined.slice(0, 4).join(" · ")
+        + (declined.length > 4 ? ` · …and ${declined.length - 4} more` : "")
+        + " — the buyer has been told and the money returns at the refund deadline", log);
+
+  return { plan: p, buys, refusals: no, wrote, stalled, declined, agent: agent?.did ?? null };
 }
 
 /* Only when run directly, so importing this in a test never touches a wire.
@@ -1389,7 +1436,7 @@ export async function loop({ live = false, everyMs, forMs, wakeFn = wake, log = 
   const every = everyMs ?? Number(process.env.WAKE_EVERY_SECONDS ?? 60) * 1000;
   const until = Date.now() + (forMs ?? Number(process.env.WAKE_WINDOW_SECONDS ?? 18000) * 1000);
   const b = budget();
-  let n = 0, upstream = 0, failed = 0, wrote = 0, stalled = 0;
+  let n = 0, upstream = 0, failed = 0, wrote = 0, stalled = 0, declined = 0;
   while (Date.now() < until) {
     const started = Date.now();
     n++;
@@ -1397,6 +1444,7 @@ export async function loop({ live = false, everyMs, forMs, wakeFn = wake, log = 
       const r = await wakeFn({ live, annotate: b.ann });
       if (r?.wrote?.length) wrote += r.wrote.length;
       if (r?.stalled?.length) stalled += r.stalled.length;
+      if (r?.declined?.length) declined += r.declined.length;
       if (r?.refusals?.length) log("nothing was written.");
     } catch (e) {
       if (e?.upstream) { upstream++; log(`board unreadable: ${e.message} — nothing to do this wake`); }
@@ -1413,13 +1461,16 @@ export async function loop({ live = false, everyMs, forMs, wakeFn = wake, log = 
   }
   const said = `${n} wake(s), ${wrote} frame(s) written`
     + (stalled ? `, ${stalled} paid deal(s) STALLED` : "")
+    /* Counted and said, but never allowed to colour the line: a window whose
+       only unusual event is a correctly declined order is a normal window. */
+    + (declined ? `, ${declined} declined and explained` : "")
     + (upstream ? `, ${upstream} with an unreadable board` : "")
     + (failed ? `, ${failed} FAILED` : "");
   log(`window closed after ${said}`);
   /* Written with annotate() directly and NOT through the budget, because this
      is the one line that must exist whatever else the window did. */
   annotate(failed || stalled ? "warning" : "notice", "the window closed", said, log);
-  return { wakes: n, upstream, failed, wrote, stalled, dropped: b.dropped };
+  return { wakes: n, upstream, failed, wrote, stalled, declined, dropped: b.dropped };
 }
 
 /* Only when run directly, so importing this in a test never touches a wire.
