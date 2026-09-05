@@ -476,7 +476,20 @@ const read = (pg) => pg.evaluate(() => ({
   signedout: document.getElementById("signedout").hidden,
   empty: document.getElementById("empty").hidden,
   nofilter: document.getElementById("nofilter").hidden,
-  stats: [...document.querySelectorAll(".stat b")].map((e) => e.textContent),
+  /* ── READ BY NAME, NOT BY POSITION ──────────────────────────────────────
+     This was `[...document.querySelectorAll(".stat b")]` and every assertion
+     below indexed into it — stats[0] is placed, stats[3] is committed. That
+     is a test coupled to the ORDER of four boxes, and the moment the summary
+     stopped being four boxes of equal weight it started asserting about the
+     wrong numbers while still passing four of them. The ids were always the
+     real handles. */
+  stats: (() => {
+    const n = (id) => document.getElementById(id)?.textContent ?? null;
+    /* A plain object, not an array with names bolted on: this crosses the
+       browser boundary as JSON, and JSON drops every non-index property of an
+       array. The named version came back as four undefineds. */
+    return { placed: n("nAll"), open: n("nOpen"), shut: n("nShut"), sum: n("nSum") };
+  })(),
   chips: [...document.querySelectorAll(".chip")].map((c) => ({
     on: c.getAttribute("aria-pressed") === "true", n: c.querySelector("span").textContent })),
   rows: document.querySelectorAll(".hrow").length,
@@ -495,13 +508,13 @@ console.log("\n=== E. the two sources are merged, not stacked");
   const s = await read(pg);
   /* 23 archived, 3 of them ALSO returned live. A page that stacked instead of
      merging would say 26 — and would be overstating what somebody spent. */
-  ok("an order in both sources is counted once", s.stats[0] === "23",
-    `${s.stats[0]} shown, ${FIXTURE.length} archived + ${liveOverlap} of them live again`);
+  ok("an order in both sources is counted once", s.stats.placed === "23",
+    `${s.stats.placed} shown, ${FIXTURE.length} archived + ${liveOverlap} of them live again`);
   ok("open and closed add up to the total",
-    Number(s.stats[1]) + Number(s.stats[2]) === Number(s.stats[0]),
-    `${s.stats[1]} + ${s.stats[2]} = ${s.stats[0]}`);
+    Number(s.stats.open) + Number(s.stats.shut) === Number(s.stats.placed),
+    `${s.stats.open} + ${s.stats.shut} = ${s.stats.placed}`);
   ok("the committed figure is the sum of the amounts, not a guess",
-    s.stats[3] === "13,000",
+    s.stats.sum === "13,000",
     "8×500 + 8×250 + 7×1000 across the fixture");
   await ctx.close();
 }
@@ -532,8 +545,15 @@ console.log("\n=== F. paging, and the pager never points at nothing");
      during a refactor with the suite still green. */
   await pg.click('.chip[data-filter="open"]'); await pg.waitForTimeout(250);
   s = await read(pg);
+  /* Eight, not seven. Seven of the fixture's offers are still inside their own
+     expiry — and the eighth is one the SHOP HAS ACCEPTED, whose offer expiry
+     passed hours ago. It used to count as closed, because this page decided
+     "open" from the offer's clock alone. That is wrong once a deal exists:
+     an answered order is not closed by its own expiry, it is waiting for
+     payment, and calling it closed while the shop waits on you is the same
+     class of lie as the Pay button over a paid order. */
   ok("changing the filter from a later page resets to the first one",
-    s.where === "1 of 1" && s.rows === 7, `${s.where}, ${s.rows} rows`);
+    s.where === "1 of 1" && s.rows === 8, `${s.where}, ${s.rows} rows`);
   ok("and the pager hides itself when one page is all there is", s.pager === true);
   await ctx.close();
 }
@@ -545,9 +565,17 @@ console.log("\n=== G. the filters agree with the figures");
   await pg.waitForTimeout(1200);
   const s = await read(pg);
   ok("each chip carries its own count",
-    s.chips.map((c) => c.n).join("/") === "23/7/16", s.chips.map((c) => c.n).join("/"));
-  ok("and those counts are the ones in the cards above",
-    s.chips[0].n === s.stats[0] && s.chips[1].n === s.stats[1] && s.chips[2].n === s.stats[2]);
+    s.chips.map((c) => c.n).join("/") === "23/8/15", s.chips.map((c) => c.n).join("/"));
+  /* Named rather than left as a number that moved: the eighth open order is
+     accepted-and-unpaid with an expired offer. A deal the shop has answered
+     is still going. */
+  ok("an accepted order is not closed by its offer's expiry",
+    String(s.chips[1].n) === "8" && String(s.chips[2].n) === "15",
+    `open ${s.chips[1].n}, closed ${s.chips[2].n} — seven unexpired offers, plus one the shop answered`);
+  ok("and those counts are the ones in the summary above",
+    String(s.chips[0].n) === s.stats.placed && String(s.chips[1].n) === s.stats.open
+      && String(s.chips[2].n) === s.stats.shut,
+    `${s.chips.map((c) => c.n).join("/")} vs ${s.stats.placed}/${s.stats.open}/${s.stats.shut}`);
   await pg.click('.chip[data-filter="shut"]'); await pg.waitForTimeout(250);
   const t = await read(pg);
   ok("exactly one chip is pressed at a time",
@@ -594,7 +622,12 @@ console.log("\n=== H. the states that are not a list");
   ok("with no identity it says so, and offers the way to make one",
     s.signedout === false && s.skel === true,
     "orders are matched to a key, so no key is a different answer from no orders");
-  ok("and shows no figures it cannot compute", s.stats.every((v) => v === "—") || s.stats.length === 0);
+  /* Every figure is either absent or still the em-dash placeholder. Nothing
+     may render a zero here: "0 orders" and "we could not read your orders"
+     look identical and mean opposite things. */
+  ok("and shows no figures it cannot compute",
+    Object.values(s.stats).every((v) => v === null || v === "—"),
+    JSON.stringify(s.stats));
   await ctx.close();
   signedInAs = DID;
 }
@@ -722,9 +755,16 @@ console.log("\n=== K. the buyer can actually pay — and is never asked to pay t
     "this is the screenshot that started it");
   const words = await pg.$eval(".hactwords b", (e) => e.textContent);
   ok("it says the payment is in, in the buyer's words", /paid/i.test(words), words);
+  /* The pill is the shared component now, and it says the shared word:
+     "Funded", not "paid". A public board shows strangers' deals, and "paid"
+     does not say by whom — so the possessive half moved to the sentence
+     underneath, which is the one that knows the deal is yours. */
   ok("and the row's own pill agrees with it",
-    (await pg.$eval(".hitem .hstate", (e) => e.textContent)) === "paid",
-    await pg.$eval(".hitem .hstate", (e) => e.textContent));
+    (await pg.$eval(".hitem .pill", (e) => e.textContent)) === "Funded",
+    await pg.$eval(".hitem .pill", (e) => e.textContent));
+  ok("while the sentence beneath it is the part that is personal",
+    /your payment/i.test(await pg.$eval(".hactwords span", (e) => e.textContent)),
+    await pg.$eval(".hactwords span", (e) => e.textContent));
   ok("and that there is nothing for them to do",
     /do not need to do anything/i.test(await pg.$eval(".hactwords span", (e) => e.textContent)));
   ok("the strip stops looking like a call to action",
@@ -814,11 +854,11 @@ console.log("\n=== K. the buyer can actually pay — and is never asked to pay t
      print at the bottom of the page is not a defence for a label that
      contradicts the sentence next to it. */
   ok("the pill says delivered, not open",
-    (await pg.$eval(".hitem .hstate", (e) => e.textContent)) === "delivered",
-    await pg.$eval(".hitem .hstate", (e) => e.textContent));
+    (await pg.$eval(".hitem .pill", (e) => e.textContent)) === "Delivered",
+    await pg.$eval(".hitem .pill", (e) => e.textContent));
   ok("and it does not read as still going",
-    (await pg.$$eval(".hitem .hstate.live", (n) => n.length)) === 0,
-    "green is the colour of a deal somebody is still waiting on");
+    (await pg.$eval(".hitem .pill", (e) => e.dataset.tone)) === "good",
+    await pg.$eval(".hitem .pill", (e) => e.dataset.tone));
   ok("the counters stop calling a delivered order still open",
     (await pg.$eval("#nOpen", (e) => e.textContent)) !== (await pg.$eval("#nAll", (e) => e.textContent)),
     `${await pg.$eval("#nOpen", (e) => e.textContent)} still open of ${await pg.$eval("#nAll", (e) => e.textContent)} — one of them is finished`);

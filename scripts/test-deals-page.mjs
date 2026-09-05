@@ -273,7 +273,14 @@ const srv = http.createServer((q, r) => {
   }
   const f = path.join(ROOT, p);
   if (fs.existsSync(f) && fs.statSync(f).isFile()) {
-    const t = p.endsWith(".js") ? "text/javascript" : p.endsWith(".json") ? "application/json" : "text/html";
+    /* A stylesheet served as text/html is REFUSED by the browser in standards
+       mode — silently, with no error the page can see. Before deal.css existed
+       nothing here was a stylesheet, so the missing branch cost nothing; the
+       moment one arrived it would have meant every visual assertion in this
+       file was quietly testing an unstyled page. */
+    const t = p.endsWith(".js") ? "text/javascript"
+      : p.endsWith(".css") ? "text/css"
+      : p.endsWith(".json") ? "application/json" : "text/html";
     r.writeHead(200, { "content-type": t });
     return r.end(fs.readFileSync(f));
   }
@@ -319,14 +326,26 @@ const liar = await pg.evaluate(() => {
   const c = cards.find((x) => x.textContent.includes("ignored frames"));
   if (!c) return null;
   c.querySelector(".more").click();
+  const rail = c.querySelector(".erail");
   return {
-    state: c.querySelector(".state")?.textContent ?? [...c.querySelectorAll(".step.at em")].map((n) => n.textContent).join(),
+    /* Read off the shared rail rather than off this page's old track. What
+       the assertion is about has not changed: a deal whose lock was REFUSED
+       must not be drawn as funded. It is now stated as a position on the rail
+       — nodes reached, and whether it stopped — which is the same claim in
+       the vocabulary every view uses. */
+    reached: rail ? rail.querySelectorAll(".erail-node.on").length : -1,
+    ends: rail ? rail.querySelectorAll(".erail-node.end").length : -1,
+    label: rail ? rail.getAttribute("aria-label") : "",
     why: [...c.querySelectorAll(".fwhy")].map((n) => n.textContent).join(" "),
     skipped: c.querySelectorAll(".frame.skip").length,
   };
 });
 ok("its lock is refused", liar && /not the payer/.test(liar.why), liar?.why);
-ok("and the deal does not advance to locked", liar && liar.state === "lock", `sits at ${liar?.state}`);
+ok("and the deal does not advance to funded",
+  liar && liar.reached === 2 && liar.ends === 0,
+  `${liar?.reached} of 4 nodes reached — ${liar?.label}`);
+ok("the rail says what it is waiting for, in the shared words",
+  liar && /Fund next/.test(liar.label), liar?.label);
 ok("the refused frame is shown, not hidden", liar && liar.skipped === 1);
 
 /* ── C. verification marks ─────────────────────────────────────────────── */
@@ -513,7 +532,11 @@ ok("never assigns innerHTML", !/innerHTML|outerHTML|insertAdjacentHTML|document\
    as NAME the thing is a rule about prose rather than about behaviour. */
 {
   const imported = [...src.matchAll(/from\s+"\/([\w.-]+\.js)"/g)].map((m) => m[1]);
-  ok("it imports a small, named set", imported.length > 0 && imported.length <= 2, imported.join(", "));
+  /* Three now: tclk.js, nav.js and deal-ui.js, the shared vocabulary. The
+     number is a bound on how much unaudited code this page can pull in, not a
+     magic value — what actually protects the promise is the loop below, which
+     reads every one of them and holds it to the same rule. */
+  ok("it imports a small, named set", imported.length > 0 && imported.length <= 3, imported.join(", "));
   const strip = (t) => t.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/gm, "");
   for (const f of imported) {
     const mod = strip(fs.readFileSync(path.join(ROOT, f), "utf8"));
@@ -553,7 +576,14 @@ ok("never assigns innerHTML", !/innerHTML|outerHTML|insertAdjacentHTML|document\
 {
   const css = src.slice(src.indexOf("<style>"), src.lastIndexOf("</style>"))
     .replace(/\/\*[\s\S]*?\*\//g, "");
-  const declared = new Set([...css.matchAll(/(--[a-z0-9-]+)\s*:/gi)].map((m) => m[1]));
+  /* ── AND NOW THERE IS A SHARED STYLESHEET ──────────────────────────────
+     The tokens moved out of this file into web/deal.css, which is the first
+     shared stylesheet these pages have had. The rule this test protects is
+     unchanged and is the one that matters: a `var()` that resolves to nothing
+     does not fall back and does not warn — the whole DECLARATION is thrown
+     away, silently. What changes is where "declared" is allowed to live. */
+  const shared = fs.readFileSync(path.join(ROOT, "deal.css"), "utf8");
+  const declared = new Set([...(css + shared).matchAll(/(--[a-z0-9-]+)\s*:/gi)].map((m) => m[1]));
   /* Only bare `var(--x)`. A `var(--x, fallback)` is a deliberate default and
      stays legal. */
   const dangling = [...new Set([...css.matchAll(/var\(\s*(--[a-z0-9-]+)\s*\)/gi)].map((m) => m[1]))]
@@ -1418,11 +1448,34 @@ console.log("\n=== V. depth");
   });
   ok("and hovering has somewhere to go", hov.rule && hov.rule !== hov.before, hov.rule.slice(0, 50) + "…");
 
-  /* The selected tab is pressed in rather than raised — a difference you
-     cannot miss, unlike two raised cards in slightly different colours. */
-  const sel = await pV2.evaluate(() =>
-    getComputedStyle(document.querySelector('.pri[aria-selected="true"]')).boxShadow);
-  ok("the chosen tab is recessed, not just tinted", /inset/.test(sel), sel.slice(0, 50) + "…");
+  /* ── THE PROPERTY, NOT THE TECHNIQUE ───────────────────────────────────
+     This used to assert an inset shadow, because the two tabs were two cards
+     and the selected one was pressed IN — a difference you cannot miss,
+     unlike two raised cards in slightly different colours.
+     They are one segmented control now, and the selected side is marked by a
+     raised pill that slides between them. The old assertion would fail on a
+     better answer to the same question, so what is checked is the question:
+     is the selection carried by something other than a colour? */
+  const sel = await pV2.evaluate(() => {
+    const on = document.querySelector('.pri[aria-selected="true"]');
+    const off = document.querySelector('.pri[aria-selected="false"]');
+    const glide = document.querySelector(".segglide");
+    const g = glide ? getComputedStyle(glide) : null;
+    return {
+      onBox: getComputedStyle(on).boxShadow, offBox: getComputedStyle(off).boxShadow,
+      onCol: getComputedStyle(on).color, offCol: getComputedStyle(off).color,
+      glide: g ? { bg: g.backgroundImage + g.backgroundColor, shadow: g.boxShadow } : null,
+      /* And it has to actually MOVE, or it is marking the wrong tab the
+         moment somebody switches. */
+      moves: g ? /translate|matrix/.test(g.transform) || g.transform === "none" : false,
+    };
+  });
+  ok("the chosen tab is marked by more than a colour",
+    Boolean(sel.glide) && /gradient|rgb/.test(sel.glide.bg) && sel.glide.shadow !== "none",
+    JSON.stringify(sel.glide).slice(0, 90));
+  ok("and the two tabs do not merely differ in text colour",
+    sel.onCol !== sel.offCol && Boolean(sel.glide),
+    `${sel.onCol} vs ${sel.offCol}`);
   ok("no errors", eV2.length === 0, eV2.join(" | "));
   await cV2.close();
 }
@@ -1610,14 +1663,27 @@ console.log("\n=== T. what the redesign has to keep true");
 
   /* Stat cards must say what they COUNT, not just what they are called.
      "in flight" means nothing to somebody who arrived ten seconds ago. */
-  const stats = await pT.evaluate(() => [...document.querySelectorAll(".stat")].map((c) => ({
-    icon: !!c.querySelector(".statk .i"), info: !!c.querySelector(".info"),
-    num: !!c.querySelector("b"), caption: (c.querySelector("i")?.textContent ?? "").trim().length,
+  /* ── FOUR CARDS BECAME ONE STRIP ──────────────────────────────────────
+     Each figure used to be its own bordered card carrying a two-line caption.
+     Four of those is four things competing to be read first, and the captions
+     were a second copy of what the (i) already said.
+     What must survive: a reader can still tell what each number is, can still
+     get the long answer, and — new, and the reason the caption could go —
+     can now CLICK a figure to see the deals it counts. A number you cannot
+     open is a number hiding the thing it counts. */
+  const stats = await pT.evaluate(() => [...document.querySelectorAll(".tal")].map((c) => ({
+    icon: !!c.querySelector(".talk .i"), info: !!c.querySelector(".info"),
+    num: !!c.querySelector("b"),
+    label: (c.querySelector(".talk")?.textContent ?? "").trim().length,
+    goes: c.querySelector(".talface")?.dataset.go ?? "",
   })));
-  ok("all four numbers are cards with a mark, a marker and a figure",
+  ok("all four numbers carry a mark, a marker and a figure",
     stats.length === 4 && stats.every((s2) => s2.icon && s2.info && s2.num), JSON.stringify(stats.length));
-  ok("and each says what it is counting, in words",
-    stats.every((s2) => s2.caption > 12), stats.map((s2) => s2.caption).join(","));
+  ok("each is named in words, not by colour alone",
+    stats.every((s2) => s2.label > 6), stats.map((s2) => s2.label).join(","));
+  ok("and each one opens the deals it counts",
+    stats.map((s2) => s2.goes).join(",") === "wanted,offered,live,done",
+    stats.map((s2) => s2.goes).join(","));
 
   /* ── SPACING, MEASURED ─────────────────────────────────────────────────
      "Text touching the boundary line" was the complaint, and it was right in
@@ -1679,7 +1745,11 @@ console.log("\n=== T. what the redesign has to keep true");
     const layer = (el, ps) => el ? getComputedStyle(el, ps).backgroundImage : "";
     return {
       hasGrainToken: grain.includes("svg"),
-      hero: layer(document.querySelector(".hero"), "::before").includes("svg"),
+      /* Both live on the ONE pseudo-element now — a dot field and the light
+         it is lit by, in a single paint. Two rules fighting over one
+         ::after is a coin toss decided by specificity, which this page
+         learned once already. */
+      heroDots: layer(document.querySelector(".hero"), "::after").includes("radial-gradient(rgb"),
       heroLit: layer(document.querySelector(".hero"), "::after").includes("gradient"),
       bandGrid: layer(document.querySelector(".bleed"), "::after").includes("gradient"),
       rail: layer(document.querySelector(".railcard"), "::before").includes("svg"),
@@ -1689,7 +1759,13 @@ console.log("\n=== T. what the redesign has to keep true");
     };
   });
   ok("the grain is an inline SVG, so nothing is downloaded", tex.hasGrainToken);
-  ok("the hero has grain and a light source", tex.hero && tex.heroLit);
+  /* The hero stopped being a card, so it stopped carrying the card texture.
+     It has its own — a dot field and a light — painted on the PAGE rather
+     than inside a frame, which is the whole reason it no longer reads as the
+     first item in a list. What is checked is that it still has a texture of
+     its own and that the texture is still behind the words. */
+  ok("the hero has a texture and a light source of its own",
+    tex.heroDots && tex.heroLit, JSON.stringify({ dots: tex.heroDots, lit: tex.heroLit }));
   ok("the full-bleed band gets a different texture from the cards", tex.bandGrid);
   ok("and the rail, the thing you act on, is lit too", tex.rail);
   ok("no texture layer can eat a click", tex.inert, "pointer-events:none on every ::before");

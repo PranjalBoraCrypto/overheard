@@ -50,33 +50,14 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/deal.css">
 <style>
-:root{
-  --navy-0:#000000; --navy-1:#02090C; --navy-2:#04141A;
-  --void:#00070A; --ink:var(--void);
-  --edge:#0E3A47; --edge-lit:#1B6478;
-  --white:#EAF7FB; --dim:#93B6C0; --faint:#5C818C;
-  --mint:#00B4D7; --blue:#58E9FF; --gold:#F2B33D; --red:#FF6B6B; --good:#3BE3B0;
-  --sell:#B98BFF;
-  --panel:rgba(4,20,26,.72);
-  --display:"Outfit",system-ui,sans-serif;
-  --mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
-  --ease:cubic-bezier(.22,.68,.24,1);
-
-  --s1:6px; --s2:10px; --s3:16px;
-  --s4:clamp(18px,2.2vw,24px);
-  --s5:clamp(26px,3.4vw,36px);
-  --s6:clamp(34px,5vw,56px);
-  --gutter:clamp(18px,4vw,40px);
-
-  --surf-a:rgba(6,26,33,.92);
-  --surf-b:rgba(2,11,15,.92);
-  --lip:inset 0 1px 0 rgba(150,235,255,.07);
-  --lift-1:0 2px 4px -2px rgba(0,0,0,.6), 0 14px 34px -22px rgba(0,0,0,.95);
-  --lift-2:0 3px 8px -3px rgba(0,0,0,.65), 0 26px 56px -26px rgba(0,0,0,1), 0 0 0 1px rgba(27,100,120,.35);
-
-  --grain:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)' opacity='.5'/%3E%3C/svg%3E");
-}
+/* ── THE TOKENS MOVED ──────────────────────────────────────────────────────
+   This block was a verbatim third copy of the same twenty-six declarations,
+   and the file said so: "there is no shared stylesheet to prevent that, so
+   the copy is the mechanism". There is one now — web/deal.css — and the copy
+   is gone with the reason for it. What stays inline below is the atmosphere,
+   which is a contract with the rest of the site rather than duplication. */
 *{box-sizing:border-box;margin:0;padding:0}
 [hidden]{display:none !important}
 
@@ -154,21 +135,39 @@ h1{font-weight:800;font-size:clamp(30px,5vw,42px);line-height:1;letter-spacing:-
 /* ── the four figures ─────────────────────────────────────────────────────
    Counts, never estimates, and each one says what it counted underneath —
    the difference between a dashboard and a scoreboard. */
-.stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:var(--s3);
-  margin-top:var(--s4)}
-.stat{position:relative;border:1px solid var(--edge);border-radius:14px;padding:var(--s4);
-  background:var(--panel);min-width:0;overflow:hidden}
-.stat::after{content:"";position:absolute;inset:0;pointer-events:none;border-radius:inherit;
-  background:linear-gradient(180deg,rgba(127,214,193,.05),transparent 42%)}
-.statk{display:flex;align-items:center;gap:7px;font-family:var(--mono);font-size:10px;
-  letter-spacing:.13em;text-transform:uppercase;color:var(--dim);margin:0 0 10px}
-.statk .i{width:13px;height:13px;color:var(--blue)}
-.stat b{display:block;font-family:var(--mono);font-weight:600;font-size:clamp(22px,3vw,28px);
-  letter-spacing:-.02em;color:var(--white);line-height:1.05;font-variant-numeric:tabular-nums}
-.stat i{display:block;font-style:normal;font-size:12.5px;color:var(--faint);margin-top:7px;
-  line-height:1.5}
-.stats .stat:nth-child(2) b{color:var(--good)}
-.stats .stat:nth-child(4) b{color:var(--blue)}
+/* ══════════════════════════════════════════════════════════════════════════
+ * THE SUMMARY
+ *
+ * Four boxes, four figures, four captions, all the same size — so the page
+ * opened with four things asking to be read first and no answer to the
+ * question somebody actually arrives with, which is "is anything waiting on
+ * me?".
+ *
+ * Asymmetric now. One figure is the news — how much is in flight, and how
+ * much FLOP is committed to it — and the other two are context, at the size
+ * context deserves. The captions went with the change: a line explaining a
+ * word the reader already understands is a caption written for the designer.
+ * ═════════════════════════════════════════════════════════════════════════*/
+.sum{display:grid;grid-template-columns:minmax(0,1.55fr) minmax(0,1fr);gap:1px;
+  margin-top:var(--s4);background:rgba(27,100,120,.22);border-radius:var(--r3);
+  overflow:hidden;box-shadow:var(--lip),var(--lift-1)}
+.sumlead{background:var(--surf-b);padding:var(--s4);display:grid;gap:7px;align-content:center}
+.sumlead b{font-family:var(--mono);font-weight:600;font-size:clamp(34px,5vw,48px);
+  line-height:1;letter-spacing:-.03em;color:var(--gold);font-variant-numeric:tabular-nums}
+.sumsub{color:var(--dim);font-size:var(--t-small);line-height:1.55}
+.sumsub b{font-family:var(--mono);font-size:inherit;color:var(--white);letter-spacing:0}
+.sumside{display:grid;grid-template-rows:1fr 1fr;gap:1px;background:rgba(27,100,120,.22)}
+.sumbit{background:var(--surf-b);padding:var(--s3) var(--s4);
+  display:flex;align-items:baseline;justify-content:space-between;gap:var(--s3)}
+.sumbit b{font-family:var(--mono);font-weight:600;font-size:20px;color:var(--white);
+  font-variant-numeric:tabular-nums}
+.sumk{display:inline-flex;align-items:center;gap:7px;font-family:var(--mono);
+  font-size:var(--t-micro);letter-spacing:.12em;text-transform:uppercase;color:var(--faint)}
+.sumk .i{width:13px;height:13px;color:var(--blue)}
+@media (max-width:720px){
+  .sum{grid-template-columns:1fr}
+  .sumside{grid-template-rows:none;grid-template-columns:1fr 1fr}
+}
 
 /* ── filters ──────────────────────────────────────────────────────────────*/
 /* ── THE TWO BLOCKS THAT HAD NO SURFACE ────────────────────────────────────
@@ -266,13 +265,9 @@ h1{font-weight:800;font-size:clamp(30px,5vw,42px);line-height:1;letter-spacing:-
   font-variant-numeric:tabular-nums;white-space:nowrap}
 .hprice span{font-size:10.5px;color:var(--faint);margin-left:4px;letter-spacing:.07em}
 .hmeta{display:flex;align-items:center;gap:var(--s3);flex-wrap:wrap}
-.hstate{font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;
-  padding:4px 10px;border-radius:999px;border:1px solid var(--edge);color:var(--dim);white-space:nowrap}
-.hstate.live{border-color:rgba(59,227,176,.45);color:var(--good);background:rgba(59,227,176,.08)}
-.hstate.gone{border-color:rgba(92,129,140,.4);color:var(--faint)}
-/* Finished, and finished WELL — distinct from both "still going" and "expired
-   unused", because those are the two things it kept being mistaken for. */
-.hstate.done{border-color:rgba(88,233,255,.45);color:var(--blue);background:rgba(88,233,255,.08)}
+/* The status pill is the shared component now — see .pill in deal.css. Three
+   pages each had their own, in three sets of colours, describing one
+   lifecycle. */
 .hwhen{font-family:var(--mono);font-size:11.5px;color:var(--faint);white-space:nowrap;min-width:66px;
   text-align:right}
 .hgo{width:16px;height:16px;color:var(--faint);flex:none;
@@ -429,15 +424,19 @@ h1{font-weight:800;font-size:clamp(30px,5vw,42px);line-height:1;letter-spacing:-
     </div>
   </header>
 
-  <div class="stats" id="stats" hidden>
-    <div class="stat"><span class="statk"><svg class="i"><use href="#i-receipt"/></svg>placed</span>
-      <b id="nAll">—</b><i>Orders signed with this key</i></div>
-    <div class="stat"><span class="statk"><svg class="i"><use href="#i-clock"/></svg>still open</span>
-      <b id="nOpen">—</b><i>Expiry has not passed yet</i></div>
-    <div class="stat"><span class="statk"><svg class="i"><use href="#i-done"/></svg>closed</span>
-      <b id="nShut">—</b><i>Past their own deadline</i></div>
-    <div class="stat"><span class="statk"><svg class="i"><use href="#i-coin"/></svg>committed</span>
-      <b id="nSum">—</b><i>Total asked across every order</i></div>
+  <!-- One asymmetric module rather than four cards of equal weight. See .sum
+       for why: four figures the same size is four things competing to answer
+       a question nobody asked, and none of them answering the one they did. -->
+  <div class="sum" id="stats" hidden>
+    <div class="sumlead">
+      <span class="sumk"><svg class="i"><use href="#i-clock"/></svg>in flight</span>
+      <b id="nOpen">&mdash;</b>
+      <span class="sumsub">orders still going &mdash; <b id="nSum">&mdash;</b> FLOP committed across every one</span>
+    </div>
+    <div class="sumside">
+      <div class="sumbit"><span class="sumk"><svg class="i"><use href="#i-receipt"/></svg>placed</span><b id="nAll">&mdash;</b></div>
+      <div class="sumbit"><span class="sumk"><svg class="i"><use href="#i-done"/></svg>finished</span><b id="nShut">&mdash;</b></div>
+    </div>
   </div>
 
   <div class="listhead" id="listhead" hidden>
@@ -496,6 +495,7 @@ h1{font-weight:800;font-size:clamp(30px,5vw,42px);line-height:1;letter-spacing:-
 <script type="module">
 import { getSession, onSession, shortDid, signTextB64u } from "/session.js";
 import { canon, readFrame } from "/tclk.js";
+import { statusOf as sharedStatus, railEl, JOBS as SHELF, ago as sharedAgo } from "/deal-ui.js";
 
 const $ = (id) => document.getElementById(id);
 const PER_PAGE = 10;
@@ -623,17 +623,41 @@ const isOpen = (o) => isFinite(o.expiresMs) && o.expiresMs > Date.now();
  * the offer's expiry when it is not. `o.dealState` is filled in by the same
  * bounded check the strip already makes — no extra reads.
  * ═════════════════════════════════════════════════════════════════════════*/
+/* ── THE WORD COMES FROM THE SHARED VOCABULARY NOW ────────────────────────
+ * This function used to own its own: "paid", "delivered", "closed". The board
+ * had a different set, hire had a third, and tclk.js had the real one — so a
+ * buyer could read PAID here, follow the link to the board, and find the same
+ * deal saying "locked".
+ *
+ * One word per state, everywhere, and chosen to be true from any angle:
+ * "Funded" rather than "Paid", because the board shows strangers' deals and
+ * "paid" does not say by whom.
+ *
+ * The possessive half did not disappear — it moved to the sentence under the
+ * pill, which is where context belongs. This page still says "your payment is
+ * locked in escrow" beneath a pill reading FUNDED.
+ */
 function statusOf(o) {
-  switch (o.dealState) {
-    case "claimed":   return { word: "delivered", cls: "done", open: false };
-    case "locked":    return { word: "paid",      cls: "live", open: true };
-    case "refunded":  return { word: "refunded",  cls: "gone", open: false };
-    case "cancelled": return { word: "cancelled", cls: "gone", open: false };
-    default:
-      return isOpen(o)
-        ? { word: "open",   cls: "live", open: true }
-        : { word: "closed", cls: "gone", open: false };
-  }
+  const now = Date.now();
+  const refund = Number(o.refundAfterMs);
+  /* ── AN ACCEPTED ORDER NOBODY EVER PAID INTO IS NOT STILL GOING ─────────
+     `accepted` is not terminal to the protocol — there is no frame that ends
+     it, which is exactly why the shop grew a reaper to cancel them. So the
+     state alone would call a deal from two days ago "Accepted", for ever.
+     Past its own refund deadline an unfunded deal can no longer move: a
+     reveal is refused after that point and a refund needs a lock that never
+     came. The clock is what knows, so the clock is asked. */
+  const dead = Number.isFinite(refund) && refund > 0 && now >= refund;
+  const state = o.dealState;
+  const st = state === "accepted" && dead
+    ? sharedStatus({ state: "cancelled" }, null)
+    : state
+      ? sharedStatus({ state }, null)
+      : sharedStatus({ state: "proposed" }, { phase: isOpen(o) ? "open" : "expired" });
+  /* `open` means STILL GOING, which is not the same as unexpired: a delivered
+     deal is finished however long its offer had left to run. */
+  return { word: st.word, tone: st.tone, key: st.key, step: st.step, ends: st.ends,
+           open: !st.ends };
 }
 /* Still open means still going, which is not the same as unexpired: a deal
    that has been delivered is finished however long its offer had left. */
@@ -764,7 +788,7 @@ function itemFor(o) {
      deal-room read comes back with repaints BOTH, in one place, at one time.
      A row that said OPEN above the words "this deal is finished" is what this
      argument is settling. */
-  const act = actionFor(o, row.querySelector(".hstate"));
+  const act = actionFor(o, row.querySelector(".pill"));
   if (!act) return row;
   const wrap = document.createElement("div");
   wrap.className = "hitem";
@@ -856,7 +880,8 @@ function actionFor(o, pill = null) {
       o.cannot = r.cannot ?? null;
       if (pill) {
         const st = statusOf(o);
-        pill.className = "hstate " + st.cls;
+        pill.className = "pill";
+        pill.dataset.tone = st.tone;
         pill.textContent = st.word;
       }
       restat();
@@ -1122,7 +1147,8 @@ function rowFor(o) {
   price.append(unit);
   const state = document.createElement("span");
   const st = statusOf(o);
-  state.className = "hstate " + st.cls;
+  state.className = "pill";
+  state.dataset.tone = st.tone;
   state.textContent = st.word;
   const when = document.createElement("span");
   when.className = "hwhen";

@@ -1,0 +1,395 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+ * THE FIRST SHARED STYLESHEET THIS PROJECT HAS HAD
+ *
+ * Three files carry the four deal views, and until now every one of them
+ * declared its own copy of the same twenty-six custom properties, its own
+ * copy of the grain utility, its own hero, its own popover, its own order
+ * row, its own emblems. The files said so out loud — "the honest cost of a
+ * set of pages with no shared stylesheet" — and paid for it with tests that
+ * compare pages to each other character by character.
+ *
+ * That cost was affordable while the pages were small. It is not affordable
+ * now: the same lifecycle is drawn four times, and four drawings of one thing
+ * drift. This file is the shared layer those tests were standing in for.
+ *
+ * ── WHAT IS DELIBERATELY NOT IN HERE ──────────────────────────────────────
+ *
+ * The atmosphere. `.sky`, `.spot`, the two keyframes and the body ground stay
+ * inline in every page, byte-identical to rooms.html, because that is what
+ * makes walking between pages feel like one site — and because the suites
+ * compare them to rooms.html character for character. Moving them here would
+ * pass a refactor and quietly break the thing they protect. They are not
+ * duplication; they are a contract with the rest of the site.
+ *
+ * The site bar is not here either. It lives in a shadow root with
+ * `:host{all:initial}`, so nothing in this file can reach it — which is why
+ * "keep the bar exactly as it is" costs nothing at all.
+ * ═════════════════════════════════════════════════════════════════════════*/
+
+:root{
+  /* ── The palette, unchanged. Every value below already existed in three
+     places; this is the same set, declared once. Changing one now changes
+     four views, which is the entire point. ─────────────────────────────── */
+  --navy-0:#000000; --navy-1:#02090C; --navy-2:#04141A;
+  --edge:#0E3A47; --edge-lit:#1B6478;
+  --white:#EAF7FB; --dim:#93B6C0; --faint:#5C818C;
+  --mint:#00B4D7; --blue:#58E9FF; --gold:#F2B33D; --red:#FF6B6B; --good:#3BE3B0;
+  --sell:#B98BFF;
+  --display:"Outfit",system-ui,sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+  --ease:cubic-bezier(.22,.68,.24,1);
+  --void:#00070A;
+  --ink:var(--void);
+  --panel:rgba(4,20,26,.72);
+
+  --s1:6px; --s2:10px; --s3:16px;
+  --s4:clamp(18px,2.2vw,24px);
+  --s5:clamp(26px,3.4vw,36px);
+  --s6:clamp(34px,5vw,56px);
+  --gutter:clamp(18px,4vw,40px);
+
+  --surf-a:rgba(6,26,33,.92);
+  --surf-b:rgba(2,11,15,.92);
+  --lip:inset 0 1px 0 rgba(150,235,255,.07);
+  --lift-1:0 2px 4px -2px rgba(0,0,0,.6), 0 14px 34px -22px rgba(0,0,0,.95);
+  --lift-2:0 3px 8px -3px rgba(0,0,0,.65), 0 26px 56px -26px rgba(0,0,0,1), 0 0 0 1px rgba(27,100,120,.35);
+  --grain:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='120' height='120' filter='url(%23n)' opacity='.35'/%3E%3C/svg%3E");
+
+  /* ── ONE COLOUR PER STATE, AND THE PAGE DOES NOT GET A VOTE ─────────────
+   * A deal that is funded is amber wherever you meet it. The tone names in
+   * deal-ui.js point here and nowhere else, so a status colour is a property
+   * of the lifecycle rather than a decision each view makes for itself.
+   *
+   * Chosen so the four a reader meets most are distinguishable at a glance
+   * AND distinguishable to the roughly one man in twelve who cannot separate
+   * red from green: cyan, amber and violet carry the load, and green is only
+   * ever the finished state, where it is confirming something already said in
+   * words. Nothing here relies on colour alone — every pill carries its word.
+   */
+  --tone-wait:#93B6C0;   /* open, nobody has answered — quiet on purpose */
+  --tone-live:var(--blue);   /* accepted, something is happening */
+  --tone-hold:var(--gold);   /* funded, money is held and a clock is running */
+  --tone-good:var(--good);   /* delivered */
+  --tone-off:#5C818C;    /* refunded, cancelled, expired — over, not bad */
+
+  /* ── DEPTH INSTEAD OF OUTLINES ──────────────────────────────────────────
+   * The old pages made every box the same way: same darkness inside as out,
+   * one hairline border doing all the work. Fifty of those on a page reads as
+   * a wireframe, and it is why a well-organised page still looked unfinished.
+   * Three surface levels, so a card can sit ON something rather than beside
+   * it, and borders become a choice rather than the only tool.
+   */
+  --sunk:rgba(0,4,6,.55);          /* below the page: wells, inputs, tracks */
+  --rise-1:linear-gradient(180deg,var(--surf-a),var(--surf-b));
+  --rise-2:linear-gradient(180deg,rgba(9,34,43,.94),rgba(3,15,20,.94));
+  --hair:1px solid rgba(27,100,120,.28);
+  --hair-lit:1px solid rgba(88,233,255,.34);
+
+  --r1:10px; --r2:14px; --r3:18px; --r4:24px;
+
+  /* ── TYPE ───────────────────────────────────────────────────────────────
+   * A scale, so a heading size is an answer rather than an opinion. Every
+   * step clamps, because the pages already learned that a phone is not the
+   * desktop with the same numbers in a narrower tube.
+   */
+  --t-hero:clamp(34px,6vw,58px);
+  --t-h2:clamp(22px,3vw,30px);
+  --t-h3:clamp(16px,1.7vw,19px);
+  --t-body:15px;
+  --t-small:13px;
+  --t-micro:11px;
+
+  --focus:0 0 0 2px var(--void), 0 0 0 4px var(--blue);
+
+  /* Written by deal-pointer.js on the element under the cursor. Declared here
+     with a neutral centre so the gradient resolves to something sensible when
+     the script never runs at all — a touch device, a blocked module, a
+     reduced-motion setting. An unresolvable var() invalidates the whole
+     declaration silently, which is precisely the bug that once left this
+     project's phone layout with no background. */
+  --mx:50%; --my:50%;
+}
+
+/* ── MOTION IS A PREFERENCE, NOT A DECORATION ──────────────────────────────
+   Declared once, at the top, so no component has to remember. Everything
+   below moves with transform and opacity only, which is what keeps this
+   smooth on the average phone rather than only on the machine it was built
+   on. */
+@media (prefers-reduced-motion: reduce){
+  *,*::before,*::after{
+    animation-duration:.001ms !important; animation-iteration-count:1 !important;
+    transition-duration:.001ms !important; scroll-behavior:auto !important;
+  }
+}
+
+/* ── THE GRAIN, WHICH IS THE ONE TEXTURE ───────────────────────────────────
+   A single very quiet noise layer over raised surfaces. It is what stops a
+   dark panel reading as flat black, and it must never be strong enough to
+   cost a word of legibility — which is why it sits at 3% and is switched off
+   entirely behind reduced-motion-free small screens where it costs more in
+   paint than it returns. */
+.tex{position:relative;isolation:isolate}
+.tex::before{
+  content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;
+  background-image:var(--grain);opacity:.03;mix-blend-mode:overlay;z-index:-1;
+}
+.tex-lit::after{
+  content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;
+  background:radial-gradient(120% 80% at 50% -20%,rgba(88,233,255,.10),transparent 70%);
+  z-index:-1;
+}
+
+/* ── SURFACES ──────────────────────────────────────────────────────────────
+   Three levels and a well. Use the level, not a border, to separate things.
+   A border here is for saying "this one is selected" or "this one needs
+   attention", which is a job it can only do if it is not also saying
+   "this is a box". */
+.surf{background:var(--rise-1);border-radius:var(--r3);box-shadow:var(--lip),var(--lift-1)}
+.surf-2{background:var(--rise-2);border-radius:var(--r3);box-shadow:var(--lip),var(--lift-2)}
+.well{background:var(--sunk);border-radius:var(--r2);box-shadow:inset 0 1px 2px rgba(0,0,0,.5)}
+
+/* ── THE STATUS PILL ───────────────────────────────────────────────────────
+   Small, quiet, and never the loudest thing in a row — the price and the
+   name are what a person scans for. It earns its colour from the state and
+   carries the word regardless, so it never depends on colour alone. */
+.pill{
+  display:inline-flex;align-items:center;gap:6px;
+  font-family:var(--mono);font-size:var(--t-micro);letter-spacing:.09em;
+  text-transform:uppercase;white-space:nowrap;
+  padding:4px 9px;border-radius:999px;
+  color:var(--tone);background:color-mix(in srgb,var(--tone) 12%,transparent);
+  border:1px solid color-mix(in srgb,var(--tone) 34%,transparent);
+}
+.pill::before{
+  content:"";width:5px;height:5px;border-radius:50%;background:var(--tone);
+  box-shadow:0 0 0 3px color-mix(in srgb,var(--tone) 18%,transparent);
+}
+.pill[data-tone="wait"]{--tone:var(--tone-wait)}
+.pill[data-tone="live"]{--tone:var(--tone-live)}
+.pill[data-tone="hold"]{--tone:var(--tone-hold)}
+.pill[data-tone="good"]{--tone:var(--tone-good)}
+.pill[data-tone="off"] {--tone:var(--tone-off)}
+
+/* ══════════════════════════════════════════════════════════════════════════
+ * THE ESCROW RAIL — the signature
+ *
+ * Four nodes and three links: Offer · Accept · Fund · Deliver. The same
+ * object explains the mechanic on the deals page, reports live state on a
+ * board listing, tracks a checkout on hire and shows an order's history on
+ * the orders page. One component, four appearances — not four progress bars
+ * that happen to look alike.
+ *
+ * The link between two reached nodes carries a slow travelling highlight, and
+ * ONLY on `.erail-live`, which a view sets when the deal is genuinely still
+ * moving. Animation that runs on a settled deal is animation that means
+ * nothing, and this project has spent a day removing things that looked
+ * informative and were not.
+ * ═════════════════════════════════════════════════════════════════════════*/
+.erail{
+  --tone:var(--tone-wait);
+  display:flex;align-items:center;gap:0;
+  --dot:9px; --line:2px;
+}
+.erail[data-tone="live"]{--tone:var(--tone-live)}
+.erail[data-tone="hold"]{--tone:var(--tone-hold)}
+.erail[data-tone="good"]{--tone:var(--tone-good)}
+.erail[data-tone="off"] {--tone:var(--tone-off)}
+.erail-c{--dot:7px; --line:2px}
+
+.erail-node{
+  flex:none;width:var(--dot);height:var(--dot);border-radius:50%;
+  background:rgba(147,182,192,.22);
+  box-shadow:inset 0 0 0 1px rgba(147,182,192,.3);
+  transition:background .3s var(--ease),box-shadow .3s var(--ease),transform .3s var(--ease);
+}
+.erail-node.on{background:var(--tone);box-shadow:inset 0 0 0 1px transparent}
+/* The node the deal is actually AT, which is the one a reader is looking for.
+   A halo rather than a size change, so nothing reflows as a deal moves. */
+.erail-node.now{box-shadow:0 0 0 4px color-mix(in srgb,var(--tone) 20%,transparent)}
+/* And an ending, which a progress bar cannot say by itself: a refund and a
+   delivery both stop at the last node, and drawing a refund as "nearly
+   finished" would be the rail telling a comfortable lie. */
+.erail-node.end{border-radius:2px;transform:rotate(45deg)}
+
+.erail-link{
+  flex:1 1 auto;min-width:14px;height:var(--line);
+  background:rgba(147,182,192,.18);border-radius:2px;position:relative;overflow:hidden;
+  transition:background .3s var(--ease);
+}
+.erail-link.on{background:color-mix(in srgb,var(--tone) 55%,transparent)}
+.erail-live .erail-link.on::after{
+  content:"";position:absolute;inset:0;border-radius:inherit;
+  background:linear-gradient(90deg,transparent,var(--tone),transparent);
+  transform:translateX(-100%);
+  animation:erailpulse 2.6s var(--ease) infinite;
+}
+@keyframes erailpulse{ 0%{transform:translateX(-100%)} 60%,100%{transform:translateX(100%)} }
+
+/* Labelled, for the one place that explains rather than reports. */
+.erail-lab{display:grid;gap:var(--s2)}
+.erail-lab .erail-words{display:flex;justify-content:space-between;
+  font-family:var(--mono);font-size:var(--t-micro);letter-spacing:.08em;
+  text-transform:uppercase;color:var(--faint)}
+
+/* ══════════════════════════════════════════════════════════════════════════
+ * CONTROLS
+ * ═════════════════════════════════════════════════════════════════════════*/
+.btn{
+  --bg:var(--rise-2);
+  display:inline-flex;align-items:center;justify-content:center;gap:8px;
+  font:inherit;font-weight:650;font-size:14px;line-height:1;cursor:pointer;
+  padding:12px 18px;border-radius:var(--r1);border:var(--hair);
+  color:var(--white);background:var(--bg);
+  box-shadow:var(--lip);
+  transition:transform .16s var(--ease),filter .16s var(--ease),box-shadow .16s var(--ease);
+  min-height:44px;                     /* a touch target, everywhere, always */
+}
+.btn-1{
+  color:var(--void);border-color:rgba(88,233,255,.5);
+  background:linear-gradient(180deg,#7ff0ff,var(--blue));
+  box-shadow:0 6px 22px -12px rgba(88,233,255,.8);
+}
+.btn:disabled{cursor:default;filter:grayscale(.5) brightness(.75);transform:none;box-shadow:none}
+.btn:focus-visible{outline:none;box-shadow:var(--focus)}
+@media (hover:hover) and (pointer:fine){
+  .btn:not(:disabled):hover{transform:translateY(-1px);filter:brightness(1.07)}
+}
+/* Touch gets a press instead of a hover — the same feedback, delivered the
+   way the device actually reports intent. */
+.btn:not(:disabled):active{transform:translateY(0) scale(.985)}
+
+.chip{
+  display:inline-flex;align-items:center;gap:7px;
+  font:inherit;font-size:var(--t-small);font-weight:600;cursor:pointer;
+  padding:9px 13px;border-radius:999px;min-height:38px;
+  color:var(--dim);background:var(--sunk);border:1px solid transparent;
+  transition:color .16s var(--ease),background .16s var(--ease),border-color .16s var(--ease);
+  white-space:nowrap;
+}
+.chip[aria-pressed="true"],.chip.on{
+  color:var(--white);background:rgba(88,233,255,.10);border-color:rgba(88,233,255,.36);
+}
+.chip:focus-visible{outline:none;box-shadow:var(--focus)}
+.chip .n{font-family:var(--mono);font-size:var(--t-micro);color:var(--faint)}
+.chip[aria-pressed="true"] .n,.chip.on .n{color:var(--blue)}
+
+/* A row of chips must be swipeable on a phone and must never push the PAGE
+   sideways — the scroll belongs to the strip. */
+.chiprow{display:flex;gap:var(--s2);overflow-x:auto;scrollbar-width:none;
+  -webkit-overflow-scrolling:touch;scroll-snap-type:x proximity;padding-bottom:2px}
+.chiprow::-webkit-scrollbar{display:none}
+.chiprow>*{scroll-snap-align:start}
+
+.field{
+  width:100%;font:inherit;font-size:16px;   /* 16px or iOS zooms the page */
+  color:var(--white);background:var(--sunk);
+  border:var(--hair);border-radius:var(--r1);
+  padding:13px 14px;min-height:46px;
+  transition:border-color .16s var(--ease),box-shadow .16s var(--ease);
+}
+.field::placeholder{color:var(--faint)}
+.field:focus{outline:none;border-color:rgba(88,233,255,.5);
+  box-shadow:0 0 0 3px rgba(88,233,255,.12)}
+.field[aria-invalid="true"]{border-color:rgba(255,107,107,.55)}
+
+/* ── STATES A PAGE HAS TO HAVE AND USUALLY FORGETS ─────────────────────────
+   A skeleton says "this shape is coming"; a spinner says "something is
+   happening somewhere". The first is worth building. */
+.skel{display:grid;gap:var(--s2)}
+.skelrow{height:64px;border-radius:var(--r2);background:var(--sunk);position:relative;overflow:hidden}
+.skelrow::after{
+  content:"";position:absolute;inset:0;
+  background:linear-gradient(90deg,transparent,rgba(147,182,192,.07),transparent);
+  transform:translateX(-100%);animation:skelsweep 1.5s var(--ease) infinite;
+}
+@keyframes skelsweep{ to{transform:translateX(100%)} }
+
+.blank{
+  display:grid;gap:var(--s2);justify-items:center;text-align:center;
+  padding:var(--s5) var(--s4);border-radius:var(--r3);
+  background:var(--sunk);color:var(--dim);
+}
+.blank b{color:var(--white);font-size:var(--t-h3)}
+.blank p{font-size:var(--t-small);line-height:1.6;max-width:44ch}
+
+/* ── LONG TECHNICAL STRINGS ────────────────────────────────────────────────
+   A did:key is 56 characters and a contract is 66. They appear on every one
+   of these views, and on a 360px phone an untruncated one is what pushes a
+   whole page sideways. */
+.did{font-family:var(--mono);font-size:var(--t-small);color:var(--dim);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%;min-width:0}
+
+/* ── FOCUS, EVERYWHERE, VISIBLY ────────────────────────────────────────────
+   Not negotiable and not a detail: it is how the page is used by anybody not
+   holding a mouse. */
+a:focus-visible,button:focus-visible,summary:focus-visible,[tabindex]:focus-visible{
+  outline:none;box-shadow:var(--focus);border-radius:var(--r1);
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+ * POINTER LIGHT
+ *
+ * The site already has one pointer effect: the fixed `.spot` glow behind
+ * everything, which is part of the site's atmosphere and is not touched here.
+ * This is a different, LOCAL thing — a surface catching light where the
+ * cursor is over it — and it is deliberately built to sit UNDER that glow
+ * rather than compete with it: no blur, no colour of its own, low opacity.
+ *
+ * Fine pointers only. On a touch screen `--mx`/`--my` are never written, so
+ * the gradient sits at its neutral position and costs nothing; the media
+ * query means the listener is never even attached.
+ * ═════════════════════════════════════════════════════════════════════════*/
+@media (hover:hover) and (pointer:fine){
+  .lit{position:relative}
+  .lit::before{
+    content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;
+    background:radial-gradient(260px circle at var(--mx,50%) var(--my,50%),
+               rgba(150,235,255,.055),transparent 60%);
+    opacity:0;transition:opacity .25s var(--ease);z-index:0;
+  }
+  .lit[data-lit="1"]::before{opacity:1}
+  .lit>*{position:relative;z-index:1}
+}
+
+/* ── SCROLL REVEALS (touch, and any pointer) ───────────────────────────────
+   Structure arriving, once, as you reach it. Never re-firing, and never a
+   whole page of things wobbling at every small scroll — the brief is right
+   that motion has to communicate, and "this section exists" is the only
+   thing a reveal can honestly say. */
+[data-rise]{transition:opacity .5s var(--ease),transform .5s var(--ease)}
+[data-rise="out"]{opacity:0;transform:translateY(10px)}
+[data-rise="in"]{opacity:1;transform:none}
+@media (prefers-reduced-motion: reduce){ [data-rise="out"]{opacity:1;transform:none} }
+
+/* ── A BOTTOM SHEET, WHICH IS WHERE A PHONE PUTS SECONDARY THINGS ──────────
+   Filters, an order summary, the technical detail under a row. It opens from
+   the edge the thumb is nearest and it is dismissible by the same gesture
+   people already use everywhere else. Desktop never sees it. */
+.sheet{
+  position:fixed;left:0;right:0;bottom:0;z-index:60;
+  max-height:82vh;overflow:auto;-webkit-overflow-scrolling:touch;
+  padding:var(--s4) var(--s4) calc(var(--s4) + env(safe-area-inset-bottom));
+  background:var(--rise-2);border-radius:var(--r4) var(--r4) 0 0;
+  box-shadow:0 -24px 60px -24px rgba(0,0,0,1),var(--lip);
+  transform:translateY(101%);transition:transform .32s var(--ease);
+}
+.sheet[data-open="1"]{transform:none}
+.sheet::before{
+  content:"";display:block;width:38px;height:4px;border-radius:999px;
+  background:rgba(147,182,192,.35);margin:0 auto var(--s3);
+}
+.scrim{
+  position:fixed;inset:0;z-index:59;background:rgba(0,4,6,.6);
+  opacity:0;pointer-events:none;transition:opacity .32s var(--ease);
+}
+.scrim[data-open="1"]{opacity:1;pointer-events:auto}
+
+/* ── A STICKY ACTION BAR ───────────────────────────────────────────────────
+   The one thing a phone must never do is put the button that completes a
+   flow below a screen and a half of summary. */
+.dock{
+  position:sticky;bottom:0;z-index:20;
+  padding:var(--s3) 0 calc(var(--s3) + env(safe-area-inset-bottom));
+  background:linear-gradient(180deg,transparent,var(--void) 28%);
+}
+@media (min-width:861px){ .dock{position:static;background:none;padding:0} }

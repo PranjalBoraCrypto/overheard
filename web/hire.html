@@ -60,6 +60,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/deal.css">
 <style>
 /* ── THE SITE'S TOKENS ─────────────────────────────────────────────────────
  * Lifted from the deals page, which lifted its atmosphere from rooms.html.
@@ -69,32 +70,12 @@
  * prevent that, so the copy is the mechanism, and a test compares the
  * atmosphere rules against rooms.html character for character.
  */
-:root{
-  --navy-0:#000000; --navy-1:#02090C; --navy-2:#04141A;
-  --void:#00070A; --ink:var(--void);
-  --edge:#0E3A47; --edge-lit:#1B6478;
-  --white:#EAF7FB; --dim:#93B6C0; --faint:#5C818C;
-  --mint:#00B4D7; --blue:#58E9FF; --gold:#F2B33D; --red:#FF6B6B; --good:#3BE3B0;
-  --sell:#B98BFF;
-  --panel:rgba(4,20,26,.72);
-  --display:"Outfit",system-ui,sans-serif;
-  --mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
-  --ease:cubic-bezier(.22,.68,.24,1);
-
-  --s1:6px; --s2:10px; --s3:16px;
-  --s4:clamp(18px,2.2vw,24px);
-  --s5:clamp(26px,3.4vw,36px);
-  --s6:clamp(34px,5vw,56px);
-  --gutter:clamp(18px,4vw,40px);
-
-  --surf-a:rgba(6,26,33,.92);
-  --surf-b:rgba(2,11,15,.92);
-  --lip:inset 0 1px 0 rgba(150,235,255,.07);
-  --lift-1:0 2px 4px -2px rgba(0,0,0,.6), 0 14px 34px -22px rgba(0,0,0,.95);
-  --lift-2:0 3px 8px -3px rgba(0,0,0,.65), 0 26px 56px -26px rgba(0,0,0,1), 0 0 0 1px rgba(27,100,120,.35);
-
-  --grain:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)' opacity='.5'/%3E%3C/svg%3E");
-}
+/* ── THE TOKENS MOVED ──────────────────────────────────────────────────────
+   This block was a verbatim third copy of the same twenty-six declarations,
+   and the file said so: "there is no shared stylesheet to prevent that, so
+   the copy is the mechanism". There is one now — web/deal.css — and the copy
+   is gone with the reason for it. What stays inline below is the atmosphere,
+   which is a contract with the rest of the site rather than duplication. */
 *{box-sizing:border-box;margin:0;padding:0}
 [hidden]{display:none !important}
 
@@ -345,6 +326,39 @@ input[type=text]:focus{outline:none;border-color:var(--blue);background:rgba(0,0
 .whynot{font-size:12.5px;color:var(--gold);margin-top:var(--s2);text-align:center;
   line-height:1.5}
 .whynot:empty{display:none}
+
+/* ══════════════════════════════════════════════════════════════════════════
+ * THE PAY DOCK
+ *
+ * Desktop: the bottom of the order card, exactly where it was.
+ * Phone: fixed to the bottom of the screen, because that is the difference
+ * between an order flow and a form somebody abandons. The summary above it
+ * stays where it is and stays readable — what moves is the one control that
+ * finishes the job.
+ *
+ * The price rides along on mobile only. On desktop it is four rows above and
+ * repeating it would be the card telling you twice.
+ * ═════════════════════════════════════════════════════════════════════════*/
+.dockrow{display:flex;align-items:center;gap:var(--s3)}
+.dockrow .go{flex:1 1 auto}
+.dockprice{display:none}
+
+@media (max-width:860px){
+  .paydock{
+    position:fixed;left:0;right:0;bottom:0;z-index:40;
+    padding:var(--s3) var(--gutter) calc(var(--s3) + env(safe-area-inset-bottom));
+    background:linear-gradient(180deg,rgba(0,7,10,.35),var(--void) 42%);
+    backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
+    box-shadow:0 -1px 0 rgba(27,100,120,.35);
+  }
+  .paydock .go{min-height:52px}
+  .dockprice{display:flex;align-items:baseline;gap:5px;flex:none;font-family:var(--mono)}
+  .dockprice b{font-size:20px;color:var(--white);font-weight:600}
+  .dockprice i{font-style:normal;font-size:10px;letter-spacing:.14em;color:var(--faint)}
+  .paydock .whynot{margin-top:8px;text-align:left}
+  /* Room for the dock, so the last thing on the page is never under it. */
+  .shell{padding-bottom:calc(112px + env(safe-area-inset-bottom))}
+}
 /* How full the shop is. Quiet by default — this is a fact about the queue,
    not a warning — and gold only when it is the reason the button is dead. */
 .cap{font-size:12.5px;line-height:1.5;color:var(--faint);margin:var(--s2) 0 0;
@@ -822,12 +836,26 @@ input[type=text]:focus{outline:none;border-color:var(--blue);background:rgba(0,0
           <b>Refunds itself</b></div>
         <div class="cartrow total"><span>Price</span><b><span id="sumPrice">500</span><i>FLOP</i></b></div>
 
-        <p class="cap" id="cap" hidden></p>
-
-        <button class="go" id="send" type="button" disabled>
-          <span id="sendlabel">Place the order</span><svg class="i"><use href="#i-caret"/></svg>
-        </button>
-        <p class="whynot" id="whynot"></p>
+        <!-- ── THE PART THAT HAS TO BE REACHABLE ─────────────────────────
+             On a laptop this is the bottom of a sidebar and everything is
+             fine. On a phone the sidebar falls below a form two thousand
+             pixels long, and the button that completes the flow ends up
+             further down the page than most people scroll.
+             So the same button — the same element, the same handler, the
+             same disabled logic — sits in a dock that is part of the card on
+             desktop and fixed to the bottom of the screen on a phone. One
+             button, two positions. A second button would be a second place
+             for the state to be wrong. -->
+        <div class="paydock" id="paydock">
+          <p class="cap" id="cap" hidden></p>
+          <div class="dockrow">
+            <span class="dockprice" aria-hidden="true"><b id="dockPrice">500</b><i>FLOP</i></span>
+            <button class="go" id="send" type="button" disabled>
+              <span id="sendlabel">Place the order</span><svg class="i"><use href="#i-caret"/></svg>
+            </button>
+          </div>
+          <p class="whynot" id="whynot"></p>
+        </div>
         <div class="msg" id="msg"></div>
 
         <div class="track">
@@ -1083,6 +1111,7 @@ function choose(btn, focusField = true) {
   $("sumJob").textContent = btn.querySelector("b").textContent;
   $("sumDeliv").textContent = btn.dataset.deliv;
   $("sumPrice").textContent = group(btn.dataset.price);
+  $("dockPrice").textContent = group(btn.dataset.price);
   /* Changing the job changes what the field MEANS, so anything already typed
      is re-judged against the new shape — and against the new question of
      whether the archive holds it — rather than silently carried over as
