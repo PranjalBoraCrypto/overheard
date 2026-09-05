@@ -177,50 +177,37 @@ for (const [w, h, tag] of [[390, 844, "iphone"], [360, 740, "android"]]) {
    THE DOOR TO THE CITY
    ════════════════════════════════════════════════════════════════════════
 
-   The bar's tab strip scrolls sideways on a phone, which is what stopped it
-   wrapping onto two lines, and it overflows: the tabs you can see are Card,
-   Rooms, Play and Create, while Verify and City sit past the right edge with
-   nothing to say they are there. The first day of real traffic read exactly
-   like that list, ending with Agent City on 9% of arrivals — the best page
-   on the site, losing on position rather than on merit.
+   The city is the best page on the site and it came last in the first day of
+   real traffic, at 9% of arrivals, because it was the last tab in a row that
+   scrolled off the edge of a phone. The row is gone now and every page is one
+   tap inside the button — but ONE TAP IS STILL A TAP, and the page that loses
+   on position is the page that has to be found rather than seen.
 
    So the homepage carries a door to it, on phones only. Both halves are
-   asserted here, because each is worthless without the other: that the tab
-   really is off screen at phone widths (if it ever stops being, this door
-   is redundant and somebody should be told), and that the door exists there
-   and NOWHERE ELSE, since the desktop layout was to be left alone.
+   asserted, because each is worthless without the other: that the City tab
+   really is not on the phone bar (if it ever comes back, this door is
+   redundant and somebody should be told), and that the door exists there and
+   NOWHERE ELSE, since the desktop layout was to be left alone.
    ════════════════════════════════════════════════════════════════════ */
 console.log("\n=== the door to the city, on phones only");
 {
   const probe = async (w, h) => {
     const ctx2 = await b.newContext({ viewport: { width: w, height: h }, deviceScaleFactor: 1,
       isMobile: w < 900, hasTouch: w < 900 });
-    /* AT REST. The strip demonstrates itself once on a first visit, and a
-       measurement taken mid-demonstration reports whatever the animation was
-       showing at that instant rather than what a visitor sits looking at. */
-    await ctx2.addInitScript(() => { try { localStorage.setItem("overheard.tabpeek", "1"); } catch {} });
     const pg = await ctx2.newPage();
     const errs = [];
     pg.on("pageerror", (e) => errs.push(e.message));
     await pg.goto("http://localhost:8995/");
     await pg.waitForTimeout(1400);
     const out = await pg.evaluate(async () => {
-      /* where the City tab actually sits, inside the bar's shadow root */
+      /* Is City reachable from the bar without opening anything? On a
+         desktop it is a tab; on a phone the tabs are not rendered at all. */
       const root = document.querySelector("overheard-bar")?.shadowRoot;
       const strip = root?.querySelector(".tabs");
-      let tab = null;
-      if (strip) {
-        const a = [...strip.querySelectorAll("a")].find((n) => /^city$/i.test(n.textContent.trim()));
-        if (a) {
-          const sb = strip.getBoundingClientRect(), ab = a.getBoundingClientRect();
-          tab = { inside: ab.right <= sb.right + 1 && ab.left >= sb.left - 1,
-            shows: Math.max(0, Math.round(Math.min(ab.right, sb.right) - Math.max(ab.left, sb.left))),
-            width: Math.round(ab.width),
-            where: `${Math.round(ab.left)}..${Math.round(ab.right)} in strip ${Math.round(sb.left)}..${Math.round(sb.right)}` };
-        }
-      }
+      const onBar = !!strip && getComputedStyle(strip).display !== "none"
+        && [...strip.querySelectorAll("a")].some((n) => /^city$/i.test(n.textContent.trim()));
       const d = document.querySelector(".citydoor");
-      if (!d) return { tab, door: null };
+      if (!d) return { onBar, door: null };
       const shown = getComputedStyle(d).display !== "none";
       const img = d.querySelector("img");
       /* ONLY WAIT WHEN IT IS ON SCREEN. The picture is loading="lazy" inside a
@@ -231,7 +218,7 @@ console.log("\n=== the door to the city, on phones only");
          a phone-only picture costs a desktop visitor nothing. */
       if (shown && img && !img.complete) await new Promise((r) => { img.onload = r; img.onerror = r; });
       const bb = d.getBoundingClientRect();
-      return { tab, door: { display: getComputedStyle(d).display, href: d.getAttribute("href"),
+      return { onBar, door: { display: getComputedStyle(d).display, href: d.getAttribute("href"),
         w: Math.round(bb.width), h: Math.round(bb.height),
         img: img ? img.naturalWidth : 0, alt: img ? img.alt.length : 0 } };
     });
@@ -240,17 +227,7 @@ console.log("\n=== the door to the city, on phones only");
   };
 
   const phone = await probe(390, 844);
-  /* WHY THIS ASSERTION IS WEAKER THAN IT WAS, AND SHOULD BE. It used to read
-     "the City tab is off the right edge", and it was, by 108px. Widening the
-     strip to the window edge pulled 52 of those back, so at rest a sliver of
-     City now breaks the fade. That is a better bar and it is not a reachable
-     tab: the thing still cannot be read or tapped without a deliberate
-     sideways scroll, which is the entire case for a door on the homepage. If
-     the day comes that the whole tab fits at rest, this fails, and somebody
-     should ask whether the door has outlived its reason. */
-  check("at 390px the City tab still cannot be read without scrolling",
-    phone.tab && !phone.tab.inside && phone.tab.shows < phone.tab.width * 0.6,
-    phone.tab ? `${phone.tab.shows} of ${phone.tab.width}px showing` : "no tab found");
+  check("at 390px the City tab is not on the bar at all", !phone.onBar);
   check("so the homepage carries a door to it",
     phone.door && phone.door.display !== "none", phone.door ? `${phone.door.w}x${phone.door.h}` : "absent");
   check("and it goes to the city", phone.door?.href === "/city", phone.door?.href || "");
@@ -259,149 +236,270 @@ console.log("\n=== the door to the city, on phones only");
   check("nothing thrown", phone.errs.length === 0, phone.errs[0] || "");
 
   const small = await probe(360, 800);
-  check("same on a 360dp Android, where the tab is off the edge entirely",
-    small.door && small.door.display !== "none" && small.tab.shows === 0,
-    `${small.tab.shows} of ${small.tab.width}px showing`);
+  check("same on a 360dp Android", small.door && small.door.display !== "none" && !small.onBar);
 
-  /* WHERE IT MUST NOT BE. The rule for this change was that the desktop view
-     does not move, and the door is only justified where the tab is hidden. */
+  /* WHERE IT MUST NOT BE. The door is justified where the tab is not on the
+     bar, and the desktop view was to be left alone. */
   const wide = await probe(560, 900);
-  check("at 560px, where the tab is back on screen, the door is gone",
-    wide.door?.display === "none" && wide.tab?.inside, `door ${wide.door?.display}, tab inside ${wide.tab?.inside}`);
+  check("at 560px the door is already gone", wide.door?.display === "none", wide.door?.display || "");
   const desk = await probe(1280, 900);
   check("and on a desktop it is gone too", desk.door?.display === "none", desk.door?.display || "absent");
-  check("where the tab was never hidden in the first place", desk.tab?.inside, desk.tab?.where || "");
+  check("where the tab was never hidden in the first place", desk.onBar);
 }
 
 
 /* ════════════════════════════════════════════════════════════════════════
-   THE TAB STRIP, WHICH HAS TO ADMIT THAT IT SCROLLS
+   THE PHONE'S NAVIGATION SHOWS EVERY PAGE
    ════════════════════════════════════════════════════════════════════════
 
-   Six tabs need 472px and a phone gives the row 308 to 390. Scrolling is the
-   right answer to that and was already the behaviour; what was missing was
-   any sign of it, so the two tabs past the edge were invisible in the sense
-   that matters — nobody knew to look.
+   WHAT WAS HERE BEFORE, and why it is gone.
 
-   Three separate promises, and they fail in different ways, so they are
-   checked separately:
+   The bar used to put its six tabs in a row that scrolled sideways on a
+   phone, and this file used to assert three things about that row: that it
+   reached the window edge, that its ends faded in proportion to how much was
+   left beyond them, and that it demonstrated the gesture once on a first
+   visit. All three were true. The measurement that mattered was elsewhere:
+   the first day of real traffic arrived in tab order and ended with Agent
+   City — the best page on the site — on 9% of arrivals, because Verify and
+   City sat past the right edge and nobody knew to look.
 
-     THE ROW REACHES THE WINDOW. It used to stop 52px short because
-     width:100% resolves against a content box the padding had already
-     narrowed, so the negative margins moved the row without widening it.
-     Fifty-two pixels is most of a tab.
+   A row that admits it scrolls is still a row you cannot read. So the row is
+   gone below 900px and there is a button, and what this section checks is
+   the promise that replaced it: EVERY PAGE, ON ONE SCREEN, ONE TAP AWAY.
 
-     THE END FADES, AND ONLY THE END THERE IS MORE BEYOND. A fade at an end
-     you have already reached is a lie in the other direction.
+   Four things, and they fail separately:
 
-     THE TAB YOU ARE STANDING ON IS ON SCREEN, and the strip demonstrates
-     itself once, on the first phone visit only, and never again.
+     THE BAR IS ONE ROW AT EVERY WIDTH. The old cut-off for the Testnet pill
+     was 760px, which was 279px short of what the full bar needs, so it
+     wrapped onto three and four lines everywhere from 600 to 1024 — 182px
+     of navigation above a 600px screen. Checked at every width, signed in
+     and signed out, because the widths that broke were in the middle.
+
+     SIGNING IN DOES NOT MOVE IT. REPORTED: the chip grew by 91px when it
+     gained the DID text, which was enough to rearrange the row. The bar is
+     now the same height and the same right edge either way.
+
+     THE SHEET HOLDS THE WHOLE SITE AND FITS ON THE SHORTEST PHONE. All of
+     PAGES, not just the tabs — which is one MORE page than the strip ever
+     offered, since the explainer was never a tab — with every row on screen
+     at 360×640 without scrolling.
+
+     AND IT IS NOT BURIED. The desktop note is fixed to the bottom of the
+     screen at z-index 9999 and the sheet comes up from the same edge; the
+     note's own fourth rule is that it never sits in front of anything.
    ════════════════════════════════════════════════════════════════════ */
-console.log("\n=== the tab strip says that it scrolls");
+console.log("\n=== the bar is one row at every width");
 {
-  const strip = (pg) => pg.evaluate(() => {
-    const root = document.querySelector("overheard-bar").shadowRoot;
-    const t = root.querySelector(".tabs");
-    const tb = t.getBoundingClientRect();
-    const cs = getComputedStyle(t);
-    const seen = [...t.querySelectorAll("a")].filter((a) => {
-      const r = a.getBoundingClientRect();
-      return r.left >= tb.left - 1 && r.right <= tb.right + 1;
-    }).map((a) => a.textContent.trim());
-    const city = [...t.querySelectorAll("a")].find((a) => /^city$/i.test(a.textContent.trim()));
-    const cr = city.getBoundingClientRect();
-    return {
-      left: Math.round(tb.left), right: Math.round(tb.right),
-      client: Math.round(t.clientWidth), scroll: Math.round(t.scrollWidth),
-      at: Math.round(t.scrollLeft), max: Math.round(t.scrollWidth - t.clientWidth),
-      fl: parseFloat(cs.getPropertyValue("--fl")) || 0,
-      fr: parseFloat(cs.getPropertyValue("--fr")) || 0,
-      masked: /linear-gradient/.test(cs.webkitMaskImage || cs.maskImage || ""),
-      seen, cityLeft: Math.round(cr.left), cityRight: Math.round(cr.right),
-      cityShows: cr.left < tb.right - 2,
-    };
-  });
-  const open = async (w, h, route, seenPeek) => {
-    const ctx2 = await b.newContext({ viewport: { width: w, height: h },
+  const DID = "did:key:z6MkngD8RZKCgJQCkJvHfGyYoCcNCG5rz9Tc7yRmWrMZExaz";
+  const look = async (w, h, signed, route = "/rooms") => {
+    const ctx = await b.newContext({ viewport: { width: w, height: h },
       isMobile: w < 900, hasTouch: w < 900 });
-    if (seenPeek) await ctx2.addInitScript(() => { try { localStorage.setItem("overheard.tabpeek", "1"); } catch {} });
-    const pg = await ctx2.newPage();
+    if (signed) await ctx.addInitScript((d) => {
+      try { localStorage.setItem("overheard.session", JSON.stringify({ did: d, at: new Date().toISOString() })); } catch {}
+    }, DID);
+    /* The desktop note is a fixed bar over the bottom of the screen and it
+       would sit inside every measurement below. It is checked on purpose
+       further down; here it is out of the way. */
+    await ctx.addInitScript(() => { try { localStorage.setItem("overheard.deskhint", "1"); } catch {} });
+    const pg = await ctx.newPage();
+    const errs = []; pg.on("pageerror", (e) => errs.push(e.message));
     await pg.goto("http://localhost:8995" + route);
-    return { ctx2, pg };
+    await pg.waitForTimeout(900);
+    const out = await pg.evaluate(() => {
+      const r = document.querySelector("overheard-bar").shadowRoot;
+      const bar = r.querySelector(".bar");
+      const shown = (s) => { const n = r.querySelector(s); if (!n) return null;
+        return getComputedStyle(n).display === "none" ? null : n.getBoundingClientRect(); };
+      const de = document.documentElement;
+      const tabs = shown(".tabs"), nb = shown(".nb"), me = shown(".me");
+      /* Everything on the row shares one horizontal band if it did not wrap.
+         Heights differ, so compare centres rather than tops. */
+      const mids = [...bar.children]
+        .filter((n) => getComputedStyle(n).display !== "none")
+        .map((n) => { const q = n.getBoundingClientRect(); return q.top + q.height / 2; });
+      return { h: Math.round(bar.getBoundingClientRect().height),
+        spread: Math.round(Math.max(...mids) - Math.min(...mids)),
+        tabs: !!tabs, nb: !!nb,
+        right: me ? Math.round(me.right) : 0,
+        over: de.scrollWidth - de.clientWidth };
+    });
+    await ctx.close();
+    return { ...out, errs };
   };
 
-  /* ── a first phone visit ─────────────────────────────────────────────── */
-  {
-    const { ctx2, pg } = await open(390, 844, "/", false);
-    /* sample across the whole peek, which starts about a second in */
-    const seenAt = [];
-    for (let i = 0; i < 42; i++) {
-      seenAt.push(await pg.evaluate(() =>
-        Math.round(document.querySelector("overheard-bar").shadowRoot.querySelector(".tabs").scrollLeft)));
-      await pg.waitForTimeout(110);
-    }
-    const s = await strip(pg);
-    check("the row reaches the right edge of the window", s.right >= 388, `${s.left}..${s.right} of 390`);
-    check("and it is masked rather than cut square", s.masked);
-    check("at rest the far end fades and the near end does not",
-      s.fr > 20 && s.fl === 0, `L${s.fl} R${s.fr}`);
-    check("the four that always fitted are still there",
-      ["Card", "Rooms", "Play", "Create"].every((n) => s.seen.includes(n)), s.seen.join(","));
-    check("Verify is now whole, which it was not before", s.seen.includes("Verify"), s.seen.join(","));
-    check("and the edge of City breaks the fade, so the row visibly continues",
-      s.cityShows, `City ${s.cityLeft}..${s.cityRight}, row ends ${s.right}`);
-    /* THE PEEK. It must happen, it must be big enough to reveal something,
-       and it must put the strip back exactly where it found it. */
-    const peak = Math.max(...seenAt);
-    check("the strip demonstrates itself once, on the first visit", peak > 40, `travelled ${peak}px`);
-    check("and returns to where it started", s.at === 0, `${s.at}px`);
-    await ctx2.close();
-  }
-
-  /* ── the second visit, and every one after it ────────────────────────── */
-  {
-    const { ctx2, pg } = await open(390, 844, "/", true);
-    const moves = [];
-    for (let i = 0; i < 30; i++) {
-      moves.push(await pg.evaluate(() =>
-        Math.round(document.querySelector("overheard-bar").shadowRoot.querySelector(".tabs").scrollLeft)));
-      await pg.waitForTimeout(110);
-    }
-    check("a nav that has already introduced itself stays still",
-      Math.max(...moves) === 0, `max ${Math.max(...moves)}px`);
-    await ctx2.close();
-  }
-
-  /* ── standing on the page whose tab is off the end ───────────────────── */
-  {
-    const { ctx2, pg } = await open(390, 844, "/city", true);
-    await pg.waitForTimeout(1400);
-    const s = await strip(pg);
-    check("standing in the city, the City tab is on screen",
-      s.cityLeft >= s.left - 1 && s.cityRight <= s.right + 1,
-      `City ${s.cityLeft}..${s.cityRight} in ${s.left}..${s.right}`);
-    check("and the near end fades now, because there is something behind you",
-      s.fl > 0, `L${s.fl} R${s.fr}`);
-    await ctx2.close();
-  }
-
-  /* ── where none of this should happen ────────────────────────────────── */
-  {
-    const { ctx2, pg } = await open(1280, 900, "/", false);
-    const moves = [];
-    for (let i = 0; i < 24; i++) {
-      moves.push(await pg.evaluate(() =>
-        Math.round(document.querySelector("overheard-bar").shadowRoot.querySelector(".tabs").scrollLeft)));
-      await pg.waitForTimeout(110);
-    }
-    const s = await strip(pg);
-    check("on a desktop the row fits, so nothing is masked", !s.masked, `scroll ${s.scroll} vs client ${s.client}`);
-    check("nothing fades", s.fr === 0 && s.fl === 0, `L${s.fl} R${s.fr}`);
-    check("and nothing moves on its own", Math.max(...moves) === 0);
-    check("every tab is simply visible", s.seen.length === 6, s.seen.join(","));
-    await ctx2.close();
+  for (const w of [360, 390, 430, 520, 560, 600, 768, 899, 900, 1024, 1280, 1440]) {
+    const out = await look(w, 900, false);
+    const inn = await look(w, 900, true);
+    check(`${w}px: one row, signed out and in`,
+      out.spread === 0 && inn.spread === 0, `spread ${out.spread} / ${inn.spread}, h ${out.h} / ${inn.h}`);
+    check(`${w}px: nothing hangs off the side`,
+      out.over <= 0 && inn.over <= 0, `${out.over} / ${inn.over}`);
+    /* THE REPORTED BUG, and it is not the same as "one row": a bar that
+       stays on one row and still shuffles when you sign in is still a bar
+       that moved under somebody. */
+    check(`${w}px: signing in does not move the bar`,
+      out.right === inn.right && out.h === inn.h,
+      `right ${out.right} → ${inn.right}, h ${out.h} → ${inn.h}`);
+    /* And which navigation is on screen. 900 is the arithmetic: without the
+       Testnet pill the row still needs 841px of content and 900 gives 848. */
+    const wantTabs = w >= 900;
+    check(`${w}px: ${wantTabs ? "the tab row" : "the button"}`,
+      out.tabs === wantTabs && out.nb === !wantTabs && inn.tabs === wantTabs && inn.nb === !wantTabs,
+      `tabs ${out.tabs}/${inn.tabs}, button ${out.nb}/${inn.nb}`);
+    check(`${w}px: throws nothing`, out.errs.length === 0 && inn.errs.length === 0,
+      (out.errs[0] || inn.errs[0] || ""));
   }
 }
+
+console.log("\n=== and one tap shows the whole site");
+{
+  const open = async (w, h, route) => {
+    const ctx = await b.newContext({ viewport: { width: w, height: h },
+      isMobile: w < 900, hasTouch: w < 900 });
+    const pg = await ctx.newPage();
+    await pg.goto("http://localhost:8995" + route);
+    await pg.waitForTimeout(900);
+    await pg.evaluate(() => document.querySelector("overheard-bar").shadowRoot.querySelector(".burger").click());
+    await pg.waitForTimeout(450);
+    return { ctx, pg };
+  };
+  const readSheet = (pg) => pg.evaluate(() => {
+    const r = document.querySelector("overheard-bar").shadowRoot;
+    const s = r.querySelector(".menu.nav");
+    if (!s) return null;
+    const sb = s.getBoundingClientRect();
+    return {
+      top: Math.round(sb.top), bottom: Math.round(sb.bottom),
+      left: Math.round(sb.left), right: Math.round(sb.right),
+      scrolls: s.scrollHeight > s.clientHeight + 1,
+      expanded: r.querySelector(".burger").getAttribute("aria-expanded"),
+      rows: [...s.querySelectorAll(".prow")].map((a) => {
+        const q = a.getBoundingClientRect();
+        return { label: a.querySelector("b").textContent, href: a.getAttribute("href"),
+          blurb: a.querySelector("i").textContent,
+          now: a.getAttribute("aria-current") === "page",
+          top: Math.round(q.top), bottom: Math.round(q.bottom), h: Math.round(q.height) };
+      }),
+      testnet: (s.querySelector(".nsoon")?.textContent || ""),
+    };
+  });
+
+  /* THE SHORTEST PHONE STILL IN USE. 360×640 is where "all of it at once"
+     is a claim rather than an observation: seven rows, a heading and the
+     Testnet line come to about 558px and this screen offers 589. */
+  {
+    const { ctx, pg } = await open(360, 640, "/play");
+    const s = await readSheet(pg);
+    check("the sheet opens", !!s && s.expanded === "true");
+    check("with every page in the site, not just the tabs", s.rows.length === 7,
+      s.rows.map((r) => r.label).join(", "));
+    check("including the explainer, which was never a tab",
+      s.rows.some((r) => r.href === "/what"), s.rows.map((r) => r.href).join(" "));
+    check("and City, which is the whole reason this exists",
+      s.rows.some((r) => r.href === "/city"));
+    check("every row is on screen at 360×640",
+      s.rows.every((r) => r.top >= 0 && r.bottom <= 640),
+      s.rows.filter((r) => r.top < 0 || r.bottom > 640).map((r) => `${r.label} ${r.top}..${r.bottom}`).join(" | ") || "all inside");
+    check("so it does not need to be scrolled", !s.scrolls);
+    check("it spans the whole width of the phone", s.left <= 0 && s.right >= 360,
+      `${s.left}..${s.right}`);
+    /* WHY THE BLURBS ARE ASSERTED. They are the reason this is worth a tap
+       rather than a worse version of six words in a row: "Play" and
+       "Create" are labels a first visitor cannot rank, and "Proof of
+       Learning" and "Make an identity" are. */
+    check("every row says what the page is for",
+      s.rows.every((r) => r.blurb && r.blurb.length > 6),
+      s.rows.filter((r) => !r.blurb).map((r) => r.label).join(" ") || "all described");
+    check("Testnet is here too, which the phone bar had no room for",
+      /testnet/i.test(s.testnet) && /soon/i.test(s.testnet), s.testnet.trim());
+    /* WHERE YOU ARE. Exactly one row, and the right one — the old strip
+       said this with a filled tab and there is nothing else saying it now. */
+    const now = s.rows.filter((r) => r.now);
+    check("the page you are on is marked, once", now.length === 1 && now[0].href === "/play",
+      now.map((r) => r.href).join(" ") || "none");
+    check("and the button says so before it is opened",
+      await pg.evaluate(() => document.querySelector("overheard-bar").shadowRoot
+        .querySelector(".nb").hasAttribute("data-hot")));
+    /* Every row is a thumb target. 44 is the number Apple and Google both
+       publish; these are 56. */
+    check("every row is a thumb target", s.rows.every((r) => r.h >= 44),
+      `smallest ${Math.min(...s.rows.map((r) => r.h))}px`);
+    await ctx.close();
+  }
+
+  /* IT CLOSES, THREE WAYS. A sheet that opens and will not shut is worse
+     than no sheet. */
+  {
+    const { ctx, pg } = await open(390, 844, "/rooms");
+    const gone = () => pg.evaluate(() => !document.querySelector("overheard-bar")
+      .shadowRoot.querySelector(".menu.nav"));
+    check("Escape closes it", (await pg.keyboard.press("Escape"), await pg.waitForTimeout(200), await gone()));
+    await pg.evaluate(() => document.querySelector("overheard-bar").shadowRoot.querySelector(".burger").click());
+    await pg.waitForTimeout(300);
+    /* The left gutter, below the bar: page background on every layout here.
+       A tap in the middle of the page lands on whatever the page put there,
+       and on /rooms at 390px that is a room link. */
+    await pg.mouse.click(5, 250);
+    await pg.waitForTimeout(250);
+    check("a tap on the page behind it closes it", await gone());
+    await pg.evaluate(() => document.querySelector("overheard-bar").shadowRoot.querySelector(".burger").click());
+    await pg.waitForTimeout(300);
+    /* And choosing the page you are already on. The browser does not
+       navigate, so nothing else would ever shut it. */
+    await pg.evaluate(() => document.querySelector("overheard-bar").shadowRoot
+      .querySelector('.prow[href="/rooms"]').click());
+    await pg.waitForTimeout(250);
+    check("and choosing the page you are already on closes it", await gone());
+    await ctx.close();
+  }
+
+  /* NOT BURIED UNDER THE DESKTOP NOTE. Found by screenshot: the note is
+     fixed to the bottom of the screen at z-index 9999, the sheet arrives at
+     the same edge, and the last two pages in the list were behind a box
+     explaining that the site is better on a computer. */
+  {
+    const ctx = await b.newContext({ viewport: { width: 360, height: 640 },
+      isMobile: true, hasTouch: true });
+    const pg = await ctx.newPage();
+    await pg.goto("http://localhost:8995/rooms");
+    await pg.waitForTimeout(1200);
+    const hint = () => pg.evaluate(() => {
+      const h = [...document.body.children].find((n) => n.shadowRoot?.querySelector(".wrap .tx b"));
+      if (!h) return "absent";
+      return getComputedStyle(h).display === "none" ? "hidden" : "showing";
+    });
+    check("the desktop note is showing to begin with", (await hint()) === "showing", await hint());
+    await pg.evaluate(() => document.querySelector("overheard-bar").shadowRoot.querySelector(".burger").click());
+    await pg.waitForTimeout(400);
+    check("and it steps aside for the sheet", (await hint()) === "hidden", await hint());
+    /* It HIDES rather than closing: closing is what records "seen", and a
+       visitor who opened a menu has not dismissed this. */
+    await pg.keyboard.press("Escape");
+    await pg.waitForTimeout(300);
+    check("and comes back when the sheet shuts", (await hint()) === "showing", await hint());
+    await ctx.close();
+  }
+
+  /* WHERE IT MUST NOT BE. The rule for this change was that the desktop bar
+     does not move. */
+  {
+    const ctx = await b.newContext({ viewport: { width: 1280, height: 900 } });
+    const pg = await ctx.newPage();
+    await pg.goto("http://localhost:8995/rooms");
+    await pg.waitForTimeout(900);
+    const d = await pg.evaluate(() => {
+      const r = document.querySelector("overheard-bar").shadowRoot;
+      return { nb: getComputedStyle(r.querySelector(".nb")).display,
+        tabs: [...r.querySelectorAll(".tabs a")].map((a) => a.textContent.trim()),
+        soon: getComputedStyle(r.querySelector(".soon")).display };
+    });
+    check("on a desktop the button does not exist", d.nb === "none", d.nb);
+    check("all six tabs are simply there", d.tabs.length === 6, d.tabs.join(","));
+    check("and Testnet with them", d.soon !== "none", d.soon);
+    await ctx.close();
+  }
+}
+
 
 
 /* ════════════════════════════════════════════════════════════════════════

@@ -24,7 +24,7 @@
 
 import { getSession, getVault, signIn, signOut, onSession, shortDid, hueOf, openVault, saveVault,
          readSeed, keyFromSeed, sealVault, PW_MIN } from "/session.js";
-import { PAGES, FONT_HREF, faceSVG } from "/nav.js";
+import { PAGES, FONT_HREF, faceSVG, iconSVG } from "/nav.js";
 
 /* The tabs are the pages that asked to be tabs, from the one list the footer
    also reads. `hot` marks a tab as worth noticing without pretending it is
@@ -43,6 +43,9 @@ const CSS = `
   font-family:"Outfit",system-ui,-apple-system,"Segoe UI",sans-serif;
   -webkit-font-smoothing:antialiased;
 }
+/* While a sheet is open. 50 is the right height for a bar; it is the wrong
+   height for a full-screen scrim, and a page is free to paint above it. */
+:host(.sheet){z-index:9999}
 *{box-sizing:border-box;margin:0;padding:0}
 .wrap{max-width:1180px;margin:0 auto;padding:0 26px}
 .bar{
@@ -101,6 +104,134 @@ const CSS = `
 .tabs a[data-hot][aria-current="page"]::before{background:#001016;box-shadow:none;animation:none}
 .tabs a:focus-visible,.brand:focus-visible{outline:2px solid #5FEBFF;outline-offset:3px}
 
+/* ══════════════════════════════════════════════════════════════════════════
+   THE PHONE NAVIGATION, WHICH USED TO HIDE HALF THE SITE
+   ══════════════════════════════════════════════════════════════════════════
+
+   REPORTED, with a screenshot: "the menu bar can't cover all pages names".
+   Correct, and it was by design — six tabs need 472px, a phone row gets 308
+   to 390, so the row scrolled sideways and the last two tabs lived past the
+   edge. Everything that could be done to make a scrolling row admit that it
+   scrolls had been done to it: a proportional fade at the ends, the current
+   tab pulled into view, a one-time peek that demonstrated the gesture. The
+   measurements say all three worked and none of them fixed the actual
+   problem, because the actual problem is that a visitor cannot choose from a
+   list they cannot see. Agent City — the best page on the site — came last
+   in the first day of traffic at 9% of arrivals, in exactly tab order.
+
+   So on a phone the row is gone and there is a button instead. One tap and
+   every page in the site is on screen at once, with its one-line description,
+   which is MORE than the strip ever showed: the explainer page is not a tab
+   at all and had no route from the bar on any screen.
+
+   WHY IT IS A SHEET AND NOT A DROPDOWN. The same reason the sign-in popover
+   became one: a menu hanging off the top-right corner of a phone is anchored
+   at the furthest point on the screen from a thumb. This reuses that sheet
+   wholesale — same class, same animation, same scrim, same grab bar — so
+   there is one bottom sheet in this bar and not two that look alike.
+
+   AND NOTHING ABOVE 560px MOVES. The desktop bar is the row of tabs it has
+   always been; the button is display:none there and its sheet can never
+   open. */
+.nb{position:relative;flex:none;display:none}
+.burger{
+  display:grid;place-items:center;width:38px;height:38px;padding:0;
+  border-radius:13px;cursor:pointer;
+  color:#CDEAF3;background:rgba(0,180,215,.10);
+  border:1px solid rgba(0,180,215,.28);
+  transition:background .25s cubic-bezier(.22,.68,.24,1),border-color .25s cubic-bezier(.22,.68,.24,1);
+}
+.burger:focus-visible{outline:2px solid #5FEBFF;outline-offset:3px}
+.nb.open .burger{background:rgba(0,180,215,.22);border-color:#5FEBFF;color:#5FEBFF}
+/* Three lines that become an X. Two of the three do the work and the middle
+   one fades, which is the cheapest version of this that still reads as one
+   object changing rather than two icons swapping. */
+.burger i{
+  display:block;position:absolute;width:17px;height:2px;border-radius:2px;
+  background:currentColor;
+  transition:transform .3s cubic-bezier(.2,.9,.3,1.2),opacity .18s linear;
+}
+.burger i:nth-child(1){transform:translateY(-5.5px)}
+.burger i:nth-child(3){transform:translateY(5.5px)}
+.nb.open .burger i:nth-child(1){transform:rotate(45deg)}
+.nb.open .burger i:nth-child(2){opacity:0}
+.nb.open .burger i:nth-child(3){transform:rotate(-45deg)}
+/* A visitor standing on a page that is not the one the button is next to has
+   no other way to know which page that is, now the active tab is gone. The
+   dot says "there is a current page in here" and the sheet says which. */
+.burger::after{
+  content:"";position:absolute;top:6px;right:6px;width:5px;height:5px;border-radius:50%;
+  background:#5FEBFF;box-shadow:0 0 7px #5FEBFF;opacity:0;transition:opacity .25s;
+}
+.nb[data-hot] .burger::after{opacity:1}
+.nb.open .burger::after{opacity:0}
+
+/* ── the rows inside it ────────────────────────────────────────────────────
+   A page per row, with the blurb the footer already carries. The blurb is
+   the reason this is worth a tap: "Play" and "Create" are labels a first
+   visitor cannot rank, and "Proof of Learning" and "Make an identity" are
+   not. Two lines each, roomy, thumb-sized — this sheet has a whole screen
+   to spend and the strip it replaces had 308 pixels. */
+.prow{
+  display:flex;align-items:center;gap:12px;width:100%;
+  margin-top:6px;padding:9px 12px;border-radius:14px;
+  text-decoration:none;text-align:left;
+  background:rgba(0,180,215,.04);border:1px solid rgba(0,180,215,.10);
+  transition:background .2s cubic-bezier(.22,.68,.24,1),border-color .2s cubic-bezier(.22,.68,.24,1);
+}
+.prow:first-of-type{margin-top:11px}
+.prow:active{background:rgba(0,180,215,.14)}
+.prow:focus-visible{outline:2px solid #5FEBFF;outline-offset:2px}
+.pico{
+  width:34px;height:34px;flex:none;border-radius:11px;display:grid;place-items:center;
+  background:rgba(0,180,215,.10);border:1px solid rgba(0,180,215,.18);color:#5FEBFF;
+}
+.pico svg{width:19px;height:19px;fill:none;stroke:currentColor;stroke-width:1.8;
+  stroke-linecap:round;stroke-linejoin:round;opacity:.9}
+.ptxt{display:block;min-width:0;flex:1 1 auto}
+.ptxt b{
+  display:block;font-family:inherit;font-size:14.5px;font-weight:600;line-height:1.2;
+  color:#EDFAFE;letter-spacing:-.01em;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+.ptxt i{
+  display:block;margin-top:3px;font-style:normal;
+  font-size:11.5px;line-height:1.35;color:#5F8593;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+/* Where you are. A filled row rather than a coloured word, because the whole
+   point of this sheet is that it is read at a glance. */
+.prow[aria-current="page"]{
+  background:rgba(0,180,215,.13);border-color:rgba(0,180,215,.42);
+}
+.prow[aria-current="page"] .ptxt b{color:#5FEBFF}
+.prow[aria-current="page"] .pico{background:rgba(0,180,215,.22);border-color:rgba(95,235,255,.45)}
+.pnow{
+  width:7px;height:7px;flex:none;border-radius:50%;background:#5FEBFF;
+  box-shadow:0 0 8px #5FEBFF;opacity:0;
+}
+.prow[aria-current="page"] .pnow{opacity:1}
+/* The live dot the City tab carries on a desktop, kept here so the same page
+   is marked the same way in both navigations. */
+.prow[data-hot] .pnow{opacity:1;background:#3BE3B0;box-shadow:0 0 8px #3BE3B0;
+  animation:barbeat 2.4s cubic-bezier(.22,.68,.24,1) infinite}
+.prow[data-hot][aria-current="page"] .pnow{background:#5FEBFF;box-shadow:0 0 8px #5FEBFF;animation:none}
+/* Testnet, which the desktop bar shows and the phone bar had no room for.
+   It has room here. */
+.nsoon{
+  display:flex;align-items:center;gap:9px;margin-top:13px;padding:11px 13px;
+  border-radius:13px;font-family:inherit;font-size:12.5px;font-weight:600;color:#5F8593;
+  background:rgba(9,32,43,.55);border:1px dashed rgba(0,180,215,.24);
+}
+.nsoon svg{width:16px;height:16px;flex:none;fill:none;stroke:currentColor;stroke-width:1.8;
+  stroke-linecap:round;stroke-linejoin:round;opacity:.7}
+.nsoon b{font-weight:700;color:#9CBFCB}
+.nsoon .tag{
+  margin-left:auto;font-family:"IBM Plex Mono",ui-monospace,Menlo,monospace;font-size:9px;
+  font-weight:600;letter-spacing:.13em;text-transform:uppercase;color:#3F6272;
+  padding:4px 7px;border-radius:6px;background:rgba(0,180,215,.08);
+}
+
 /* ── testnet, when there is one ────────────────────────────────────────────
    A label, not a control. It says what is coming without pretending to be a
    place you can go, so it takes the shape of a status pill rather than a tab:
@@ -120,7 +251,15 @@ const CSS = `
   letter-spacing:.13em;text-transform:uppercase;color:#3F6272;
   padding:3px 6px;border-radius:6px;background:rgba(0,180,215,.08);
 }
-@media (max-width:760px){.soon{display:none}}
+/* MEASURED, at every width from 360 to 1440. The bar needs 175px of wordmark,
+   466px of tabs, 146px of Testnet pill and 152px of signed-in chip, plus three
+   16px gaps: 987px of content, inside a wrapper that gives (viewport − 52).
+   The old cut-off was 760, which is 279px short of that, and the result was a
+   bar that wrapped onto three and four lines everywhere from 600px to 1024px —
+   182px of navigation on a 600px screen before the page began. Below 1100 the
+   pill is the thing that gives way, because it is the one element here that is
+   a label rather than a route. */
+@media (max-width:1099px){.soon{display:none}}
 
 /* ── the way in ────────────────────────────────────────────────────────────
    Signed out, every page looked the same as signed in, and the only routes to
@@ -128,7 +267,12 @@ const CSS = `
    is always in the same place. */
 .in{
   display:inline-flex;align-items:center;gap:11px;flex:none;margin-left:10px;
-  padding:10px 15px;border-radius:11px;cursor:pointer;
+  /* ONE HEIGHT FOR EVERY CONTROL ON THIS ROW. Signed out this button was
+     36px and the signed-in chip was 40, so the bar was 80px tall for a
+     stranger and 84 for somebody signed in — the whole page under it moved
+     four pixels down the moment you signed in, on every page of the site.
+     The button, the chip and the phone's menu button are all 38 now. */
+  height:38px;padding:0 15px;border-radius:11px;cursor:pointer;
   font-family:inherit;font-size:13.5px;font-weight:700;line-height:1;color:#001016;
   background:linear-gradient(120deg,#5FEBFF,#00B4D7 60%,#0093BC);border:0;
   box-shadow:0 12px 28px -16px rgba(0,180,215,1);
@@ -289,7 +433,7 @@ const CSS = `
    drift apart visually — one card, two contents. */
 .me .in{margin-left:0}
 .chip{
-  display:flex;align-items:center;gap:9px;padding:5px 11px 5px 5px;border-radius:999px;cursor:pointer;
+  display:flex;align-items:center;gap:9px;height:38px;padding:0 11px 0 5px;border-radius:999px;cursor:pointer;
   font-family:inherit;font-size:12.5px;font-weight:600;line-height:1;color:#CDEAF3;
   background:rgba(0,180,215,.10);border:1px solid rgba(0,180,215,.28);
   transition:border-color .25s cubic-bezier(.22,.68,.24,1),background .25s cubic-bezier(.22,.68,.24,1),transform .25s cubic-bezier(.22,.68,.24,1);
@@ -418,40 +562,58 @@ const CSS = `
    tabs SCROLL sideways rather than wrapping: six of them wrapped to two rows
    and pushed the whole page down by forty pixels of navigation before
    anything else appeared. */
+/* THE ROW IS GONE AND THE BUTTON IS HERE, everywhere the row does not fit.
+   See the block at the top of this stylesheet for why a button beats a
+   scrolling strip; the width is arithmetic. Without the Testnet pill the bar
+   still needs 175 + 466 + 152 + 48 = 841px of content, and a 900px window
+   gives 848. One pixel narrower than that and something has to wrap, so 900
+   is where the tabs stop and the button starts. Above it the desktop bar is
+   the row of tabs it has always been and this rule does not exist. */
+@media (max-width:899px){
+  .tabs{display:none}
+  .nb{display:block;margin-left:auto}
+  .me{margin-left:10px;order:0;flex:none}
+}
 @media (max-width:560px){
-  .bar{gap:9px;padding:16px 0}
-  .brand{font-size:19px;gap:10px}
-  .glyph{width:30px;height:30px}
-  .me{margin-left:auto;order:0}
-  .tabs{
-    order:1;margin-left:0;flex-wrap:nowrap;
-    overflow-x:auto;overscroll-behavior-x:contain;
-    scrollbar-width:none;-ms-overflow-style:none;
-    /* BLEED TO THE WINDOW EDGES, PROPERLY THIS TIME. The negative margins
-       were already here and the row still stopped 52px short of the right
-       edge, because width:100% resolves against the wrap CONTENT box, which
-       the padding has already narrowed. The margins only moved that box, so
-       the strip started at 0 and ended at 338 on a 390px phone. Fifty-two
-       pixels back is most of a tab: Verify is now whole and City breaks the
-       edge instead of being nowhere at all. */
-    margin-left:-26px;margin-right:-26px;
-    width:calc(100% + 52px);
-    padding:0 26px 2px;
-    /* The ends fade rather than being cut square, and the fade is driven by
-       where the strip actually is: nothing at an end you have reached, up to
-       30px at an end there is more beyond. A mask instead of a gradient
-       overlay because the bar sits on whatever the page is painting, and an
-       overlay would have to guess that colour on seven different pages. */
-    -webkit-mask-image:linear-gradient(90deg,transparent 0,#000 var(--fl,0px),#000 calc(100% - var(--fr,0px)),transparent 100%);
-    mask-image:linear-gradient(90deg,transparent 0,#000 var(--fl,0px),#000 calc(100% - var(--fr,0px)),transparent 100%);
-  }
-  .tabs::-webkit-scrollbar{display:none}
-  .tabs a{flex:none;padding:9px 11px;font-size:13px}
-  /* The width cap that used to keep the DROPDOWN on screen here is gone: on a
-     phone this is a sheet now, sized to the viewport by the block above. This
-     rule outlived it and, being later in the file, quietly won — which is how
-     a 390px screen ended up with a 338px sheet and a 52px strip of nothing
-     down one side. */
+  /* THE ROW IS NOW EXACTLY AS WIDE AS IT NEEDS TO BE, and at 360px that took
+     arithmetic rather than taste. The wordmark wants 110px of text, the
+     button 42, the signed-out control 110, two gaps 18 \u2014 320px of content
+     inside the 308 a 360px phone gives after its gutters. Twelve pixels over,
+     and what those twelve pixels produced was a wordmark quietly CLIPPED by
+     twelve, because white-space:nowrap under a flex shrink cuts rather than
+     wraps and says nothing about it.
+
+     So every element gives a little back: two off the glyph, two off the
+     button, six off the sign-in padding, one off each gap, and a wordmark
+     that scales with the window instead of stepping at a breakpoint. 298 of
+     308 at 360px, full size again by 396px, and nothing clipped anywhere
+     between. */
+  .bar{gap:8px;padding:16px 0;flex-wrap:nowrap}
+  .brand{font-size:clamp(17px,4.8vw,19px);gap:10px;flex:none}
+  .glyph{width:28px;height:28px}
+  .in{padding:0 13px;gap:9px}
+  .me{margin-left:0}
+  /* Three controls on one row at 360px is 308 pixels to spend, and the DID
+     text is the one part of the chip that is not doing work a face does
+     better — the face is the thing a person learns to recognise, and the
+     whole DID is one tap away inside the chip's own sheet. This is also the
+     answer to a REPORTED bug: signing in widened the chip by 91px, which was
+     enough to push the row over and rearrange the bar the moment somebody
+     signed in. The bar is now the same width signed in and signed out. */
+  .chip .nm{display:none}
+  .chip{padding:0 8px 0 5px}
+  /* Seven rows, a heading and the Testnet line come to about 558px, and a
+     640-tall Android gives 86vh = 550. Nine pixels is not worth a scrollbar
+     under a menu whose entire purpose is that you can see all of it at once,
+     and this sheet has no text field in it, so there is no keyboard to leave
+     room for. */
+  .menu.nav{max-height:min(92vh,760px)}
+  /* The strip's own rules — the bleed to the window edges, the proportional
+     mask, the reduced tab padding — went with it. They were load-bearing for
+     a row that no longer exists at this width, and a stylesheet that keeps
+     the scaffolding of a removed thing is how the next person concludes it is
+     still there. The scroll wiring in the JS is likewise a no-op here: it
+     measures a display:none element, finds no overflow, and returns. */
   /* The wordmark's halo is a blurred conic gradient rotating forever, on
      every page of the site. It is small, so it is not the biggest cost on a
      phone, but it is a continuous one that buys a shimmer nobody came for.
@@ -525,115 +687,156 @@ function styleScrollbars() {
 
 
 /* ══════════════════════════════════════════════════════════════════════════
-   THE TAB STRIP HAS TO ADMIT THAT IT SCROLLS
+   WHAT USED TO BE HERE
    ══════════════════════════════════════════════════════════════════════════
 
-   On a phone the six tabs need 472px and the row gets 308 to 390. Scrolling
-   is the right answer to that; the bug was that the row gave no sign of it.
-   Measured on the live site: at 360, 390, 412 and 430px the tabs on screen
-   were Card, Rooms, Play and Create, with Verify half off the edge and City
-   entirely past it. The first day of traffic came back in exactly that
-   order, ending with Agent City on 9% of arrivals.
+   Ninety lines that made a horizontally-scrolling tab strip admit that it
+   scrolled: a mask whose fade at each end was proportional to how much row
+   was left in that direction, a scroll-into-view for the current tab, and a
+   one-time animated peek that demonstrated the gesture on a visitor's first
+   phone load and never again.
 
-   Three things, in the order a visitor meets them.
+   All three worked, and none of them fixed the problem. The problem was that
+   a visitor cannot choose from a list they cannot see, and the answer to that
+   is a list they can see — THE PHONE NAVIGATION, in the stylesheet above.
 
-   1. AN END THAT FADES. A row cut square at the edge looks like a row that
-      ends there. A row that fades looks like a row that continues, and the
-      fade is proportional to how much is actually left, so it disappears
-      when you reach the end and tells no lie in either direction.
+   It is deleted rather than left switched off. The strip is display:none
+   below 900px and does not overflow above it, so every line of this would
+   have measured a hidden element, found no overflow and returned — while
+   still costing a scroll listener, a resize listener, a rAF and a
+   localStorage write on every page load of the site, on exactly the devices
+   least able to spare them. */
 
-   2. THE TAB YOU ARE ON IS ON SCREEN. Standing on /city and seeing no City
-      tab is disorienting in a way that is hard to name and easy to fix.
+/* ══════════════════════════════════════════════════════════════════════════
+   THE PHONE'S NAVIGATION
+   ══════════════════════════════════════════════════════════════════════════
 
-   3. ONE PEEK, ONCE, EVER. A fade is a hint and hints get missed, so the
-      first time somebody opens this site on a phone the strip scrolls a
-      little way out and comes back. It is the difference between showing an
-      affordance and demonstrating it. Once, because a nav that fidgets on
-      every page load is a nav with a nervous tic; not at all if the visitor
-      asked for reduced motion, or if the strip does not overflow, or if the
-      current tab already had to be scrolled into view, since that visitor
-      has just watched it move for a better reason.
+   Every page in the site, on one screen, one tap from anywhere. Three things
+   about it are deliberate and easy to lose:
 
-   It aborts the moment a finger lands on the strip. An animation that keeps
-   running while somebody is trying to use the thing is a fight over the
-   scroll position, and they should win it. */
-const PEEK_KEY = "overheard.tabpeek";
+   1. IT READS THE SAME LIST THE TABS DO, and then some. `PAGES` is the one
+      place a page is declared; the tabs take the subset that asked to be
+      tabs and this takes ALL of them, which is how "What is Overheard?" —
+      the explainer, deliberately not a tab because six tabs already
+      overflowed a desktop row — finally gets a route from the bar.
 
-function wireStrip(nav) {
-  let raf = 0;
-  const paint = () => {
-    raf = 0;
-    const max = nav.scrollWidth - nav.clientWidth;
-    const l = max <= 2 ? 0 : Math.min(nav.scrollLeft, 30);
-    const r = max <= 2 ? 0 : Math.min(max - nav.scrollLeft, 30);
-    nav.style.setProperty("--fl", l.toFixed(1) + "px");
-    nav.style.setProperty("--fr", r.toFixed(1) + "px");
-  };
-  const queue = () => { if (!raf) raf = requestAnimationFrame(paint); };
-  nav.addEventListener("scroll", queue, { passive: true });
-  addEventListener("resize", queue);
+   2. IT IS BUILT ONCE, NOT ON EVERY OPEN. Seven rows of static markup
+      rebuilt on each tap is work done for nothing, and it means a row can
+      differ between two openings for reasons nobody intended. Only the
+      open/closed class changes.
 
-  requestAnimationFrame(() => {
-    paint();
-    const room = nav.scrollWidth - nav.clientWidth;
-    if (room <= 2) return;
-
-    /* 2. bring the current tab into view, instantly: this is where the strip
-          should already have been, not somewhere to travel to. */
-    let moved = false;
-    const cur = nav.querySelector('[aria-current="page"]');
-    if (cur) {
-      const nb = nav.getBoundingClientRect(), cb = cur.getBoundingClientRect();
-      if (cb.right > nb.right - 10 || cb.left < nb.left + 10) {
-        nav.scrollLeft = Math.max(0, Math.min(room,
-          cur.offsetLeft - (nav.clientWidth - cur.offsetWidth) / 2));
-        moved = true;
-        paint();
-      }
-    }
-
-    /* 3. the peek */
-    if (moved) return;
-    if (!matchMedia("(max-width:560px)").matches) return;
-    if (matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-    try { if (localStorage.getItem(PEEK_KEY)) return; localStorage.setItem(PEEK_KEY, "1"); } catch { return; }
-    setTimeout(() => peekStrip(nav, room), 950);
-  });
+   3. THE CLOSE PATH IS THE SAME ONE THE SIGN-IN SHEET USES: a capture-phase
+      pointerdown that checks the composed path, and Escape. Composed,
+      because this is a shadow root — an event that starts on a row inside it
+      arrives at the document with `target` retargeted to <overheard-bar>, so
+      a naive `contains` check closes the sheet on every tap of its own
+      contents. That bug has been written twice in this file already. */
+/* An open sheet has to be above everything, and the bar's host sits at
+   z-index 50. Anything a page paints above 50 — and the desktop note, which
+   is at 9999 in its own root — covers it otherwise. Both menus in this file
+   call it, so there is one rule for "a sheet is open" rather than two that
+   agree today. */
+function lift(el, on) {
+  const host = el.getRootNode()?.host;
+  if (host) host.classList.toggle("sheet", on);
+  hushHint(on);
 }
 
-/* Hand-rolled rather than scrollTo({behavior:"smooth"}), because the shape of
-   this movement is the whole message: out on an ease that accelerates, a beat
-   of stillness at the far end so the eye can register what was hidden there,
-   then back. The browser's smooth scroll is one flat curve with no pause in
-   it, which reads as a glitch rather than as a gesture. */
-function peekStrip(nav, room) {
-  const to = Math.min(room, 78);
-  const OUT = 620, HOLD = 360, BACK = 540;
-  const ease = (t) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
-  let live = true;
-  const stop = () => { live = false; };
-  for (const ev of ["pointerdown", "touchstart", "wheel", "keydown"]) {
-    nav.addEventListener(ev, stop, { once: true, passive: true });
+function buildBurger(path, explicit) {
+  const nb = document.createElement("div");
+  nb.className = "nb";
+
+  const btn = document.createElement("button");
+  btn.className = "burger";
+  btn.type = "button";
+  btn.setAttribute("aria-label", "Open the site menu");
+  btn.setAttribute("aria-haspopup", "dialog");
+  btn.setAttribute("aria-expanded", "false");
+  for (let i = 0; i < 3; i++) btn.append(document.createElement("i"));
+
+  const sheet = document.createElement("div");
+  sheet.className = "menu nav";
+  sheet.setAttribute("role", "dialog");
+  sheet.setAttribute("aria-label", "Sections");
+  sheet.append(Object.assign(document.createElement("h3"), { textContent: "Go to" }));
+
+  let hot = false;
+  for (const p of PAGES) {
+    const a = document.createElement("a");
+    a.className = "prow";
+    a.href = p.href;
+    const on = explicit ? explicit === p.label.toLowerCase() : p.match(path);
+    if (on) a.setAttribute("aria-current", "page");
+    if (p.hot) a.setAttribute("data-hot", "");
+    if (on) hot = true;
+
+    const ico = document.createElement("span");
+    ico.className = "pico";
+    ico.innerHTML = iconSVG(p.icon, "");           // our own markup, from nav.js
+    const txt = document.createElement("span");
+    txt.className = "ptxt";
+    txt.append(Object.assign(document.createElement("b"), { textContent: p.label }));
+    txt.append(Object.assign(document.createElement("i"), { textContent: p.blurb }));
+    a.append(ico, txt, Object.assign(document.createElement("span"), { className: "pnow" }));
+    sheet.append(a);
   }
-  const t0 = performance.now();
-  const out = (now) => {
-    if (!live) return;
-    const t = Math.min(1, (now - t0) / OUT);
-    nav.scrollLeft = to * ease(t);
-    if (t < 1) return requestAnimationFrame(out);
-    setTimeout(() => {
-      if (!live) return;
-      const t1 = performance.now();
-      const back = (n2) => {
-        if (!live) return;
-        const u = Math.min(1, (n2 - t1) / BACK);
-        nav.scrollLeft = to * (1 - ease(u));
-        if (u < 1) requestAnimationFrame(back);
-      };
-      requestAnimationFrame(back);
-    }, HOLD);
+  /* Only when the visitor is standing somewhere this sheet can name. On a
+     page that is not in the list the dot would promise a highlighted row
+     that is not in there. */
+  if (hot) nb.setAttribute("data-hot", "");
+
+  const ns = document.createElement("div");
+  ns.className = "nsoon";
+  ns.innerHTML = ICONS.flask;                      // our own markup
+  ns.append(Object.assign(document.createElement("b"), { textContent: "Testnet" }));
+  ns.append(Object.assign(document.createElement("span"),
+    { textContent: " — being built" }));
+  ns.append(Object.assign(document.createElement("span"), { className: "tag", textContent: "soon" }));
+  sheet.append(ns);
+
+  nb.append(btn);
+
+  /* IT IS BUILT ONCE AND ATTACHED ONLY WHILE OPEN, which is two decisions
+     rather than one. Built once because seven rows of static markup rebuilt
+     on every tap is work done for nothing and a row that can differ between
+     openings for reasons nobody intended. Attached only while open because
+     this shares the .menu class with the sign-in sheet — deliberately, so
+     there is one sheet in this bar and not two that resemble each other —
+     and a permanently-present second .menu makes `shadowRoot.querySelector
+     (".menu")` ambiguous for everything that ever reads this bar. Closed, it
+     is a detached node holding no listeners the document knows about. */
+  const close = () => {
+    if (!sheet.isConnected) return;
+    sheet.remove();
+    nb.classList.remove("open");
+    btn.setAttribute("aria-expanded", "false");
+    lift(nb, false);
+    removeEventListener("pointerdown", away, true);
+    removeEventListener("keydown", esc, true);
   };
-  requestAnimationFrame(out);
+  const away = (e) => { if (!e.composedPath().includes(nb)) close(); };
+  const esc = (e) => { if (e.key === "Escape") { close(); btn.focus(); } };
+
+  btn.addEventListener("click", () => {
+    if (sheet.isConnected) return close();
+    nb.append(sheet);
+    nb.classList.add("open");
+    btn.setAttribute("aria-expanded", "true");
+    lift(nb, true);
+    addEventListener("pointerdown", away, true);
+    addEventListener("keydown", esc, true);
+    /* The current row, or the first one. A sheet that opens with focus still
+       on the button behind it is a sheet a keyboard cannot enter. */
+    (sheet.querySelector('[aria-current="page"]') ?? sheet.querySelector(".prow"))?.focus();
+  });
+  /* Tapping a row navigates, and on a same-page link the browser does not
+     navigate at all — so the sheet has to shut itself or it stays open over
+     the page the visitor just chose. */
+  sheet.addEventListener("click", (e) => {
+    if (e.target instanceof Element && e.target.closest(".prow")) close();
+  });
+
+  return nb;
 }
 
 /** Right-aligned tabs follow the viewport width, and the viewport width moves
@@ -694,15 +897,17 @@ class OverheardBar extends HTMLElement {
     soon.append(Object.assign(document.createElement("b"), { textContent: "Testnet" }));
     soon.append(Object.assign(document.createElement("span"), { className: "tag", textContent: "soon" }));
 
+    const nb = buildBurger(path, explicit);
+
     const me = document.createElement("div");
     me.className = "me";
     me.hidden = true;
 
-    bar.append(brand, nav, soon, me);
+    bar.append(brand, nav, soon, nb, me);
     wrap.appendChild(bar);
     root.append(style, wrap);
 
-    wireStrip(nav);
+    /* nothing to wire: the tabs either fit or are not shown. */
 
     this._paintMe = () => paintMe(me, root);
     this._paintMe();
@@ -749,6 +954,7 @@ function paintSignIn(me) {
   const close = () => {
     menu?.remove(); menu = null;
     me.classList.remove("open");
+    lift(me, false);
     btn.setAttribute("aria-expanded", "false");
     removeEventListener("pointerdown", away, true);
     removeEventListener("keydown", esc, true);
@@ -778,6 +984,7 @@ function paintSignIn(me) {
     menu.setAttribute("aria-label", "Sign in");
     me.appendChild(menu);
     me.classList.add("open");
+    lift(me, true);
     btn.setAttribute("aria-expanded", "true");
     addEventListener("pointerdown", away, true);
     addEventListener("keydown", esc, true);
@@ -1155,6 +1362,7 @@ function paintMe(me, root) {
   const s = getSession();
   me.replaceChildren();
   me.classList.remove("open");
+  lift(me, false);
   me.hidden = false;
   if (!s) return paintSignIn(me);
 
@@ -1175,6 +1383,7 @@ function paintMe(me, root) {
   const close = () => {
     menu?.remove(); menu = null;
     me.classList.remove("open");
+    lift(me, false);
     chip.setAttribute("aria-expanded", "false");
     removeEventListener("pointerdown", away, true);
     removeEventListener("keydown", esc, true);
@@ -1233,6 +1442,7 @@ function paintMe(me, root) {
     menu.append(h, did, copy, card, rooms, out, fine);
     me.appendChild(menu);
     me.classList.add("open");
+    lift(me, true);
     chip.setAttribute("aria-expanded", "true");
     addEventListener("pointerdown", away, true);
     addEventListener("keydown", esc, true);
@@ -1269,6 +1479,19 @@ function paintMe(me, root) {
    ══════════════════════════════════════════════════════════════════════════ */
 const SEEN_KEY = "overheard.deskhint";
 const SESSION_KEY_HINT = "overheard.deskhint.session";
+
+/* ── AND IT STEPS ASIDE FOR A SHEET ────────────────────────────────────────
+   The note is fixed to the bottom of the screen at z-index 9999. So is a
+   bottom sheet. FOUND BY SCREENSHOT: the site menu opened underneath it and
+   the last two pages in the list were behind a box explaining that the site
+   is better on a computer — which breaks this component's own fourth rule,
+   the one that says it never sits in front of anything.
+
+   It hides rather than closing, and closing is what records "seen": a
+   visitor who opened a menu has not dismissed this, and should still get to
+   read it when the menu shuts. */
+let hintHost = null;
+function hushHint(on) { if (hintHost) hintHost.style.display = on ? "none" : ""; }
 
 const HINT_CSS = `
 :host{all:initial}
@@ -1341,7 +1564,12 @@ function deskHint() {
     removeEventListener("keydown", esc, true);
     host.remove();
   };
-  const esc = (e) => { if (e.key === "Escape") close(); };
+  /* NOT WHILE IT IS HUSHED. Escape closes an open sheet, and closing THIS
+     records "seen" forever — so without the guard, one Escape aimed at the
+     site menu permanently dismissed a note the visitor never got to read,
+     from behind the sheet that was covering it. Hidden means not
+     addressable. */
+  const esc = (e) => { if (e.key === "Escape" && host.style.display !== "none") close(); };
   x.addEventListener("click", close);
   /* Tapping anywhere on it dismisses too — a 30px × on a phone is a target
      somebody has to aim at, and there is nothing else in here to press. */
@@ -1351,6 +1579,7 @@ function deskHint() {
   wrap.append(ic, tx, x);
   root.append(st, wrap);
   document.body.appendChild(host);
+  hintHost = host;
 }
 
 if (document.readyState === "loading") {
