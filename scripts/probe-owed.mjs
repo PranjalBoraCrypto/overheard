@@ -32,7 +32,7 @@ import {
 } from "./runner.mjs";
 import { safeRoom } from "./buy.mjs";
 import { verifyLock, RAIL } from "./rail.mjs";
-import { CAN_DO } from "./work.mjs";
+import { CAN_DO, doJob } from "./work.mjs";
 
 const now = Date.now();
 const ago = (t) => (t ? `${Math.round((now - t) / 3.6e6 * 10) / 10}h ago` : "unknown");
@@ -112,15 +112,59 @@ for (const d of p.owed) {
     console.log(`  WHY IT STALLS  ${reasons[0]}`);
     for (const r of reasons.slice(1)) console.log(`  and also        ${r}`);
     found.push(`${job}: ${reasons[0]}`);
+    continue;
+  }
+
+  /* ── PAST WHERE THE FIRST VERSION OF THIS PROBE COULD SEE ────────────────
+     Every guard the wake checks BEFORE doing the work says deliver. So the
+     answer is inside the work itself, and the only honest way to get it is
+     to run the handler. doJob reads the archive and returns a document; it
+     signs nothing and posts nothing, which is why a probe with no seed may
+     call it. A room summary was measured at 829 ms.
+
+     `permanent` is the field that matters. work.mjs separates a bad minute
+     from an answer: a bad minute is retried, an ANSWER means no amount of
+     waiting will produce this document, and the wake tells the buyer once
+     and then leaves the deal alone until it refunds. */
+  const brief = d.offer.body?.job?.brief ?? d.offer.body?.job?.subject ?? "";
+  console.log(`  brief          ${JSON.stringify(String(brief).slice(0, 120))}`);
+  let done;
+  try { done = await doJob(job, brief, {}); }
+  catch (e) { done = { ok: false, permanent: false, why: `the handler threw: ${String(e?.message || e).slice(0, 120)}` }; }
+  console.log(`  handler        ok=${done.ok} permanent=${Boolean(done.permanent)}`);
+  if (!done.ok) console.log(`  handler says   ${done.why}`);
+
+  /* ── AND WHETHER THE BUYER WAS EVER TOLD ─────────────────────────────────
+     This is the difference between a shop that quietly ate an order and a
+     shop that declined it out loud. On a permanent failure the wake posts one
+     note into the deal room and then goes silent — deliberately, to avoid
+     eighty-six copies of the same sentence over a refund window. The silence
+     afterwards is correct; being unable to tell it apart from a stall is not,
+     which is the whole reason this probe exists. */
+  let told = "the deal room could not be read";
+  const room = safeRoom(contract);
+  if (room) {
+    try {
+      const msgs = await readAnyRoom(room, {});
+      const note = msgs.find((m) => m?.from === US && /^Overheard cannot deliver this order/.test(String(m.text ?? "")));
+      told = note ? `yes — told at ${note.ts ?? "unknown time"}` : "NO — the buyer has not been told anything";
+      console.log(`  room           ${room} · ${msgs.length} messages`);
+    } catch { /* left as the default */ }
+  }
+  console.log(`  buyer told     ${told}`);
+
+  if (!done.ok && done.permanent) {
+    found.push(`${job}: cannot ever be delivered — ${done.why} · buyer ${told.startsWith("yes") ? "was told" : "NOT TOLD"}`);
+  } else if (!done.ok) {
+    found.push(`${job}: the handler failed but says it is temporary — ${done.why}`);
   } else {
-    /* Everything this probe can check says it should have gone out. That is
-       a genuinely different finding from a stall, and it must not be
-       reported as a clean bill of health: the remaining possibilities all
-       live past the point a read-only probe can reach — the handler throwing,
-       the venue refusing the delivery, or no seed in that job's environment. */
-    console.log("  WHY IT STALLS  every guard this probe can check says DELIVER");
-    found.push(`${job}: passes every readable guard — the failure is in the handler, the post, or the seed`);
+    found.push(`${job}: the handler PRODUCED the work — nothing explains why it was not delivered`);
   }
 }
 
-annotate("warning", `${p.owed.length} paid deal(s) waiting`, found.slice(0, 4).join(" · "));
+annotate("warning", `${p.owed.length} paid deal(s) waiting`, found.slice(0, 3).join(" · "));
+for (const d of p.owed.slice(0, 2))
+  annotate("notice", "the deal", `${d.offer.body?.job?.id} · contract ${d.accept?.body?.contract ?? "?"}`
+    + ` · accepted ${ago(d.accept?.at)}`
+    + ` · refund due ${d.accept?.at ? new Date(d.accept.at + WINDOW.refundAfter).toISOString() : "?"}`
+    + (d.accept?.at && d.accept.at + WINDOW.refundAfter < now ? " (ALREADY PAST)" : ""));
