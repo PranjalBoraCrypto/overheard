@@ -257,10 +257,6 @@ h1{font-weight:800;font-size:clamp(30px,5vw,42px);line-height:1;letter-spacing:-
 .hfield dd .sub{display:block;font-size:12px;color:var(--faint);margin-top:2px}
 .hfield.wide{grid-column:1/-1}
 
-.hdetgo{display:inline-flex;align-items:center;gap:7px;margin-top:var(--s4);
-  font-size:13px;font-weight:600;color:var(--blue);text-decoration:none}
-.hdetgo:hover{text-decoration:underline}
-.hdetgo .i{width:13px;height:13px}
 /* The contract id line. It takes the whole width under the words and the
    button, and it is quiet — a reference, not a thing to read. `order:9` so it
    is always last however the row wraps: a receipt number that lands in the
@@ -965,11 +961,6 @@ function fieldsFor(o) {
 
 function itemFor(o) {
   const row = rowFor(o);
-  /* The pill is handed to the strip so the two cannot disagree: whatever the
-     deal-room read comes back with repaints BOTH, in one place, at one time.
-     A row that said OPEN above the words "this deal is finished" is what this
-     argument is settling. */
-  const act = actionFor(o, row.querySelector(".pill"));
 
   const wrap = document.createElement("div");
   wrap.className = "hitem";
@@ -982,6 +973,23 @@ function itemFor(o) {
   row.setAttribute("aria-controls", det.id);
   det.append(fieldsFor(o));
 
+  /* ── THE PANEL IS HANDED OVER TOO, AND THIS IS WHY ──────────────────────
+     The pill was already handed to the strip so the two could not disagree.
+     The panel was not, and it disagreed with both: it is built ONCE, from
+     statusOf(o), at the moment the row is drawn — which is before the deal's
+     own room has been read. At that moment o.dealState is empty and statusOf
+     falls back to the only thing it knows, the offer's expiry. Every order
+     whose offer window had closed therefore opened on "Expired", and STAYED
+     there while the pill above it repainted to Delivered, or Funded, or the
+     "this order cannot be filled" note appeared two lines up. Reported as
+     "almost all showing this", which is exactly what it would be: the
+     fallback is the answer for every order older than its own expiry, and
+     nothing ever replaced it.
+
+     The comment three lines up said the read "repaints BOTH, in one place,
+     at one time". It repainted one. Now it repaints the panel with it. */
+  const act = actionFor(o, row.querySelector(".pill"), det);
+
   /* ── THE ACTION STRIP STAYS OUT HERE, AND THE SUITE IS WHY ───────────────
      The first version of this put the strip inside the panel with everything
      else, and test-orders-page went red trying to click "Pay into the lock":
@@ -991,34 +999,19 @@ function itemFor(o) {
      has always been — attached to the row, visible without asking. What folds
      away is the reading matter. */
 
-  /* The board, from inside, where it answers a question the reader has now
-     formed rather than being the only thing a row could do. */
-  const go = document.createElement("a");
-  go.className = "hdetgo";
-  /* ── AND IT HAS TO LAND ON THIS ORDER, NOT ON A PAGE ABOUT ORDERS ────────
-     First it went to the deals page, which opens on the order FORM, so a
-     link reading "the deals board" put people somewhere to place another
-     order. Then it went to #board, which is the right page but still the
-     whole board — a list of everybody's deals, with no answer to "what about
-     MINE" except a search. Reported both times.
+  /* ── AND THEN IT WENT AWAY ───────────────────────────────────────────────
+     Three rounds on one link. It pointed at the deals page, which opens on
+     the ORDER FORM. Then at #board, the right page but everybody's list.
+     Then at #/deal/<id>, this order on its own — correct, and still cut,
+     because by then the question had stopped being "where should it go" and
+     become "why is it here". The panel is what an order IS, in plain words;
+     a link out of it is a fourth thing to read on the way to somewhere the
+     page already goes twice. So it is gone, and the board is still one press
+     away from the top of this page and from the footer.
 
-     The page has always been able to open one deal on its own: #/deal/<id>.
-     That is what this link means, so that is what it now says and where it
-     now goes. Falls back to the board only when there is no id to aim at,
-     and the words change with it — a label that promises one order and
-     delivers a list is the bug being fixed here, twice over. */
-  const key = String(o.accept?.contract || o.id || "");
-  const one = /^0x[0-9a-fA-F]{8,}$/.test(key);
-  go.href = "/deals-preview-78cb4a1be923c6b4.html" + (one ? "#/deal/" + key : "#board");
-  go.textContent = one ? "Check every signature on this order"
-                       : "Check every signature on the deals board";
-  const gi = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-  gi.setAttribute("class", "i");
-  const gu = document.createElementNS("http://www.w3.org/2000/svg", "use");
-  gu.setAttribute("href", "#i-caret");
-  gi.append(gu);
-  go.append(gi);
-  det.append(go);
+     Kept in the deals page, though: #/deal/<id> works, and the "all deals"
+     way out of it goes to the board rather than the order form. That half
+     was a real bug and it stays fixed whether anything links to it or not. */
 
   row.addEventListener("click", () => {
     const open = det.hidden;
@@ -1085,7 +1078,7 @@ function restat() {
 }
 
 /** The strip under a row, or null when there is nothing for the buyer to do. */
-function actionFor(o, pill = null) {
+function actionFor(o, pill = null, det = null) {
   if (!o.accept?.room || !o.accept?.contract) return null;
   /* Past refundAfterMs a lock leads nowhere: reveal is refused at
      `at >= refundAfter` and a refund needs a lock that never came. Offering
@@ -1141,6 +1134,11 @@ function actionFor(o, pill = null) {
         pill.dataset.tone = st.tone;
         pill.textContent = st.word;
       }
+      /* Rebuilt rather than patched field by field: the answer changes what
+         "where it stands" says AND whether the refund line belongs there at
+         all, and a panel half-updated is the bug this is fixing. It is a
+         handful of elements and it happens once per order. */
+      if (det) det.replaceChildren(fieldsFor(o));
       restat();
     }
     if (state === "locked") {

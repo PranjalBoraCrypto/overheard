@@ -509,10 +509,6 @@ input[type=text]:focus{outline:none;border-color:var(--blue);background:rgba(0,0
 .hfield dd{margin:4px 0 0;font-size:14px;color:var(--white);line-height:1.45;
   overflow-wrap:anywhere}
 .hfield dd .sub{display:block;font-size:12px;color:var(--faint);margin-top:2px}
-.hdetgo{display:inline-flex;align-items:center;gap:7px;margin-top:var(--s4);
-  font-size:13px;font-weight:600;color:var(--blue);text-decoration:none}
-.hdetgo:hover{text-decoration:underline}
-.hdetgo .i{width:13px;height:13px}
 .hjob{font-weight:600;font-size:14px;white-space:nowrap}
 .hbrief{font-family:var(--mono);font-size:12px;color:var(--faint);min-width:0;
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -1961,30 +1957,19 @@ async function loadHistory() {
     }
     det.append(dl);
 
-    const go = document.createElement("a");
-    go.className = "hdetgo";
-    /* ── AND IT HAS TO LAND ON THIS ORDER, NOT ON A PAGE ABOUT ORDERS ────────
-       First it went to the deals page, which opens on the order FORM, so a
-       link reading "the deals board" put people somewhere to place another
-       order. Then it went to #board, which is the right page but still the
-       whole board — a list of everybody's deals, with no answer to "what about
-       MINE" except a search. Reported both times.
+    /* ── AND THEN IT WENT AWAY ───────────────────────────────────────────────
+       Three rounds on one link. It pointed at the deals page, which opens on
+       the ORDER FORM. Then at #board, the right page but everybody's list.
+       Then at #/deal/<id>, this order on its own — correct, and still cut,
+       because by then the question had stopped being "where should it go" and
+       become "why is it here". The panel is what an order IS, in plain words;
+       a link out of it is a fourth thing to read on the way to somewhere the
+       page already goes twice. So it is gone, and the board is still one press
+       away from the top of this page and from the footer.
 
-       The page has always been able to open one deal on its own: #/deal/<id>.
-       That is what this link means, so that is what it now says and where it
-       now goes. Falls back to the board only when there is no id to aim at,
-       and the words change with it — a label that promises one order and
-       delivers a list is the bug being fixed here, twice over. */
-    const key = String(o.body?.id ?? "");
-    const one = /^0x[0-9a-fA-F]{8,}$/.test(key);
-    go.href = "/deals-preview-78cb4a1be923c6b4.html" + (one ? "#/deal/" + key : "#board");
-    go.textContent = one ? "Check every signature on this order"
-                         : "Check every signature on the deals board";
-    const gi = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-    gi.setAttribute("class", "i");
-    const gu = document.createElementNS("http://www.w3.org/2000/svg", "use");
-    gu.setAttribute("href", "#i-caret");
-    gi.append(gu); go.append(gi); det.append(go);
+       Kept in the deals page, though: #/deal/<id> works, and the "all deals"
+       way out of it goes to the board rather than the order form. That half
+       was a real bug and it stays fixed whether anything links to it or not. */
 
     row.addEventListener("click", () => {
       const willOpen = det.hidden;

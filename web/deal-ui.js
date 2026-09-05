@@ -74,8 +74,13 @@ export const STATES = {
 /* Not a deal state — a clock reading. An offer nobody answered before its own
    expiry is still `proposed` to the protocol, and calling it "Open" a day
    later would be the page telling a comfortable lie. */
+/* "its own expiry passed with no answer" was the sentence here, and it is
+   written from the protocol's side: an expiry is a field on a frame, and
+   "no answer" is what the room did not contain. A buyer reading their own
+   order needs the two facts that affect them — nobody took the job, and
+   their money never moved — in the order they would ask for them. */
 export const EXPIRED = { word: "Expired", tone: "off", step: 1, ends: true,
-                         says: "its own expiry passed with no answer" };
+                         says: "nobody took it on before the deadline, so no payment was ever locked" };
 
 export const RAIL_STEPS = ["Offer", "Accept", "Fund", "Deliver"];
 

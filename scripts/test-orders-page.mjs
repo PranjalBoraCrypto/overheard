@@ -876,6 +876,33 @@ console.log("\n=== K. the buyer can actually pay — and is never asked to pay t
   ok("the counters stop calling a delivered order still open",
     (await pg.$eval("#nOpen", (e) => e.textContent)) !== (await pg.$eval("#nAll", (e) => e.textContent)),
     `${await pg.$eval("#nOpen", (e) => e.textContent)} still open of ${await pg.$eval("#nAll", (e) => e.textContent)} — one of them is finished`);
+
+  /* ── AND THE PANEL HAS TO AGREE WITH THE PILL ───────────────────────────
+     The same argument, one level down, and it was lost there for a while.
+     The details panel is built ONCE, when the row is drawn — before the
+     deal's own room has been read. At that moment there is no state to go
+     on and statusOf falls back to the offer's expiry, so every order older
+     than its own offer window opened on "Expired" and stayed there while
+     the pill above it repainted to Delivered. Reported as "almost all
+     showing this", which is what it would be.
+
+     Asserted as agreement rather than as the word "Delivered": whatever the
+     row says at the top, the panel underneath has to say the same thing. */
+  await pg.locator(".hrow").first().click();
+  await pg.waitForTimeout(300);
+  const agree = await pg.evaluate(() => {
+    const pill = document.querySelector(".hitem .pill")?.textContent.trim();
+    const f = [...document.querySelectorAll(".hdet .hfield")]
+      .find((x) => /Where it stands/.test(x.querySelector("dt")?.textContent || ""));
+    const dd = f?.querySelector("dd");
+    return { pill, panel: dd?.firstChild?.textContent.trim(),
+             says: (dd?.querySelector(".sub")?.textContent || "").trim() };
+  });
+  ok("the open panel says what the pill says",
+    agree.pill === agree.panel, `pill "${agree.pill}" vs panel "${agree.panel}"`);
+  ok("and never the pre-read fallback once the room has answered",
+    agree.panel !== "Expired", agree.panel);
+  ok("with a sentence a buyer can act on", /\w{20,}|\w+ \w+ \w+/.test(agree.says), agree.says);
   await ctx.close();
 }
 {
@@ -1160,39 +1187,26 @@ console.log("\n=== K. the row opens in place");
     ["What you ordered", "About", "Price", "Placed", "Where it stands"].every((l) => opened.labels.includes(l)),
     opened.labels.join(" · "));
   ok("and no protocol word as a field name", opened.jargon.length === 0, opened.jargon.join(", "));
-  ok("the board is still reachable, from inside", opened.board);
+  /* ── AND NOTHING LEADS OUT OF IT ─────────────────────────────────────────
+     There was a link in here. It went to the deals page, which opens on the
+     ORDER FORM; then to #board, the right page but everybody's list; then to
+     #/deal/<id>, this order on its own — correct, and cut anyway, because
+     the question had turned into "why is it here". The panel says what an
+     order IS. The board is reached from the top of this page and from the
+     footer, twice, without opening anything.
 
-  /* ── AND IT LANDS ON THIS ORDER ──────────────────────────────────────────
-     Two rounds of the same report. First the link was the bare deals page,
-     which opens on the ORDER FORM — so "check every signature" delivered
-     somewhere to place another order. Then it was #board: the right page,
-     but the whole list, with nothing pointing at the order the reader had
-     open in front of them.
-
-     The deals page has always been able to open one deal on its own. So the
-     assertion is about the promise the words make: a link that names THIS
-     order carries this order's id, and the board wording is allowed only
-     when there is no id to carry. */
-  await pg.evaluate(() => document.querySelectorAll(".hrow").forEach((r) => r.click()));
-  await pg.waitForTimeout(300);
-  const dest = await pg.evaluate(() => [...document.querySelectorAll(".hdet a.hdetgo")].map((a) => {
-    const item = a.closest(".hitem");
-    const idf = [...item.querySelectorAll(".hfield")]
-      .find((f) => /Order id/.test(f.querySelector("dt")?.textContent || ""));
-    return { href: a.getAttribute("href"), text: a.textContent.trim(),
-             shown: (idf?.querySelector("dd")?.textContent || "").match(/0x[0-9a-f]{8,}/i)?.[0] || null };
+     Asserted as an absence, which is a thing worth asserting: a link that
+     creeps back into the panel is a fourth round of the same report. */
+  ok("nothing in the panel leads off the page", !opened.board,
+    "the board is reached from the top of the page and the footer");
+  const outs = await pg.evaluate(() => ({
+    inPanel: document.querySelectorAll(".hdet a[href]").length,
+    onPage: [...document.querySelectorAll("a[href*='deals-preview']")]
+      .filter((a) => !a.closest(".hdet")).length,
   }));
-  ok("every row's link names a destination, never the bare page",
-    dest.length > 0 && dest.every((d) => /#\/deal\/0x[0-9a-f]{8,}$/i.test(d.href) || d.href.endsWith("#board")),
-    dest.length + " links");
-  ok("and where an order id is printed, that is the id it carries",
-    dest.every((d) => !d.shown || d.href.endsWith("#/deal/" + d.shown)),
-    dest.map((d) => (d.shown || "-").slice(0, 14)).join(" "));
-  ok("the words match where it goes — this order, or the board",
-    dest.every((d) => (/#\/deal\//.test(d.href) ? /this order/ : /deals board/).test(d.text)),
-    [...new Set(dest.map((d) => d.text))].join(" | "));
-  await pg.evaluate(() => document.querySelectorAll(".hrow").forEach((r) => r.click()));
-  await pg.waitForTimeout(200);
+  ok("no links at all inside a details panel", outs.inPanel === 0, outs.inPanel + " found");
+  ok("and the board is still reachable from the page itself", outs.onPage >= 2,
+    outs.onPage + " ways");
 
   await pg.locator(".hrow").first().click();
   await pg.waitForTimeout(200);
