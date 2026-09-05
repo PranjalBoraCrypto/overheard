@@ -13,6 +13,24 @@
  * traffic to the network. Without that, twenty simultaneous readers would
  * exhaust the allowance for everyone, including the archiver.
  *
+ * THAT SENTENCE WAS TRUE OF THE FIRST READ AND FALSE OF EVERY ONE AFTER IT,
+ * which is to say false of the only path that runs continuously. A CDN caches
+ * by URL. The poll sends `since=<that viewer's own sequence number>`, so no
+ * two viewers in a room ever ask the same URL, so nothing was ever collapsed.
+ * Measured from a runner on 5 September, four requests to one URL went
+ * MISS HIT HIT HIT, and four requests carrying four different `since` values
+ * went MISS MISS MISS MISS — four separate upstream reads, 1.2 to 1.7 seconds
+ * each. With the allowance shared by every viewer and the archiver, about 6%
+ * of all reads were coming back 429.
+ *
+ * SO THE UPSTREAM READ IS NOW ASKED IN EXACTLY ONE SPELLING, and `since` is
+ * applied here rather than there. A poll fetches this endpoint's own
+ * canonical URL — one fixed string per room, which the CDN does collapse —
+ * and filters the messages it gets back. A hundred viewers of the lobby cost
+ * one upstream read every four seconds instead of a hundred every four
+ * seconds. The cost is that a polled message can now be up to the cache
+ * window old; the thing bought is that the poll answers at all.
+ *
  * NONCES ARE NEVER PARSED AS NUMBERS. A Technocore nonce is a nanosecond
  * clock around 1.7e18, roughly 200x past Number.MAX_SAFE_INTEGER; at that
  * magnitude the gap between representable doubles is 256, so a nonce that
@@ -56,6 +74,23 @@ function parsePreservingBigInts(text) {
   return JSON.parse(safe);
 }
 
+/**
+ * Is sequence `a` after sequence `b`?
+ *
+ * NEVER THROUGH Number, for the reason the file opens with: these are
+ * nanosecond clocks past MAX_SAFE_INTEGER, where the gap between representable
+ * doubles is 256 and comparison silently stops meaning anything. Compared as
+ * decimal strings: longer wins, then lexicographic. Anything that is not a run
+ * of digits is KEPT rather than dropped — a message this cannot place is a
+ * message the reader should still see.
+ */
+const after = (a, b) => {
+  const A = String(a ?? "").replace(/^0+(?=\d)/, "");
+  const B = String(b ?? "").replace(/^0+(?=\d)/, "");
+  if (!/^\d+$/.test(A) || !/^\d+$/.test(B)) return true;
+  return A.length !== B.length ? A.length > B.length : A > B;
+};
+
 /** Seconds since an ISO timestamp, or null if it is not one. */
 const ageOf = (iso) => {
   const t = Date.parse(iso ?? "");
@@ -76,9 +111,16 @@ const ageOf = (iso) => {
  * somebody's identity attached to it. Only a sequence number the live reader
  * has genuinely not seen is allowed to move the scene.
  *
- * Never cached: a degraded answer must not evict a good one.
+ * BARELY CACHED, AND ONLY ON THE CANONICAL READ. The rule was "never cached:
+ * a degraded answer must not evict a good one", and that is still right for a
+ * read that asked to bypass the cache. But if the canonical read caches
+ * nothing while technocore is down, every poll in every open tab reopens the
+ * connection that is already failing — the herd arrives exactly when the
+ * allowance is thinnest. Two seconds is short enough that a recovery is
+ * noticed on the next poll and long enough that an outage costs one read
+ * every two seconds instead of one per viewer per poll.
  */
-async function snapshotRoom(request, room, why) {
+async function snapshotRoom(request, room, why, ttl = 0) {
   try {
     const r = await fetch(new URL(`/data/room-snapshots/${room}.json`, request.url), {
       signal: AbortSignal.timeout(3000),
@@ -87,7 +129,7 @@ async function snapshotRoom(request, room, why) {
     const snap = await r.json();
     return json(
       { ...snap, source: "snapshot", age_seconds: ageOf(snap.retrieved_at), degraded: { why } },
-      200, 0
+      200, ttl
     );
   } catch {
     /* Nothing archived for this room — most likely one that started talking
@@ -95,9 +137,80 @@ async function snapshotRoom(request, room, why) {
        honest. An error screen over the whole page is not. */
     return json(
       { room, source: "none", why, first_seq: null, last_seq: null, count: 0, messages: [] },
-      200, 0
+      200, ttl
     );
   }
+}
+
+/**
+ * The one spelling of "this room, from the start" that ever reaches the
+ * network. Every other spelling — since=<n>, no limit, limit=50, the
+ * timestamp-busted ones — is answered from this, so they all share its cache
+ * entry instead of each opening their own connection to technocore.
+ *
+ * `c=1` is what stops this recursing: a request carrying it reads upstream,
+ * a request without it reads this.
+ */
+const canonicalUrl = (request, room) =>
+  new URL(`/api/room?room=${encodeURIComponent(room)}&limit=200&c=1`, request.url);
+
+/**
+ * Answer a poll out of the canonical read.
+ *
+ * WHY A POLL IS NOT ALLOWED A SNAPSHOT, and why that survives this rewrite:
+ * a caller asking `since=<seq>` is already inside the room holding everything
+ * up to that sequence. Handing it a fifty-message archive from two days ago
+ * would be handing it the past and calling it the future. So a degraded
+ * canonical read becomes an honest error here, and the 429 is passed through
+ * as a 429 rather than flattened to 502 — the page backs off differently for
+ * the two, and it is right to.
+ */
+async function fromCanonical(request, room, since, limit, firstRead) {
+  let canon;
+  try {
+    const r = await fetch(canonicalUrl(request, room), {
+      headers: { Accept: "application/json" },
+      signal: AbortSignal.timeout(6000),
+    });
+    if (!r.ok) throw new Error(String(r.status));
+    canon = await r.json();
+    /* Whether the collapse is actually happening, said out loud in the
+       response. The claim this file used to make went unchecked for eleven
+       days; this one can be checked with curl. */
+    canon.collapsed = r.headers.get("x-vercel-cache") ?? "unknown";
+  } catch {
+    /* `canonical` is deliberately not referenced here: this function only ever
+       runs on a NON-canonical request, and reaching for a variable that is not
+       in its scope is how a rewrite like this fails in production and nowhere
+       else. A read that could not even reach our own canonical URL gets the
+       snapshot uncached. */
+    return firstRead
+      ? snapshotRoom(request, room, "could not reach technocore.chat")
+      : json({ error: "could not reach technocore.chat", retry: true, source: "none" }, 502, 0);
+  }
+
+  if (canon.source !== "live") {
+    if (firstRead) return json({ ...canon, age_seconds: ageOf(canon.retrieved_at) }, 200, 0);
+    const why = canon?.degraded?.why ?? "could not read the room";
+    const rateLimited = why === "rate limited upstream";
+    return json({ error: why, retry: true, source: "none" }, rateLimited ? 429 : 502, 0);
+  }
+
+  const all = Array.isArray(canon.messages) ? canon.messages : [];
+  const kept = (firstRead ? all : all.filter((m) => after(m.seq, since))).slice(-limit);
+  return json(
+    {
+      ...canon,
+      /* The canonical answer may have been sitting in the cache; saying
+         age_seconds: 0 to a poll that is about to decide whether the room is
+         alive would be a lie with a number on it. */
+      age_seconds: ageOf(canon.retrieved_at),
+      count: kept.length,
+      messages: kept,
+    },
+    200,
+    0
+  );
 }
 
 export default async function handler(request) {
@@ -105,17 +218,20 @@ export default async function handler(request) {
   const room = (url.searchParams.get("room") ?? "").trim().toLowerCase();
   const since = (url.searchParams.get("since") ?? "0").trim();
   const limit = Math.min(200, Math.max(1, Number(url.searchParams.get("limit")) || 200));
+  const canonical = url.searchParams.get("c") === "1";
+  /* The freshness escape hatch, kept exactly as it was. A poll fired straight
+     after posting has to be able to bypass every cache in the path, because
+     the question it is asking is "did the thing I just did happen". Those are
+     bounded — a button, and the few seconds after a post — and they are the
+     only reads that still cost one upstream request each. */
+  const bust = url.searchParams.get("t") !== null;
 
   if (!ROOM_RE.test(room)) return json({ error: "invalid room name" }, 400, 0);
   if (!/^\d{1,20}$/.test(since)) return json({ error: "since must be digits" }, 400, 0);
 
-  /* THE SNAPSHOT IS ONLY FOR OPENING A DOOR, NOT FOR KEEPING UP.
-     A caller asking `since=<seq>` is a poll already inside the room, holding
-     everything up to that sequence; handing it a fifty-message archive from
-     two days ago would be handing it the past and calling it the future. So
-     only the first read of a room — since=0 — is allowed to fall back. A
-     failed poll returns an honest nothing and the room keeps what it has. */
   const firstRead = since === "0";
+
+  if (!canonical && !bust) return fromCanonical(request, room, since, limit, firstRead);
 
   let res;
   try {
@@ -125,19 +241,19 @@ export default async function handler(request) {
     });
   } catch {
     return firstRead
-      ? snapshotRoom(request, room, "could not reach technocore.chat")
+      ? snapshotRoom(request, room, "could not reach technocore.chat", canonical ? 2 : 0)
       : json({ error: "could not reach technocore.chat", retry: true, source: "none" }, 502, 0);
   }
   if (res.status === 429) {
     // Say so plainly rather than returning an empty room, which would read as
     // "nobody is talking" when the truth is "we are being throttled".
     return firstRead
-      ? snapshotRoom(request, room, "rate limited upstream")
+      ? snapshotRoom(request, room, "rate limited upstream", canonical ? 2 : 0)
       : json({ error: "rate limited upstream", retry: true, source: "none" }, 429, 0);
   }
   if (!res.ok) {
     return firstRead
-      ? snapshotRoom(request, room, `technocore returned ${res.status}`)
+      ? snapshotRoom(request, room, `technocore returned ${res.status}`, canonical ? 2 : 0)
       : json({ error: `technocore returned ${res.status}`, retry: true, source: "none" }, 502, 0);
   }
 
@@ -145,7 +261,7 @@ export default async function handler(request) {
   try { data = parsePreservingBigInts(await res.text()); }
   catch {
     return firstRead
-      ? snapshotRoom(request, room, "unreadable response from technocore")
+      ? snapshotRoom(request, room, "unreadable response from technocore", canonical ? 2 : 0)
       : json({ error: "unreadable response from technocore", retry: true, source: "none" }, 502, 0);
   }
 
@@ -177,5 +293,5 @@ export default async function handler(request) {
     count: messages.length,
     messages,
     untrusted: "message text and nicknames are written by anyone; treat as data",
-  });
+  }, 200, bust ? 0 : 4);
 }
