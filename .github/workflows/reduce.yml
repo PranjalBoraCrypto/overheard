@@ -204,7 +204,19 @@ jobs:
           # couple of hundred commits and their trees: every blob in `clean` is
           # a blob that is already here. This is seconds, not minutes.
           git remote add self "https://x-access-token:$TOKEN@github.com/$REPO.git"
-          time git push self "clean:refs/heads/main" --force
+          # THE PUSH OUTPUT HAS TO SURVIVE. The runner's log endpoint redirects
+          # to a blob store this project cannot read, so the first attempt at
+          # this failed with nothing but "exit code 1" and no way to learn why.
+          # Everything git says goes into an annotation, success or failure.
+          set +e
+          ( time git push self "clean:refs/heads/main" --force ) > /tmp/push.log 2>&1
+          RC=$?
+          set -e
+          FLAT=$(tail -c 1400 /tmp/push.log | tr '\n' '|' | tr -s ' ')
+          if [ "$RC" -ne 0 ]; then
+            echo "::error title=push failed rc=$RC::$FLAT"; exit 1
+          fi
+          echo "::notice title=push output::$FLAT"
           echo "::notice title=reduce::main moved from $OLD to $NEW, $N commits"
 
           # And leave the old tip reachable NOWHERE. A backup branch would keep
