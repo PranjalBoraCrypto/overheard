@@ -995,11 +995,23 @@ function itemFor(o) {
      formed rather than being the only thing a row could do. */
   const go = document.createElement("a");
   go.className = "hdetgo";
-  /* #board, not the bare page: it opens on the ORDER FORM, so a link saying
-     "the deals board" was landing people on somewhere to place another
-     order. Reported, and fair. */
-  go.href = "/deals-preview-78cb4a1be923c6b4.html#board";
-  go.textContent = "Check every signature on the deals board";
+  /* ── AND IT HAS TO LAND ON THIS ORDER, NOT ON A PAGE ABOUT ORDERS ────────
+     First it went to the deals page, which opens on the order FORM, so a
+     link reading "the deals board" put people somewhere to place another
+     order. Then it went to #board, which is the right page but still the
+     whole board — a list of everybody's deals, with no answer to "what about
+     MINE" except a search. Reported both times.
+
+     The page has always been able to open one deal on its own: #/deal/<id>.
+     That is what this link means, so that is what it now says and where it
+     now goes. Falls back to the board only when there is no id to aim at,
+     and the words change with it — a label that promises one order and
+     delivers a list is the bug being fixed here, twice over. */
+  const key = String(o.accept?.contract || o.id || "");
+  const one = /^0x[0-9a-fA-F]{8,}$/.test(key);
+  go.href = "/deals-preview-78cb4a1be923c6b4.html" + (one ? "#/deal/" + key : "#board");
+  go.textContent = one ? "Check every signature on this order"
+                       : "Check every signature on the deals board";
   const gi = document.createElementNS("http://www.w3.org/2000/svg", "svg");
   gi.setAttribute("class", "i");
   const gu = document.createElementNS("http://www.w3.org/2000/svg", "use");

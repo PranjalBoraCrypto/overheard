@@ -13,6 +13,7 @@
  * genuinely contain and each has a right answer that is not "hide it".
  */
 import { chromium } from "playwright";
+import { PNG } from "pngjs";
 import http from "http";
 import fs from "fs";
 import path from "path";
@@ -1935,6 +1936,166 @@ console.log("\n=== T. what the redesign has to keep true");
   ok("the hamburger's lines are centred in their button",
     bp && bp.length === 3 && bp.every((d) => Math.abs(d) < 0.6), JSON.stringify(bp));
   await ctxB.close();
+}
+
+/* ── M. THE RAW FRAME'S COPY BUTTON ────────────────────────────────────────
+   It shipped blank. The button is built by copyBtn() in deal-ui.js, which
+   puts a `copy` class on itself, and every rule that makes the two little
+   SVGs visible — a size, no fill, a stroke in the current colour, and both
+   of them stacked on one grid cell with the tick faded out — hangs off that
+   class in deal.css. This page then wrote `className = "rawcopy"` to park
+   the button in the corner, which REPLACED that class instead of joining
+   it. The glyphs fell back to fill:black, no stroke, no size, and on a dark
+   panel that is an empty square.
+
+   So the assertions are about the glyph, not about the class name: it has a
+   size, it is drawn as a line and not a fill, and only one of the two is
+   showing. Any future way of losing the base class fails these too. */
+{
+  const ctxR = await b.newContext({ viewport: { width: 1104, height: 1000 } });
+  const pR = await ctxR.newPage();
+  const eR = []; pR.on("pageerror", (e) => eR.push(String(e).slice(0, 160)));
+  await pR.goto("http://localhost:9101" + PAGE, { waitUntil: "domcontentloaded" });
+  await pR.waitForTimeout(1400);
+  /* The board and its per-deal expander are shut by default; opened here only
+     so the frame line can be measured. */
+  await pR.evaluate(() => {
+    document.querySelectorAll("section[hidden]").forEach((s) => { s.hidden = false; });
+    const st = document.createElement("style");
+    st.textContent = ".bodywrap{grid-template-rows:1fr!important}.body{visibility:visible!important}";
+    document.head.append(st);
+    document.querySelectorAll("details").forEach((d) => { d.open = true; });
+  });
+  await pR.waitForTimeout(500);
+
+  const rc = await pR.evaluate(() => {
+    const btn = document.querySelector("pre.raw button");
+    if (!btn) return null;
+    const b = btn.getBoundingClientRect();
+    const pre = btn.closest("pre.raw").getBoundingClientRect();
+    const g = [...btn.querySelectorAll("svg")].map((s) => {
+      const c = getComputedStyle(s);
+      /* The LAID-OUT size, not the painted one: the tick is parked at
+         scale(.6) until a copy lands, so its bounding box lies about it. */
+      return { w: parseFloat(c.width), h: parseFloat(c.height),
+               fill: c.fill, stroke: c.stroke, op: +c.opacity };
+    });
+    return { g, tap: Math.round(Math.min(b.width, b.height)),
+             inside: b.right <= pre.right + 0.5 && b.top >= pre.top - 0.5 };
+  });
+  ok("the raw frame has a copy button", !!rc && rc.g.length === 2, rc ? rc.g.length + " glyphs" : "no button");
+  if (rc) {
+    ok("its icon has a size", rc.g.every((x) => x.w >= 8 && x.h >= 8),
+      JSON.stringify(rc.g.map((x) => `${x.w}x${x.h}`)));
+    ok("and is drawn as a line, not a black fill",
+      rc.g.every((x) => x.fill === "none" && x.stroke !== "none"),
+      JSON.stringify(rc.g.map((x) => `${x.fill}/${x.stroke}`)));
+    ok("one glyph shows at a time — the sheets now, the tick after a copy",
+      rc.g.filter((x) => x.op > 0.5).length === 1, JSON.stringify(rc.g.map((x) => x.op)));
+    ok("the button sits inside the frame box", rc.inside);
+    ok("and is big enough to hit", rc.tap >= 24, rc.tap + "px");
+  }
+
+  await pR.locator("pre.raw button").first().click();
+  await pR.waitForTimeout(2100);          /* past the 1.9s revert */
+  const back = await pR.evaluate(() => {
+    const btn = document.querySelector("pre.raw button");
+    return { done: btn.dataset.done, label: btn.getAttribute("aria-label") };
+  });
+  ok("a copy says which thing went, then goes quiet again",
+    back.done === undefined && /^Copy the frame$/.test(back.label), JSON.stringify(back));
+  ok("no errors", eR.length === 0, eR.join(" | "));
+  await ctxR.close();
+}
+
+/* ── N. THE LINK THAT ARRIVES HERE, AND THE WAY BACK ───────────────────────
+   The order-details panels on the orders page and the hire page both carry
+   "check every signature". This is the receiving end of that link, and it
+   has been the wrong place twice: the bare page opens on the ORDER FORM, and
+   #board opens the whole list. It now arrives as #/deal/<id>, one deal on
+   its own — and the way out of that view has to be the board, because an
+   empty hash is the order form again. Same mistake, one level down, and it
+   was there the whole time this was being fixed above it. */
+{
+  const ctxN = await b.newContext({ viewport: { width: 1104, height: 900 } });
+  const pN = await ctxN.newPage();
+  const eN = []; pN.on("pageerror", (e) => eN.push(String(e).slice(0, 160)));
+  await pN.goto("http://localhost:9101" + PAGE, { waitUntil: "domcontentloaded" });
+  await pN.waitForTimeout(1600);
+
+  /* An id the fixture actually serves, taken off the board rather than typed
+     in — a deep-link test against an invented id proves only the error path. */
+  const id = await pN.evaluate(() => {
+    document.querySelectorAll("section[hidden]").forEach((s) => { s.hidden = false; });
+    const t = document.body.textContent.match(/0x[0-9a-f]{16,}/i);
+    return t ? t[0] : null;
+  });
+  ok("the fixture serves a deal to deep-link to", !!id, id ? id.slice(0, 14) + "…" : "none");
+
+  if (id) {
+    await pN.evaluate((h) => { location.hash = "#/deal/" + h; }, id);
+    await pN.waitForTimeout(700);
+    const solo = await pN.evaluate(() => ({
+      one: !document.getElementById("one").hidden,
+      shop: !document.getElementById("pShop").hidden,
+      board: !document.getElementById("pBoard").hidden,
+      missing: /not in the current window/.test(document.getElementById("one").textContent),
+      frames: document.querySelectorAll("#one pre.raw").length,
+    }));
+    ok("#/deal/<id> opens that one deal", solo.one && !solo.shop && !solo.board, JSON.stringify(solo));
+    ok("and it is the deal, not the not-found notice", !solo.missing && solo.frames > 0,
+      solo.frames + " frames");
+
+    await pN.evaluate(() => document.querySelector("#one .back").click());
+    await pN.waitForTimeout(600);
+    const out = await pN.evaluate(() => ({ hash: location.hash,
+      board: !document.getElementById("pBoard").hidden,
+      shop: !document.getElementById("pShop").hidden }));
+    ok("and the way out is the board, not the order form",
+      out.hash === "#board" && out.board && !out.shop, JSON.stringify(out));
+  }
+
+  /* ── AND NOTHING LIGHTS THE EMPTY STRIP BESIDE THE ACCOUNT CHIP ──────────
+     .heroglow is a 520px circle placed above and to the right of the hero
+     card. Most of it lands outside the card: the part above lit the nav
+     strip, and the part to the right met overflow-x:clip and stopped on a
+     straight vertical line. Reported twice as "a blueish transparent
+     background", which is the right description — a glow with a hard edge,
+     over nothing, is a rectangle.
+
+     Tested as a property of the RESULT, not of the CSS: turn the glow off
+     and the strip beside the card must not change. Any future placement that
+     puts it back over empty space fails this, whatever rule does it. */
+  for (const W of [1280, 900, 640, 390]) {
+    const pG = await ctxN.newPage();
+    await pG.setViewportSize({ width: W, height: 900 });
+    await pG.goto("http://localhost:9101" + PAGE, { waitUntil: "domcontentloaded" });
+    await pG.waitForTimeout(1500);
+    const box = await pG.evaluate(() => {
+      const h = document.querySelector("header.hero").getBoundingClientRect();
+      return { x: Math.round(h.right) - 90, y: Math.max(0, Math.round(h.top) - 66), width: 90, height: 56 };
+    });
+    /* Shot with the glow, shot without it, and compared pixel by pixel. Not
+       byte-identical: the bar's glass re-renders and a blurred tail leaves a
+       unit or two of noise. The threshold is what the eye reads — before the
+       mask the strip jumped 13 levels at the clip line and the wash itself
+       ran ~14 above the flat background, both of which this catches. */
+    const before = PNG.sync.read(await pG.screenshot({ clip: box }));
+    await pG.evaluate(() => { const s = document.createElement("style");
+      s.id = "nog"; s.textContent = ".heroglow{display:none!important}"; document.head.append(s); });
+    await pG.waitForTimeout(300);
+    const after = PNG.sync.read(await pG.screenshot({ clip: box }));
+    let worst = 0;
+    for (let i = 0; i < before.data.length; i += 4)
+      for (let c = 0; c < 3; c++)
+        worst = Math.max(worst, Math.abs(before.data[i + c] - after.data[i + c]));
+    ok(`at ${W}px the glow paints nothing in the strip beside the card`,
+      worst <= 4, `worst channel difference ${worst}`);
+    await pG.close();
+  }
+
+  ok("no errors", eN.length === 0, eN.join(" | "));
+  await ctxN.close();
 }
 
 await b.close(); srv.close();

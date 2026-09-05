@@ -1162,6 +1162,38 @@ console.log("\n=== K. the row opens in place");
   ok("and no protocol word as a field name", opened.jargon.length === 0, opened.jargon.join(", "));
   ok("the board is still reachable, from inside", opened.board);
 
+  /* ── AND IT LANDS ON THIS ORDER ──────────────────────────────────────────
+     Two rounds of the same report. First the link was the bare deals page,
+     which opens on the ORDER FORM — so "check every signature" delivered
+     somewhere to place another order. Then it was #board: the right page,
+     but the whole list, with nothing pointing at the order the reader had
+     open in front of them.
+
+     The deals page has always been able to open one deal on its own. So the
+     assertion is about the promise the words make: a link that names THIS
+     order carries this order's id, and the board wording is allowed only
+     when there is no id to carry. */
+  await pg.evaluate(() => document.querySelectorAll(".hrow").forEach((r) => r.click()));
+  await pg.waitForTimeout(300);
+  const dest = await pg.evaluate(() => [...document.querySelectorAll(".hdet a.hdetgo")].map((a) => {
+    const item = a.closest(".hitem");
+    const idf = [...item.querySelectorAll(".hfield")]
+      .find((f) => /Order id/.test(f.querySelector("dt")?.textContent || ""));
+    return { href: a.getAttribute("href"), text: a.textContent.trim(),
+             shown: (idf?.querySelector("dd")?.textContent || "").match(/0x[0-9a-f]{8,}/i)?.[0] || null };
+  }));
+  ok("every row's link names a destination, never the bare page",
+    dest.length > 0 && dest.every((d) => /#\/deal\/0x[0-9a-f]{8,}$/i.test(d.href) || d.href.endsWith("#board")),
+    dest.length + " links");
+  ok("and where an order id is printed, that is the id it carries",
+    dest.every((d) => !d.shown || d.href.endsWith("#/deal/" + d.shown)),
+    dest.map((d) => (d.shown || "-").slice(0, 14)).join(" "));
+  ok("the words match where it goes — this order, or the board",
+    dest.every((d) => (/#\/deal\//.test(d.href) ? /this order/ : /deals board/).test(d.text)),
+    [...new Set(dest.map((d) => d.text))].join(" | "));
+  await pg.evaluate(() => document.querySelectorAll(".hrow").forEach((r) => r.click()));
+  await pg.waitForTimeout(200);
+
   await pg.locator(".hrow").first().click();
   await pg.waitForTimeout(200);
   ok("and clicking again closes it",

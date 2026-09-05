@@ -298,8 +298,36 @@ body::before{content:"";position:absolute;top:0;left:0;right:0;
    vertically. Clip does neither, and `overflow-y` stays visible beside it,
    which is the one pairing the spec allows. */
 header.hero{overflow-x:clip}
+/* ── AND IT WAS SHOWING UP WHERE THE CARD ISN'T ────────────────────────────
+   The circle is 520px placed 200px above the card and 120px past its right
+   edge, so most of it lands OUTSIDE the hero. Two things followed. The part
+   above the card lit the empty strip beside the account chip — the brightest
+   thing the glow was doing anywhere, and it was doing it over nothing. And
+   the part past the right edge met `overflow-x:clip` and stopped dead, so
+   the wash ended on a straight vertical line in mid-air.
+
+   Reported twice, both times as "a blueish transparent background", which is
+   the right words for it: a glow with a straight edge, lighting no object,
+   is not lighting. It is a rectangle.
+
+   The mask keeps the same circle and shows only the part that falls on the
+   card. Vertically it starts below the card's top edge, horizontally it is
+   gone before the clip line — so nothing is cut, because nothing reaches a
+   cut. Two gradients intersected: `mask-composite` keeps the overlap, which
+   is the one corner of the circle that has something to light.
+
+   Not deleted, because on a wide screen it is the light on the stage's top
+   corner and the hero is flat without it. Not moved inside either: at
+   `top:0` the whole circle sits behind the stage, which is 92% opaque, and
+   the glow disappears entirely — measured. */
 .heroglow{position:absolute;width:520px;height:520px;right:-120px;top:-200px;border-radius:50%;
-  background:radial-gradient(circle,rgba(0,180,215,.24),transparent 66%);filter:blur(60px);pointer-events:none}
+  background:radial-gradient(circle,rgba(0,180,215,.24),transparent 66%);filter:blur(60px);pointer-events:none;
+  -webkit-mask-image:linear-gradient(transparent 30%,#000 54%),
+                     linear-gradient(90deg,#000 46%,transparent 74%);
+          mask-image:linear-gradient(transparent 30%,#000 54%),
+                     linear-gradient(90deg,#000 46%,transparent 74%);
+  -webkit-mask-composite:source-in;
+          mask-composite:intersect}
 .herowords{position:relative;min-width:0}
 .eyebrow{display:inline-flex;align-items:center;gap:8px;font-family:var(--mono);font-size:11px;
   letter-spacing:.16em;text-transform:uppercase;color:var(--mint)}
@@ -454,6 +482,9 @@ h1{font-weight:800;font-size:var(--t-hero);line-height:.98;letter-spacing:-.045e
  * ═════════════════════════════════════════════════════════════════════════*/
 @media (max-width:900px){
   header.hero{grid-template-columns:1fr;gap:var(--s4);margin-top:var(--s4)}
+  /* The mask on .heroglow keeps it on the card at every width; here the
+     card is narrower, so the circle is too. */
+  .heroglow{width:340px;height:340px;right:-70px;top:-130px;filter:blur(48px)}
   .lede{max-width:none;font-size:16px}
   /* Two full-width buttons rather than two half ones: a thumb wants a target,
      and "Explore the open board" wrapping to two lines in a 150px box is what
@@ -768,13 +799,14 @@ pre.raw{font-family:var(--mono);font-size:11px;line-height:1.6;color:var(--dim);
   border:1px solid var(--edge);border-radius:9px;padding:11px 42px 11px 12px;margin-top:10px;
   white-space:pre;max-width:100%;position:relative;min-width:0}
 pre.raw .midtrim{display:flex}
-.rawcopy{position:absolute;top:7px;right:7px;display:inline-flex;align-items:center;
-  justify-content:center;width:24px;height:24px;padding:0;cursor:pointer;
-  border:1px solid var(--edge);border-radius:7px;background:var(--navy-1);color:var(--faint)}
-.rawcopy .i{width:12px;height:12px}
-.rawcopy:hover{color:var(--blue);border-color:var(--blue)}
-.rawcopy:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
-.rawcopy.done{color:var(--good);border-color:rgba(59,227,176,.5)}
+/* This is .copy from deal.css, parked in the corner and made smaller. It
+   overrides POSITION AND SIZE ONLY. Not display: .copy is an inline-grid and
+   both glyphs sit on the one cell, the tick faded out until a copy lands, and
+   a flex box here would stand them side by side instead. Not the states
+   either — .copy[data-done] is more specific than this and keeps working. */
+.rawcopy{position:absolute;top:7px;right:7px;width:24px;height:24px;
+  border-color:var(--edge);background:var(--navy-1)}
+.rawcopy svg{width:12px;height:12px}
 .kv{font-family:var(--mono);font-size:11.5px;color:var(--faint);margin-top:12px;word-break:break-all}
 .kv b{color:var(--dim);font-weight:500}
 .kv+.kv{margin-top:5px}
@@ -2795,8 +2827,13 @@ function drawFrames(deal) {
     /* Both ends kept, the middle dropped, and the whole line on the button. */
     const raw = el("pre", "raw");
     raw.append(midText(document, f.raw, 22));
-    raw.append(copyBtn(document, f.raw, "frame"));
-    raw.lastChild.className = "rawcopy";
+    /* ADD the corner class, never assign it. "className =" threw away the
+       copy class the button gives itself, and with it the deal.css rules
+       that size the two glyphs, stack them on one grid cell and hide the
+       tick — so the button rendered as an empty square. */
+    const rawcopy = copyBtn(document, f.raw, "frame");
+    rawcopy.classList.add("rawcopy");
+    raw.append(rawcopy);
     mid.append(raw);
     row.append(mid);
     wrap.append(row);
@@ -3189,7 +3226,11 @@ function drawOne(entry) {
   const back = el("button", "back");
   back.type = "button";
   back.append(icon("i-caret"), el("span", null, "all deals"));
-  back.addEventListener("click", () => { location.hash = ""; });
+  /* "#board", not "": an empty hash is the page default, which is the
+     ORDER FORM. A button labelled "all deals" that lands somebody on a
+     form is the same wrong destination this link has now been reported
+     for twice, one level down. */
+  back.addEventListener("click", () => { location.hash = "#board"; });
   wrap.append(back);
 
   const head = el("div", "onehead");
@@ -3265,7 +3306,11 @@ function applyView() {
       const back = el("button", "back");
       back.type = "button";
       back.append(icon("i-caret"), el("span", null, "all deals"));
-      back.addEventListener("click", () => { location.hash = ""; });
+      /* "#board", not "": an empty hash is the page default, which is the
+     ORDER FORM. A button labelled "all deals" that lands somebody on a
+     form is the same wrong destination this link has now been reported
+     for twice, one level down. */
+  back.addEventListener("click", () => { location.hash = "#board"; });
       $("one").append(back, el("div", "empty",
         "That deal is not in the current window of the offers room. It may have scrolled past, or it may not exist."));
     }
