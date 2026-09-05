@@ -762,6 +762,11 @@ export function annotate(kind, title, message, out = console.log) {
 
 /* ── the wake ────────────────────────────────────────────────────────────── */
 
+/* Declined deals already announced by THIS process. Same shape and same
+   reason as TOLD_UNDELIVERABLE: a fact that is true for hours must not be
+   restated on a clock. */
+const DECLINED_SAID = new Set();
+
 export async function wake(opts = {}) {
   const log = opts.log ?? console.log;
   const now = opts.now ?? Date.now();
@@ -1354,10 +1359,28 @@ export async function wake(opts = {}) {
      shop correctly refused and correctly explained. Raising them to warning
      would train a reader to scroll past the line above, which is the one that
      must never be scrolled past. */
-  if (declined.length && !no.length)
-    ann("notice", `${declined.length} deal(s) declined and already explained`,
-      declined.slice(0, 4).join(" · ")
-        + (declined.length > 4 ? ` · …and ${declined.length - 4} more` : "")
+  /* ── SAID ONCE PER DEAL, NOT ONCE PER WAKE ──────────────────────────────
+     MEASURED on the live window of 5 September 17:32, which is the first one
+     this line ever ran in: ONE declined deal produced EIGHT identical
+     annotations and the closing summary read "49 declined and explained" for
+     the same single order. GitHub keeps ten notices per step. So the wake in
+     that window that actually delivered work and opened a lock — the only
+     line in it worth reading — was sharing the budget with eight copies of a
+     sentence about a deal that had already been settled hours earlier.
+
+     This is the annotation-budget problem the file warns about in three
+     places, and the new line walked into it within an hour of being written:
+     a wake does not decide how loud it is, and I gave one an event that is
+     really a tick. The set is per-process rather than per-wake, so the deal
+     is announced when it FIRST appears and then goes quiet, which is exactly
+     what it is describing. */
+  const newlyDeclined = declined.filter((d) => !DECLINED_SAID.has(d));
+  for (const d of declined) DECLINED_SAID.add(d);
+  if (DECLINED_SAID.size > 200) DECLINED_SAID.clear();
+  if (newlyDeclined.length && !no.length)
+    ann("notice", `${newlyDeclined.length} deal(s) declined and already explained`,
+      newlyDeclined.slice(0, 4).join(" · ")
+        + (newlyDeclined.length > 4 ? ` · …and ${newlyDeclined.length - 4} more` : "")
         + " — the buyer has been told and the money returns at the refund deadline", log);
 
   return { plan: p, buys, refusals: no, wrote, stalled, declined, agent: agent?.did ?? null };
@@ -1436,7 +1459,11 @@ export async function loop({ live = false, everyMs, forMs, wakeFn = wake, log = 
   const every = everyMs ?? Number(process.env.WAKE_EVERY_SECONDS ?? 60) * 1000;
   const until = Date.now() + (forMs ?? Number(process.env.WAKE_WINDOW_SECONDS ?? 18000) * 1000);
   const b = budget();
-  let n = 0, upstream = 0, failed = 0, wrote = 0, stalled = 0, declined = 0;
+  let n = 0, upstream = 0, failed = 0, wrote = 0, stalled = 0;
+  /* A SET, not a counter. Summing r.declined.length across fifty wakes turns
+     one declined order into "49 declined and explained", which is a sentence
+     about a number of events that did not happen. */
+  const declined = new Set();
   while (Date.now() < until) {
     const started = Date.now();
     n++;
@@ -1444,7 +1471,7 @@ export async function loop({ live = false, everyMs, forMs, wakeFn = wake, log = 
       const r = await wakeFn({ live, annotate: b.ann });
       if (r?.wrote?.length) wrote += r.wrote.length;
       if (r?.stalled?.length) stalled += r.stalled.length;
-      if (r?.declined?.length) declined += r.declined.length;
+      for (const d of (r?.declined ?? [])) declined.add(d);
       if (r?.refusals?.length) log("nothing was written.");
     } catch (e) {
       if (e?.upstream) { upstream++; log(`board unreadable: ${e.message} — nothing to do this wake`); }
@@ -1463,14 +1490,14 @@ export async function loop({ live = false, everyMs, forMs, wakeFn = wake, log = 
     + (stalled ? `, ${stalled} paid deal(s) STALLED` : "")
     /* Counted and said, but never allowed to colour the line: a window whose
        only unusual event is a correctly declined order is a normal window. */
-    + (declined ? `, ${declined} declined and explained` : "")
+    + (declined.size ? `, ${declined.size} declined and explained` : "")
     + (upstream ? `, ${upstream} with an unreadable board` : "")
     + (failed ? `, ${failed} FAILED` : "");
   log(`window closed after ${said}`);
   /* Written with annotate() directly and NOT through the budget, because this
      is the one line that must exist whatever else the window did. */
   annotate(failed || stalled ? "warning" : "notice", "the window closed", said, log);
-  return { wakes: n, upstream, failed, wrote, stalled, declined, dropped: b.dropped };
+  return { wakes: n, upstream, failed, wrote, stalled, declined: declined.size, dropped: b.dropped };
 }
 
 /* Only when run directly, so importing this in a test never touches a wire.

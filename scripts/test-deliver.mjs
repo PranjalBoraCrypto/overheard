@@ -452,3 +452,48 @@ say("on the paper rail the shop still delivers",
   say("without a separator that would split one event into two",
     failed.every((w) => !w.includes(" · ")), failed.join(" | "));
 }
+
+
+/* ── SAID ONCE PER DEAL, NOT ONCE PER WAKE ─────────────────────────────────
+ * MEASURED on the first live window this line ever ran in, 5 September 17:32:
+ * one declined deal produced EIGHT identical annotations, and the closing
+ * summary read "49 declined and explained" about that same single order.
+ * GitHub keeps ten notices per step, so the wake that actually delivered work
+ * and opened a lock was competing for space with eight copies of a sentence
+ * about a deal settled hours earlier.
+ *
+ * A wake does not get to decide how loud it is. This asserts the quiet.
+ * ───────────────────────────────────────────────────────────────────────── */
+{
+  const fresh = await import("./runner.mjs?once=" + Math.random());
+  const room = (await import("../scripts/buy.mjs")).safeRoom(badAcc.body.contract);
+  const seenIt = [{
+    seq: "99", ts: new Date(NOW).toISOString(), from: US, sig: "s",
+    text: "Overheard cannot deliver this order: that is not a canonical did:key. "
+        + "No payment has been taken and none can be.",
+  }];
+  const stub = async (url) => {
+    const u = String(url);
+    if (u.includes("say-signed")) return { ok: true, status: 200, text: async () => "{}" };
+    if (u.includes(`/r/${room}?`)) return { ok: true, status: 200, json: async () => ({ messages: seenIt }) };
+    if (u.includes("/api/profile")) return { ok: false, status: 503, json: async () => ({}) };
+    return { ok: true, status: 200, json: async () => ({ messages: badFrames }) };
+  };
+  const said = [];
+  const ann = (kind, title, msg) => { said.push(`${kind}|${title}`); return null; };
+  const opts = { fetch: stub, base: "http://stub", log: () => {}, now: NOW, seed: SEED, live: true, annotate: ann };
+
+  const r1 = await fresh.wake(opts);
+  const after1 = said.filter((x) => /declined and already explained/.test(x)).length;
+  const r2 = await fresh.wake(opts);
+  const r3 = await fresh.wake(opts);
+  const after3 = said.filter((x) => /declined and already explained/.test(x)).length;
+
+  say("the first wake announces the declined deal", after1 === 1, `${after1} annotation(s)`);
+  say("and two more wakes add nothing", after3 === 1, `${after3} after three wakes`);
+  /* Still REPORTED to the caller every wake — the window summary needs it, and
+     it dedupes with a Set. What is rationed is the annotation, not the fact. */
+  say("while every wake still reports it to the window",
+    (r1.declined ?? []).length === 1 && (r2.declined ?? []).length === 1 && (r3.declined ?? []).length === 1,
+    `${(r1.declined||[]).length}/${(r2.declined||[]).length}/${(r3.declined||[]).length}`);
+}
