@@ -926,7 +926,10 @@ console.log("\n=== P2. the skeleton stands for a real read");
   await pS.waitForTimeout(1200);            /* let the first four rooms land */
   const before = await pS.evaluate(() => window.__deals.reads());
   await pS.click('#pgLive .pg[aria-label="Page 2"]');
-  const skel = await pS.evaluate(() => document.querySelectorAll("#live .skel").length);
+  /* .skel-card, not .skel: the container carries .skel and aria-busy now,
+     and the placeholders inside it are the cards. Counting the container
+     would have reported 1 forever, whether or not anything was drawn. */
+  const skel = await pS.evaluate(() => document.querySelectorAll("#live .skel-card").length);
   ok("turning onto unread deals shows a skeleton", skel > 0, skel + " placeholders");
   await pS.waitForFunction(() => document.querySelectorAll("#live .deal").length > 0,
     null, { timeout: 8000 });

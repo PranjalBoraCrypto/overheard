@@ -215,6 +215,12 @@ h1{font-weight:800;font-size:clamp(30px,5vw,42px);line-height:1;letter-spacing:-
    thing to understand. Hence the negative top margin and the flat top edge —
    they are one object with a seam. */
 .hitem{display:flex;flex-direction:column}
+/* The contract id line. It takes the whole width under the words and the
+   button, and it is quiet — a reference, not a thing to read. `order:9` so it
+   is always last however the row wraps: a receipt number that lands in the
+   middle of a sentence about payment reads as part of the sentence. */
+.href{order:9;flex:1 1 100%;min-width:0;margin-top:2px}
+.href .did{font-size:11.5px;color:var(--faint);opacity:.85}
 .hact{display:flex;align-items:center;gap:var(--s3);flex-wrap:wrap;
   margin-top:-1px;padding:14px var(--s4);
   border:1px solid rgba(88,233,255,.3);border-top-color:transparent;
@@ -311,13 +317,21 @@ h1{font-weight:800;font-size:clamp(30px,5vw,42px);line-height:1;letter-spacing:-
    MEASURED PROBLEM, not a nicety: the list needs two network reads, and
    until they land "no orders yet" and "still loading" look identical. A page
    that tells a returning customer they have never ordered anything, and then
-   corrects itself half a second later, has said something false. */
-.skel{display:flex;flex-direction:column;gap:var(--s2)}
-.skelrow{height:74px;border-radius:14px;border:1px solid var(--edge);
-  background:linear-gradient(100deg,rgba(255,255,255,.02) 30%,rgba(255,255,255,.06) 50%,rgba(255,255,255,.02) 70%);
-  background-size:300% 100%;animation:shimmer 1.4s linear infinite}
-@keyframes shimmer{to{background-position:-150% 0}}
+   corrects itself half a second later, has said something false.
 
+   The shapes themselves are in deal.css now — the same ones the board draws,
+   built by the same function. What was here was three grey bars of a height
+   nothing on this page has, animating background-position, which is not a
+   composited property. */
+
+/* The skeleton sits where the list will, so it needs the space the list
+   header would have taken above it — without this the first placeholder is
+   flush against the hero and the page grows a gap the moment it loads. */
+#skel{margin-top:var(--s4)}
+/* An empty footer is still a bordered box with 24px of padding in it, and
+   while the page is loading that is what it is: an empty bordered box under
+   the skeleton, for no reason. */
+.foot:empty{display:none}
 .foot{margin-top:var(--s5);padding:var(--s4);border:1px solid var(--edge);border-radius:14px;
   background:var(--panel);font-size:12.5px;color:var(--faint);line-height:1.7}
 .foot a{color:var(--blue)}
@@ -451,7 +465,7 @@ h1{font-weight:800;font-size:clamp(30px,5vw,42px);line-height:1;letter-spacing:-
   <!-- Three mutually exclusive states, plus the list. Only one is ever
        visible, and the skeleton is the one that shows first — see the note
        beside `.skel` for why "no orders" must never be the loading state. -->
-  <div class="skel" id="skel"><div class="skelrow"></div><div class="skelrow"></div><div class="skelrow"></div></div>
+  <div class="skel" id="skel"></div>
 
   <div class="card" id="signedout" hidden>
     <svg class="i"><use href="#i-key"/></svg>
@@ -464,6 +478,18 @@ h1{font-weight:800;font-size:clamp(30px,5vw,42px);line-height:1;letter-spacing:-
        <b>Sign in</b> at the top of the page. If you do not, making one takes a
        moment and it never leaves this device.</p>
     <a class="go" href="/create.html">Create an identity<svg class="i"><use href="#i-caret"/></svg></a>
+  </div>
+
+  <!-- NOT THE SAME AS HAVING NO ORDERS. Both reads this page makes can fail,
+       and when they both did it used to show the card below — telling a
+       customer with nine orders that they had never ordered anything. -->
+  <div class="card" id="unread" hidden>
+    <svg class="i"><use href="#i-empty"/></svg>
+    <h3>Could not read your orders</h3>
+    <p>Neither the archive nor the live offers room answered just now. Your orders are
+       on the public network and nothing here can lose them &mdash; this is only this
+       page failing to look.</p>
+    <button class="go" type="button" id="retry">Try again<svg class="i"><use href="#i-caret"/></svg></button>
   </div>
 
   <div class="card" id="empty" hidden>
@@ -495,7 +521,16 @@ h1{font-weight:800;font-size:clamp(30px,5vw,42px);line-height:1;letter-spacing:-
 <script type="module">
 import { getSession, onSession, shortDid, signTextB64u } from "/session.js";
 import { canon, readFrame } from "/tclk.js";
-import { statusOf as sharedStatus, railEl, JOBS as SHELF, ago as sharedAgo } from "/deal-ui.js";
+import { statusOf as sharedStatus, railEl, JOBS as SHELF, ago as sharedAgo,
+         skeletonsInto, skeletonsDone, copyBtn, copyRow, announce } from "/deal-ui.js";
+
+/* Filled here rather than in the markup: the shape is data in deal-ui.js
+   and a hand-written copy in this file would be a fifth thing to keep in
+   step. Three rows, because that is the length of a first page that has
+   nothing in it — a taller skeleton than the answer is a page that
+   shrinks when it finishes. */
+skeletonsInto(document.getElementById("skel"), "order", 3,
+  "Reading your orders off the board, and the deal room behind each one.");
 
 const $ = (id) => document.getElementById(id);
 const PER_PAGE = 10;
@@ -529,6 +564,7 @@ let orders = [];
 let filter = "all";
 let page = 0;
 let meta = null;
+let unread = false;      // both reads failed — see load()
 
 /* ── reading ───────────────────────────────────────────────────────────────
  * Two sources, and neither is complete on its own. The archive is the record
@@ -544,12 +580,16 @@ async function readArchive(did) {
   } catch { return null; }
 }
 
+/* NULL MEANS "COULD NOT LOOK", [] MEANS "NOTHING THERE". They were the same
+   value, and the difference is the difference between telling a customer
+   their order list is empty and telling them the network is down. See the
+   branch in paint(). */
 async function readLive(did) {
   try {
     const r = await fetch("/api/room?room=tclk-offers&limit=200", { cache: "no-store" });
-    if (!r.ok) return [];
+    if (!r.ok) return null;
     const j = await r.json();
-    if (j.error || j.source === "none") return [];
+    if (j.error || j.source === "none") return null;
     const out = [];
     for (const m of j.messages ?? []) {
       if (m.from !== did) continue;
@@ -571,13 +611,19 @@ async function readLive(did) {
       });
     }
     return out;
-  } catch { return []; }
+  } catch { return null; }
 }
 
 async function load() {
   if (!ID) return;
   const [arch, live] = await Promise.all([readArchive(ID.did), readLive(ID.did)]);
   meta = arch;
+  /* ── THE STATE THIS PAGE WAS MISSING ────────────────────────────────────
+     Both reads can fail, and when they did the page went on to say "Nothing
+     ordered yet" to somebody with nine orders — the same false statement the
+     skeleton at the top of this file exists to prevent, arriving through a
+     different door. A read that did not happen is not an empty result. */
+  unread = arch === null && live === null;
   const seen = new Map();
   /* Live first so its copy wins on a tie — same order, but read a moment
      closer to now.
@@ -586,7 +632,7 @@ async function load() {
      far too short to hold. A straight "live wins" would therefore delete the
      accept from every order recent enough to appear in both — which is every
      order that still has a button worth pressing. */
-  for (const o of [...live, ...(arch?.orders ?? [])]) {
+  for (const o of [...(live ?? []), ...(arch?.orders ?? [])]) {
     const key = o.nonce || `${o.seq}`;
     const had = seen.get(key);
     if (!had) { seen.set(key, { ...o }); continue; }
@@ -666,6 +712,7 @@ const matching = () => orders.filter((o) => filter === "all" ? true : filter ===
 
 function paint() {
   $("skel").hidden = true;
+  skeletonsDone($("skel"));
 
   if (!ID) {
     $("signedout").hidden = false;
@@ -680,15 +727,25 @@ function paint() {
   led.replaceChildren(document.createTextNode("Everything signed with "));
   const c = document.createElement("code");
   c.textContent = shortDid(ID.did);
-  led.append(c, document.createTextNode(" that has reached the public offers room."));
+  led.append(c);
+  /* The short form is what fits in a sentence; the button copies all 56
+     characters, which is the thing somebody actually needs when they take
+     this key somewhere else. Copying what is on screen would hand them an
+     ellipsis in the middle of a did:key. */
+  led.append(copyBtn(document, ID.did, "full did:key"));
+  led.append(document.createTextNode(" that has reached the public offers room."));
 
   if (!orders.length) {
-    $("empty").hidden = false;
+    /* Which of the two empty states this is. "Nothing ordered yet" is a
+       claim about the network; "could not read" is a claim about this
+       browser's last few seconds, and only one of them can be made here. */
+    $(unread ? "unread" : "empty").hidden = false;
     for (const id of ["stats", "listhead", "hlist", "pager", "nofilter"]) $(id).hidden = true;
     paintFoot();
     return;
   }
   $("empty").hidden = true;
+  $("unread").hidden = true;
 
   const open = orders.filter(stillOpen).length;
   const total = orders.reduce((s, o) => s + (Number(o.amount) || 0), 0);
@@ -867,6 +924,15 @@ function actionFor(o, pill = null) {
   said.className = "hsaid";
   said.hidden = true;
 
+  /* ── THE ONE STRING THAT IDENTIFIES THIS DEAL ────────────────────────────
+     A contract id is this order's receipt number: it is what names the deal
+     room, what every frame in that room carries, and what a buyer would
+     quote if they wanted to ask anybody about it. It was on screen nowhere.
+     Sixty-six characters, truncated to one line, with the whole thing on the
+     button. */
+  const ref = copyRow(document, o.accept.contract, "contract id");
+  ref.classList.add("href");
+
   /* ── WHAT THE ANSWER MEANS, IN THE BUYER'S WORDS ────────────────────────
      Four outcomes, and only one of them is a button. The common case by far
      is `locked` — the checkout does this automatically — so that is the one
@@ -1025,7 +1091,7 @@ function actionFor(o, pill = null) {
     }
   });
 
-  box.append(words, go, said);
+  box.append(words, go, said, ref);
   return box;
 }
 
@@ -1174,7 +1240,12 @@ function paintFoot() {
   const f = $("foot");
   f.replaceChildren();
   if (!meta) {
-    f.textContent = "Could not read the archive just now. The live offers room is still being shown, which covers about the last two hundred messages.";
+    /* TWO DIFFERENT FAILURES, and the sentence has to know which. Saying "the
+       live offers room is still being shown" when the live offers room did
+       not answer either is the footer contradicting the card above it. */
+    f.textContent = unread
+      ? "Neither read succeeded, so nothing below is being shown from anywhere. The page keeps trying, and everything it looks for is on the public network."
+      : "Could not read the archive just now. The live offers room is still being shown, which covers about the last two hundred messages.";
     return;
   }
   const bits = [];
@@ -1196,6 +1267,15 @@ function paintFoot() {
 }
 
 /* ── controls ─────────────────────────────────────────────────────────────*/
+/* The one control on the failure card. It shows the skeleton again first, so
+   pressing it looks like something rather than like nothing. */
+$("retry").addEventListener("click", async () => {
+  $("unread").hidden = true;
+  $("foot").replaceChildren();
+  skeletonsInto($("skel"), "order", 3, "Reading your orders off the board, and the deal room behind each one.");
+  $("skel").hidden = false;
+  await load();
+});
 for (const chip of document.querySelectorAll(".chip")) {
   chip.addEventListener("click", () => {
     filter = chip.dataset.filter;

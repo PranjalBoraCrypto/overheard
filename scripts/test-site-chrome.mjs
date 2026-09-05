@@ -56,7 +56,11 @@ const srv = http.createServer((req, res) => {
 
   const f = path.join(ROOT, p);
   if (fs.existsSync(f) && fs.statSync(f).isFile()) {
-    const type = p.endsWith(".js") ? "text/javascript" : p.endsWith(".png") ? "image/png" : "text/html";
+    /* ".css" is here because a stylesheet served as text/html is one
+       Chromium refuses in silence, and the page then measures as if the
+       stylesheet did not exist. */
+    const type = p.endsWith(".js") ? "text/javascript" : p.endsWith(".css") ? "text/css"
+      : p.endsWith(".png") ? "image/png" : p.endsWith(".svg") ? "image/svg+xml" : "text/html";
     res.writeHead(200, { "content-type": type });
     return res.end(fs.readFileSync(f));
   }

@@ -347,7 +347,11 @@ input[type=text]:focus{outline:none;border-color:var(--blue);background:rgba(0,0
   .paydock{
     position:fixed;left:0;right:0;bottom:0;z-index:40;
     padding:var(--s3) var(--gutter) calc(var(--s3) + env(safe-area-inset-bottom));
-    background:linear-gradient(180deg,rgba(0,7,10,.35),var(--void) 42%);
+    /* .35 at the top let the card behind read straight through the capacity
+       line — the one sentence in this dock that a buyer has to be able to
+       read before pressing the button under it. The fade is still a fade;
+       it just starts opaque enough to be a surface. */
+    background:linear-gradient(180deg,rgba(0,7,10,.72),var(--void) 34%);
     backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
     box-shadow:0 -1px 0 rgba(27,100,120,.35);
   }
@@ -356,11 +360,28 @@ input[type=text]:focus{outline:none;border-color:var(--blue);background:rgba(0,0
   .dockprice b{font-size:20px;color:var(--white);font-weight:600}
   .dockprice i{font-style:normal;font-size:10px;letter-spacing:.14em;color:var(--faint)}
   .paydock .whynot{margin-top:8px;text-align:left}
-  /* Room for the dock, so the last thing on the page is never under it. */
-  .shell{padding-bottom:calc(112px + env(safe-area-inset-bottom))}
+  /* Room for the dock, so the last thing on the page is never under it.
+     MEASURED, not guessed: 112 was written when the dock held one row, and
+     the capacity line and the reason-it-is-off line have been added under it
+     since — at which point the last paragraph of the page sat behind a
+     button. `--dockh` is written by the script below from the dock's real
+     height on every resize, and the 112 here is only what applies for the
+     frame before that runs. */
+  .shell{padding-bottom:calc(var(--dockh,112px) + 18px + env(safe-area-inset-bottom))}
 }
 /* How full the shop is. Quiet by default — this is a fact about the queue,
    not a warning — and gold only when it is the reason the button is dead. */
+/* The busy state of the one button that completes this flow. It stays
+   coloured while it works rather than dropping to the disabled grey: grey
+   says "you cannot", and what is true here is "it is going". The caret steps
+   aside for the ring — two glyphs in one button is one too many. */
+.go[data-busy="1"]{background:linear-gradient(180deg,var(--blue),var(--mint));
+  color:#00171d;opacity:.8;cursor:progress}
+.go[data-busy="1"] .i{display:none}
+/* No box: what is coming here is one sentence inside a dock that is already
+   a panel, and a bordered placeholder for it would be a border that never
+   appears. Just the lines, and the light passing over them. */
+.cap .skel-card{padding:3px 0 1px;background:none;border:0}
 .cap{font-size:12.5px;line-height:1.5;color:var(--faint);margin:var(--s2) 0 0;
   text-align:center}
 .cap b{color:var(--white);font-weight:650}
@@ -475,14 +496,7 @@ input[type=text]:focus{outline:none;border-color:var(--blue);background:rgba(0,0
 .histnote a{color:var(--blue)}
 
 /* ── the (i) and its panel ────────────────────────────────────────────────*/
-.info{display:inline-flex;align-items:center;justify-content:center;vertical-align:middle;
-  width:17px;height:17px;margin-left:6px;border-radius:50%;flex:none;
-  border:1px solid var(--edge);background:rgba(127,178,214,.08);color:var(--dim);
-  font:600 10.5px/1 var(--display);cursor:pointer;padding:0;
-  transition:color .18s,border-color .18s,background .18s,transform .18s}
-.info:hover,.info[aria-expanded="true"]{color:var(--blue);border-color:var(--blue);
-  background:rgba(127,178,214,.16);transform:scale(1.12)}
-.info:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
+/* The (i) is in deal.css now — it was declared identically here and in hire. */
 .pop{position:absolute;z-index:60;width:max-content;max-width:min(380px,calc(100vw - 28px));
   background:linear-gradient(180deg,#0d1a21,#081216);
   border:1px solid var(--edge-lit);border-radius:14px;
@@ -540,8 +554,16 @@ input[type=text]:focus{outline:none;border-color:var(--blue);background:rgba(0,0
   .stepsub{margin-left:0}
   .codecopy{position:static;margin-bottom:8px;width:100%;justify-content:center}
   .codewrap{display:flex;flex-direction:column}
-  .hrow{flex-wrap:wrap;gap:var(--s2) var(--s3)}
-  .hstate{margin-left:0}
+  /* THE SAME SHAPE ON EVERY ROW. Wrapping alone gave a ragged list: a short
+     brief left the state and the time on line one, a long one pushed them to
+     line two, and three rows in a column each broke differently. So the
+     phone layout is explicit — name and brief above, state and time below,
+     the same on every row whatever is in it. */
+  .hrow{flex-wrap:wrap;gap:6px var(--s3);align-items:baseline}
+  .hjob{flex:1 1 100%}
+  .hbrief{flex:1 1 100%}
+  .hstate{margin-left:0;order:8}
+  .hwhen{order:9;margin-left:auto}
   /* Everything tappable clears the 44px the platforms ask for. */
   .info{width:26px;height:26px;font-size:12px}
 }
@@ -847,7 +869,12 @@ input[type=text]:focus{outline:none;border-color:var(--blue);background:rgba(0,0
              button, two positions. A second button would be a second place
              for the state to be wrong. -->
         <div class="paydock" id="paydock">
-          <p class="cap" id="cap" hidden></p>
+          <!-- Not hidden. Whether this shop can take an order is the one
+               fact standing between a visitor and the button below, and
+               an empty gap where it will be says nothing while it is
+               being read. It carries a skeleton until the first answer
+               lands, and hides itself only if that answer is unknown. -->
+          <div class="cap" id="cap"></div>
           <div class="dockrow">
             <span class="dockprice" aria-hidden="true"><b id="dockPrice">500</b><i>FLOP</i></span>
             <button class="go" id="send" type="button" disabled>
@@ -907,6 +934,7 @@ input[type=text]:focus{outline:none;border-color:var(--blue);background:rgba(0,0
 <script type="module">
 import { getSession, onSession, shortDid, signTextB64u } from "/session.js";
 import { canon, offerId, dealRoom } from "/tclk.js";
+import { skeletonsInto, skeletonsDone, copyBtn, copyRow, copyText, announce } from "/deal-ui.js";
 
 const $ = (id) => document.getElementById(id);
 const HOUR = 3600000;
@@ -1336,6 +1364,36 @@ function repaint() {
 let SHOP_FULL = false;
 let capTimer = null;
 
+/* Before the first read lands. One row and no sentence under it: this is a
+   single short fetch, and a "still trying" note under one line would be more
+   furniture than the thing it is apologising for. */
+skeletonsInto(document.getElementById("cap"), "text", 1);
+
+/* ── HOW MUCH ROOM THE DOCK NEEDS ──────────────────────────────────────────
+ * On a phone the pay dock is fixed to the bottom of the screen, so the page
+ * has to reserve its height or the last thing on the page ends up behind it.
+ * That reserve was a constant — 112px, correct when the dock was one row —
+ * and the dock has since grown a capacity line and a line saying why the
+ * button is off. The last paragraph of the page was behind the button.
+ *
+ * So it is measured. ResizeObserver rather than a resize listener, because
+ * what changes the dock's height is usually its CONTENT — the shop filling
+ * up, a validation message appearing — and the window never moved.
+ */
+{
+  const dock = document.getElementById("paydock");
+  const set = () => {
+    /* Only when it is actually fixed. On a desktop the dock is part of the
+       card and reserving space for it at the bottom of the page would be
+       reserving space twice. */
+    const h = getComputedStyle(dock).position === "fixed" ? dock.offsetHeight : 0;
+    document.documentElement.style.setProperty("--dockh", h + "px");
+  };
+  if ("ResizeObserver" in window) new ResizeObserver(set).observe(dock);
+  addEventListener("resize", set);
+  set();
+}
+
 async function readCapacity() {
   let d = null;
   try {
@@ -1344,9 +1402,11 @@ async function readCapacity() {
   } catch { /* handled as unknown below */ }
 
   const el = $("cap");
+  skeletonsDone(el);
   if (!d?.ok) {
     /* Unknown. Not full — see the block above. */
     SHOP_FULL = false;
+    el.replaceChildren();
     el.hidden = true;
     stopWatchingCapacity();
     repaint();
@@ -1431,7 +1491,11 @@ function paintWho(s) {
   if (s) {
     b.textContent = "Ordering as you";
     const c = document.createElement("code"); c.textContent = shortDid(s.did);
-    t.append(b, c);
+    /* The SHORT form is what is readable and the FULL one is what is useful:
+       this button copies all 56 characters, which is the string somebody is
+       about to paste into a terminal or another agent's config. Copying what
+       is on screen would hand them an ellipsis. */
+    t.append(b, c, copyBtn(document, s.did, "full did:key"));
   } else {
     b.textContent = "You are not signed in";
     /* TWO ROUTES, NAMED, because they are not the same question. The bar's
@@ -1559,6 +1623,7 @@ async function finish(s, offerRef) {
   step("lock");
   say("Done. Ordered, accepted and funded — the work is published to the board, and nothing else is needed from you.", "ok");
   $("sendlabel").textContent = "Ordered";
+  delete $("send").dataset.busy;
   afterOrder();
 }
 
@@ -1589,6 +1654,7 @@ $("send").addEventListener("click", async () => {
 
   $("send").disabled = true;
   $("sendlabel").textContent = "Signing…";
+  $("send").dataset.busy = "1";
   say("Signing…");
   try {
     const body = offerBody(s.did, Date.now());
@@ -1608,6 +1674,7 @@ $("send").addEventListener("click", async () => {
     step("sign");
 
     $("sendlabel").textContent = "Posting…";
+    $("send").dataset.busy = "1";
     say("Posting to the board…");
     const r = await fetch("/api/post", {
       method: "POST", headers: { "Content-Type": "application/json" },
@@ -1617,12 +1684,14 @@ $("send").addEventListener("click", async () => {
     if (!d.ok) {
       say(d.error || d.why || "The network would not take it. Nothing was charged — nothing can be.", "bad");
       $("sendlabel").textContent = "Place the order";
+      delete $("send").dataset.busy;
       $("send").disabled = false;
       return;
     }
     step("post");
     posted = true;
     $("sendlabel").textContent = "Ordered";
+    delete $("send").dataset.busy;
     $("send").disabled = true;
 
     /* ── AND NOW FINISH IT, WHILE THEY ARE STILL HERE ────────────────────
@@ -1663,11 +1732,13 @@ $("send").addEventListener("click", async () => {
     if (posted) {
       say("Ordered — but this page lost track after that. Open your orders page to see where it got to and finish it there.", "bad");
       $("sendlabel").textContent = "Ordered";
+      delete $("send").dataset.busy;
       $("send").disabled = true;
       afterOrder();
     } else {
       say("Could not place that order. Nothing was charged.", "bad");
       $("sendlabel").textContent = "Place the order";
+      delete $("send").dataset.busy;
       $("send").disabled = false;
     }
   }
@@ -1704,16 +1775,18 @@ paintTries();
     revert = setTimeout(() => { label.textContent = "copy"; btn.className = "codecopy"; }, 2200);
   };
   btn.addEventListener("click", async () => {
-    try { await navigator.clipboard.writeText(sample.textContent); flash("copied", "done"); }
-    catch {
-      /* Clipboard access is refused in plenty of ordinary situations — an
-         insecure origin, a permissions policy, a browser wanting a closer
-         user gesture. Selecting the block gives them a working Ctrl-C
-         instead of a button that silently did nothing. */
+    /* copyText, not navigator.clipboard directly. The modern API is absent on
+       an insecure origin and refusable by a browser setting, and this button
+       reported failure in both cases where a hidden textarea would have
+       worked — which is exactly what copyText tries second. */
+    if (await copyText(sample.textContent)) return flash("copied", "done");
+    /* Both routes refused. Selecting the block gives them a working Ctrl-C
+       instead of a button that silently did nothing. */
+    try {
       const r = document.createRange(); r.selectNodeContents(sample);
       const sel = getSelection(); sel.removeAllRanges(); sel.addRange(r);
-      flash("select + copy", "failed");
-    }
+    } catch { /* a selection is a courtesy, not the mechanism */ }
+    flash("select + copy", "failed");
   });
 }
 

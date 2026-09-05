@@ -202,6 +202,240 @@ export function ago(ts, now = Date.now()) {
   return `${Math.round(s / 86400)}d ago`;
 }
 
+/* ══════════════════════════════════════════════════════════════════════════
+ * SKELETONS
+ *
+ * A silhouette per view, described as data rather than drawn three times.
+ * The rule the shapes follow: the skeleton has the SAME HEIGHT, PADDING AND
+ * GAPS as the row it stands in for, so nothing moves when the data lands.
+ * A grey bar of the wrong height is a layout shift with a delay on it.
+ *
+ * Each part is `[kind, options]`. Only four kinds exist and that is
+ * deliberate — a skeleton language rich enough to reproduce a card exactly is
+ * a second copy of the card, and it will drift from the first.
+ * ═════════════════════════════════════════════════════════════════════════*/
+export const SKEL = {
+  /* A board listing: title, a line of meta, the rail, a price pill. */
+  listing: [
+    ["row", [["col", [["line", { s: "head", w: "58%" }], ["line", { s: "micro", w: "38%" }]]],
+             ["pill", { w: "84px" }]]],
+    ["line", { w: "100%" }],
+    ["row", [["line", { w: "46%" }], ["gap"], ["pill", { w: "62px" }]]],
+  ],
+  /* An order row on the orders page: job name, when, state pill, and the
+     four-node rail underneath. 74px was the old grey bar; this is the shape
+     that bar was standing in for. */
+  order: [
+    ["row", [["tile", { w: "38px", h: "38px" }],
+             ["col", [["line", { s: "head", w: "44%" }], ["line", { s: "micro", w: "62%" }]]],
+             ["pill", { w: "76px" }]]],
+    ["line", { w: "100%" }],
+  ],
+  /* A shop card: emblem, name, one line of description, a price. */
+  shelf: [
+    ["row", [["tile", { w: "44px", h: "44px" }],
+             ["col", [["line", { s: "head", w: "52%" }], ["line", { s: "micro", w: "70%" }]]]]],
+    ["line", { w: "92%" }],
+    ["line", { w: "64%" }],
+    ["row", [["pill", { w: "70px" }], ["gap"], ["pill", { w: "92px" }]]],
+  ],
+  /* Two lines and a figure — a tally tile, a capacity figure. */
+  strip: [
+    ["row", [["col", [["line", { s: "micro", w: "44%" }], ["line", { s: "head", w: "30%" }]]],
+             ["pill", { w: "58px" }]]],
+  ],
+  /* A sentence that has not arrived. Two lines, the second short, which is
+     what a wrapped sentence looks like. Used where the thing coming is prose
+     rather than a row — and the pages that use it drop the card's border and
+     background, because a boxed placeholder for one line of text is a box
+     that was never going to be there. */
+  text: [["line", { w: "100%" }], ["line", { w: "58%" }]],
+};
+
+function skelPart(doc, [kind, opt]) {
+  if (kind === "row" || kind === "col") {
+    const el = doc.createElement("div");
+    el.className = kind === "row" ? "skel-row" : "skel-col";
+    for (const p of opt) el.append(skelPart(doc, p));
+    return el;
+  }
+  const el = doc.createElement("div");
+  el.className = `skel-${kind}`;
+  if (opt?.s) el.dataset.s = opt.s;
+  if (opt?.w) el.style.setProperty("--w", opt.w);
+  if (opt?.h) el.style.setProperty("--h", opt.h);
+  return el;
+}
+
+/**
+ * `n` cards of the named shape into `node`, replacing whatever is there.
+ *
+ * `--i` carries the card's index to the stylesheet, which uses it to stagger
+ * the sweep. It is set here rather than in CSS because :nth-child() cannot
+ * produce an arbitrary count and a list of nth-child rules is a limit nobody
+ * remembers is there until the ninth card does not animate.
+ */
+export function skeletonsInto(node, kind, n = 3, say = "") {
+  const doc = node.ownerDocument;
+  node.replaceChildren();
+  const shape = SKEL[kind] ?? SKEL.listing;
+  for (let i = 0; i < n; i++) {
+    const card = doc.createElement("div");
+    card.className = "skel-card";
+    card.style.setProperty("--i", String(i));
+    /* Not a live region and not read out. A screen reader is told the list is
+       busy by aria-busy on the list itself; these are pictures of nothing. */
+    card.setAttribute("aria-hidden", "true");
+    for (const p of shape) card.append(skelPart(doc, p));
+    node.append(card);
+  }
+  if (say) {
+    const s = doc.createElement("p");
+    s.className = "skel-say";
+    s.textContent = say;
+    node.append(s);
+  }
+  node.classList.add("skel");
+  node.setAttribute("aria-busy", "true");
+  return node;
+}
+
+/** The other half, and the half that gets forgotten: a list that finished
+ *  loading is no longer busy, and a screen reader has no other way to know. */
+export function skeletonsDone(node) {
+  node.removeAttribute("aria-busy");
+  node.classList.remove("skel");
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+ * COPY
+ *
+ * `navigator.clipboard` is not available on an insecure origin and can be
+ * refused by a browser setting, so there are two paths and the button says
+ * which one happened. The fallback is a hidden textarea and execCommand —
+ * deprecated, still implemented everywhere, and the only thing that works
+ * when the modern API is absent.
+ * ═════════════════════════════════════════════════════════════════════════*/
+export async function copyText(text) {
+  try {
+    if (navigator.clipboard?.writeText) { await navigator.clipboard.writeText(text); return true; }
+  } catch { /* fall through — a refusal is not a reason to give up */ }
+  try {
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    ta.setAttribute("readonly", "");
+    /* Off screen rather than hidden: display:none and visibility:hidden are
+       both unselectable, and a selection is the entire mechanism here. */
+    ta.style.cssText = "position:fixed;top:-1000px;opacity:0";
+    document.body.append(ta);
+    ta.select();
+    const ok = document.execCommand("copy");
+    ta.remove();
+    return ok;
+  } catch { return false; }
+}
+
+/* ── THE TWO GLYPHS, BUILT AS NODES ────────────────────────────────────────
+ * Not innerHTML, even for a string this file wrote itself. The deals page
+ * carries a promise that it never assigns innerHTML, outerHTML or
+ * insertAdjacentHTML anywhere, and its suite extends that promise to every
+ * module the page imports — precisely so the guarantee cannot be weakened by
+ * moving code one file sideways. Six lines of createElementNS is the price of
+ * a rule that means something.
+ */
+const SVG_NS = "http://www.w3.org/2000/svg";
+function glyph(doc, cls, parts) {
+  const s = doc.createElementNS(SVG_NS, "svg");
+  s.setAttribute("class", cls);
+  s.setAttribute("viewBox", "0 0 24 24");
+  s.setAttribute("aria-hidden", "true");
+  for (const [tag, attrs] of parts) {
+    const n = doc.createElementNS(SVG_NS, tag);
+    for (const k in attrs) n.setAttribute(k, attrs[k]);
+    s.append(n);
+  }
+  return s;
+}
+const COPY_GLYPH = (doc) => glyph(doc, "no", [
+  ["rect", { x: 9, y: 9, width: 12, height: 12, rx: 2.5 }],
+  ["path", { d: "M6 15H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v1" }],
+]);
+const TICK_GLYPH = (doc) => glyph(doc, "yes", [
+  ["polyline", { points: "4.5 12.5 9.5 17.5 19.5 6.5" }],
+]);
+
+/**
+ * A copy button for one string.
+ *
+ * `what` names the thing in the accessible label and in the confirmation,
+ * because "Copied" on a card carrying four copyable strings does not say
+ * which one went. The confirmation is an aria-live announcement rather than a
+ * tooltip: a tooltip is invisible to a screen reader and, on a phone, to
+ * everybody, since there is no hover to reveal it.
+ */
+export function copyBtn(doc, text, what = "") {
+  const b = doc.createElement("button");
+  b.type = "button";
+  b.className = "copy";
+  b.append(COPY_GLYPH(doc), TICK_GLYPH(doc));
+  const name = what ? `Copy the ${what}` : "Copy";
+  b.setAttribute("aria-label", name);
+  b.title = name;
+
+  let back = 0;
+  b.addEventListener("click", async (e) => {
+    e.preventDefault();
+    e.stopPropagation();                         // never also open the card
+    const ok = await copyText(typeof text === "function" ? text() : text);
+    b.dataset.done = ok ? "1" : "no";
+    b.setAttribute("aria-label", ok ? `Copied${what ? " the " + what : ""}` : "Could not copy — select it by hand");
+    b.title = b.getAttribute("aria-label");
+    announce(doc, b.getAttribute("aria-label"));
+    clearTimeout(back);
+    /* Long enough to be seen on a glance away, short enough that a row of
+       these does not stay green after somebody has moved on. */
+    back = setTimeout(() => {
+      delete b.dataset.done;
+      b.setAttribute("aria-label", name);
+      b.title = name;
+    }, 1900);
+  });
+  return b;
+}
+
+/** One live region per document, reused. A page that creates a new one per
+ *  announcement leaves a growing pile of empty divs, and screen readers do
+ *  not reliably announce a region that was added at the same moment as its
+ *  text. */
+export function announce(doc, msg) {
+  let r = doc.getElementById("oh-live");
+  if (!r) {
+    r = doc.createElement("div");
+    r.id = "oh-live";
+    r.setAttribute("role", "status");
+    r.setAttribute("aria-live", "polite");
+    r.style.cssText =
+      "position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap";
+    doc.body.append(r);
+  }
+  /* Cleared first: setting the same string twice is not a change, and a
+     screen reader will say nothing the second time. */
+  r.textContent = "";
+  setTimeout(() => { r.textContent = msg; }, 30);
+}
+
+/** A truncated string beside its copy button, on one line. */
+export function copyRow(doc, text, what = "", cls = "did") {
+  const row = doc.createElement("div");
+  row.className = "copyrow";
+  const s = doc.createElement("span");
+  s.className = cls;
+  s.textContent = text;
+  s.title = text;
+  row.append(s, copyBtn(doc, text, what));
+  return row;
+}
+
 /** The shop's shelf, named once. Three files carried their own copy of this
  *  map and one of them was already missing a job. */
 export const JOBS = {

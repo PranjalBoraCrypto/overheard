@@ -532,13 +532,11 @@ section.band{margin-top:30px}
 .empty{border:1px dashed var(--edge);border-radius:15px;padding:24px;margin-top:15px;
   color:var(--faint);font-size:14.5px;text-align:center}
 
-/* ── skeletons ─────────────────────────────────────────────────────────── */
-.skel{border:1px solid var(--edge);border-radius:16px;margin-top:14px;padding:19px;overflow:hidden}
-.sl{height:12px;border-radius:6px;background:linear-gradient(90deg,rgba(14,58,71,.5) 25%,rgba(27,100,120,.55) 37%,rgba(14,58,71,.5) 63%);
-  background-size:400% 100%;animation:shimmer 1.4s linear infinite}
-.sl+.sl{margin-top:11px}
-.sl.w1{width:44%;height:20px}.sl.w2{width:66%}.sl.w3{width:52%}
-@keyframes shimmer{to{background-position:-135% 0}}
+/* The skeletons are in deal.css now, with the rest of the shared vocabulary.
+   What was here animated BACKGROUND-POSITION on a 400%-wide gradient, once
+   per line, twelve lines at a time on a loading board — twelve main-thread
+   repaints per frame for a shape that resembled nothing the page was about
+   to draw. See WAITING in deal.css. */
 
 /* ── a deal ────────────────────────────────────────────────────────────── */
 .deal{border:1px solid var(--edge);border-radius:16px;margin-top:14px;overflow:hidden;
@@ -591,8 +589,16 @@ section.band{margin-top:30px}
 .wants.open .wantbox{grid-template-rows:1fr}
 .wantin{overflow:hidden;min-height:0}
 .wantpad{padding-top:9px}
-.wrow{display:grid;grid-template-columns:74px 1fr;gap:10px;font-family:var(--mono);font-size:12px;
-  padding:5px 0;align-items:start}
+/* Three columns now, and the third collapses to nothing on the rows that do
+   not have a copy button — `auto` on an empty column is zero wide, so the
+   value column still starts in the same place on every row. Getting this
+   wrong would have jogged the labels of the rows that are prose. */
+.wrow{display:grid;grid-template-columns:74px minmax(0,1fr) auto;gap:10px;
+  font-family:var(--mono);font-size:12px;padding:5px 0;align-items:center}
+/* The button is 34px and the row's text is 12px, so without this the rows
+   with a button are twice the height of the rows without one. */
+.wrow .copy{width:28px;height:28px;margin:-6px 0}
+.wrow .copy svg{width:13px;height:13px}
 .wrow b{color:var(--faint);font-weight:500;letter-spacing:.06em;text-transform:uppercase;font-size:10.5px;padding-top:1px}
 .wrow span{color:var(--dim);word-break:break-word}
 .wrow a{color:var(--blue);word-break:break-all}
@@ -678,6 +684,15 @@ section.band{margin-top:30px}
 .bodyin{padding:6px 19px 20px}
 
 .frame{display:grid;grid-template-columns:auto 1fr;gap:13px;padding:14px 0;border-bottom:1px solid rgba(14,58,71,.6)}
+/* MEASURED AT 360px, and invisible until it was: a grid item's automatic
+   minimum size is its CONTENT, so the 1fr column was not 1fr at all — the row
+   of verification pills laid itself out 3,298 pixels wide inside a 288-pixel
+   column and never wrapped, because there was nothing to wrap against. The
+   card's overflow:hidden then cut the pills off mid-word, which is why the
+   page did not scroll sideways and nothing looked wrong: the marks that say
+   "offer is well formed" and "bytes reproduce" were simply not there on a
+   small phone. min-width:0 is what makes 1fr mean 1fr. */
+.frame>*{min-width:0}
 .frame:last-child{border-bottom:0}
 .ftype{font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;
   padding:4px 9px;border-radius:7px;background:var(--navy-2);border:1px solid var(--edge);color:var(--dim);
@@ -1269,17 +1284,8 @@ footer a{color:var(--blue)}
  * never see the content at all. This opens on click OR hover-intent, closes
  * on Escape, click-away and blur, and is announced as a button that expands.
  * ═══════════════════════════════════════════════════════════════════════ */
-.info{display:inline-flex;align-items:center;justify-content:center;vertical-align:middle;
-  width:17px;height:17px;margin-left:6px;border-radius:50%;flex:none;
-  border:1px solid var(--edge);background:rgba(127,178,214,.08);color:var(--dim);
-  /* `var(--sans)` — another name that was never declared, so this `font`
-     shorthand was invalid and the (i) inherited 16px body text into a 17px
-     circle. It is `--display` like everything else on the page. */
-  font:600 10.5px/1 var(--display);cursor:pointer;padding:0;
-  transition:color .18s,border-color .18s,background .18s,transform .18s}
-.info:hover,.info[aria-expanded="true"]{color:var(--blue);border-color:var(--blue);
-  background:rgba(127,178,214,.16);transform:scale(1.12)}
-.info:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
+/* The (i) is in deal.css now — it was declared identically here and in hire,
+   broken font shorthand and all. */
 /* ── WHY THE PANEL WAS HARD TO READ ────────────────────────────────────────
  *
  * Four separate things, none of them "the words are too long":
@@ -1767,9 +1773,18 @@ footer a{color:var(--blue)}
     An open offer where the sender is the one PAYING. They have named a price and a deadline; anybody
     who can do the job may accept it. Nothing is locked until somebody does.</template>
   <template id="pop-offered"><b>Work offered</b>
-    The other side of the same board: the sender is offering to do the work. Rarer, and worth knowing
-    that this direction cannot currently settle &mdash; the escrow only runs one way, so almost none of
-    these ever complete.</template>
+    The other side of the same board: the sender is offering to do the work rather than asking for it.
+    It cannot currently settle, and the reason is mechanical rather than a matter of anybody trying
+    harder. The side that ACCEPTS an offer mints the secret that opens the lock, and only the payee is
+    allowed to spend it &mdash; so on an offer opened by the payee, the secret is minted by the one
+    party forbidden to use it.
+    <br><br>
+    Our archive of this room says the same thing in counts: 430 offers opened this way, 19 answered,
+    one reveal, and that one came from the payer, which the state machine rejects. Against 1,852
+    opened the other way, of which 1,385 were answered. This is
+    <a href="https://github.com/flop-labs/tclk/issues/12" rel="noopener noreferrer">flop-labs/tclk#12</a>,
+    where the maintainers are choosing between narrowing the protocol to payer-opened offers and
+    changing the frame shape so it can work both ways. Nothing here posts in this direction.</template>
   <template id="pop-flight"><b>In flight</b>
     A deal both sides have agreed. It is somewhere between accepted and paid: waiting on money being
     locked, on the work, or on the secret that opens the lock.</template>
@@ -2277,7 +2292,16 @@ footer a{color:var(--blue)}
 
     <section class="band" id="bOffered">
       <div class="bandhead"><h2>Work offered</h2><span class="count" id="cOffered"></span></div>
-      <p class="bandsub">Someone will do this for pay &mdash; the other side of the same board.</p>
+        <!-- THE NUMBER IS IN THE OPEN NOW, not behind the (i). This bucket is
+           17.5% of the board and it is the direction that does not complete;
+           presenting it as the mirror image of the one above, with the
+           caveat one click away, is the page implying two live routes where
+           there is one. The figures are our own archive of this room, which
+           as far as we can tell nobody else keeps, and they are quoted as
+           counts rather than as a verdict. -->
+      <p class="bandsub">Someone will do this for pay &mdash; and it is the direction that does not
+        complete. 430 of the 2,282 offers in our archive of this room were opened this way;
+        19 were answered and not one has ever settled.</p>
       <div id="offered"></div><div class="pager" id="pgOffered"></div>
     </section>
 
@@ -2311,7 +2335,8 @@ import {
    that is missing from one of them. nav.js has no imports and nothing runs
    at load, so this costs a file and no behaviour. */
 import { faceSVG } from "/nav.js";
-import { railEl, statusOf, STATES, leftFor, PHASE_CAPTION, pillEl } from "/deal-ui.js";
+import { railEl, statusOf, STATES, leftFor, PHASE_CAPTION, pillEl,
+         skeletonsInto, skeletonsDone, copyBtn, copyRow, announce } from "/deal-ui.js";
 
 const $ = (id) => document.getElementById(id);
 
@@ -2981,14 +3006,6 @@ function arrange(list) {
   return out;
 }
 
-function skeletonsInto(node, n) {
-  node.replaceChildren();
-  for (let i = 0; i < n; i++) {
-    const k = el("div", "skel");
-    k.append(el("div", "sl w1"), el("div", "sl w2"), el("div", "sl w3"));
-    node.append(k);
-  }
-}
 
 /* ── THE PAGER, AND WHY ITS SKELETON IS NOT THEATRE ────────────────────────
  *
@@ -3045,7 +3062,7 @@ async function turn(key, to) {
   const missing = list.filter((e) => e.room && !dealCache.has(e.room));
   if (!missing.length) { paint(); return; }   /* nothing to wait for, so do not pretend */
   busy.add(key);
-  skeletonsInto(node, Math.min(list.length, 3));
+  skeletonsInto(node, "listing", Math.min(list.length, 3));
   drawPager($("pg" + key[0].toUpperCase() + key.slice(1)), key, arrange(state[key]).length);
   try { await fetchRooms(missing.slice(0, MAX_DEALS)); } catch {}
   busy.delete(key);
@@ -3061,6 +3078,10 @@ function fill(node, key, list, emptyText) {
   const slice = arranged.slice(page[key] * PER, (page[key] + 1) * PER);
   if (busy.has(key)) return;
   node.replaceChildren();
+  /* The list is no longer busy, and a screen reader has no other way to
+     know: aria-busy is what stops it reading a half-built list, and a page
+     that sets it and never clears it has told the reader to wait forever. */
+  skeletonsDone(node);
   if (!slice.length) {
     node.append(el("div", "empty", query ? "Nothing here matches that." : emptyText));
     drawPager($("pg" + key[0].toUpperCase() + key.slice(1)), key, 0);
@@ -3119,7 +3140,13 @@ function drawOne(entry) {
   wrap.append(head);
 
   const body = el("div", "onebody"), pad = el("div", "onepad");
-  const kv = (k, v, link) => {
+  /* `copy` on a row means the value is an IDENTIFIER — something whose only
+     use is somewhere else. A did:key is 56 characters and a contract id 66,
+     and the way a person gets one of those into a terminal without a button
+     is by reading it off a screen, which is where a wrong character comes
+     from. The brief is not one of these: it is prose, and it is meant to be
+     read here. */
+  const kv = (k, v, { link = false, copy = false } = {}) => {
     const r = el("div", "wrow");
     r.append(el("b", null, k));
     if (link && /^https?:\/\//i.test(String(v))) {
@@ -3127,15 +3154,16 @@ function drawOne(entry) {
       a.href = String(v); a.rel = "noopener noreferrer nofollow"; a.target = "_blank";
       const sp = el("span"); sp.append(a); r.append(sp);
     } else r.append(el("span", null, String(v)));
+    if (copy) r.append(copyBtn(document, String(v), k));
     pad.append(r);
   };
-  if (deal.payer) kv("payer", deal.payer);
-  if (deal.payee) kv("payee", deal.payee);
-  if (!deal.payer && !deal.payee && o?.from) kv(deal.selling ? "payee" : "payer", o.from);
-  if (job?.context) kv("brief", job.context, true);
-  if (o?.id) kv("offer id", o.id);
-  if (deal.accept?.contract) kv("contract", deal.accept.contract);
-  if (roomName) kv("deal room", roomName);
+  if (deal.payer) kv("payer", deal.payer, { copy: true });
+  if (deal.payee) kv("payee", deal.payee, { copy: true });
+  if (!deal.payer && !deal.payee && o?.from) kv(deal.selling ? "payee" : "payer", o.from, { copy: true });
+  if (job?.context) kv("brief", job.context, { link: true });
+  if (o?.id) kv("offer id", o.id, { copy: true });
+  if (deal.accept?.contract) kv("contract", deal.accept.contract, { copy: true });
+  if (roomName) kv("deal room", roomName, { copy: true });
   const bad = o ? lintOffer(o) : [];
   if (bad.length) kv("problems", bad.join("; "));
   body.append(pad);
@@ -3346,7 +3374,12 @@ const dealCache = new Map();
 
 function skeletons() {
   for (const id of ["wanted", "offered", "live", "done"])
-    if (!$(id).children.length) skeletonsInto($(id), id === "wanted" ? 3 : 1);
+    if (!$(id).children.length)
+      /* THE SENTENCE IS ONLY ON THE FIRST BUCKET. It is one message about one
+         network, and four copies of "still trying" down a loading page reads
+         as four things going wrong. */
+      skeletonsInto($(id), "listing", id === "wanted" ? 3 : 1,
+        id === "wanted" ? "Reading the board off Technocore. It holds two hundred messages and forgets the rest, so this is the live edge rather than a database." : "");
 }
 
 let lastGood = 0, everLoaded = false;
@@ -3417,6 +3450,22 @@ function assemble(frames, enrich) {
 
 let lastFrames = [];
 
+/* ── THE LINE UNDER THE HERO, WHICH HAD NEVER SAID ANYTHING ────────────────
+ *
+ * FOUND BY PROBING THE PAGE WITH A NETWORK THAT ANSWERS 503: it still read
+ * "reading the board…" after six seconds, and it reads that on a good load
+ * too, forever. Nothing in this file had ever assigned to it — the markup
+ * shipped with a placeholder and the placeholder became the feature.
+ *
+ * It carries the same three answers `#srctext` carries, in fewer words,
+ * because it is above the fold and the source line is not. `data-on` is what
+ * turns its dot green, and it is only ever set by a read that succeeded.
+ */
+function heroSays(text, live) {
+  $("heroliveText").textContent = text;
+  $("herolive").dataset.on = live ? "1" : "0";
+}
+
 async function load() {
   const offers = await room(OFFERS_ROOM);
 
@@ -3425,6 +3474,12 @@ async function load() {
     $("srctext").textContent = everLoaded
       ? `could not refresh · showing the read from ${ago(lastGood)} · ${offers.why}`
       : `could not read tclk-offers · ${offers.why} · retrying`;
+    /* "Retrying" rather than "failed", because it is: poll() backs off from
+       a minute to eight and keeps going, and a page that says failed while
+       it is still working is a page somebody reloads for no reason. */
+    heroSays(everLoaded
+      ? `showing the board as it was ${ago(lastGood)} — still trying`
+      : "cannot reach the board — still trying", false);
     return;
   }
 
@@ -3434,6 +3489,11 @@ async function load() {
     offers.source === "live" ? "live · reading tclk-offers" + trimmed
     : offers.source === "snapshot" ? "from this site's archive — not live"
     : "the offers room is empty";
+  heroSays(
+    offers.source === "live" ? "live — reading the offers room"
+    : offers.source === "snapshot" ? "from this site's archive, not live"
+    : "the offers room is empty right now",
+    offers.source === "live");
 
   lastFrames = framesIn(offers);
   state = assemble(lastFrames, dealCache);
@@ -3763,6 +3823,7 @@ skeletons();
 load().catch(() => {
   $("src").className = "srcline none";
   $("srctext").textContent = "could not reach the offers room";
+  heroSays("cannot reach the board — still trying", false);
   for (const id of ["wanted", "offered", "live", "done"]) $(id).replaceChildren();
   $("wanted").append(el("div", "empty", "Could not reach the offers room. This page will keep trying."));
 });

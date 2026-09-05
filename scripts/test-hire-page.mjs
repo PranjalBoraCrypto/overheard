@@ -123,7 +123,16 @@ import http from "node:http";
 import { chromium } from "playwright";
 
 const PORT = 9439;
-const TYPES = { ".html": "text/html", ".js": "text/javascript", ".svg": "image/svg+xml" };
+/* ".css" IS IN HERE, AND IT WAS NOT.
+   A stylesheet served as text/plain is a stylesheet Chromium refuses, in
+   silence — no console error the page can see, no failed request. So this
+   harness had been running the page with deal.css NOT APPLIED, and every
+   assertion in this file passed against an unstyled document. Found when a
+   button that is 34px square measured 4×19. If a suite here is checking a
+   size, a position or an overflow, this line is what makes the answer mean
+   anything. */
+const TYPES = { ".html": "text/html", ".js": "text/javascript", ".svg": "image/svg+xml",
+                ".css": "text/css", ".png": "image/png", ".webp": "image/webp", ".json": "application/json" };
 const srv = http.createServer((q, r) => {
   const u = q.url.split("?")[0];
   /* The history section asks for the offers room. Answered with an empty
@@ -150,6 +159,18 @@ const jsErrors = [];
 pg.on("pageerror", (e) => jsErrors.push(String(e).slice(0, 140)));
 await pg.goto(`http://localhost:${PORT}/hire.html`, { waitUntil: "domcontentloaded" });
 await pg.waitForTimeout(900);
+
+/* ── THE SHARED STYLESHEET IS ACTUALLY APPLIED ─────────────────────────────
+   A harness that serves .css as text/plain hands Chromium a stylesheet it
+   refuses, in silence — no console error, no failed request — and every size,
+   position and overflow assertion below then measures an unstyled document
+   and passes. This file was doing exactly that until a 34px button measured
+   4×19 somewhere else and gave it away. --tone-hold is declared in deal.css
+   and nowhere else. */
+ok("deal.css reached the page",
+  (await pg.evaluate(() => getComputedStyle(document.documentElement)
+    .getPropertyValue("--tone-hold").trim())).length > 0,
+  "if this is red, check the content-type this harness serves for .css");
 
 const state = () => pg.evaluate(() => ({
   job: document.querySelector('.pick[aria-checked="true"]')?.dataset.job,

@@ -759,7 +759,11 @@ if (!chromium) {
 } else {
 
   const PORT = 9443;
-  const TYPES = { ".html": "text/html", ".js": "text/javascript", ".svg": "image/svg+xml" };
+  /* ".css" was missing, and a stylesheet served as text/plain is one
+     Chromium refuses without saying so — this harness had been running
+     the page with deal.css not applied. */
+  const TYPES = { ".html": "text/html", ".js": "text/javascript", ".svg": "image/svg+xml",
+                  ".css": "text/css", ".png": "image/png", ".webp": "image/webp", ".json": "application/json" };
 
   const REAL_SESSION = fs.readFileSync(path.join(ROOT, "web/session.js"), "utf8");
   const EXPORTED = [...new Set([

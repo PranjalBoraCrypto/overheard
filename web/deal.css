@@ -292,17 +292,168 @@
   box-shadow:0 0 0 3px rgba(88,233,255,.12)}
 .field[aria-invalid="true"]{border-color:rgba(255,107,107,.55)}
 
-/* ── STATES A PAGE HAS TO HAVE AND USUALLY FORGETS ─────────────────────────
-   A skeleton says "this shape is coming"; a spinner says "something is
-   happening somewhere". The first is worth building. */
+/* ══════════════════════════════════════════════════════════════════════════
+ * WAITING
+ *
+ * A skeleton says "this shape is coming". A spinner says "something is
+ * happening somewhere". The first is worth building, and the difference is
+ * not decoration: on the orders page a page that shows "you have no orders"
+ * while it is still reading has told a returning customer something false,
+ * and corrected itself half a second later.
+ *
+ * ── THE THREE COPIES THIS REPLACES ────────────────────────────────────────
+ *
+ * Every one of the three files had its own, and two of the three were built
+ * the expensive way:
+ *
+ *   deals   .skel + .sl, animating BACKGROUND-POSITION on a 400%-wide
+ *           gradient. Background position is not a composited property. Every
+ *           frame repaints the element on the main thread, once per line, and
+ *           a loading board carried twelve of them.
+ *   orders  .skelrow, the same technique on a 300% gradient, three at a time,
+ *           and no internal shape at all — three grey bars that resemble
+ *           nothing the page is about to draw.
+ *   hire    nothing. The page reads capacity and order history on load and
+ *           showed an empty box while it did.
+ *
+ * ── WHAT THIS DOES INSTEAD ────────────────────────────────────────────────
+ *
+ * ONE ANIMATED ELEMENT PER CARD, not one per line, and it is a TRANSFORM: a
+ * single band of light travelling across the card on the compositor. Five
+ * bars pulsing out of step reads as a page glitching; one light passing over
+ * reads as a page loading. On a four-card list that is four animations
+ * instead of twenty, all of them off the main thread.
+ *
+ * AND THE SHAPE IS THE SHAPE THAT IS COMING. A silhouette that matches the
+ * real row means nothing jumps when the data lands — same height, same
+ * padding, same gaps. A grey bar of the wrong height is a layout shift with
+ * a delay on it.
+ * ═════════════════════════════════════════════════════════════════════════*/
 .skel{display:grid;gap:var(--s2)}
-.skelrow{height:64px;border-radius:var(--r2);background:var(--sunk);position:relative;overflow:hidden}
-.skelrow::after{
-  content:"";position:absolute;inset:0;
-  background:linear-gradient(90deg,transparent,rgba(147,182,192,.07),transparent);
-  transform:translateX(-100%);animation:skelsweep 1.5s var(--ease) infinite;
+.skel[hidden]{display:none}
+
+.skel-card{
+  position:relative;overflow:hidden;isolation:isolate;
+  display:grid;gap:var(--s2);align-content:start;
+  /* The real cards' padding, so the wait is the same size as the answer. */
+  padding:var(--s3);border-radius:var(--r2);
+  background:var(--sunk);border:var(--hair);
+}
+.skel-card::after{
+  content:"";position:absolute;inset:0;z-index:2;pointer-events:none;
+  background:linear-gradient(100deg,transparent 20%,rgba(147,182,192,.085) 50%,transparent 80%);
+  transform:translateX(-100%);
+  animation:skelsweep 1.6s var(--ease) infinite;
+  /* Staggered down the list, so it reads as one light moving through the
+     page rather than every card flashing in unison. --i is the card's index,
+     written by the one function that builds these. */
+  animation-delay:calc(var(--i,0) * .13s);
 }
 @keyframes skelsweep{ to{transform:translateX(100%)} }
+
+/* The parts. Nothing here has a colour of its own — one flat tint at the
+   weight of text that has not arrived. */
+.skel-row{display:flex;align-items:center;gap:var(--s2)}
+.skel-col{display:grid;gap:var(--s1);flex:1 1 auto;min-width:0}
+/* Weighted to read as "text that has not arrived" against the sunk surface
+   they sit on — light enough not to be mistaken for content, dark enough to
+   be visible on a phone in daylight, which .11 was not. */
+.skel-line,.skel-tile,.skel-pill{background:rgba(147,182,192,.15)}
+.skel-line{height:11px;border-radius:999px;width:var(--w,100%)}
+.skel-line[data-s="head"]{height:18px;border-radius:var(--r1);width:var(--w,52%)}
+.skel-line[data-s="micro"]{height:8px;width:var(--w,32%)}
+.skel-tile{flex:none;width:var(--w,38px);height:var(--h,38px);border-radius:var(--r1)}
+.skel-pill{flex:none;height:22px;width:var(--w,74px);border-radius:999px}
+.skel-gap{flex:1 1 auto}
+
+/* ── AND WHEN IT IS TAKING TOO LONG ────────────────────────────────────────
+   Four seconds is the point at which a skeleton stops being informative and
+   starts being a page that is broken in a tasteful way. This says so, and it
+   costs no JavaScript and no timer: an opacity fade with a four-second delay
+   that never runs if the skeleton is removed first.
+
+   The delay survives reduced motion on purpose. The global rule at the top of
+   this file collapses DURATION, not delay, so a visitor who asked for less
+   motion still gets the sentence — at four seconds, without the fade. */
+.skel-say{
+  padding:var(--s3) var(--s2) 0;text-align:center;
+  font-size:var(--t-small);line-height:1.6;color:var(--faint);
+  opacity:0;animation:skelsay .45s var(--ease) 4s forwards;
+}
+@keyframes skelsay{ to{opacity:1} }
+
+/* ── A CONTROL THAT IS BUSY ────────────────────────────────────────────────
+   Hire's checkout is four network steps and the button used to report them by
+   changing its own label to "Signing…", which is a button that has stopped
+   looking like it is doing anything. A ring, in the button, beside the word
+   that says which step this is — the label still carries the meaning and the
+   ring carries the fact that it is still going.
+
+   `rotate` on a bordered box: one composited property, no repaint, and no
+   image to download. */
+/* Any button, not just .btn: hire's primary control is `.go`, its own older
+   class, and the point of putting this here is that a working button looks
+   the same on all four views. */
+button[data-busy="1"]{pointer-events:none}
+button[data-busy="1"]::before{
+  content:"";width:15px;height:15px;flex:none;border-radius:50%;
+  border:2px solid currentColor;border-top-color:transparent;
+  opacity:.85;animation:btnspin .7s linear infinite;
+}
+@keyframes btnspin{ to{transform:rotate(360deg)} }
+/* Reduced motion gets a ring that does not spin rather than no ring at all:
+   the fact that the control is working is information, and it is the
+   spinning that was the preference. */
+@media (prefers-reduced-motion: reduce){
+  button[data-busy="1"]::before{border-top-color:currentColor;opacity:.45}
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+ * COPY
+ *
+ * Every one of these views puts strings on screen that are only useful
+ * somewhere else: a 56-character did:key, a 66-character contract id, an
+ * offer id, a room name, the JSON a developer is meant to post. Reading one
+ * off a screen and typing it into a terminal is where a wrong character comes
+ * from, and a did:key with a wrong character fails in a way that looks like
+ * the site being broken.
+ *
+ * ONE CONTROL, so a copy is the same gesture and the same confirmation
+ * wherever it appears. It is 34px because a 20px icon button is a target for
+ * a cursor and a miss for a thumb, and it does not change size when it
+ * succeeds — a control that grows on click moves the row underneath it.
+ * ═════════════════════════════════════════════════════════════════════════*/
+.copy{
+  display:inline-grid;place-items:center;flex:none;
+  width:34px;height:34px;padding:0;cursor:pointer;
+  border-radius:var(--r1);border:1px solid transparent;
+  color:var(--faint);background:transparent;
+  transition:color .16s var(--ease),background .16s var(--ease),border-color .16s var(--ease);
+}
+.copy svg{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:1.8;
+  stroke-linecap:round;stroke-linejoin:round;grid-area:1/1;
+  transition:opacity .18s var(--ease),transform .18s var(--ease)}
+.copy .yes{opacity:0;transform:scale(.6)}
+@media (hover:hover) and (pointer:fine){
+  .copy:hover{color:var(--blue);background:rgba(88,233,255,.09);border-color:rgba(88,233,255,.22)}
+}
+.copy:active{transform:scale(.94)}
+.copy:focus-visible{outline:none;box-shadow:var(--focus)}
+.copy[data-done="1"]{color:var(--good);background:rgba(59,227,176,.10);border-color:rgba(59,227,176,.3)}
+.copy[data-done="1"] .no{opacity:0;transform:scale(.6)}
+.copy[data-done="1"] .yes{opacity:1;transform:none}
+/* It failed. Clipboard access is refused often enough — an insecure origin, a
+   browser setting, a permission — that "nothing happened" is the wrong
+   answer; the row falls back to selecting the text so it can be copied by
+   hand, and the button says which of the two just happened. */
+.copy[data-done="no"]{color:var(--gold);border-color:rgba(242,179,61,.34)}
+
+/* A long string and its button, on one line, with the string doing the
+   shrinking. `min-width:0` on the text is the whole trick: without it a flex
+   child refuses to go below its content width and the button is pushed off
+   the end of a 360px phone. */
+.copyrow{display:flex;align-items:center;gap:var(--s1);min-width:0}
+.copyrow>.did,.copyrow>code{flex:1 1 auto;min-width:0}
 
 .blank{
   display:grid;gap:var(--s2);justify-items:center;text-align:center;
@@ -311,6 +462,91 @@
 }
 .blank b{color:var(--white);font-size:var(--t-h3)}
 .blank p{font-size:var(--t-small);line-height:1.6;max-width:44ch}
+
+/* ══════════════════════════════════════════════════════════════════════════
+ * THE (i)
+ *
+ * The disclosure control that opens an explanation, on every one of these
+ * views. It was declared TWICE — byte for byte, in the deals page and in
+ * hire, down to the comment about the font shorthand that was broken in both
+ * because it named a custom property neither file declared. Two copies of a
+ * bug is what this stylesheet exists to stop.
+ * ═════════════════════════════════════════════════════════════════════════*/
+.info{
+  display:inline-flex;align-items:center;justify-content:center;vertical-align:middle;
+  width:17px;height:17px;margin-left:6px;border-radius:50%;flex:none;
+  border:1px solid var(--edge);background:rgba(127,178,214,.08);color:var(--dim);
+  font:600 10.5px/1 var(--display);cursor:pointer;padding:0;
+  transition:color .18s,border-color .18s,background .18s,transform .18s;
+}
+.info:hover,.info[aria-expanded="true"]{color:var(--blue);border-color:var(--blue);
+  background:rgba(127,178,214,.16);transform:scale(1.12)}
+.info:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
+
+/* ══════════════════════════════════════════════════════════════════════════
+ * THE HIT AREA IS NOT THE INK
+ *
+ * MEASURED, across four views and seven widths: on a phone this product had
+ * eleven controls under 40 pixels, and three of them under 22 — a progress
+ * dot three pixels tall, a disclosure caret twelve, a "see all" link
+ * twenty-two. Every one of them is a thing somebody is meant to press with a
+ * thumb, and Apple and Google both publish 44 as the floor.
+ *
+ * The wrong fix is to make them bigger. A 44px circle beside a sentence is
+ * not an (i), it is a button with an (i) in it, and a 44px progress dot is
+ * not a progress dot. So the DRAWING does not change by a pixel and the
+ * TARGET grows underneath it: a transparent pseudo-element, centred on the
+ * control, at least 44 square, and only where the pointer is coarse. On a
+ * desktop none of this exists and a 17px (i) beside a cursor is exactly
+ * right.
+ *
+ * ── WHY THE PAGES' OWN CLASS NAMES ARE IN THE SHARED SHEET ────────────────
+ *
+ * Because CSS has no way to say "and this one too" from another file, and the
+ * alternative was this rule copied into three stylesheets. This file is
+ * loaded by exactly three pages and by nothing else; one list that names all
+ * of their small controls is one thing to keep true. A list per page is three
+ * things that agree until somebody edits one.
+ *
+ * Adding a control here is a two-second job. Forgetting to is what the sweep
+ * in scripts/probe-space.mjs is for.
+ */
+@media (pointer: coarse){
+  .info, .copy,
+  .wantbtn, .link, .raillink, .stagedots button,     /* the deals page */
+  .try, .histall, .codecopy,                         /* hire */
+  .hbtn{                                             /* the orders page */
+    position:relative;
+  }
+  .info::after, .copy::after,
+  .wantbtn::after, .link::after, .raillink::after, .stagedots button::after,
+  .try::after, .histall::after, .codecopy::after,
+  .hbtn::after{
+    content:"";position:absolute;left:50%;top:50%;
+    width:max(100%,44px);height:max(100%,44px);
+    transform:translate(-50%,-50%);
+    /* Nothing is drawn and nothing is caught that the control would not have
+       caught anyway — this sits INSIDE the control, so it is the control's
+       own hit area getting bigger, not a new object over the page. */
+  }
+  /* ── AND THE ONES WHERE THE PSEUDO DOES NOT WORK ────────────────────────
+     Three of these were measured unreachable even with the box in place, for
+     two different reasons, and both are reasons to stop being clever:
+
+       · SOMETHING PAINTS OVER IT. hire's suggestion chips sit directly under
+         the brief field, and the field's wrapper — positioned, and later in
+         the document — covers the four pixels the chip's box reaches up
+         into. A transparent target under an opaque box is not a target.
+       · THE PAGE OWNS THE POSITION. `.codecopy` is absolutely positioned in
+         the corner of a code block by hire's own stylesheet, which loads
+         after this one and wins; the pseudo then resolves its 100% against
+         the wrong box and comes out 517px tall.
+
+     For these the honest fix is the boring one: be taller. They are real
+     controls with a visible surface, so height costs nothing but height. */
+  .tab, .field, .chip, .try, .search input{min-height:44px}
+  .codecopy, .link{min-height:40px}
+}
 
 /* ── LONG TECHNICAL STRINGS ────────────────────────────────────────────────
    A did:key is 56 characters and a contract is 66. They appear on every one

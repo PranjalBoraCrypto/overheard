@@ -340,7 +340,16 @@ const asMessage = (o) => ({
   }),
 });
 
-const TYPES = { ".html": "text/html", ".js": "text/javascript", ".svg": "image/svg+xml" };
+/* ".css" IS IN HERE, AND IT WAS NOT.
+   A stylesheet served as text/plain is a stylesheet Chromium refuses, in
+   silence — no console error the page can see, no failed request. So this
+   harness had been running the page with deal.css NOT APPLIED, and every
+   assertion in this file passed against an unstyled document. Found when a
+   button that is 34px square measured 4×19. If a suite here is checking a
+   size, a position or an overflow, this line is what makes the answer mean
+   anything. */
+const TYPES = { ".html": "text/html", ".js": "text/javascript", ".svg": "image/svg+xml",
+                ".css": "text/css", ".png": "image/png", ".webp": "image/webp", ".json": "application/json" };
 /* ── THE STUB HAS TO CARRY THE WHOLE MODULE'S SURFACE ──────────────────────
    The page now mounts <overheard-bar>, and bar.js imports thirteen names from
    /session.js. A stub exporting three of them makes the browser throw
@@ -403,6 +412,10 @@ FIXTURE[LATE].accept = { ...FIXTURE[ANSWERED].accept, contract: "0x" + "cd".repe
 
 let signedInAs = DID;
 let archiveAnswers = true;
+/* A 503, as opposed to `archiveAnswers = false`, which is a 200 carrying an
+   empty list. The page has to tell those apart: one is "you have no orders"
+   and the other is "I could not look". */
+let archiveBroken = false;
 let liveOverlap = 3;
 /* What the deal room contains when the page goes looking, and what the page
    posted when it stopped. Both are the point of section K. */
@@ -423,6 +436,7 @@ const srv = http.createServer((q, r) => {
     return r.end(SESSION(signedInAs));
   }
   if (u === "/api/orders") {
+    if (archiveBroken) { r.writeHead(503, { "content-type": "application/json" }); return r.end('{"error":"upstream"}'); }
     const body = archiveAnswers
       ? JSON.stringify({ did: DID, source: "repository", orders: FIXTURE,
           days_scanned: 2, days_available: 2, window_days: 14, truncated: false })
@@ -939,6 +953,157 @@ console.log("\n=== K. the buyer can actually pay — and is never asked to pay t
   ok("signed out, no Pay button is offered at all",
     await pg.$$eval(".hbtn:not([hidden])", (n) => n.length) === 0);
   signedInAs = DID;
+  await ctx.close();
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   THE TWO EMPTY PAGES, WHICH ARE NOT THE SAME PAGE
+   ══════════════════════════════════════════════════════════════════════════
+
+   This page reads two things, and BOTH can fail. When both did, `orders` was
+   an empty array and the page went on to render "Nothing ordered yet" — to a
+   customer with nine orders. It is the same false statement the skeleton at
+   the top of orders.html exists to prevent, arriving through a different
+   door: not "empty while loading", but "empty because nobody answered".
+
+   The distinction lives in one value. readLive() used to return [] both when
+   the room was unreachable and when it held nothing, and a function that
+   cannot tell those apart makes it impossible for anything downstream to.
+   ════════════════════════════════════════════════════════════════════════ */
+console.log("\n=== I2. a read that did not happen is not an empty list");
+{
+  const state = async () => {
+    const { ctx, pg } = await open();
+    await pg.goto("http://localhost:9441/orders.html", { waitUntil: "domcontentloaded" });
+    await pg.waitForTimeout(1800);
+    const out = await pg.evaluate(() => ({
+      empty: !document.getElementById("empty").hidden,
+      unread: !document.getElementById("unread").hidden,
+      rows: document.querySelectorAll(".hrow").length,
+      retry: !!document.getElementById("retry"),
+      foot: document.getElementById("foot").textContent.trim(),
+    }));
+    return { out, ctx, pg };
+  };
+
+  archiveBroken = true; roomBroken = true;
+  {
+    const { out, ctx } = await state();
+    ok("both reads down: it does NOT say you have never ordered anything", !out.empty);
+    ok("it says it could not read them", out.unread);
+    ok("and offers a way to ask again", out.retry);
+    /* The footer used to say "the live offers room is still being shown" in
+       exactly this state, directly under a card saying nothing could be
+       read. Two sentences about the same failure, disagreeing. */
+    ok("the footer does not claim the live room is being shown",
+      !/live offers room is still being shown/.test(out.foot), out.foot.slice(0, 70));
+    await ctx.close();
+  }
+
+  /* AND THE OTHER SIDE OF IT. A page that shows "could not read" whenever a
+     list is empty is the same bug facing the other way — a first-time
+     visitor would be told the network is broken. */
+  archiveBroken = false; roomBroken = false; archiveAnswers = false;
+  const savedFixture = FIXTURE.splice(0, FIXTURE.length);
+  const savedOverlap = liveOverlap; liveOverlap = 0;
+  {
+    const { out, ctx } = await state();
+    ok("both reads fine and genuinely nothing there: it says so", out.empty && !out.unread,
+      `empty ${out.empty}, unread ${out.unread}`);
+    await ctx.close();
+  }
+  FIXTURE.push(...savedFixture);
+  liveOverlap = savedOverlap; archiveAnswers = true;
+
+  /* And that pressing the button actually re-reads, rather than only hiding
+     the card it is on. */
+  archiveBroken = true; roomBroken = true;
+  {
+    const { ctx, pg } = await state();
+    archiveBroken = false; roomBroken = false;
+    await pg.click("#retry");
+    await pg.waitForTimeout(1800);
+    const rows = await pg.$$eval(".hrow", (n) => n.length);
+    ok("and Try again brings the orders back", rows > 0, `${rows} rows`);
+    await ctx.close();
+  }
+  archiveBroken = false; roomBroken = false;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   THE COPY BUTTONS ACTUALLY COPY
+   ══════════════════════════════════════════════════════════════════════════
+
+   Two things here that a rendering test would miss.
+
+   THE FULL STRING, NOT THE VISIBLE ONE. What is on screen is `z6Mkng…Exaz`
+   and what somebody needs is all 56 characters. A button that copies its own
+   label hands them an ellipsis in the middle of a did:key, which fails
+   wherever they paste it in a way that looks like our fault and is.
+
+   AND IT SAYS SO. `navigator.clipboard` is refused often enough — an insecure
+   origin, a browser setting — that a button which silently does nothing is a
+   real outcome, so the control has a confirmed state and the test reads it
+   rather than trusting the call not to have thrown.
+   ════════════════════════════════════════════════════════════════════════ */
+console.log("\n=== I3. the copy buttons");
+{
+  const ctx = await browser.newContext({ viewport: { width: 1280, height: 1000 },
+    permissions: ["clipboard-read", "clipboard-write"] });
+  const pg = await ctx.newPage();
+  pg.on("pageerror", (e) => errs.push(String(e).slice(0, 140)));
+  await pg.goto("http://localhost:9441/orders.html", { waitUntil: "domcontentloaded" });
+  await pg.waitForTimeout(1800);
+
+  const b1 = await pg.$("#lede .copy");
+  ok("your own key has a copy button beside it", !!b1);
+  if (b1) {
+    await b1.click();
+    await pg.waitForTimeout(250);
+    const got = await pg.evaluate(() => navigator.clipboard.readText());
+    ok("and it copies the whole did:key, not the shortened one",
+      got === DID, got.length > 20 ? `${got.slice(0, 18)}… (${got.length} chars)` : got);
+    ok("the button confirms it", await b1.getAttribute("data-done") === "1");
+    /* Same box before and after. The point is not the number 34 — it is that
+       a control which grows when it succeeds moves everything beside it, and
+       a copy button sits in the middle of a sentence. */
+    const box = await b1.boundingBox();
+    ok("without changing size, which would move the sentence it is in",
+      Math.abs(box.width - box.height) < 1 && box.width >= 30 && box.width <= 36,
+      `${Math.round(box.width)}×${Math.round(box.height)}`);
+  }
+
+  /* The contract id, which is the receipt number for an order and was on
+     screen nowhere before. */
+  const b2 = await pg.$(".hact .copyrow .copy");
+  ok("an order's contract id has one too", !!b2);
+  if (b2) {
+    await b2.click();
+    await pg.waitForTimeout(250);
+    const got = await pg.evaluate(() => navigator.clipboard.readText());
+    ok("and it copies a whole contract id", /^0x[0-9a-f]{64}$/.test(got), got.slice(0, 20) + "…");
+  }
+  await ctx.close();
+}
+
+
+/* ══════════════════════════════════════════════════════════════════════════
+   THE SHARED STYLESHEET IS ACTUALLY APPLIED
+   ══════════════════════════════════════════════════════════════════════════
+   A harness that serves .css as text/plain hands Chromium a stylesheet it
+   refuses, and refuses in silence — no console error, no failed request, and
+   every size, position and overflow assertion in the file then measures an
+   unstyled document and passes. This one line is what stops that from being
+   discoverable only by accident. --tone-hold is declared in deal.css and
+   nowhere else. ══════════════════════════════════════════════════════════ */
+{
+  const { ctx, pg } = await open();
+  await pg.goto("http://localhost:9441/orders.html", { waitUntil: "domcontentloaded" });
+  await pg.waitForTimeout(900);
+  const tone = await pg.evaluate(() =>
+    getComputedStyle(document.documentElement).getPropertyValue("--tone-hold").trim());
+  ok("deal.css reached the page", tone.length > 0,
+    tone || "the shared stylesheet did not apply — check the content-type this harness serves");
   await ctx.close();
 }
 
