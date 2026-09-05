@@ -266,8 +266,29 @@ body::before{content:"";position:absolute;top:0;left:0;right:0;
     radial-gradient(70% 100% at 6% 0%,rgba(88,233,255,.10),transparent 60%),
     radial-gradient(rgba(147,182,192,.13) 1px,transparent 1.2px);
   background-size:auto,22px 22px;
-  -webkit-mask-image:linear-gradient(#000 40%,rgba(0,0,0,.34) 72%,transparent);
-  mask-image:linear-gradient(#000 40%,rgba(0,0,0,.34) 72%,transparent)}
+  /* ── AND IT FADES SIDEWAYS TOO, WHICH IS WHY THERE IS NO EDGE ──────────
+     Reported twice: a strip down the right-hand side. It is the scrollbar
+     gutter. MEASURED at 1512 and at 1280, with the scrollbar hidden and with
+     the page not scrolling at all: html and body are ten pixels narrower than
+     the window every time, because the gutter is reserved whether or not
+     anything is drawn in it. `right:0` is the edge of that box, so the field
+     ended there and the gutter stayed bare.
+     Three fixes were tried and all three left the pixels identical: 100vw
+     (clipped by body{overflow-x:hidden}), hanging the layer off the root
+     (then html needs overflow-x:clip, and clip is a clip), and moving the
+     whole thing into the canvas background (headless paints its own scrollbar
+     over it, so it cannot even be measured here).
+     So the field stops ENDING. It fades out horizontally before it gets
+     anywhere near the edge, which means there is no vertical boundary to see
+     whether the gutter is ten pixels, fifteen, or — on a Mac with overlay
+     scrollbars — none at all. A fade cannot be wrong about a width it never
+     reaches. */
+  -webkit-mask-image:linear-gradient(#000 40%,rgba(0,0,0,.34) 72%,transparent),
+                     linear-gradient(90deg,#000 68%,rgba(0,0,0,.35) 88%,transparent);
+  -webkit-mask-composite:source-in;
+  mask-image:linear-gradient(#000 40%,rgba(0,0,0,.34) 72%,transparent),
+             linear-gradient(90deg,#000 68%,rgba(0,0,0,.35) 88%,transparent);
+  mask-composite:intersect}
 /* ── THE GLOW WAS PUSHING THE PAGE SIDEWAYS ────────────────────────────────
    A 520px decorative circle hanging off the right edge is 94px of horizontal
    scroll on a 390px phone, and it was doing that before this redesign too —
@@ -3148,6 +3169,13 @@ let focused = null;
 const readHash = () => {
   const m = /^#\/deal\/(0x[0-9a-fA-F]{8,})$/.exec(location.hash || "");
   focused = m ? m[1] : null;
+  /* ── #board, BECAUSE A LINK HAS TO LAND WHERE ITS LABEL SAYS ───────────
+     This page opens on "Order from Overheard", which is an order form. The
+     order-details panels elsewhere on the site link here under the words
+     "check every signature on the deals board" — and everybody who followed
+     that link arrived at the ordering form and reported the site as broken.
+     They were right: the destination did not match the promise. */
+  if (!focused && /^#board$/.test(location.hash || "")) main = "board";
 };
 
 const everyDeal = () => [...state.wanted, ...state.offered, ...state.live, ...state.done];
@@ -3863,7 +3891,10 @@ schedule(BASE_POLL);
   requestAnimationFrame(paint);
 })();
 
-window.addEventListener("hashchange", () => { readHash(); applyView(); });
+window.addEventListener("hashchange", () => {
+  readHash(); applyView();
+  if (!focused && location.hash === "#board") $("pBoard").scrollIntoView({ block: "start" });
+});
 readHash();
 
 skeletons();

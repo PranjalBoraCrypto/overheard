@@ -1764,6 +1764,7 @@ console.log("\n=== T. what the redesign has to keep true");
         const r = document.body.getBoundingClientRect();
         return { top: cs.top, left: cs.left, right: cs.right,
                  masked: (cs.maskImage || cs.webkitMaskImage || "").includes("gradient"),
+                 mask: cs.maskImage || cs.webkitMaskImage || "",
                  wide: r.width };
       })(),
       /* And the hero must NOT have grown its own back, or the two overlap and
@@ -1794,6 +1795,15 @@ console.log("\n=== T. what the redesign has to keep true");
     tex.field.left === "0px" && tex.field.right === "0px",
     `${tex.field.left} / ${tex.field.right}`);
   ok("and fades out instead of ending on a line", tex.field.masked);
+  /* ── AND SIDEWAYS, WHICH IS THE ONE THAT WAS REPORTED TWICE ────────────
+     A vertical fade fixes the bottom edge and leaves the right one. The
+     scrollbar gutter is reserved whether or not a scrollbar is drawn in it,
+     so the field's box is ten pixels narrower than the window and `right:0`
+     put a hard vertical line exactly there. Three attempts to widen it were
+     defeated by a clip. The field fades horizontally instead, so there is no
+     edge to land anywhere. */
+  ok("and fades sideways too, so the scrollbar gutter has no edge to show",
+    /90deg/.test(tex.field.mask), tex.field.mask.slice(0, 70));
   ok("and the hero does not paint a second one over it", tex.heroClean);
   ok("the full-bleed band gets a different texture from the cards", tex.bandGrid);
   ok("and the rail, the thing you act on, is lit too", tex.rail);

@@ -1963,7 +1963,9 @@ async function loadHistory() {
 
     const go = document.createElement("a");
     go.className = "hdetgo";
-    go.href = "/deals-preview-78cb4a1be923c6b4.html";
+    /* #board — the page opens on the order form, so this link was sending
+       people back to ordering. */
+    go.href = "/deals-preview-78cb4a1be923c6b4.html#board";
     go.textContent = "Check every signature on the deals board";
     const gi = document.createElementNS("http://www.w3.org/2000/svg", "svg");
     gi.setAttribute("class", "i");
@@ -1975,6 +1977,14 @@ async function loadHistory() {
       const willOpen = det.hidden;
       det.hidden = !willOpen;
       row.setAttribute("aria-expanded", willOpen ? "true" : "false");
+      /* Only when part of it is off screen, and never on close. */
+      if (!willOpen) return;
+      requestAnimationFrame(() => {
+        const r = det.getBoundingClientRect();
+        if (r.bottom <= innerHeight && r.top >= 0) return;
+        item.scrollIntoView({ block: "nearest",
+          behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
+      });
     });
 
     const item = document.createElement("div");

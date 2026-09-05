@@ -995,7 +995,10 @@ function itemFor(o) {
      formed rather than being the only thing a row could do. */
   const go = document.createElement("a");
   go.className = "hdetgo";
-  go.href = "/deals-preview-78cb4a1be923c6b4.html";
+  /* #board, not the bare page: it opens on the ORDER FORM, so a link saying
+     "the deals board" was landing people on somewhere to place another
+     order. Reported, and fair. */
+  go.href = "/deals-preview-78cb4a1be923c6b4.html#board";
   go.textContent = "Check every signature on the deals board";
   const gi = document.createElementNS("http://www.w3.org/2000/svg", "svg");
   gi.setAttribute("class", "i");
@@ -1009,6 +1012,19 @@ function itemFor(o) {
     const open = det.hidden;
     det.hidden = !open;
     row.setAttribute("aria-expanded", open ? "true" : "false");
+    /* ── BRING IT INTO VIEW, BECAUSE OPENING IT USUALLY PUSHES IT OUT ─────
+       A panel this tall opening under a row near the bottom of the screen
+       leaves the reader looking at the row and nothing else, with the thing
+       they asked for below the fold. Only ever scrolls when part of the panel
+       is actually off screen, and never on close — a page that jumps when you
+       put something away is worse than one that does not move at all. */
+    if (!open) return;
+    requestAnimationFrame(() => {
+      const r = det.getBoundingClientRect();
+      if (r.bottom <= innerHeight && r.top >= 0) return;
+      const behaviour = matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth";
+      wrap.scrollIntoView({ block: "nearest", behavior: behaviour });
+    });
   });
 
   if (act) wrap.append(row, act, det); else wrap.append(row, det);
