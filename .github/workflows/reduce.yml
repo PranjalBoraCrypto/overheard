@@ -1,28 +1,46 @@
 # Replace this repository's history with the same files and none of the past.
 #
-# WHY. GitHub reports 88 GB eleven days after this repository was created,
-# against a documented recommended maximum of 10. Of 2,150 commits, 1,906 are
-# machine commits from overheard-archiver and every one of them touches
-# nothing outside web/data — they carry the whole weight and none of the
-# meaning. Rebuilt without them the same files come to 0.901 GB, measured, in
-# PranjalBoraCrypto/overheard2.
+# WHY. GitHub reports 88.5 GB twelve days after this repository was created,
+# against a documented recommended maximum of 10, and the server has started
+# answering pushes with "Repository is approaching its size quota". Of 2,163
+# commits, 1,926 are machine commits from overheard-archiver and every one of
+# them touches nothing outside web/data — they carry the whole weight and none
+# of the meaning. Rebuilt without them the same files come to 0.901 GB,
+# measured, in PranjalBoraCrypto/overheard2.
 #
 # GitHub Support declined to run maintenance (free plan, self-service only),
-# so a repack on request is not available. This is the other lever: force-push
-# a history that does not contain the old objects, and let them become
-# unreachable. Whether GitHub then reclaims them is THEIR schedule and not
-# something this can make happen — if the size has not moved in a day, the
-# answer is a fresh repository instead, which overheard2 already is.
+# so a repack on request is not available. This is the other lever: force main
+# onto a history that does not contain the old objects, and let them become
+# unreachable. Whether GitHub then reclaims them is THEIR schedule.
 #
-# NOTHING IS LOST IF IT DOES NOT WORK. The files are identical either way, and
-# what stops being reachable is 1,906 commits recording what standings.json
-# looked like at 04:15 on 30 August.
+# NOTHING IS LOST IF IT DOES NOT WORK. The files are identical either way.
 #
-# IT IS SAFE TO RUN WHILE THE ARCHIVER IS COLLECTING. A rejected push sends
-# archive.yml down its retry path, which does `git reset --mixed origin/main`
-# — that keeps the working tree and re-commits this pass's data on top of
-# whatever landed. Read that block before assuming otherwise; it was written
-# after a run built 52 commits and published none of them.
+# ── WHY THIS IS IN TWO PUSHES, WHICH IS THE WHOLE DESIGN ───────────────────
+#
+# The first two attempts rebuilt perfectly and then died on the push with:
+#
+#   ! [remote rejected] clean -> main (cannot lock ref 'refs/heads/main':
+#     is at ae43cd73 but expected 80d91cd7)
+#   real 6m50s
+#
+# That is not a permissions problem and not a force problem. A push names the
+# ref value it saw when it opened the connection, and the server refuses if
+# the ref has moved by the time the pack finishes arriving. The pack took SIX
+# MINUTES AND FIFTY SECONDS — the server has to check the new objects against
+# 88 GB — and the archiver commits every FIVE MINUTES. The race is not close
+# and no number of retries wins it.
+#
+# So the slow part is moved off the contested ref entirely. The whole rebuilt
+# history goes up first under a TAG, where nothing is racing anything and it
+# can take its seven minutes in peace. Once those objects are on the server,
+# main needs one commit and two trees — a push of a few kilobytes, over in
+# seconds — and it is sent with --force-with-lease so that if the archiver
+# still manages to land in that window, the push is refused rather than
+# silently eating a commit, and the loop simply rebuilds and tries again.
+#
+# THE ARCHIVER IS NEVER STOPPED AND NEVER LOSES A MESSAGE. The alternative
+# was to disable the workflow and cancel its in-flight run for the duration,
+# which would have cost ten minutes of rooms that cannot be collected twice.
 name: reduce
 
 on:
@@ -67,7 +85,7 @@ jobs:
           set -euo pipefail
           # ANNOTATIONS, NOT LOG LINES. The runner's log endpoint redirects to
           # a blob store this project cannot reach, so a failure that says only
-          # "exit code 128" is all anybody gets. Annotations survive into the
+          # "exit code 1" is all anybody gets. Annotations survive into the
           # API. GitHub keeps the first ten notices per step, so these are
           # milestones and not a running commentary.
           say() { echo "::notice title=rebuild::$*"; }
@@ -78,11 +96,7 @@ jobs:
 
           echo "== source"; git log --oneline -1 "$BASE"
           TOTAL=$(git rev-list --count "$BASE")
-          echo "   $TOTAL commits, $(git rev-list --merges "$BASE" | wc -l) of them merges"
 
-          # Of 2,145 commits, 1,906 are machine commits from overheard-archiver
-          # and every one of them — checked, all 1,906 — touches nothing outside
-          # web/data. They carry the weight and none of the meaning.
           mapfile -t COMMITS < <(git log --reverse --format='%H%x09%an' "$BASE" \
             | awk -F'\t' '$2 != "overheard-archiver" { print $1 }')
           say "${#COMMITS[@]} human commits to replay out of $TOTAL"
@@ -93,15 +107,10 @@ jobs:
           # 142,000 index entries read-tree would have expanded — which was
           # measured at over three minutes for forty commits.
           #
-          # --missing IS LOAD-BEARING, and its absence is what failed the first
-          # two attempts with a bare "exit code 128". By default mktree checks
-          # that every entry it is given names an object that exists here. This
-          # is a blob:none clone: the blobs deliberately do not exist here. On a
-          # runner that is a hard failure on the first commit. On a desktop it
-          # was worse than a failure — mktree quietly triggered a lazy fetch per
-          # entry, which is why the same rebuild took 2m41s there and why the
-          # cause stayed hidden.
-          #
+          # --missing IS LOAD-BEARING. By default mktree checks that every
+          # entry it is given names an object that exists here. This is a
+          # blob:none clone: the blobs deliberately do not exist here. Without
+          # it this fails on the first commit with a bare "exit code 128".
           # Skipping the check is right rather than merely expedient: every one
           # of these objects exists on the server the trees came from, and the
           # push is what proves it.
@@ -141,33 +150,17 @@ jobs:
           done
           say "kept $KEPT, skipped $SKIPPED that only touched web/data"
 
+          # `spine` is the code history and nothing else: every human commit,
+          # no archive at any point in it. The commit that carries the archive
+          # is built fresh at landing time, against whatever main holds then,
+          # so that nothing the archiver collected while this ran is dropped.
+          git branch -f spine "$PREV"
+
           unset GIT_AUTHOR_NAME GIT_AUTHOR_EMAIL GIT_AUTHOR_DATE
           unset GIT_COMMITTER_NAME GIT_COMMITTER_EMAIL GIT_COMMITTER_DATE
-          cat > /tmp/msg <<'MSG'
-          The archive as it stands, with none of the ten days it took to collect
-
-          Technocore rooms hold about two hundred messages and forget the rest
-          within minutes, so this data cannot be collected twice and cannot be
-          regenerated. That is why it is here at all, and why the repository
-          could not simply be started again empty.
-
-          Its HISTORY is worth nothing. Nobody needs to know what standings.json
-          looked like at 04:15 on 30 August. That history was 1,906 machine
-          commits and about 87 GB of repository, because a profile shard was
-          rewritten whole every time one identity in it posted, ninety-six
-          times a day.
-
-          So the archive arrives as one commit: every file exactly as the old
-          main had it, and no record of how it got that way. The commits above
-          are the ones a person wrote.
-          MSG
-          FINAL=$(git commit-tree "$(git rev-parse "$BASE^{tree}")" -p "$PREV" -F /tmp/msg)
+          FINAL=$(git commit-tree "$(git rev-parse "$BASE^{tree}")" -p "$PREV" -m "preload")
           git branch -f clean "$FINAL"
 
-          echo "== result"
-          echo "   $(git rev-list --count clean) commits on clean, against $TOTAL"
-          # The one check that matters: the new tip must hold exactly the files
-          # the old tip held. Same tree object, or this has lost something.
           A=$(git rev-parse "$BASE^{tree}"); B=$(git rev-parse clean^{tree})
           if [ "$A" = "$B" ]; then say "tip tree identical to $BASE — not one file differs"
           else echo "::error title=rebuild::TREES DIFFER $A vs $B"; exit 1; fi
@@ -175,59 +168,118 @@ jobs:
           SCRIPT
           bash /tmp/rebuild.sh
 
-      - name: force main onto it
+      - name: send the objects up under a tag, where nothing is racing
         env:
           TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
           cd src
-          OLD=$(git rev-parse origin/main)
-          NEW=$(git rev-parse clean)
-          # The old tip, recorded where it survives the force-push. GitHub keeps
-          # unreachable commits addressable by SHA for a while, so this is the
-          # thread back if anything about this turns out to be wrong.
-          echo "::notice title=reduce::old tip $OLD — recoverable by SHA for a while yet"
-
-          # THE LAST GUARD BEFORE SOMETHING IRREVERSIBLE. The replay already
-          # compared trees and exits non-zero if they differ, so reaching here
-          # means the files are identical. This checks the other half: that the
-          # history is a plausible size rather than one commit or none, which
-          # is what a subtly broken replay would produce while still matching
-          # on trees.
-          N=$(git rev-list --count clean)
-          if [ "$N" -lt 200 ]; then
-            echo "::error title=reduce::only $N commits rebuilt — refusing to force-push"; exit 1
-          fi
-
-          # Nothing is sent that the server does not already have except a
-          # couple of hundred commits and their trees: every blob in `clean` is
-          # a blob that is already here. This is seconds, not minutes.
           git remote add self "https://x-access-token:$TOKEN@github.com/$REPO.git"
-          # THE PUSH OUTPUT HAS TO SURVIVE. The runner's log endpoint redirects
-          # to a blob store this project cannot read, so the first attempt at
-          # this failed with nothing but "exit code 1" and no way to learn why.
-          # Everything git says goes into an annotation, success or failure.
+          # A TAG AND NOT A BRANCH, deliberately. A new branch would have
+          # Vercel build a preview deployment of 207,000 files for a ref that
+          # exists for four minutes. Tags do not trigger it. Nothing here
+          # watches tags either — archive and reduce are schedule and dispatch.
           set +e
-          ( time git push self "clean:refs/heads/main" --force ) > /tmp/push.log 2>&1
+          ( time git push self "clean:refs/tags/reduce-preload" --force ) > /tmp/pre.log 2>&1
           RC=$?
           set -e
-          FLAT=$(tail -c 1400 /tmp/push.log | tr '\n' '|' | tr -s ' ')
-          if [ "$RC" -ne 0 ]; then
-            echo "::error title=push failed rc=$RC::$FLAT"; exit 1
-          fi
-          echo "::notice title=push output::$FLAT"
-          echo "::notice title=reduce::main moved from $OLD to $NEW, $N commits"
+          FLAT=$(tail -c 1200 /tmp/pre.log | tr '\n' '|' | tr -s ' ')
+          if [ "$RC" -ne 0 ]; then echo "::error title=preload failed rc=$RC::$FLAT"; exit 1; fi
+          echo "::notice title=preload::$FLAT"
 
-          # And leave the old tip reachable NOWHERE. A backup branch would keep
-          # every one of the 88 GB of objects alive and defeat the entire
-          # exercise; overheard2 is the backup, and it is a whole repository.
-
-      - name: and say what the size does
+      - name: land it on main, in seconds, without stopping the archiver
         env:
           TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO: ${{ github.repository }}
         run: |
+          set -euo pipefail
+          cd src
+          PREV=$(git rev-parse spine)
+          BASETIP=$(git rev-parse origin/main)
+
+          cat > /tmp/final-msg <<'MSG'
+          The archive as it stands, with none of the twelve days it took to collect
+
+          Technocore rooms hold about two hundred messages and forget the rest
+          within minutes, so this data cannot be collected twice and cannot be
+          regenerated. That is why it is here at all, and why the repository
+          could not simply be started again empty.
+
+          Its HISTORY is worth nothing. Nobody needs to know what standings.json
+          looked like at 04:15 on 30 August. That history was 1,926 machine
+          commits and about 88 GB of repository, because a profile shard was
+          rewritten whole every time one identity in it posted, and there were
+          only 256 of them to rewrite.
+
+          So the archive arrives as one commit: every file exactly as main had
+          it a moment ago, and no record of how it got that way. The commits
+          above are the ones a person wrote.
+          MSG
+
+          for TRY in 1 2 3 4 5 6; do
+            git fetch -q origin main
+            EXPECT=$(git rev-parse origin/main)
+
+            # A human commit landing mid-run would not be in `spine` and would
+            # be dropped on the floor by this. It has never happened — the only
+            # things that commit here between a dispatch and a landing are the
+            # archiver's — but dropping somebody's work silently is exactly the
+            # class of failure this whole exercise exists to stop.
+            NEWHUMAN=$(git log --format='%an' "$BASETIP..$EXPECT" | grep -cv '^overheard-archiver$' || true)
+            if [ "$NEWHUMAN" -ne 0 ]; then
+              echo "::error title=reduce::$NEWHUMAN human commit(s) landed since the clone — re-run rather than lose them"; exit 1
+            fi
+
+            # The archive as one commit, on top of the code history, carrying
+            # whatever main holds RIGHT NOW. Everything it points at is already
+            # on the server: the trees came from the preload, the blobs have
+            # been there all along.
+            FINAL=$(git commit-tree "$EXPECT^{tree}" -p "$PREV" -F /tmp/final-msg)
+            N=$(git rev-list --count "$FINAL")
+
+            # THE LAST GUARD BEFORE SOMETHING IRREVERSIBLE. The replay already
+            # compared trees and exits non-zero if they differ, so reaching
+            # here means the files are identical. This checks the other half:
+            # that the history is a plausible size rather than one commit or
+            # none, which is what a subtly broken replay would produce while
+            # still matching on trees.
+            if [ "$N" -lt 200 ]; then
+              echo "::error title=reduce::only $N commits rebuilt — refusing to force main"; exit 1
+            fi
+
+            # --force-with-lease AND NOT --force. If the archiver lands in the
+            # second between reading EXPECT and this arriving, a plain --force
+            # would erase that commit's data for good. This is refused instead,
+            # and the loop rebuilds on top of it.
+            set +e
+            git push self "$FINAL:refs/heads/main" \
+              --force-with-lease="refs/heads/main:$EXPECT" > /tmp/land.log 2>&1
+            RC=$?
+            set -e
+            FLAT=$(tail -c 700 /tmp/land.log | tr '\n' '|' | tr -s ' ')
+            if [ "$RC" -eq 0 ]; then
+              echo "::notice title=reduce::main moved from $EXPECT to $FINAL, $N commits, attempt $TRY"
+              echo "$EXPECT" > /tmp/old-tip
+              exit 0
+            fi
+            echo "attempt $TRY refused: $FLAT"
+            BASETIP=$EXPECT
+            sleep 5
+          done
+          echo "::error title=reduce::six attempts all refused — $FLAT"; exit 1
+
+      - name: take the tag back down, and say what the size does
+        if: always()
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+        run: |
+          cd src || exit 0
+          # The tag has to go or it keeps the whole rebuilt history reachable
+          # twice over, which is harmless in itself but leaves a ref nobody
+          # will remember the meaning of in a month.
+          git push self --delete refs/tags/reduce-preload 2>&1 | tail -2 || true
           # Expected to read unchanged. GitHub computes this asynchronously and
           # only frees unreachable objects during its own maintenance, so the
           # number that matters is tomorrow's, not this one. Recorded anyway so
