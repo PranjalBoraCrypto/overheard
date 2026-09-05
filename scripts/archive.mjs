@@ -635,10 +635,47 @@ async function writeAtomic(file, text) {
  * directory was staged on every third pass, and there is nothing a visitor
  * can do with a profile that is fifteen minutes fresher rather than ninety.
  * ═════════════════════════════════════════════════════════════════════════*/
-export const SHARD_CHARS = 3;
+/* ── AND THEN A SECOND TIME, TO FOUR ───────────────────────────────────────
+ *
+ * Three characters was measured on the live network the same morning it
+ * shipped, and it was not enough. 4,096 shards over what turned out to be
+ * 1.28 GB of profiles is 320 KB each, and the fifteen hundred identities who
+ * post in an hour still land in about a third of the buckets — 390 MB of new
+ * objects per publish, down from 1,279 but nowhere near done.
+ *
+ * FOUR characters is 65,536 shards of about 20 KB. Now fifteen hundred
+ * identities touch about fifteen hundred buckets, each one small, and a
+ * publish writes 30 MB rather than 390. That is where the arithmetic stops
+ * being interesting: below this the per-file overhead — a git object header,
+ * a thirty-byte tree entry, one more thing for a static host to walk —
+ * starts to cost more than the bytes it saves.
+ *
+ * NESTED, ab/cd.json, and not because git cares. Git sees the same work
+ * either way: one flat tree of 65,536 entries is 2 MB rewritten per commit,
+ * and 256 leaf trees of 256 entries is the same 2 MB. It is nested because
+ * 65,536 files in a single directory is a directory nothing enjoys reading —
+ * not a person, not a build step, not a file walker with a timeout.
+ *
+ * WHAT WAS CHECKED FIRST. Vercel documents a 15,000-file ceiling, and it is
+ * for CLI deployments; this site deploys through the git integration and
+ * already ships 141,884 files. This takes it to about 207,000, which is
+ * unproven rather than known — so both readers try the new name and then the
+ * old, and a deployment that chokes on the file count degrades to the
+ * previous layout instead of to a blank card.
+ * ═════════════════════════════════════════════════════════════════════════*/
+export const SHARD_CHARS = 4;
 export const shardOf = (did) =>
   createHash("sha256").update(did, "utf8").digest("hex").slice(0, SHARD_CHARS);
-const OLD_SHARD = /^[0-9a-f]{2}\.json$/;
+
+/** Where a shard lives, relative to the profiles directory. */
+export const shardPath = (shard) =>
+  shard.length > 3 ? `${shard.slice(0, 2)}/${shard.slice(2)}.json` : `${shard}.json`;
+
+/* Everything at the top level with a short name is a previous layout. Both
+   of them: this repository ran two characters for eleven days and three for
+   about an hour, and a migration that knew only about the older one would
+   have stranded whatever the newer one had already written. */
+const OLD_SHARD = /^[0-9a-f]{2,3}\.json$/;
 
 async function loadState() {
   return {
@@ -690,30 +727,40 @@ async function writeShard(state, shard) {
   const body = Object.keys(bucket).sort()
     .map((did) => ` ${JSON.stringify(did)}:${JSON.stringify(bucket[did])}`)
     .join(",\n");
-  await writeAtomic(path.join(OUT, "profiles", `${shard}.json`), `{\n${body}\n}\n`);
+  const file = path.join(OUT, "profiles", shardPath(shard));
+  /* The nesting means a shard's directory may not exist yet. mkdir is cheap
+     and idempotent; getting this wrong loses a shard silently, because
+     writeAtomic's rename would fail into a catch nobody is watching. */
+  await mkdir(path.dirname(file), { recursive: true });
+  await writeAtomic(file, `{\n${body}\n}\n`);
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
- * THE ONE-TIME MOVE FROM 256 SHARDS TO 4,096
+ * THE ONE-TIME MOVE ONTO WHATEVER THE CURRENT LAYOUT IS
  *
- * Without this the widening would be silent data loss of the worst kind. The
- * archiver reads a shard on demand — profileShard() — and a read of a file
- * that does not exist returns {}. So on the first pass after the change, the
- * ~150 identities seen in that window would be written into new three-
- * character shards holding only themselves, the 256 two-character files would
- * sit there unread, and the card page — which now asks for the new name —
- * would report 97,000 identities as never having spoken. Nothing would throw
- * and no test that did not know to look would notice.
+ * Without this a widening is silent data loss of the worst kind. The archiver
+ * reads a shard ON DEMAND — profileShard() — and a read of a file that does
+ * not exist returns {}. So on the first pass after a change, the identities
+ * seen in that one window get written into new shards holding only
+ * themselves, the old files sit there unread, and the card page — which now
+ * asks for the new name — reports every identity on the network as never
+ * having spoken. Nothing throws. No test that did not know to look notices.
  *
- * So every old shard is read, its identities redistributed by the new rule,
- * and the old file removed, before anything else runs. Sixteen new shards out
- * of each old one, since it is the third hex character that is new.
+ * So every file still at the top level is read, its identities redistributed
+ * by the current rule, and the old file removed, before anything else runs.
  *
- * IT MERGES RATHER THAN OVERWRITES. A run that is interrupted halfway leaves
- * some identities in the new layout and some still in the old; the next run
- * has to finish the job without discarding what the first one wrote. And it
- * costs nothing once done — the filter finds no two-character files and it
- * returns immediately, on every pass for the rest of the archive's life.
+ * IT HANDLES BOTH PREVIOUS LAYOUTS. This repository ran two characters for
+ * eleven days and three for about an hour, so a migration that knew only
+ * about the older one would have stranded everything the newer one had
+ * already written. OLD_SHARD matches any short name at the top level, and
+ * the current layout is nested, so "at the top level" is itself the test for
+ * "not yet moved" — there is nothing to keep in step.
+ *
+ * IT MERGES RATHER THAN OVERWRITES. A run interrupted halfway leaves some
+ * identities moved and some not; the next run has to finish the job without
+ * discarding what the first one wrote. And it costs nothing once done — the
+ * filter finds no short names, and it returns immediately, on every pass for
+ * the rest of the archive's life.
  * ═════════════════════════════════════════════════════════════════════════*/
 export async function migrateShards(state) {
   const dir = path.join(OUT, "profiles");
@@ -746,8 +793,8 @@ export async function migrateShards(state) {
        walks every entry in it and sorts them, which on the migration pass
        would be a 2.7-million-element sort for a list of sixty.
 
-       Safe because the first two characters are PRESERVED: everything in
-       `ab.json` goes to `ab0`…`abf` and no other old shard can ever write
+       Safe because the leading characters are PRESERVED: everything in
+       `ab.json` goes to `ab00`…`abff` and nothing in `cd.json` can ever land
        there. Each new shard is finished the moment its parent is, so nothing
        here will be read again — and if the run does need one later,
        profileShard() reads it back from disk. */
@@ -760,7 +807,7 @@ export async function migrateShards(state) {
 
 export async function profileShard(state, shard) {
   if (!state.profiles.has(shard)) {
-    state.profiles.set(shard, await readJson(path.join(OUT, "profiles", `${shard}.json`), {}));
+    state.profiles.set(shard, await readJson(path.join(OUT, "profiles", shardPath(shard)), {}));
   }
   return state.profiles.get(shard);
 }
@@ -1382,7 +1429,11 @@ async function writeStandings() {
   const uniq = new Map(), rooms = new Map(), hours = new Map();
   let identities = 0, active = 0, activePerfect = 0, activeHigh = 0, activeLow = 0;
 
-  for (const file of (await readdir(dir)).filter((f) => f.endsWith(".json"))) {
+  /* RECURSIVE, because the shards are nested now. A flat readdir here would
+     have returned 256 DIRECTORY names, matched none of them against .json,
+     and quietly computed the standings of nobody — every figure on the card
+     page zero, with no error anywhere. */
+  for (const file of (await readdir(dir, { recursive: true })).filter((f) => f.endsWith(".json"))) {
     const bucket = await readJson(path.join(dir, file), {});
     for (const p of Object.values(bucket)) {
       identities++;
@@ -1624,7 +1675,24 @@ async function main() {
   state.sched = sched;
   state.produced = 0;
   const deadline = started + RUN_MS;
-  const STANDINGS_MS = Math.max(FLUSH_MS, 240_000);
+  /* ── WHY THIS IS TEN MINUTES AND NOT FOUR ────────────────────────────────
+     writeStandings re-reads every shard on disk, and MEASURED on the real
+     archive that is 2,758,760 identities and 815 MB of JSON.parse: 11.2
+     seconds when the profiles were 256 files, 19.5 now that they are 65,536.
+     The bytes are identical; the extra eight seconds are 65,280 more file
+     opens, which is the price of the shard width and worth paying.
+
+     What is NOT worth paying is nineteen seconds of blocked event loop every
+     four minutes — eight per cent of a run spent recomputing a histogram
+     that decides where a card sits in a ranking. Ten minutes is the same
+     number to any reader and a third of the cost.
+
+     The real fix is to stop re-reading shards that have not changed and keep
+     a running aggregate instead; that is an arithmetic refactor of the
+     standings themselves and does not belong in a commit about shard width.
+     The end-of-run flush still passes `true`, so the published figures are
+     always computed from a complete final read. */
+  const STANDINGS_MS = Math.max(FLUSH_MS, 600_000);
   let lastFlush = started, lastStandings = 0, lastRoster = started;
   const inflight = new Set();
   let flushing = null, rostering = null;

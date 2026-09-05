@@ -53,10 +53,14 @@ const ok = (n, c, note = "") => {
    OUT is resolved once, at module load. */
 const OUT = fs.mkdtempSync(path.join(os.tmpdir(), "shards-"));
 process.env.OUT_DIR = OUT;
-const { migrateShards, shardOf, SHARD_CHARS, profileShard } = await import("../scripts/archive.mjs");
+const { migrateShards, shardOf, shardPath, SHARD_CHARS, profileShard } = await import("../scripts/archive.mjs");
 
 const hex = (did) => createHash("sha256").update(did, "utf8").digest("hex");
-const oldShard = (did) => hex(did).slice(0, 2);
+/* Both layouts this has been through. Two characters ran for eleven days,
+   three for about an hour, and the migration has to be able to pick up from
+   either — an interrupted widening leaves a directory holding some of each. */
+const shard2 = (did) => hex(did).slice(0, 2);
+const shard3 = (did) => hex(did).slice(0, 3);
 
 /* ── the fixture ──────────────────────────────────────────────────────────
    Enough identities that every one of the sixteen sub-shards of at least one
@@ -72,13 +76,16 @@ const record = (i) => ({ count: i + 1, unique: (i % 7) + 1, templates: i % 3,
   first: "2026-08-29T02:37:26.020678Z", last: "2026-09-03T10:51:30.982888Z",
   last_room: "lobby", last_text: "a line of text, number " + i });
 
-function writeOldLayout() {
+/* `rule` picks which previous layout to lay down. Passing a mix of both is
+   the interrupted-widening case, which section D uses. */
+function writeOldLayout(rule = shard2, which = () => true) {
   const dir = path.join(OUT, "profiles");
-  fs.rmSync(dir, { recursive: true, force: true });
+  if (which === true) { fs.rmSync(dir, { recursive: true, force: true }); }
   fs.mkdirSync(dir, { recursive: true });
   const buckets = new Map();
   dids.forEach((did, i) => {
-    const s = oldShard(did);
+    if (!which(did, i)) return;
+    const s = rule(did);
     if (!buckets.has(s)) buckets.set(s, {});
     buckets.get(s)[did] = record(i);
   });
@@ -88,35 +95,50 @@ function writeOldLayout() {
   }
   return buckets.size;
 }
+const fresh = () => fs.rmSync(path.join(OUT, "profiles"), { recursive: true, force: true });
 
+/* Recursive: the layout is nested now, and a flat read here would have found
+   256 directories, matched none of them, and reported the archive as empty —
+   which is the failure this file exists to catch, arriving in the test. */
 const readAll = () => {
   const dir = path.join(OUT, "profiles");
   const out = new Map();               // did -> [shardName, record]
-  for (const f of fs.readdirSync(dir)) {
-    const j = JSON.parse(fs.readFileSync(path.join(dir, f), "utf8"));
-    for (const [did, v] of Object.entries(j)) out.set(did, [f.replace(/\.json$/, ""), v]);
+  for (const f of fs.readdirSync(dir, { recursive: true })) {
+    const full = path.join(dir, f);
+    if (!f.endsWith(".json") || !fs.statSync(full).isFile()) continue;
+    const j = JSON.parse(fs.readFileSync(full, "utf8"));
+    for (const [did, v] of Object.entries(j))
+      out.set(did, [f.replace(/\.json$/, "").replace(/[\\/]/g, ""), v]);
   }
   return out;
 };
+const shortNames = () => fs.readdirSync(path.join(OUT, "profiles"))
+  .filter((f) => /^[0-9a-f]{2,3}\.json$/.test(f));
 
 console.log("=== A. the rule itself");
-ok("the shard is three hex characters", SHARD_CHARS === 3, String(SHARD_CHARS));
-ok("and it is the first three of SHA-256 of the did",
-  dids.every((d) => shardOf(d) === hex(d).slice(0, 3)));
+ok("the shard is four hex characters", SHARD_CHARS === 4, String(SHARD_CHARS));
+ok("and it is the first four of SHA-256 of the did",
+  dids.every((d) => shardOf(d) === hex(d).slice(0, 4)));
+ok("and it is stored nested, two characters then two",
+  dids.every((d) => shardPath(shardOf(d)) === `${hex(d).slice(0,2)}/${hex(d).slice(2,4)}.json`),
+  shardPath(shardOf(dids[0])));
 /* 4,096 possible shards over 97,000 identities is about 24 each. The fixture
    is smaller, so what is checked is that the hash SPREADS — a rule that put
    everything in one shard would pass every other test here and fix nothing. */
 {
   const seen = new Set(dids.map(shardOf));
-  ok("900 identities land in hundreds of different shards, not a handful",
-    seen.size > 700, `${seen.size} shards`);
-  const old = new Set(dids.map(oldShard));
-  ok("where two characters put them in far fewer", old.size < 300, `${old.size} shards`);
+  ok("900 identities land in nearly 900 different shards",
+    seen.size > 880, `${seen.size} shards`);
+  ok("where three characters shared them out", new Set(dids.map(shard3)).size < 880,
+    `${new Set(dids.map(shard3)).size} shards`);
+  ok("and two characters crammed them together", new Set(dids.map(shard2)).size < 300,
+    `${new Set(dids.map(shard2)).size} shards`);
 }
 
 console.log("\n=== B. the move loses nothing");
 {
-  const before = writeOldLayout();
+  fresh();
+  const before = writeOldLayout(shard2);
   const originals = readAll();
   ok("the fixture starts in the old layout", before > 100 && originals.size === dids.length,
     `${before} old shards, ${originals.size} identities`);
@@ -139,12 +161,14 @@ console.log("\n=== B. the move loses nothing");
   ok("in the shard the readers compute", misplaced.length === 0,
     misplaced.slice(0, 2).map((d) => `${after.get(d)?.[0]} ≠ ${shardOf(d)}`).join(" "));
 
-  const left = fs.readdirSync(path.join(OUT, "profiles")).filter((f) => /^[0-9a-f]{2}\.json$/.test(f));
-  ok("and no two-character file is left to be served instead", left.length === 0, left.join(" "));
-  ok("the files really are smaller now",
-    Math.max(...fs.readdirSync(path.join(OUT, "profiles"))
-      .map((f) => fs.statSync(path.join(OUT, "profiles", f)).size))
-    < 40 * 1024, "largest shard");
+  ok("and no short name is left at the top level to be served instead",
+    shortNames().length === 0, shortNames().join(" "));
+  const sizes = fs.readdirSync(path.join(OUT, "profiles"), { recursive: true })
+    .map((f) => path.join(OUT, "profiles", f))
+    .filter((f) => f.endsWith(".json") && fs.statSync(f).isFile())
+    .map((f) => fs.statSync(f).size);
+  ok("the files really are smaller now", Math.max(...sizes) < 8 * 1024,
+    `largest ${Math.max(...sizes)} bytes`);
 }
 
 console.log("\n=== C. it is safe to run again, and it will be, forever");
@@ -160,11 +184,12 @@ console.log("\n=== C. it is safe to run again, and it will be, forever");
 console.log("\n=== D. a run interrupted halfway");
 {
   /* The runner is killed mid-migration and the next pass has to finish it.
-     Simulated by leaving the old layout in place AND writing a partial new
-     one first — which is exactly the state an interrupted run leaves behind,
-     and the state where a migration that OVERWRITES rather than merges eats
-     the identities the first attempt had already saved. */
-  writeOldLayout();
+     Simulated by leaving old files in place AND writing a partial new layout
+     first — exactly the state an interrupted run leaves behind, and the state
+     where a migration that OVERWRITES rather than merges eats the identities
+     the first attempt had already saved. */
+  fresh();
+  writeOldLayout(shard2);
   const dir = path.join(OUT, "profiles");
   const early = dids.slice(0, 40);
   const partial = new Map();
@@ -175,7 +200,9 @@ console.log("\n=== D. a run interrupted halfway");
   }
   for (const [s, b] of partial) {
     const body = Object.keys(b).sort().map((d) => ` ${JSON.stringify(d)}:${JSON.stringify(b[d])}`).join(",\n");
-    fs.writeFileSync(path.join(dir, `${s}.json`), `{\n${body}\n}\n`);
+    const f = path.join(dir, shardPath(s));
+    fs.mkdirSync(path.dirname(f), { recursive: true });
+    fs.writeFileSync(f, `{\n${body}\n}\n`);
   }
 
   const state = { profiles: new Map() };
@@ -184,11 +211,44 @@ console.log("\n=== D. a run interrupted halfway");
   ok("every identity is present after the second attempt", after.size === dids.length, `${after.size}`);
   ok("nothing the first attempt wrote was thrown away",
     early.every((d) => after.get(d) && after.get(d)[0] === shardOf(d)));
-  const left = fs.readdirSync(dir).filter((f) => /^[0-9a-f]{2}\.json$/.test(f));
-  ok("and the old files are gone this time too", left.length === 0, left.join(" "));
+  ok("and the old files are gone this time too", shortNames().length === 0, shortNames().join(" "));
 }
 
-console.log("\n=== E. the three copies of the rule agree");
+/* ════════════════════════════════════════════════════════════════════════
+   BOTH PREVIOUS LAYOUTS AT ONCE
+   ════════════════════════════════════════════════════════════════════════
+
+   This is not hypothetical and it is not a corner. The widening to three
+   characters shipped at 10:16 and the widening to four went out the same
+   day, so a directory can genuinely hold two-character files that the first
+   migration never reached AND three-character files that it wrote. A
+   migration that knew only about the older name would leave every
+   three-character file sitting at the top level, unread — the exact silent
+   emptying this whole file exists to prevent, one layout later.
+   ════════════════════════════════════════════════════════════════════════ */
+console.log("\n=== E. a directory holding both old layouts");
+{
+  fresh();
+  const half = (d, i) => i % 2 === 0;
+  const other = (d, i) => i % 2 === 1;
+  writeOldLayout(shard2, half);          // the ones the first migration missed
+  writeOldLayout(shard3, other);         // the ones it had already moved
+  const before = shortNames();
+  ok("the directory starts with both name lengths in it",
+    before.some((f) => f.length === 7) && before.some((f) => f.length === 8),
+    `${before.filter((f) => f.length === 7).length} two-char, ${before.filter((f) => f.length === 8).length} three-char`);
+
+  const state = { profiles: new Map() };
+  const moved = await migrateShards(state);
+  ok("both are picked up", moved === dids.length, `${moved} of ${dids.length}`);
+  const after = readAll();
+  ok("and every identity survives either way", after.size === dids.length, `${after.size}`);
+  const misplaced = dids.filter((d) => after.get(d)?.[0] !== shardOf(d));
+  ok("all of them in the current shard", misplaced.length === 0, `${misplaced.length} wrong`);
+  ok("nothing short is left behind", shortNames().length === 0, shortNames().join(" "));
+}
+
+console.log("\n=== F. the three copies of the rule agree");
 /* THE RULE LIVES IN THREE FILES and nothing makes them agree at runtime. A
    mismatch does not throw: the browser or the endpoint fetches a shard name
    that does not exist, gets a 404, and reports the identity as unknown. That
@@ -208,10 +268,16 @@ console.log("\n=== E. the three copies of the rule agree");
      the wrong number and call it a mismatch is a check nobody will trust the
      second time it goes red. */
   const b = n(api, /async function shardOf\([\s\S]{0,400}?\.slice\(0,\s*(\d+)\)/);
-  const c = n(card, /const h of \[hex\.slice\(0,\s*(\d+)\)/);
-  ok("the archiver says three", a === 3, String(a));
+  /* The card page's first name is nested, so its width is two slices rather
+     than one: 0..2 and 2..4. Read both and add them. */
+  const cm = card.match(/const h of \[`\$\{hex\.slice\(0,\s*(\d+)\)\}\/\$\{hex\.slice\((\d+),\s*(\d+)\)\}`/);
+  const c = cm ? Number(cm[3]) : null;
+  ok("the archiver says four", a === 4, String(a));
   ok("api/profile.js agrees", b === a, `${b} vs ${a}`);
   ok("and the card page agrees", c === a, `${c} vs ${a}`);
+  ok("and the card page nests it the same way the archiver does",
+    cm && Number(cm[1]) === 2 && Number(cm[2]) === 2,
+    cm ? `${cm[1]}/${cm[2]}..${cm[3]}` : "no match");
   /* And that each really is reading a hash of the DID rather than, say, the
      first characters of the DID itself — which for did:key would put every
      identity on the network into one shard. */
@@ -227,10 +293,16 @@ console.log("\n=== E. the three copies of the rule agree");
      exactly the kind of instruction that gets followed at the wrong moment.
      When it IS deleted, this pair of checks is what should be deleted with
      it. */
-  ok("the card page falls back to the old name while the migration publishes",
-    /hex\.slice\(0,\s*3\),\s*hex\.slice\(0,\s*2\)/.test(card));
+  ok("the card page falls back through BOTH older names",
+    /hex\.slice\(0,\s*3\),\s*hex\.slice\(0,\s*2\)/.test(card), "3 then 2");
   ok("and so does the endpoint",
-    /shard\.slice\(0,\s*2\)/.test(api) && /profiles\/\$\{oldName\}\.json/.test(api));
+    /shard\.slice\(0,\s*3\)/.test(api) && /shard\.slice\(0,\s*2\)/.test(api));
+  /* Order matters as much as presence: newest first, or a stale deployed copy
+     answers before the current one and the page shows yesterday's figures
+     forever rather than for ninety minutes. */
+  ok("newest name first, in both",
+    card.indexOf("hex.slice(0,3)") > card.indexOf("hex.slice(2,4)")
+    && api.indexOf("shard.slice(0, 3)") > api.indexOf("shard.slice(2)"));
 
   ok("all three shard on a hash and not on the did",
     /createHash\("sha256"\)\.update\(did/.test(arch)
@@ -238,7 +310,7 @@ console.log("\n=== E. the three copies of the rule agree");
     && /digest\("SHA-256",new TextEncoder\(\)\.encode\(did\)\)/.test(card));
 }
 
-console.log("\n=== F. the workflow no longer stages profiles on their own");
+console.log("\n=== G. the workflow no longer stages profiles on their own");
 {
   const yml = fs.readFileSync(path.join(ROOT, ".github/workflows/archive.yml"), "utf8");
   /* Comments name the old tier on purpose, so the check has to look at what

@@ -53,8 +53,18 @@ const json = (body, status = 200, ttl = 60) =>
 async function shardOf(did) {
   const bytes = new TextEncoder().encode(did);
   const hash = await crypto.subtle.digest("SHA-256", bytes);
-  return [...new Uint8Array(hash)].map((b) => b.toString(16).padStart(2, "0")).join("").slice(0, 3);
+  return [...new Uint8Array(hash)].map((b) => b.toString(16).padStart(2, "0")).join("").slice(0, 4);
 }
+
+/** Every name this shard has ever had, newest first. The reader tries them
+ *  in order because the archiver's layout moves ahead of the deployed copy
+ *  by up to one publish pass, and because a widening that a static host
+ *  refuses should degrade to the previous layout rather than to nothing. */
+const shardNames = (shard) => [
+  `${shard.slice(0, 2)}/${shard.slice(2)}`,     // 65,536, nested — current
+  shard.slice(0, 3),                            // 4,096, flat
+  shard.slice(0, 2),                            // 256, flat
+];
 
 /* ── where this identity stands ───────────────────────────────────────────
  * Computed here rather than in the browser because standings.json describes
@@ -136,26 +146,25 @@ export default async function handler(request) {
      PERMANENT per-identity fact this network offers — a signed, first-come,
      never-expiring claim in /kv/room-owners — and unlike everything else
      here it reads the same today and in a year. */
-  const [bucket, standings, owners] = await Promise.all([
-    grab(`profiles/${shard}.json`),
-    grab("standings.json"),
-    grab("owners.json"),
-  ]);
+  /* These two are always wanted and never conditional, so they go together
+     and in parallel with the shard search below. */
+  const side = Promise.all([grab("standings.json"), grab("owners.json")]);
 
-  /* THE OLD SHARD NAME, TRIED SECOND, AND THIS IS TEMPORARY.
-     The shards were widened from two hex characters to three, and this reads
-     whatever the last COMMIT holds — which carries the old layout until the
-     archiver's next publish pass, up to ninety minutes after the migration
-     runs. Without this, every identity would come back unknown for that hour
-     and a half. Delete once a publish has carried the new layout out. */
-  const oldName = shard.slice(0, 2);
-  const older = (!bucket || !bucket[did])
-    ? await grab(`profiles/${oldName}.json`) : null;
-  /* The bucket the identity was actually FOUND in, which is the only one any
-     of the rest of this should read. */
-  const found = bucket?.[did] ? bucket : (older?.[did] ? older : (bucket ?? older));
+  /* IN ORDER, AND IT STOPS AT THE FIRST HIT. Sequential rather than parallel
+     on purpose: the current name answers essentially every time, and firing
+     three requests at the repository to save a few milliseconds on the rare
+     one would triple this endpoint's read volume against a shared allowance
+     the archiver is also spending. */
+  let found = null, any = null;
+  for (const n of shardNames(shard)) {
+    const b = await grab(`profiles/${n}.json`);
+    if (b && !any) any = b;                 // it answered, even if empty
+    if (b?.[did]) { found = b; break; }
+  }
+  found = found ?? any;
+  const [standings, owners] = await side;
 
-  /* Unavailable means neither name could be read at all — not that the
+  /* Unavailable means no name could be read at all — not that the
      identity is unknown, which is `p` below being null. */
   if (!found) {
     return json({ did, shard, source: "unavailable", profile: null,
