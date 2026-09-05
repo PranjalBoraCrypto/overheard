@@ -452,6 +452,15 @@ button[data-busy="1"]::before{
    shrinking. `min-width:0` on the text is the whole trick: without it a flex
    child refuses to go below its content width and the button is pushed off
    the end of a 360px phone. */
+/* ── MIDDLE TRUNCATION ─────────────────────────────────────────────────────
+   Two spans in a row: the head shrinks and clips, the tail never does. The
+   browser recomputes it on every reflow, so it is right at any width, after a
+   late font, and through a zoom — none of which a measured-in-script version
+   would survive. See midText() in deal-ui.js. */
+.midtrim{display:inline-flex;min-width:0;max-width:100%;align-items:baseline}
+.midtrim .mt-head{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.midtrim .mt-tail{flex:none;white-space:nowrap}
+
 .copyrow{display:flex;align-items:center;gap:var(--s1);min-width:0}
 .copyrow>.did,.copyrow>code{flex:1 1 auto;min-width:0}
 

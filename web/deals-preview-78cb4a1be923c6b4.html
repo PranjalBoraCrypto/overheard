@@ -237,13 +237,37 @@ body{background:var(--void);color:var(--white);font-family:var(--display);
 header.hero{position:relative;margin-top:var(--s5);margin-bottom:var(--s4);
   display:grid;grid-template-columns:minmax(0,1.05fr) minmax(0,.95fr);
   gap:var(--s6);align-items:center}
-header.hero::after{content:"";position:absolute;inset:-40px -20px 0;pointer-events:none;z-index:-1;
+/* ── THE DOT FIELD WAS A RECTANGLE, AND THE NOTE ABOVE SAYS IT SHOULD NOT BE ─
+ *
+ * "The light and the dot field stay, on the PAGE rather than in a frame."
+ * They did not. They were on `.hero::after`, and two lines pinned them into
+ * exactly the frame that sentence rejects:
+ *
+ *   · `inset:-40px …` started the field FORTY PIXELS above the hero and no
+ *     higher, so the top of the page — the strip the bar sits on — was bare,
+ *     with a hard horizontal edge across it where the dots began.
+ *   · `.hero{overflow-x:clip}` is three rules below, and it clips this. The
+ *     -20px sideways bleed never painted. On a wide screen the field stopped
+ *     at the hero's own box, well short of the window, with a visible vertical
+ *     edge down each side.
+ *
+ * Neither shows up in a test and both are obvious the moment somebody looks at
+ * the page, which is how it survived. It is a rectangle of texture floating on
+ * a plain background.
+ *
+ * So the field moves to where the sentence always said it was: the page. Full
+ * width, from the very top, fading out rather than ending — a hard edge is the
+ * thing that made it read as a box. It cannot live on the hero at all while
+ * the hero clips, and the hero has to clip, because a 520px glow hanging off
+ * its right edge is 94px of horizontal scroll on a phone. */
+body::before{content:"";position:absolute;top:0;left:0;right:0;
+  height:clamp(560px,96vh,940px);pointer-events:none;z-index:0;
   background-image:
     radial-gradient(70% 100% at 6% 0%,rgba(88,233,255,.10),transparent 60%),
     radial-gradient(rgba(147,182,192,.13) 1px,transparent 1.2px);
   background-size:auto,22px 22px;
-  -webkit-mask-image:linear-gradient(160deg,#000 0%,rgba(0,0,0,.35) 52%,transparent 82%);
-  mask-image:linear-gradient(160deg,#000 0%,rgba(0,0,0,.35) 52%,transparent 82%)}
+  -webkit-mask-image:linear-gradient(#000 40%,rgba(0,0,0,.34) 72%,transparent);
+  mask-image:linear-gradient(#000 40%,rgba(0,0,0,.34) 72%,transparent)}
 /* ── THE GLOW WAS PUSHING THE PAGE SIDEWAYS ────────────────────────────────
    A 520px decorative circle hanging off the right edge is 94px of horizontal
    scroll on a 390px phone, and it was doing that before this redesign too —
@@ -709,9 +733,27 @@ section.band{margin-top:30px}
 .mark.no{border-color:rgba(255,107,107,.45);color:var(--red)}
 .mark.meh{border-color:rgba(242,179,61,.4);color:var(--gold)}
 .mark .i{width:12px;height:12px}
+/* ── THE RAW FRAME RAN OFF THE EDGE OF ITS OWN BOX ────────────────────────
+ * `overflow-x:auto` is a correct answer to a long line and a bad one here. A
+ * tclk frame is 200-odd characters on one line, so what a reader saw was the
+ * first sixty and a cut, with a scrollbar that only appears on hover on a
+ * desktop and is a gesture nobody thinks to try on a phone. The part that
+ * identifies the frame — the signature, the nonce — is at the far end and was
+ * never on screen.
+ *
+ * So it keeps both ends and loses the middle, and the whole line is one press
+ * away on the copy button rather than one horizontal drag. */
 pre.raw{font-family:var(--mono);font-size:11px;line-height:1.6;color:var(--dim);background:var(--navy-0);
-  border:1px solid var(--edge);border-radius:9px;padding:11px 12px;margin-top:10px;
-  overflow-x:auto;white-space:pre;max-width:100%}
+  border:1px solid var(--edge);border-radius:9px;padding:11px 42px 11px 12px;margin-top:10px;
+  white-space:pre;max-width:100%;position:relative;min-width:0}
+pre.raw .midtrim{display:flex}
+.rawcopy{position:absolute;top:7px;right:7px;display:inline-flex;align-items:center;
+  justify-content:center;width:24px;height:24px;padding:0;cursor:pointer;
+  border:1px solid var(--edge);border-radius:7px;background:var(--navy-1);color:var(--faint)}
+.rawcopy .i{width:12px;height:12px}
+.rawcopy:hover{color:var(--blue);border-color:var(--blue)}
+.rawcopy:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
+.rawcopy.done{color:var(--good);border-color:rgba(59,227,176,.5)}
 .kv{font-family:var(--mono);font-size:11.5px;color:var(--faint);margin-top:12px;word-break:break-all}
 .kv b{color:var(--dim);font-weight:500}
 .kv+.kv{margin-top:5px}
@@ -2336,7 +2378,7 @@ import {
    at load, so this costs a file and no behaviour. */
 import { faceSVG } from "/nav.js";
 import { railEl, statusOf, STATES, leftFor, PHASE_CAPTION, pillEl,
-         skeletonsInto, skeletonsDone, copyBtn, copyRow, announce } from "/deal-ui.js";
+         skeletonsInto, skeletonsDone, copyBtn, copyRow, midText, announce } from "/deal-ui.js";
 
 const $ = (id) => document.getElementById(id);
 
@@ -2729,7 +2771,12 @@ function drawFrames(deal) {
     if (!step.applied && step.why) mid.append(el("div", "fwhy", "ignored: " + step.why));
     if (f.reason) mid.append(el("div", "freason", String(f.reason)));
     mid.append(drawMarks({ ...f, statementSeen: stmt }, deal.offer?.body ?? null));
-    mid.append(el("pre", "raw", f.raw));
+    /* Both ends kept, the middle dropped, and the whole line on the button. */
+    const raw = el("pre", "raw");
+    raw.append(midText(document, f.raw, 22));
+    raw.append(copyBtn(document, f.raw, "frame"));
+    raw.lastChild.className = "rawcopy";
+    mid.append(raw);
     row.append(mid);
     wrap.append(row);
   }

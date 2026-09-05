@@ -44,8 +44,20 @@ const CSS = `
   -webkit-font-smoothing:antialiased;
 }
 /* While a sheet is open. 50 is the right height for a bar; it is the wrong
-   height for a full-screen scrim, and a page is free to paint above it. */
-:host(.sheet){z-index:9999}
+   height for a full-screen scrim, and a page is free to paint above it.
+
+   ── THE NAME IS NAMESPACED, AND THAT IS NOT FUSSINESS ────────────────────
+   This class was called 'sheet'. deal.css has a '.sheet' of its own — an
+   unrelated bottom-sheet component: position:fixed, bottom:0, z-index:60 —
+   and a page's stylesheet always beats :host() on the host element. So on
+   every page that loads deal.css, opening the profile menu put THE WHOLE BAR
+   at the bottom of the screen, half off it. Reported as "the bar appears at
+   the bottom of the page and hides", on desktop and on mobile.
+   Nothing here was wrong in isolation and nothing errored. The bar reaches
+   out of its shadow root exactly once, to set this class, and one word was
+   enough to collide. Anything this component writes onto its own host is
+   prefixed from now on. */
+:host(.oh-lifted){z-index:9999}
 *{box-sizing:border-box;margin:0;padding:0}
 .wrap{max-width:1180px;margin:0 auto;padding:0 26px}
 .bar{
@@ -135,6 +147,16 @@ const CSS = `
    open. */
 .nb{position:relative;flex:none;display:none}
 .burger{
+  /* POSITION:RELATIVE IS LOAD-BEARING AND WAS MISSING. The three lines below
+     are position:absolute, so without it they resolve against .nb -- which
+     is the wrapper, not the button — and land against its top-left corner
+     instead of in the middle of the square. The grid's place-items:center
+     sets their static position, which is exactly what an absolutely
+     positioned child uses when it has no offsets, so the centring was written
+     and simply never applied. Same shape as the two colour names this project
+     used and never declared: nothing errors, nothing warns, it just looks
+     wrong. The dot in ::after was landing on the wrapper for the same reason. */
+  position:relative;
   display:grid;place-items:center;width:38px;height:38px;padding:0;
   border-radius:13px;cursor:pointer;
   color:#CDEAF3;background:rgba(0,180,215,.10);
@@ -738,7 +760,7 @@ function styleScrollbars() {
    agree today. */
 function lift(el, on) {
   const host = el.getRootNode()?.host;
-  if (host) host.classList.toggle("sheet", on);
+  if (host) host.classList.toggle("oh-lifted", on);
   hushHint(on);
 }
 

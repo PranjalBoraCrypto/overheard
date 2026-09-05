@@ -938,7 +938,13 @@ console.log("\n=== K. the buyer can actually pay — and is never asked to pay t
   const { ctx, pg } = await open();
   await pg.goto("http://localhost:9441/orders.html", { waitUntil: "domcontentloaded" });
   await pg.waitForTimeout(1600);
-  const late = await pg.evaluate(() => document.querySelectorAll(".hitem").length);
+  /* COUNTED BY THE STRIP AND NOT BY THE WRAPPER. This read `.hitem`, which
+     was the same number only because a wrapper existed only when there was a
+     strip to put in it. Every row has a wrapper now — they all open — so the
+     proxy stopped meaning anything while still being a number. The thing this
+     is about has always been `.hact`: an order past its refund deadline must
+     not be offered a payment that can buy nothing. */
+  const late = await pg.evaluate(() => document.querySelectorAll(".hact").length);
   ok("an accepted order past its refund deadline gets no strip", late === 1,
     `${late} strips — the expired one must not offer a payment that cannot buy anything`);
   await ctx.close();
@@ -1104,6 +1110,73 @@ console.log("\n=== I3. the copy buttons");
     getComputedStyle(document.documentElement).getPropertyValue("--tone-hold").trim());
   ok("deal.css reached the page", tone.length > 0,
     tone || "the shared stylesheet did not apply — check the content-type this harness serves");
+  await ctx.close();
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+ * K. A ROW OPENS THE ORDER. IT DOES NOT LEAVE THE PAGE.
+ *
+ * Every row used to be an <a> to the deals board. Tapping your own order and
+ * landing on a page about everybody's orders is the wrong answer to "what
+ * happened to this one?", and the board cannot even scroll to it. Reported by
+ * the owner, twice, on two different pages.
+ *
+ * The half of this worth testing is not that a panel appears. It is that the
+ * page still reaches the board from somewhere, that the ONE button a buyer
+ * may need is not folded away behind a press, and that what the panel says is
+ * readable by somebody who does not know what a contract is.
+ * ═════════════════════════════════════════════════════════════════════════*/
+console.log("\n=== K. the row opens in place");
+{
+  const { ctx, pg } = await open();
+  await pg.goto("http://localhost:9441/orders.html", { waitUntil: "domcontentloaded" });
+  await pg.waitForTimeout(1600);
+
+  const shape = await pg.evaluate(() => {
+    const row = document.querySelector(".hrow");
+    return { tag: row?.tagName, href: row?.getAttribute("href"),
+             expanded: row?.getAttribute("aria-expanded"),
+             controls: !!row?.getAttribute("aria-controls"),
+             panelHidden: document.querySelector(".hdet")?.hidden };
+  });
+  ok("a row is a button, not a link off the page", shape.tag === "BUTTON" && !shape.href,
+    `${shape.tag} href=${shape.href}`);
+  ok("it says whether it is open, for a screen reader too",
+    shape.expanded === "false" && shape.controls, JSON.stringify(shape));
+  ok("and the details start closed", shape.panelHidden === true, String(shape.panelHidden));
+
+  await pg.locator(".hrow").first().click();
+  await pg.waitForTimeout(250);
+  const opened = await pg.evaluate(() => {
+    const det = document.querySelector(".hdet");
+    const labels = [...det.querySelectorAll(".hfield dt")].map((d) => d.textContent);
+    return { hidden: det.hidden, expanded: document.querySelector(".hrow").getAttribute("aria-expanded"),
+             labels, board: !!det.querySelector('a[href*="deals"]'),
+             /* Nothing in the panel may be a bare protocol word. */
+             jargon: labels.filter((l) => /contract|escrow|preimage|nonce|did:key|frame/i.test(l)) };
+  });
+  ok("clicking it opens the details", opened.hidden === false && opened.expanded === "true");
+  ok("with the things a person actually asks",
+    ["What you ordered", "About", "Price", "Placed", "Where it stands"].every((l) => opened.labels.includes(l)),
+    opened.labels.join(" · "));
+  ok("and no protocol word as a field name", opened.jargon.length === 0, opened.jargon.join(", "));
+  ok("the board is still reachable, from inside", opened.board);
+
+  await pg.locator(".hrow").first().click();
+  await pg.waitForTimeout(200);
+  ok("and clicking again closes it",
+    await pg.evaluate(() => document.querySelector(".hdet").hidden === true));
+
+  /* THE ONE THING THAT MUST NOT BE BEHIND A PRESS. Caught by this suite the
+     first time, when the strip was put inside the panel with everything
+     else — a page telling somebody their payment never landed, with the
+     button to finish it hidden. */
+  const payVisible = await pg.evaluate(() => {
+    const b = [...document.querySelectorAll(".hbtn")].find((x) => /Pay into the lock/.test(x.textContent));
+    if (!b) return "no such button on this fixture";
+    return !b.closest(".hdet") && b.offsetParent !== null;
+  });
+  ok("the pay button is never folded away inside the details", payVisible === true, String(payVisible));
   await ctx.close();
 }
 

@@ -425,13 +425,45 @@ export function announce(doc, msg) {
 }
 
 /** A truncated string beside its copy button, on one line. */
+/**
+ * A long string that keeps BOTH ends when it will not fit.
+ *
+ * WHY NOT text-overflow:ellipsis. It cuts the tail, and for everything long on
+ * this site the tail is the identifying part — two contract ids share their
+ * first thirty characters and differ in the last six, so an end-clipped one is
+ * indistinguishable from every other. And why not measure the width in script:
+ * this has to survive a resize, a font that loads late and a zoom, none of
+ * which fire anything a measurement could hang off reliably.
+ *
+ * So it is two spans in a flex row. The head is allowed to shrink and clips
+ * with an ellipsis; the tail never shrinks. The browser does the arithmetic on
+ * every reflow for nothing.
+ *
+ * The whole string stays in the title and on the copy button beside it — this
+ * changes what is DRAWN and never what is copied.
+ */
+export function midText(doc, text, tail = 12, cls = "") {
+  const t = String(text ?? "");
+  const wrap = doc.createElement("span");
+  wrap.className = "midtrim" + (cls ? " " + cls : "");
+  wrap.title = t;
+  const cut = t.length > tail + 8 ? t.length - tail : t.length;
+  const head = doc.createElement("span");
+  head.className = "mt-head";
+  head.textContent = t.slice(0, cut);
+  const end = doc.createElement("span");
+  end.className = "mt-tail";
+  end.textContent = t.slice(cut);
+  wrap.append(head, end);
+  return wrap;
+}
+
 export function copyRow(doc, text, what = "", cls = "did") {
   const row = doc.createElement("div");
   row.className = "copyrow";
-  const s = doc.createElement("span");
-  s.className = cls;
-  s.textContent = text;
-  s.title = text;
+  /* Middle-truncated rather than end-clipped: see midText. A contract id read
+     off a card is compared by its last characters. */
+  const s = midText(doc, text, 10, cls);
   row.append(s, copyBtn(doc, text, what));
   return row;
 }

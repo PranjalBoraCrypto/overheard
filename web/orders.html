@@ -215,6 +215,52 @@ h1{font-weight:800;font-size:clamp(30px,5vw,42px);line-height:1;letter-spacing:-
    thing to understand. Hence the negative top margin and the flat top edge —
    they are one object with a seam. */
 .hitem{display:flex;flex-direction:column}
+
+/* ── THE ROW OPENS, IT DOES NOT LEAVE ─────────────────────────────────────
+ * Every row was an <a> to the deals board. Tapping your own order and landing
+ * on a page about somebody else's is the wrong answer to "what happened to
+ * this?" — the board is where you go to CHECK a deal, not to read one, and it
+ * cannot even scroll to yours.
+ * So the row is a button that opens the order underneath itself, in fields a
+ * person can read without knowing what a contract is. The board is still one
+ * press away, from inside, where it is an answer to a question somebody has
+ * actually formed. */
+.hrow{width:100%;text-align:left;font:inherit;color:inherit;cursor:pointer}
+.hgo{transition:transform .25s var(--ease),color .2s var(--ease)}
+.hrow[aria-expanded="true"] .hgo{transform:rotate(90deg);color:var(--blue)}
+.hitem:has(.hdet:not([hidden])) .hrow{border-bottom-left-radius:0;border-bottom-right-radius:0;
+  border-bottom-color:transparent}
+/* The rounded bottom belongs to whichever block is last, and which that is
+   depends on whether this order has an action strip and whether the details
+   are open. Three states, one rule each, rather than a class the script has
+   to remember to set. */
+.hitem:has(.hdet:not([hidden])) .hact{border-radius:0}
+.hitem .hdet{border-radius:0 0 14px 14px}
+
+.hdet{margin-top:-1px;padding:var(--s4);
+  border:1px solid rgba(88,233,255,.3);border-top-color:transparent;
+  border-radius:0 0 14px 14px;
+  background:linear-gradient(180deg,rgba(88,233,255,.045),rgba(88,233,255,.012));
+  animation:hopen .22s var(--ease) both}
+@keyframes hopen{from{opacity:0;transform:translateY(-4px)}}
+@media (prefers-reduced-motion:reduce){.hdet{animation:none}}
+
+/* Plain fields, two columns on anything wide enough and one on a phone. A
+   definition list because that is what this is: a label and its value. */
+.hfields{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));
+  gap:var(--s3) var(--s4);margin:0}
+.hfield{min-width:0}
+.hfield dt{font-family:var(--mono);font-size:10.5px;letter-spacing:.08em;
+  text-transform:uppercase;color:var(--faint)}
+.hfield dd{margin:4px 0 0;font-size:14px;color:var(--white);line-height:1.45;
+  overflow-wrap:anywhere}
+.hfield dd .sub{display:block;font-size:12px;color:var(--faint);margin-top:2px}
+.hfield.wide{grid-column:1/-1}
+
+.hdetgo{display:inline-flex;align-items:center;gap:7px;margin-top:var(--s4);
+  font-size:13px;font-weight:600;color:var(--blue);text-decoration:none}
+.hdetgo:hover{text-decoration:underline}
+.hdetgo .i{width:13px;height:13px}
 /* The contract id line. It takes the whole width under the words and the
    button, and it is quiet — a reference, not a thing to read. `order:9` so it
    is always last however the row wraps: a receipt number that lands in the
@@ -703,6 +749,10 @@ function statusOf(o) {
   /* `open` means STILL GOING, which is not the same as unexpired: a delivered
      deal is finished however long its offer had left to run. */
   return { word: st.word, tone: st.tone, key: st.key, step: st.step, ends: st.ends,
+           /* Carried rather than re-written: deal-ui.js already has one plain
+              sentence per state and the details panel needs exactly that. A
+              second copy here is a second thing to keep in step. */
+           says: st.says ?? "",
            open: !st.ends };
 }
 /* Still open means still going, which is not the same as unexpired: a deal
@@ -839,6 +889,80 @@ function queueCheck(fn) {
   checkQueue = checkQueue.then(fn, fn);
   return true;
 }
+/** One labelled fact. Nothing here needs the reader to know the protocol. */
+function field(label, value, sub) {
+  const d = document.createElement("div");
+  d.className = "hfield";
+  const dt = document.createElement("dt");
+  dt.textContent = label;
+  const dd = document.createElement("dd");
+  if (value instanceof Node) dd.append(value); else dd.textContent = value;
+  if (sub) {
+    const s2 = document.createElement("span");
+    s2.className = "sub";
+    s2.textContent = sub;
+    dd.append(s2);
+  }
+  d.append(dt, dd);
+  return d;
+}
+
+/* ── WHAT AN ORDER IS, IN WORDS SOMEBODY WHO IS NOT A DEVELOPER CAN READ ───
+   The row already carries the four things you scan for. This is what you open
+   it to find out, and every line of it is either a plain English sentence or
+   a number with a unit. The one opaque string — the contract id — is labelled
+   as what it is FOR ("quote this if you ask anybody about this order") rather
+   than by its protocol name. */
+function fieldsFor(o) {
+  const spec = JOBS[o.job] ?? { name: o.job || "order" };
+  const dl = document.createElement("dl");
+  dl.className = "hfields";
+
+  dl.append(field("What you ordered", spec.name));
+  /* Full width on purpose. A brief runs to a couple of hundred characters and
+     in a shared grid row it sets the row's height, leaving the three short
+     fields beside it floating in whitespace. */
+  const about = field("About", o.brief || "—");
+  about.classList.add("wide");
+  dl.append(about);
+  dl.append(field("Price", `${group(o.amount || "0")} ${o.asset || "FLOP"}`,
+    "Nothing of value moves yet — the rehearsal rail holds no money."));
+
+  /* Date.parse and not Number(): `ts` is an ISO string here, which is what
+     ago() has always been handed. The first version read it as a number, got
+     NaN for every order on the page and printed an em dash under PLACED —
+     visible in the first screenshot of this panel and in nothing else. */
+  const when = Date.parse(o.ts);
+  dl.append(field("Placed",
+    Number.isFinite(when)
+      ? new Date(when).toLocaleString(undefined,
+          { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })
+      : "—",
+    Number.isFinite(when) ? ago(o.ts) : ""));
+
+  const st = statusOf(o);
+  dl.append(field("Where it stands", st.word, st.says ? st.says[0].toUpperCase() + st.says.slice(1) + "." : ""));
+
+  /* Only when it is known, and phrased as the answer to the question a person
+     with a locked payment actually has. */
+  const back = Number(o.refundAfterMs);
+  if (Number.isFinite(back) && back > 0) {
+    dl.append(field("Payment unlocks itself",
+      new Date(back).toLocaleString(undefined,
+        { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }),
+      back <= Date.now() ? "That moment has passed, so it is refundable now."
+                         : "If the work never arrives, it comes back to you then."));
+  }
+
+  if (o.accept?.contract) {
+    const f = field("Order id", copyRow(document, o.accept.contract, "order id"),
+      "Quote this if you ever need to ask about this order.");
+    f.classList.add("wide");
+    dl.append(f);
+  }
+  return dl;
+}
+
 function itemFor(o) {
   const row = rowFor(o);
   /* The pill is handed to the strip so the two cannot disagree: whatever the
@@ -846,12 +970,51 @@ function itemFor(o) {
      A row that said OPEN above the words "this deal is finished" is what this
      argument is settling. */
   const act = actionFor(o, row.querySelector(".pill"));
-  if (!act) return row;
+
   const wrap = document.createElement("div");
   wrap.className = "hitem";
-  wrap.append(row, act);
+
+  const det = document.createElement("div");
+  det.className = "hdet";
+  det.hidden = true;
+  det.setAttribute("role", "region");
+  det.id = "d" + (++detSeq);
+  row.setAttribute("aria-controls", det.id);
+  det.append(fieldsFor(o));
+
+  /* ── THE ACTION STRIP STAYS OUT HERE, AND THE SUITE IS WHY ───────────────
+     The first version of this put the strip inside the panel with everything
+     else, and test-orders-page went red trying to click "Pay into the lock":
+     the one button on this page that a buyer may actually NEED had been put
+     behind a press nobody would know to make. It is not a detail. It is the
+     page telling somebody their payment never landed, and it belongs where it
+     has always been — attached to the row, visible without asking. What folds
+     away is the reading matter. */
+
+  /* The board, from inside, where it answers a question the reader has now
+     formed rather than being the only thing a row could do. */
+  const go = document.createElement("a");
+  go.className = "hdetgo";
+  go.href = "/deals-preview-78cb4a1be923c6b4.html";
+  go.textContent = "Check every signature on the deals board";
+  const gi = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  gi.setAttribute("class", "i");
+  const gu = document.createElementNS("http://www.w3.org/2000/svg", "use");
+  gu.setAttribute("href", "#i-caret");
+  gi.append(gu);
+  go.append(gi);
+  det.append(go);
+
+  row.addEventListener("click", () => {
+    const open = det.hidden;
+    det.hidden = !open;
+    row.setAttribute("aria-expanded", open ? "true" : "false");
+  });
+
+  if (act) wrap.append(row, act, det); else wrap.append(row, det);
   return wrap;
 }
+let detSeq = 0;
 
 /* ── WHEN THE MONEY COMES BACK, IN WORDS AND NOT IN A PROTOCOL FIELD ──────
    `refundAfterMs` is on every offer and has never been shown to anybody. It
@@ -1183,9 +1346,10 @@ async function dealState(room, contract) {
 
 function rowFor(o) {
   const spec = JOBS[o.job] ?? { name: o.job || "order", mark: "agent" };
-  const a = document.createElement("a");
+  const a = document.createElement("button");
+  a.type = "button";
   a.className = "hrow";
-  a.href = "/deals-preview-78cb4a1be923c6b4.html";
+  a.setAttribute("aria-expanded", "false");
 
   const em = document.createElement("span");
   em.className = "hem";
@@ -1229,7 +1393,7 @@ function rowFor(o) {
 
   a.append(em, words, meta2, go);
   a.setAttribute("aria-label",
-    `${spec.name}, ${o.brief || "no brief"}, ${o.amount} ${o.asset}, ${st.word} — open the deals board`);
+    `${spec.name}, ${o.brief || "no brief"}, ${o.amount} ${o.asset}, ${st.word} — show the details`);
   return a;
 }
 

@@ -1748,12 +1748,27 @@ console.log("\n=== T. what the redesign has to keep true");
     const layer = (el, ps) => el ? getComputedStyle(el, ps).backgroundImage : "";
     return {
       hasGrainToken: grain.includes("svg"),
-      /* Both live on the ONE pseudo-element now — a dot field and the light
-         it is lit by, in a single paint. Two rules fighting over one
-         ::after is a coin toss decided by specificity, which this page
-         learned once already. */
-      heroDots: layer(document.querySelector(".hero"), "::after").includes("radial-gradient(rgb"),
-      heroLit: layer(document.querySelector(".hero"), "::after").includes("gradient"),
+      /* ON THE PAGE, AND THE TEST HAS TO SAY SO. This asserted the dot field
+         was on `.hero::after`, and it was — pinned inside the hero's own box,
+         clipped sideways by `.hero{overflow-x:clip}` and starting forty pixels
+         above it. The result was a rectangle of texture floating on a plain
+         background, with a hard edge across the top of the page and down each
+         side. The test passed the whole time, because "there is a gradient on
+         this pseudo-element" was never the property that mattered.
+         What matters is that the field covers the page: from the very top,
+         edge to edge, so there is no boundary to see. */
+      heroDots: layer(document.body, "::before").includes("radial-gradient(rgb"),
+      heroLit: layer(document.body, "::before").includes("gradient"),
+      field: (() => {
+        const cs = getComputedStyle(document.body, "::before");
+        const r = document.body.getBoundingClientRect();
+        return { top: cs.top, left: cs.left, right: cs.right,
+                 masked: (cs.maskImage || cs.webkitMaskImage || "").includes("gradient"),
+                 wide: r.width };
+      })(),
+      /* And the hero must NOT have grown its own back, or the two overlap and
+         the dots double up into a darker patch exactly where the hero is. */
+      heroClean: !layer(document.querySelector(".hero"), "::after").includes("radial-gradient"),
       bandGrid: layer(document.querySelector(".bleed"), "::after").includes("gradient"),
       rail: layer(document.querySelector(".railcard"), "::before").includes("svg"),
       /* Nothing decorative may eat a click. */
@@ -1767,8 +1782,19 @@ console.log("\n=== T. what the redesign has to keep true");
      than inside a frame, which is the whole reason it no longer reads as the
      first item in a list. What is checked is that it still has a texture of
      its own and that the texture is still behind the words. */
-  ok("the hero has a texture and a light source of its own",
+  ok("the page has a texture and a light source of its own",
     tex.heroDots && tex.heroLit, JSON.stringify({ dots: tex.heroDots, lit: tex.heroLit }));
+  /* The three properties that stop it reading as a box, each of which was
+     false before: it starts at the top of the page rather than below the bar,
+     it reaches both edges rather than stopping at the hero's column, and it
+     ENDS by fading rather than by stopping. */
+  ok("the field starts at the very top of the page, behind the bar",
+    tex.field.top === "0px", tex.field.top);
+  ok("and reaches both edges rather than stopping at the hero's column",
+    tex.field.left === "0px" && tex.field.right === "0px",
+    `${tex.field.left} / ${tex.field.right}`);
+  ok("and fades out instead of ending on a line", tex.field.masked);
+  ok("and the hero does not paint a second one over it", tex.heroClean);
   ok("the full-bleed band gets a different texture from the cards", tex.bandGrid);
   ok("and the rail, the thing you act on, is lit too", tex.rail);
   ok("no texture layer can eat a click", tex.inert, "pointer-events:none on every ::before");
@@ -1845,6 +1871,63 @@ console.log("\n=== T. what the redesign has to keep true");
   await cM.close();
 }
 
+/* ══════════════════════════════════════════════════════════════════════════
+ * THE BAR REACHES OUT OF ITS SHADOW ROOT EXACTLY ONCE, AND IT COLLIDED
+ *
+ * bar.js marks its own host element while a menu is open so it can raise its
+ * z-index. It called that class `sheet`. deal.css has an unrelated `.sheet` —
+ * a bottom-sheet component: position:fixed, bottom:0 — and a page stylesheet
+ * always beats :host() on the host. So on every page that loads deal.css,
+ * opening the profile menu threw the WHOLE BAR to the bottom of the screen,
+ * half off it. Reported as "the bar appears in bottom of page and hides".
+ *
+ * Nothing errored, nothing warned, and neither rule was wrong on its own.
+ * The only durable guard is to assert the two never share a word again.
+ * ═════════════════════════════════════════════════════════════════════════*/
+{
+  const ctxB = await b.newContext({ viewport: { width: 1280, height: 900 } });
+  const pB = await ctxB.newPage();
+  await pB.addInitScript(() => localStorage.setItem("overheard.session",
+    JSON.stringify({ did: "did:key:z6MkngD8RZKCgJQCkJvHfGyYoCcNCG5rz9Tc7yRmWrMZExaz", at: new Date().toISOString() })));
+  await pB.goto("http://localhost:9101" + PAGE, { waitUntil: "domcontentloaded" });
+  await pB.waitForTimeout(1200);
+
+  const before = await pB.evaluate(() => getComputedStyle(document.querySelector("overheard-bar")).position);
+  await pB.evaluate(() => document.querySelector("overheard-bar").shadowRoot.querySelector(".chip")?.click());
+  await pB.waitForTimeout(300);
+  const after = await pB.evaluate(() => {
+    const h = document.querySelector("overheard-bar");
+    const cs = getComputedStyle(h);
+    return { cls: h.className, pos: cs.position, top: Math.round(h.getBoundingClientRect().top),
+             menuOpen: !!h.shadowRoot.querySelector(".menu") };
+  });
+  ok("opening the profile menu does not move the bar",
+    after.pos === before && after.top === 0, `${before} -> ${after.pos} at y=${after.top}`);
+  ok("and the class it puts on its own host is namespaced",
+    /^oh-/.test(after.cls), after.cls || "(none)");
+  ok("so no page stylesheet can claim it by accident",
+    after.cls !== "sheet" && after.menuOpen, after.cls);
+
+  /* And the three lines belong in the middle of their button. They were
+     absolutely positioned against a parent that was not the button, so they
+     sat against its top-left corner. */
+  const bp = await pB.setViewportSize({ width: 420, height: 800 })
+    .then(() => pB.waitForTimeout(250))
+    .then(() => pB.evaluate(() => {
+      const btn = document.querySelector("overheard-bar").shadowRoot.querySelector(".burger");
+      if (!btn) return null;
+      const r = btn.getBoundingClientRect();
+      return [...btn.querySelectorAll("i")].map((i) => {
+        const li = i.getBoundingClientRect();
+        return +(li.x + li.width / 2 - r.x - r.width / 2).toFixed(1);
+      });
+    }));
+  ok("the hamburger's lines are centred in their button",
+    bp && bp.length === 3 && bp.every((d) => Math.abs(d) < 0.6), JSON.stringify(bp));
+  await ctxB.close();
+}
+
 await b.close(); srv.close();
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

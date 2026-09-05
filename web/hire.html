@@ -464,7 +464,15 @@ input[type=text]:focus{outline:none;border-color:var(--blue);background:rgba(0,0
 .codecopy.failed{color:var(--gold);border-color:rgba(242,179,61,.5)}
 
 /* ── your orders ──────────────────────────────────────────────────────────*/
-.histhead{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;margin-bottom:var(--s3)}
+/* ── IT HAD NO SPACING OF ITS OWN AT ALL ──────────────────────────────────
+   Measured: #history's top was 1356 and the block above it ended at 1356.
+   Margin zero, padding zero, no rule anywhere — the heading sat welded to the
+   bottom edge of the dev-route box, which is why the whole block read as
+   packed and slightly out of place rather than as a section of the page.
+   A rule and a gap, because this IS a different subject: everything above it
+   is about placing an order and this is about the ones already placed. */
+#history{margin-top:var(--s6);padding-top:var(--s5);border-top:1px solid var(--edge)}
+.histhead{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;margin-bottom:var(--s4)}
 .histhead h2{font-size:clamp(17px,2.2vw,21px);font-weight:700;letter-spacing:-.02em}
 .histcount{font-family:var(--mono);font-size:12px;color:var(--faint)}
 .histall{margin-left:auto;display:inline-flex;align-items:center;gap:6px;
@@ -474,9 +482,37 @@ input[type=text]:focus{outline:none;border-color:var(--blue);background:rgba(0,0
 .hlist{display:flex;flex-direction:column;gap:var(--s2)}
 .hrow{display:flex;align-items:center;gap:var(--s3);padding:13px var(--s4);
   border:1px solid var(--edge);border-radius:13px;background:var(--panel);
-  text-decoration:none;color:inherit;min-width:0;
+  text-decoration:none;color:inherit;min-width:0;width:100%;text-align:left;
+  font:inherit;cursor:pointer;
   transition:border-color .2s var(--ease),transform .2s var(--ease)}
 .hrow:hover{border-color:var(--edge-lit);transform:translateX(2px)}
+/* ── AND IT OPENED THE DEALS BOARD, WHICH IS SOMEBODY ELSE'S PAGE ─────────
+   Same fix as the orders list: a row about your order shows your order. The
+   board is still linked, from inside, where it answers a question rather than
+   being the only thing a tap could do. */
+.hitem{display:flex;flex-direction:column}
+.hitem:has(.hdet:not([hidden])) .hrow{border-bottom-left-radius:0;border-bottom-right-radius:0;
+  border-bottom-color:transparent;transform:none}
+.hcar{width:12px;height:12px;flex:none;opacity:.55;margin-left:2px;
+  transition:transform .25s var(--ease)}
+.hrow[aria-expanded="true"] .hcar{transform:rotate(90deg);opacity:1;color:var(--blue)}
+.hdet{margin-top:-1px;padding:var(--s4);
+  border:1px solid rgba(88,233,255,.28);border-top-color:transparent;
+  border-radius:0 0 13px 13px;
+  background:linear-gradient(180deg,rgba(88,233,255,.045),rgba(88,233,255,.012))}
+.hfields{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));
+  gap:var(--s3) var(--s4);margin:0}
+.hfield{min-width:0}
+.hfield.wide{grid-column:1/-1}
+.hfield dt{font-family:var(--mono);font-size:10.5px;letter-spacing:.08em;
+  text-transform:uppercase;color:var(--faint)}
+.hfield dd{margin:4px 0 0;font-size:14px;color:var(--white);line-height:1.45;
+  overflow-wrap:anywhere}
+.hfield dd .sub{display:block;font-size:12px;color:var(--faint);margin-top:2px}
+.hdetgo{display:inline-flex;align-items:center;gap:7px;margin-top:var(--s4);
+  font-size:13px;font-weight:600;color:var(--blue);text-decoration:none}
+.hdetgo:hover{text-decoration:underline}
+.hdetgo .i{width:13px;height:13px}
 .hjob{font-weight:600;font-size:14px;white-space:nowrap}
 .hbrief{font-family:var(--mono);font-size:12px;color:var(--faint);min-width:0;
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -1840,10 +1876,12 @@ async function loadHistory() {
   const list = $("hlist");
   list.replaceChildren();
   const now = Date.now();
+  let seq = 0;
   for (const o of mine.slice(0, 3)) {
-    const row = document.createElement("a");
+    const row = document.createElement("button");
+    row.type = "button";
     row.className = "hrow";
-    row.href = "/deals-preview-78cb4a1be923c6b4.html";
+    row.setAttribute("aria-expanded", "false");
     const job = document.createElement("span");
     job.className = "hjob";
     job.textContent = JOB_NAMES[o.body.job?.id] ?? String(o.body.job?.id ?? "order");
@@ -1862,8 +1900,87 @@ async function loadHistory() {
     const w = document.createElement("span");
     w.className = "hwhen";
     w.textContent = when(o.at);
-    row.append(job, brief, state, w);
-    list.append(row);
+    const car = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    car.setAttribute("class", "i hcar");
+    const cu = document.createElementNS("http://www.w3.org/2000/svg", "use");
+    cu.setAttribute("href", "#i-caret");
+    car.append(cu);
+    row.append(job, brief, state, w, car);
+
+    /* ── THE ORDER, IN FIELDS RATHER THAN IN PROTOCOL ────────────────────
+       Everything here comes off the offer frame this browser signed, so it is
+       all knowable without reading a deal room. What is NOT knowable is
+       whether it has been accepted or paid — that lives in a room this page
+       deliberately does not read — so the panel says what it can prove and
+       sends the reader to the page that resolves the rest. */
+    const det = document.createElement("div");
+    det.className = "hdet";
+    det.hidden = true;
+    det.setAttribute("role", "region");
+    det.id = "hd" + (++seq);
+    row.setAttribute("aria-controls", det.id);
+
+    const dl = document.createElement("dl");
+    dl.className = "hfields";
+    const fld = (label, value, sub, wide) => {
+      const d = document.createElement("div");
+      d.className = "hfield" + (wide ? " wide" : "");
+      const dt = document.createElement("dt"); dt.textContent = label;
+      const dd = document.createElement("dd");
+      if (value instanceof Node) dd.append(value); else dd.textContent = value;
+      if (sub) { const sp = document.createElement("span"); sp.className = "sub"; sp.textContent = sub; dd.append(sp); }
+      d.append(dt, dd); dl.append(d);
+    };
+    fld("What you ordered", job.textContent);
+    fld("About", String(o.body.job?.brief ?? "—") || "—", "", true);
+    fld("Price", `${o.body.amount ?? "0"} ${o.body.asset ?? "FLOP"}`,
+      "Nothing of value moves yet — the rehearsal rail holds no money.");
+    const placed = Date.parse(o.at);
+    fld("Placed", Number.isFinite(placed)
+      ? new Date(placed).toLocaleString(undefined,
+          { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })
+      : "—", Number.isFinite(placed) ? when(o.at) : "");
+    fld("Where it stands", open ? "Open" : "Closed",
+      open ? "Signed and on the public board. It can still be accepted."
+           : "Its expiry passed. If nobody accepted it, nothing was charged.");
+    if (isFinite(exp)) {
+      fld(open ? "Open until" : "Expired",
+        new Date(exp).toLocaleString(undefined,
+          { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }));
+    }
+    if (o.body.id) {
+      const f = document.createElement("div");
+      f.className = "hfield wide";
+      const dt = document.createElement("dt"); dt.textContent = "Order id";
+      const dd = document.createElement("dd");
+      dd.append(copyRow(document, String(o.body.id), "order id"));
+      const sp = document.createElement("span"); sp.className = "sub";
+      sp.textContent = "Quote this if you ever need to ask about this order.";
+      dd.append(sp);
+      f.append(dt, dd); dl.append(f);
+    }
+    det.append(dl);
+
+    const go = document.createElement("a");
+    go.className = "hdetgo";
+    go.href = "/deals-preview-78cb4a1be923c6b4.html";
+    go.textContent = "Check every signature on the deals board";
+    const gi = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    gi.setAttribute("class", "i");
+    const gu = document.createElementNS("http://www.w3.org/2000/svg", "use");
+    gu.setAttribute("href", "#i-caret");
+    gi.append(gu); go.append(gi); det.append(go);
+
+    row.addEventListener("click", () => {
+      const willOpen = det.hidden;
+      det.hidden = !willOpen;
+      row.setAttribute("aria-expanded", willOpen ? "true" : "false");
+    });
+
+    const item = document.createElement("div");
+    item.className = "hitem";
+    item.append(row, det);
+    list.append(item);
   }
   $("histcount").textContent = mine.length === 1 ? "1 order" : mine.length + " orders";
   /* The badge in the bar. Only ever set from a read that succeeded, so an
