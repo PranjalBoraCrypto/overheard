@@ -53,7 +53,8 @@ const ok = (n, c, note = "") => {
    OUT is resolved once, at module load. */
 const OUT = fs.mkdtempSync(path.join(os.tmpdir(), "shards-"));
 process.env.OUT_DIR = OUT;
-const { migrateShards, shardOf, shardPath, SHARD_CHARS, profileShard } = await import("../scripts/archive.mjs");
+const { migrateShards, shardOf, shardPath, shardPathJson, SHARD_CHARS, profileShard, foldLog, writeShard }
+  = await import("../scripts/archive.mjs");
 
 const hex = (did) => createHash("sha256").update(did, "utf8").digest("hex");
 /* Both layouts this has been through. Two characters ran for eleven days,
@@ -103,12 +104,20 @@ const fresh = () => fs.rmSync(path.join(OUT, "profiles"), { recursive: true, for
 const readAll = () => {
   const dir = path.join(OUT, "profiles");
   const out = new Map();               // did -> [shardName, record]
-  for (const f of fs.readdirSync(dir, { recursive: true })) {
-    const full = path.join(dir, f);
-    if (!f.endsWith(".json") || !fs.statSync(full).isFile()) continue;
-    const j = JSON.parse(fs.readFileSync(full, "utf8"));
+  /* A shard is a LOG now, and during a rollout the directory holds logs and
+     whole files side by side — a shard converts the first time somebody in it
+     speaks. The log wins where both exist, which is the same order the two
+     readers use. */
+  const names = fs.readdirSync(dir, { recursive: true })
+    .filter((f) => fs.statSync(path.join(dir, f)).isFile());
+  const logs = new Set(names.filter((f) => f.endsWith(".ndjson")).map((f) => f.slice(0, -7)));
+  for (const f of names) {
+    const isLog = f.endsWith(".ndjson");
+    if (!isLog && !(f.endsWith(".json") && !logs.has(f.slice(0, -5)))) continue;
+    const text = fs.readFileSync(path.join(dir, f), "utf8");
+    const j = isLog ? foldLog(text).bucket : JSON.parse(text);
     for (const [did, v] of Object.entries(j))
-      out.set(did, [f.replace(/\.json$/, "").replace(/[\\/]/g, ""), v]);
+      out.set(did, [f.replace(/\.(ndjson|json)$/, "").replace(/[\\/]/g, ""), v]);
   }
   return out;
 };
@@ -119,8 +128,8 @@ console.log("=== A. the rule itself");
 ok("the shard is four hex characters", SHARD_CHARS === 4, String(SHARD_CHARS));
 ok("and it is the first four of SHA-256 of the did",
   dids.every((d) => shardOf(d) === hex(d).slice(0, 4)));
-ok("and it is stored nested, two characters then two",
-  dids.every((d) => shardPath(shardOf(d)) === `${hex(d).slice(0,2)}/${hex(d).slice(2,4)}.json`),
+ok("and it is stored nested, two characters then two, as a log",
+  dids.every((d) => shardPath(shardOf(d)) === `${hex(d).slice(0,2)}/${hex(d).slice(2,4)}.ndjson`),
   shardPath(shardOf(dids[0])));
 /* 4,096 possible shards over 97,000 identities is about 24 each. The fixture
    is smaller, so what is checked is that the hash SPREADS — a rule that put
@@ -165,7 +174,7 @@ console.log("\n=== B. the move loses nothing");
     shortNames().length === 0, shortNames().join(" "));
   const sizes = fs.readdirSync(path.join(OUT, "profiles"), { recursive: true })
     .map((f) => path.join(OUT, "profiles", f))
-    .filter((f) => f.endsWith(".json") && fs.statSync(f).isFile())
+    .filter((f) => /\.(ndjson|json)$/.test(f) && fs.statSync(f).isFile())
     .map((f) => fs.statSync(f).size);
   ok("the files really are smaller now", Math.max(...sizes) < 8 * 1024,
     `largest ${Math.max(...sizes)} bytes`);
@@ -199,10 +208,10 @@ console.log("\n=== D. a run interrupted halfway");
     partial.get(s)[d] = { ...record(dids.indexOf(d)), rescued: true };
   }
   for (const [s, b] of partial) {
-    const body = Object.keys(b).sort().map((d) => ` ${JSON.stringify(d)}:${JSON.stringify(b[d])}`).join(",\n");
     const f = path.join(dir, shardPath(s));
     fs.mkdirSync(path.dirname(f), { recursive: true });
-    fs.writeFileSync(f, `{\n${body}\n}\n`);
+    fs.writeFileSync(f, Object.keys(b).sort()
+      .map((d) => JSON.stringify({ did: d, ...b[d] }) + "\n").join(""));
   }
 
   const state = { profiles: new Map() };
@@ -270,7 +279,7 @@ console.log("\n=== F. the three copies of the rule agree");
   const b = n(api, /async function shardOf\([\s\S]{0,400}?\.slice\(0,\s*(\d+)\)/);
   /* The card page's first name is nested, so its width is two slices rather
      than one: 0..2 and 2..4. Read both and add them. */
-  const cm = card.match(/const h of \[`\$\{hex\.slice\(0,\s*(\d+)\)\}\/\$\{hex\.slice\((\d+),\s*(\d+)\)\}`/);
+  const cm = card.match(/const h of \[`\$\{hex\.slice\(0,\s*(\d+)\)\}\/\$\{hex\.slice\((\d+),\s*(\d+)\)\}\.ndjson`/);
   const c = cm ? Number(cm[3]) : null;
   ok("the archiver says four", a === 4, String(a));
   ok("api/profile.js agrees", b === a, `${b} vs ${a}`);
@@ -294,7 +303,15 @@ console.log("\n=== F. the three copies of the rule agree");
      When it IS deleted, this pair of checks is what should be deleted with
      it. */
   ok("the card page falls back through BOTH older names",
-    /hex\.slice\(0,\s*3\),\s*hex\.slice\(0,\s*2\)/.test(card), "3 then 2");
+    /hex\.slice\(0,\s*3\)\}\.json`,\s*`\$\{hex\.slice\(0,\s*2\)\}\.json`/.test(card), "3 then 2");
+  /* And through the whole-file spelling of the CURRENT width, which is the
+     one that matters during this rollout: a shard nobody has spoken in since
+     the change still has only its .json, and there are tens of thousands of
+     them. Losing this line would blank the card for every quiet identity. */
+  ok("and through the whole-file name of the current width",
+    /hex\.slice\(2,4\)\}\.json`/.test(card));
+  ok("and so does the endpoint",
+    /shard\.slice\(2\)\}\.json`/.test(api));
   ok("and so does the endpoint",
     /shard\.slice\(0,\s*3\)/.test(api) && /shard\.slice\(0,\s*2\)/.test(api));
   /* Order matters as much as presence: newest first, or a stale deployed copy
@@ -308,6 +325,129 @@ console.log("\n=== F. the three copies of the rule agree");
     /createHash\("sha256"\)\.update\(did/.test(arch)
     && /digest\("SHA-256", *bytes\)/.test(api)
     && /digest\("SHA-256",new TextEncoder\(\)\.encode\(did\)\)/.test(card));
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+ * H. THE SHARD IS A LOG, WHICH IS THE WHOLE POINT OF THIS CHANGE
+ *
+ * MEASURED on the publish of 5 September 16:03: 77% of all 65,536 shards were
+ * rewritten, and inside them 41 records of 1,614 had changed. 1,045 MB written
+ * to record 15 MB of news. Everything below asserts the property that stops
+ * that: what gets written is what changed.
+ *
+ * The dangerous half is the reading. A log can be torn by an interrupted
+ * append, it can hold several versions of one record, and for the length of
+ * this rollout it can be absent entirely with a whole file in its place. Get
+ * any of those wrong and identities silently read as never having spoken —
+ * which is the failure this project keeps producing and the one no error
+ * message ever announces.
+ * ═════════════════════════════════════════════════════════════════════════*/
+console.log("\n=== H. what a write actually writes");
+{
+  fresh();
+  const dir = path.join(OUT, "profiles");
+  fs.mkdirSync(dir, { recursive: true });
+
+  /* One shard, by hand, so the assertions are about the writer and not about
+     whichever identities happen to hash together. */
+  const S = "abcd";
+  const file = path.join(dir, shardPath(S));
+  const bucket = {};
+  for (let i = 0; i < 40; i++) bucket["did:key:z6Mk" + String(i).padStart(44, "0")] = record(i);
+  const state = { profiles: new Map([[S, bucket]]) };
+
+  await writeShard(state, S, undefined);          // undefined = write it all
+  const lines = () => fs.readFileSync(file, "utf8").split("\n").filter(Boolean);
+  ok("a first write lays down one line per record", lines().length === 40, `${lines().length}`);
+  ok("and every line parses on its own", lines().every((l) => { try { JSON.parse(l); return true; } catch { return false; } }));
+  ok("and folding it returns exactly what went in",
+    Object.keys(foldLog(fs.readFileSync(file, "utf8")).bucket).length === 40);
+
+  /* THE ASSERTION THE CHANGE EXISTS FOR. */
+  const before = fs.readFileSync(file, "utf8");
+  const one = Object.keys(bucket)[7];
+  bucket[one] = { ...bucket[one], count: 999, last_text: "said something new" };
+  await writeShard(state, S, new Set([one]));
+  const after = fs.readFileSync(file, "utf8");
+  ok("changing one record appends ONE line", lines().length === 41, `${lines().length}`);
+  ok("and does not touch a byte of what was already there",
+    after.startsWith(before), `${after.length - before.length} bytes added`);
+  ok("and the later line is the one that counts",
+    foldLog(after).bucket[one].count === 999, String(foldLog(after).bucket[one].count));
+  ok("while everybody else is unchanged",
+    Object.keys(foldLog(after).bucket).length === 40);
+
+  /* A dirty set that turns out to be empty must write nothing at all —
+     otherwise a shard marked and not changed costs a full rewrite, which is
+     the cost this is here to remove. */
+  const sizeBefore = fs.statSync(file).size;
+  await writeShard(state, S, new Set());
+  ok("a shard marked but unchanged writes nothing", fs.statSync(file).size === sizeBefore);
+
+  /* ── the torn line ────────────────────────────────────────────────────
+     An append killed halfway leaves one unparseable line, at the end. */
+  fs.appendFileSync(file, '{"did":"did:key:z6Mkpartial","cou');
+  const torn = foldLog(fs.readFileSync(file, "utf8"));
+  ok("a half-written last line is skipped, not fatal",
+    Object.keys(torn.bucket).length === 40 && torn.dropped === 1, `${torn.dropped} dropped`);
+  ok("and the reader still finds the record that was updated",
+    torn.bucket[one].count === 999);
+  fs.writeFileSync(file, after);                 // put it back
+
+  /* ── compaction ──────────────────────────────────────────────────────
+     40 records at COMPACT_AT = 3 means the log is rewritten once a write
+     would take it past 120 lines. What is asserted is the PROPERTY, not the
+     round it happens on: the file is bounded, and it drops back to one line
+     per record when it is rewritten. Pinning the exact round would be a test
+     of the arithmetic in the test. */
+  const seen = [];
+  for (let round = 0; round < 8; round++) {
+    const some = Object.keys(bucket).slice(0, 30);
+    for (const d of some) bucket[d] = { ...bucket[d], count: bucket[d].count + 1 };
+    await writeShard(state, S, new Set(some));
+    seen.push(lines().length);
+  }
+  ok("the log never grows past three times the records it holds",
+    Math.max(...seen) <= 120, `peak ${Math.max(...seen)} lines`);
+  ok("because it is rewritten when it gets there",
+    seen.includes(40) && seen.some((n, i) => i && n < seen[i - 1]), seen.join(" "));
+  ok("and compaction loses nothing",
+    Object.keys(foldLog(fs.readFileSync(file, "utf8")).bucket).length === 40);
+  ok("and every record still holds its latest value",
+    foldLog(fs.readFileSync(file, "utf8")).bucket[one].count === 999 + 8,
+    String(foldLog(fs.readFileSync(file, "utf8")).bucket[one].count));
+}
+
+console.log("\n=== H2. a shard still in the whole-file layout");
+{
+  fresh();
+  const dir = path.join(OUT, "profiles");
+  const S = "beef";
+  const oldFile = path.join(dir, shardPathJson(S));
+  fs.mkdirSync(path.dirname(oldFile), { recursive: true });
+  const bucket = {};
+  /* Hashed, not padded. A first version used String(i).padStart(44, "1"),
+     which makes 1 and 11 — and 0 and 10 — the SAME did, so twelve records
+     became ten and the test reported a reader that had lost two. */
+  for (let i = 0; i < 12; i++)
+    bucket["did:key:z6Mk" + createHash("sha256").update("h2-" + i).digest("hex").slice(0, 44)] = record(i);
+  fs.writeFileSync(oldFile, JSON.stringify(bucket, null, 1));
+
+  const state = { profiles: new Map() };
+  const read = await profileShard(state, S);
+  ok("it is still read", Object.keys(read).length === 12, `${Object.keys(read).length}`);
+
+  const one = Object.keys(read)[0];
+  read[one] = { ...read[one], count: 4242 };
+  await writeShard(state, S, new Set([one]));
+  const newFile = path.join(dir, shardPath(S));
+  ok("the first write converts it to a log", fs.existsSync(newFile));
+  ok("with every record carried across",
+    Object.keys(foldLog(fs.readFileSync(newFile, "utf8")).bucket).length === 12);
+  ok("and the update in it", foldLog(fs.readFileSync(newFile, "utf8")).bucket[one].count === 4242);
+  /* Deleted only AFTER the log is on disk, so a reader arriving in between
+     finds the old answer rather than none. */
+  ok("and the whole file removed once its replacement exists", !fs.existsSync(oldFile));
 }
 
 console.log("\n=== G. the workflow no longer stages profiles on their own");

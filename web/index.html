@@ -2802,10 +2802,24 @@ async function lookupStats(did){
       // deployed fine rather than to a blank card.
       // Delete the short names once 4-character shards have been live for a
       // while — scripts/test-archive-shards.mjs pins that they are here.
-      for(const h of [`${hex.slice(0,2)}/${hex.slice(2,4)}`, hex.slice(0,3), hex.slice(0,2)]){
-        const r=await fetch(`./data/profiles/${h}.json`,{cache:"no-cache"});
+      // A shard is a LOG now — one record per line, last line for a did wins —
+      // and the whole-file names stay behind it for the same reason they
+      // always have: the deployed copy trails the archiver by up to a publish
+      // pass, and a shard migrates only when somebody in it next speaks.
+      // A line that will not parse is skipped, never fatal: an interrupted
+      // append leaves exactly one, at the end.
+      for(const h of [`${hex.slice(0,2)}/${hex.slice(2,4)}.ndjson`, `${hex.slice(0,2)}/${hex.slice(2,4)}.json`, `${hex.slice(0,3)}.json`, `${hex.slice(0,2)}.json`]){
+        const r=await fetch(`./data/profiles/${h}`,{cache:"no-cache"});
         if(!r.ok) continue;
-        p=(await r.json())[did];
+        if(h.endsWith(".ndjson")){
+          for(const line of (await r.text()).split("\n")){
+            if(!line) continue;
+            let rec; try{ rec=JSON.parse(line); }catch{ continue; }
+            if(rec && rec.did===did){ const {did:_d, ...rest}=rec; p=rest; }
+          }
+        } else {
+          p=(await r.json())[did];
+        }
         if(p) break;
       }
       if(!p) return null;

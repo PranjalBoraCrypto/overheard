@@ -61,9 +61,10 @@ async function shardOf(did) {
  *  by up to one publish pass, and because a widening that a static host
  *  refuses should degrade to the previous layout rather than to nothing. */
 const shardNames = (shard) => [
-  `${shard.slice(0, 2)}/${shard.slice(2)}`,     // 65,536, nested — current
-  shard.slice(0, 3),                            // 4,096, flat
-  shard.slice(0, 2),                            // 256, flat
+  `${shard.slice(0, 2)}/${shard.slice(2)}.ndjson`,  // the log — current
+  `${shard.slice(0, 2)}/${shard.slice(2)}.json`,    // 65,536, whole file
+  `${shard.slice(0, 3)}.json`,                      // 4,096, flat
+  `${shard.slice(0, 2)}.json`,                      // 256, flat
 ];
 
 /* ── where this identity stands ───────────────────────────────────────────
@@ -155,9 +156,31 @@ export default async function handler(request) {
      three requests at the repository to save a few milliseconds on the rare
      one would triple this endpoint's read volume against a shared allowance
      the archiver is also spending. */
+  /* A shard is a LOG now: one record per line, the last line for a did
+     winning. A line that will not parse is skipped rather than fatal — an
+     append interrupted halfway leaves exactly one such line, at the end, and
+     refusing to read the file would report everybody in it as never having
+     spoken. */
+  const grabLog = async (p) => {
+    try {
+      const res = await fetch(raw(p), { headers: { Accept: "text/plain", "User-Agent": "overheard-profile/1.0" } });
+      if (!res.ok) return null;
+      const out = {};
+      for (const line of (await res.text()).split("\n")) {
+        if (!line) continue;
+        let r;
+        try { r = JSON.parse(line); } catch { continue; }
+        if (!r || typeof r.did !== "string") continue;
+        const { did: d, ...rest } = r;
+        out[d] = rest;
+      }
+      return out;
+    } catch { return null; }
+  };
+
   let found = null, any = null;
   for (const n of shardNames(shard)) {
-    const b = await grab(`profiles/${n}.json`);
+    const b = n.endsWith(".ndjson") ? await grabLog(`profiles/${n}`) : await grab(`profiles/${n}`);
     if (b && !any) any = b;                 // it answered, even if empty
     if (b?.[did]) { found = b; break; }
   }

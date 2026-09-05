@@ -80,8 +80,25 @@ await new Promise((done) => {
   setTimeout(() => p.kill("SIGTERM"), 40000);
 });
 
+/** The cursors, whichever layout they are in. A log now; a whole file until
+ *  the first write after this change. */
+function readCursors(dir) {
+  const log = path.join(dir, "cursors.ndjson");
+  if (fs.existsSync(log)) {
+    const out = {};
+    for (const line of fs.readFileSync(log, "utf8").split("\n")) {
+      if (!line) continue;
+      try { const r = JSON.parse(line); if (r && typeof r.room === "string") out[r.room] = r.cursor; }
+      catch { /* a torn last line is skipped, exactly as the archiver does */ }
+    }
+    return out;
+  }
+  const old = path.join(dir, "cursors.json");
+  return fs.existsSync(old) ? JSON.parse(fs.readFileSync(old, "utf8")) : {};
+}
+
 const meta = JSON.parse(fs.readFileSync(path.join(OUT, "quiet-room", "_meta.json"), "utf8"));
-const cursors = JSON.parse(fs.readFileSync(path.join(OUT, "cursors.json"), "utf8"));
+const cursors = readCursors(OUT);
 const admitted = (meta.gaps ?? []).reduce((s, g) => s + (g.missed || 0), 0);
 
 console.log("\n=== the cursor, and what it admits to");

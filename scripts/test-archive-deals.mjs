@@ -155,7 +155,10 @@ console.log("\n=== E. a gap says which kind of gap it was");
 
 console.log("\n=== D. the archiver still did its actual job");
 ok("it recorded the offers room too", fs.existsSync(path.join(OUT, "tclk-offers")));
-ok("cursors were written", fs.existsSync(path.join(OUT, "cursors.json")));
+/* Either layout counts: this asserts that the archiver recorded where it got
+   to, not which file it happens to use this month. */
+ok("cursors were written",
+  fs.existsSync(path.join(OUT, "cursors.ndjson")) || fs.existsSync(path.join(OUT, "cursors.json")));
 ok("it did not fall over", !/UnhandledPromiseRejection|TypeError|ReferenceError/.test(globalThis.__log || ""),
   (globalThis.__log || "").split("\n").find((l) => /Error/.test(l)) || "clean");
 

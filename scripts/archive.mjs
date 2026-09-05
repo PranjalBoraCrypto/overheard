@@ -85,7 +85,7 @@
  *   into place. git never sees a half-written shard.
  */
 
-import { readFile, writeFile, rename, mkdir, readdir, rm } from "node:fs/promises";
+import { readFile, writeFile, appendFile, rename, mkdir, readdir, rm } from "node:fs/promises";
 /* The deal-room name comes from the protocol module the site already uses, so
    the archiver and the page can never disagree about which room a deal is in. */
 import { readFrame, isFrameText, dealRoom, OFFERS_ROOM } from "../web/tclk.js";
@@ -667,9 +667,88 @@ export const SHARD_CHARS = 4;
 export const shardOf = (did) =>
   createHash("sha256").update(did, "utf8").digest("hex").slice(0, SHARD_CHARS);
 
+/* ══════════════════════════════════════════════════════════════════════════
+ * AND WHY WIDENING WAS NEVER GOING TO BE ENOUGH
+ *
+ * The shards went 256 -> 4,096 -> 65,536 and the repository still grew about
+ * seven gigabytes a day. MEASURED on the publish of 5 September 16:03, by
+ * diffing the tree against its parent:
+ *
+ *   · 77% of all 65,536 shard files were rewritten by ONE publish
+ *   · inside them, 41 of 1,614 records had actually changed — 2.5%
+ *   · so 1,045 MB was written to record 15 MB of news
+ *
+ * The reason is the property that makes hash sharding attractive. It spreads
+ * identities EVENLY, so a publish touching ~86,000 records over 65,536 shards
+ * puts an average of 1.3 in each — and a shard with one changed record costs
+ * exactly as much to rewrite as a shard with sixty. Poisson says 73% of shards
+ * get at least one; the measurement said 77%. Splitting finer divides the
+ * records but never the news, and to reach 30 MB a publish by width alone
+ * would take about four MILLION files.
+ *
+ * So the shard stops being a file that is rewritten and becomes a LOG that is
+ * appended to. One line per record, the last line for a did winning. A publish
+ * writes what changed — measured at 31 MB against 1,045 MB, the number the
+ * widening was aiming at all along — and the file is rewritten only when it
+ * has grown to COMPACT_AT times the records it actually holds.
+ * ═════════════════════════════════════════════════════════════════════════*/
+
 /** Where a shard lives, relative to the profiles directory. */
 export const shardPath = (shard) =>
+  shard.length > 3 ? `${shard.slice(0, 2)}/${shard.slice(2)}.ndjson` : `${shard}.ndjson`;
+
+/** The same shard under the whole-file layout this replaces. Read, never
+ *  written, and deleted the moment its log has landed. */
+export const shardPathJson = (shard) =>
   shard.length > 3 ? `${shard.slice(0, 2)}/${shard.slice(2)}.json` : `${shard}.json`;
+
+/* ── how long a log is allowed to get ─────────────────────────────────────
+   Chosen from the arithmetic rather than by feel. Appending costs 0.61 GB a
+   day whatever this is; compacting costs 65,536 rewrites divided by however
+   many days it takes to trigger, and a lookup pays for whatever has piled up
+   since. Measured against 69 records and 21 KB in an average shard:
+
+        at 2x    43 KB peak    every 2.2 d    1.23 GB/day
+        at 3x    65 KB peak    every 4.4 d    0.92 GB/day     <- here
+        at 6x   129 KB peak    every 11 d     0.74 GB/day
+        at 20x  430 KB peak    every 42 d     0.65 GB/day
+
+   The saving is nearly all bought by 3x; past it the file grows faster than
+   the storage falls, and the file is what a visitor downloads to see a card.
+   Today's figure, for scale, is 24.5 GB a day. */
+const COMPACT_AT = 3;
+/* Below this a log is too short for the bookkeeping to be worth anything, and
+   rewriting it costs almost nothing. */
+const COMPACT_MIN = 32;
+
+/** Read a file, or null if it is not there. */
+async function readText(file) {
+  try { return await readFile(file, "utf8"); } catch { return null; }
+}
+
+/**
+ * Fold a log into the object a bucket is. Later lines win.
+ *
+ * A LINE THAT WILL NOT PARSE IS SKIPPED, NOT FATAL. An append interrupted
+ * halfway leaves bytes nobody finished writing, and there is exactly one such
+ * line and it is at the end. Losing that one update is recoverable — the next
+ * pass writes it again. Refusing to read the shard is not: it would report
+ * every identity in it as never having spoken.
+ */
+export function foldLog(text) {
+  const bucket = {};
+  let lines = 0, dropped = 0;
+  for (const line of String(text ?? "").split("\n")) {
+    if (!line) continue;
+    lines++;
+    let r;
+    try { r = JSON.parse(line); } catch { dropped++; continue; }
+    if (!r || typeof r.did !== "string") { dropped++; continue; }
+    const { did, ...rest } = r;
+    bucket[did] = rest;
+  }
+  return { bucket, lines, dropped };
+}
 
 /* Everything at the top level with a short name is a previous layout. Both
    of them: this repository ran two characters for eleven days and three for
@@ -677,9 +756,69 @@ export const shardPath = (shard) =>
    have stranded whatever the newer one had already written. */
 const OLD_SHARD = /^[0-9a-f]{2,3}\.json$/;
 
+/* ══════════════════════════════════════════════════════════════════════════
+ * THE OTHER FILE THAT WAS COSTING HALF A GIGABYTE A DAY
+ *
+ * cursors.json is where each room was left off. MEASURED on 5 September: it
+ * holds 78,222 rooms in 1.73 MB, on ONE line, and 256 of those rooms change
+ * in a five-minute pass. So a fifth of a percent of it was news and all of it
+ * was written, 288 times a day — about 490 MB, for eleven and a half kilobytes
+ * of actual change.
+ *
+ * Nothing outside this file has ever read it: it is bookkeeping, not archive.
+ * So it becomes a log too, on the same rule as the shards.
+ * ═════════════════════════════════════════════════════════════════════════*/
+async function loadCursors() {
+  const log = await readText(path.join(OUT, "cursors.ndjson"));
+  if (log !== null) {
+    const map = {};
+    let lines = 0;
+    for (const line of log.split("\n")) {
+      if (!line) continue;
+      lines++;
+      /* Same rule as a shard log: a half-written last line is skipped. Losing
+         one cursor re-reads one room from where it was, which costs a read
+         and duplicates nothing — every writer here is keyed by sequence. */
+      try {
+        const r = JSON.parse(line);
+        if (r && typeof r.room === "string") map[r.room] = r.cursor;
+      } catch { /* skipped on purpose */ }
+    }
+    return { map, lines };
+  }
+  /* The whole-file layout. Zero lines means the first write rewrites it. */
+  return { map: await readJson(path.join(OUT, "cursors.json"), {}), lines: 0 };
+}
+
+/** The cursors, written the same way a shard is. */
+async function writeCursors(state, dirty) {
+  if (!dirty.size) return;
+  const file = path.join(OUT, "cursors.ndjson");
+  const line = (room) => JSON.stringify({ room, cursor: state.cursors[room] }) + "\n";
+  const held = Object.keys(state.cursors).length;
+  const lines = state.cursorLines ?? 0;
+
+  if (lines === 0 || lines + dirty.size > Math.max(COMPACT_MIN, held * COMPACT_AT)) {
+    await writeAtomic(file, Object.keys(state.cursors).sort().map(line).join(""));
+    state.cursorLines = held;
+    const old = path.join(OUT, "cursors.json");
+    if (existsSync(old)) await rm(old, { force: true });
+  } else {
+    await appendFile(file, [...dirty].sort().map(line).join(""));
+    state.cursorLines = lines + dirty.size;
+  }
+}
+
 async function loadState() {
+  const cursors = await loadCursors();
   return {
-    cursors: await readJson(path.join(OUT, "cursors.json"), {}),
+    cursors: cursors.map,
+    /* How many lines are on disk, so the writer knows when the log has grown
+       past the records it holds and is worth rewriting. */
+    cursorLines: cursors.lines,
+    dirtyCursors: new Set(),
+    shardLines: new Map(),
+    dirtyDids: new Map(),
     templates: await readJson(path.join(OUT, "templates.json"), { updated: null, texts: {} }),
     profiles: new Map(),
     dirtyProfiles: new Set(),
@@ -718,21 +857,59 @@ function trimDeals(deals) {
   return deals;
 }
 
-/** One shard, on disk. One identity per line — still valid JSON, but a
- *  single identity's update changes one short line rather than shuffling the
- *  whole object onto one line, which is the difference between git storing a
- *  delta and storing the file again. */
-async function writeShard(state, shard) {
+/**
+ * One shard, on disk.
+ *
+ * It used to be one identity per line inside a JSON object, on the theory
+ * that a short changed line is a small delta. It is not: git stores the whole
+ * blob and the pack's own measurement says so — 1,045 MB of rewritten shards
+ * turned into 336 MB of repository, which is zlib and nothing else.
+ *
+ * So `dids` is the set that actually changed, and only those lines are
+ * written. Pass it undefined to force a full rewrite, which is what a
+ * migration wants.
+ */
+export async function writeShard(state, shard, dids) {
+  state.shardLines ??= new Map();
   const bucket = state.profiles.get(shard);
-  const body = Object.keys(bucket).sort()
-    .map((did) => ` ${JSON.stringify(did)}:${JSON.stringify(bucket[did])}`)
-    .join(",\n");
-  const file = path.join(OUT, "profiles", shardPath(shard));
+  if (!bucket) return;
+  /* An empty dirty set means somebody marked a shard and changed nothing in
+     it. Rewriting the whole file for that is the exact cost this is here to
+     stop. */
+  if (dids && dids.size === 0) return;
+
+  const dir = path.join(OUT, "profiles");
+  const file = path.join(dir, shardPath(shard));
   /* The nesting means a shard's directory may not exist yet. mkdir is cheap
      and idempotent; getting this wrong loses a shard silently, because
      writeAtomic's rename would fail into a catch nobody is watching. */
   await mkdir(path.dirname(file), { recursive: true });
-  await writeAtomic(file, `{\n${body}\n}\n`);
+
+  const line = (did) => JSON.stringify({ did, ...bucket[did] }) + "\n";
+  const held = Object.keys(bucket).length;
+  const lines = state.shardLines.get(shard) ?? 0;
+
+  /* `lines === 0` covers three cases and all three want the same answer: a
+     shard that is new, one still in the whole-file layout, and one this
+     process has not read. Each needs a file that stands on its own before
+     anything may be appended to it. */
+  const rewrite = !dids || lines === 0
+    || lines + dids.size > Math.max(COMPACT_MIN, held * COMPACT_AT);
+
+  if (rewrite) {
+    await writeAtomic(file, Object.keys(bucket).sort().map(line).join(""));
+    state.shardLines.set(shard, held);
+    /* The previous layout's file, removed only AFTER its replacement is on
+       disk. writeAtomic renames, so there is no instant where a reader could
+       find neither — and the readers try the log first and the old name
+       second, so one that arrives in between finds the old answer rather
+       than no answer. */
+    const old = path.join(dir, shardPathJson(shard));
+    if (existsSync(old)) await rm(old, { force: true });
+  } else {
+    await appendFile(file, [...dids].sort().map(line).join(""));
+    state.shardLines.set(shard, lines + dids.size);
+  }
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
@@ -799,15 +976,31 @@ export async function migrateShards(state) {
        here will be read again — and if the run does need one later,
        profileShard() reads it back from disk. */
     state.profiles.delete(file.replace(/\.json$/, ""));
-    for (const s of touched) state.profiles.delete(s);
+    for (const s of touched) { state.profiles.delete(s); state.shardLines.delete(s); }
   }
   console.log(`  profiles: moved ${moved} identities out of ${old.length} old shards into ${SHARD_CHARS}-character ones`);
   return moved;
 }
 
 export async function profileShard(state, shard) {
+  /* Made on demand, because the suites construct a state by hand and should
+     not have to know which bookkeeping maps this file happens to keep. */
+  state.shardLines ??= new Map();
+  state.dirtyDids ??= new Map();
   if (!state.profiles.has(shard)) {
-    state.profiles.set(shard, await readJson(path.join(OUT, "profiles", shardPath(shard)), {}));
+    const dir = path.join(OUT, "profiles");
+    const log = await readText(path.join(dir, shardPath(shard)));
+    if (log !== null) {
+      const { bucket, lines } = foldLog(log);
+      state.profiles.set(shard, bucket);
+      state.shardLines.set(shard, lines);
+    } else {
+      /* Still in the whole-file layout, or not there at all. Either way the
+         line count is zero, which is what makes the next write a full one —
+         so a shard migrates itself the first time anybody in it speaks. */
+      state.profiles.set(shard, await readJson(path.join(dir, shardPathJson(shard)), {}));
+      state.shardLines.set(shard, 0);
+    }
   }
   return state.profiles.get(shard);
 }
@@ -832,6 +1025,12 @@ async function recordProfile(state, did, room, ts, isTemplate, text) {
   const shard = shardOf(did);
   const bucket = await profileShard(state, shard);
   state.dirtyProfiles.add(shard);
+  /* WHICH record, not merely which file. The whole saving is here: without
+     this the writer knows a shard changed and has to assume all of it did. */
+  state.dirtyDids ??= new Map();
+  let touched = state.dirtyDids.get(shard);
+  if (!touched) state.dirtyDids.set(shard, touched = new Set());
+  touched.add(did);
   const p = (bucket[did] ??= { count: 0, unique: 0, templates: 0, rooms: [], first: ts, last: ts });
   p.count++;
   // `unique` is the headline figure on a card, and it deliberately excludes
@@ -1137,6 +1336,7 @@ async function readRoom(state, e) {
   }
 
   state.cursors[e.room] = head;
+  (state.dirtyCursors ??= new Set()).add(e.room);
 
   /* When this room last had anything to say. A deal room keeps its tight
      ceiling while this is recent and falls back to the ordinary cadence once
@@ -1186,14 +1386,26 @@ function detach(state) {
   }
   const shards = [...state.dirtyProfiles];
   state.dirtyProfiles.clear();
-  return { work, shards };
+  /* THE SAME HANDOVER, FOR THE SAME REASON. Reads keep arriving through the
+     seconds this flush takes, and a did recorded mid-flush must belong to the
+     NEXT write, not be deleted along with the set the current one is holding.
+     Detaching the shard names and leaving the dids behind would lose exactly
+     the updates that arrived while we were writing. */
+  const dirtyDids = new Map();
+  for (const shard of shards) {
+    const set = state.dirtyDids.get(shard);
+    if (set) { dirtyDids.set(shard, set); state.dirtyDids.delete(shard); }
+  }
+  const cursors = state.dirtyCursors ?? new Set();
+  state.dirtyCursors = new Set();
+  return { work, shards, dirtyDids, cursors };
 }
 
 async function flush(state, rows, total, standings = false) {
-  const { work, shards } = detach(state);
+  const { work, shards, dirtyDids, cursors } = detach(state);
 
   await mkdir(path.join(OUT, "profiles"), { recursive: true });
-  for (const shard of shards) await writeShard(state, shard);
+  for (const shard of shards) await writeShard(state, shard, dirtyDids.get(shard) ?? new Set());
 
   for (const { room, days, gaps, p } of work) {
     const roomDir = path.join(OUT, room);
@@ -1281,7 +1493,7 @@ async function flush(state, rows, total, standings = false) {
 
   await writeTail(state);
 
-  await writeAtomic(path.join(OUT, "cursors.json"), JSON.stringify(state.cursors) + "\n");
+  await writeCursors(state, cursors);
 
   /* The index of deal rooms is itself worth publishing: it is the only list
      anywhere of where tclk settlements are happening, and it is what lets the
@@ -1433,8 +1645,20 @@ async function writeStandings() {
      have returned 256 DIRECTORY names, matched none of them against .json,
      and quietly computed the standings of nobody — every figure on the card
      page zero, with no error anywhere. */
-  for (const file of (await readdir(dir, { recursive: true })).filter((f) => f.endsWith(".json"))) {
-    const bucket = await readJson(path.join(dir, file), {});
+  /* BOTH LAYOUTS AT ONCE, AND NEITHER COUNTED TWICE. A shard migrates the
+     first time anybody in it speaks, so for a few passes the directory holds
+     logs and whole files side by side. A shard that has both — which is only
+     possible if a rewrite landed and the delete after it did not — must be
+     counted once, and the log is the newer of the two. */
+  const names = await readdir(dir, { recursive: true });
+  const logs = new Set(names.filter((f) => f.endsWith(".ndjson")).map((f) => f.slice(0, -7)));
+  const wanted = names.filter((f) =>
+    f.endsWith(".ndjson") || (f.endsWith(".json") && !logs.has(f.slice(0, -5))));
+
+  for (const file of wanted) {
+    const bucket = file.endsWith(".ndjson")
+      ? foldLog(await readText(path.join(dir, file))).bucket
+      : await readJson(path.join(dir, file), {});
     for (const p of Object.values(bucket)) {
       identities++;
       const u = p.unique ?? 0, r = (p.rooms ?? []).length, c = p.count ?? 0;
