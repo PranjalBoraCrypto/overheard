@@ -85,7 +85,7 @@
  *   into place. git never sees a half-written shard.
  */
 
-import { readFile, writeFile, rename, mkdir, readdir } from "node:fs/promises";
+import { readFile, writeFile, rename, mkdir, readdir, rm } from "node:fs/promises";
 /* The deal-room name comes from the protocol module the site already uses, so
    the archiver and the page can never disagree about which room a deal is in. */
 import { readFrame, isFrameText, dealRoom, OFFERS_ROOM } from "../web/tclk.js";
@@ -604,7 +604,41 @@ async function writeAtomic(file, text) {
   await rename(tmp, file);
 }
 
-const shardOf = (did) => createHash("sha256").update(did, "utf8").digest("hex").slice(0, 2);
+/* ══════════════════════════════════════════════════════════════════════════
+ * HOW WIDE A PROFILE SHARD IS, AND WHY IT COST SEVEN GIGABYTES A DAY
+ *
+ * This was TWO hex characters — 256 shards over 2,758,760 identities, so
+ * 10,650 identities and 3.2 MB in every file. Git does not store a change to
+ * a file; it stores the FILE. So one identity posting one message wrote a new
+ * 3.2 MB object.
+ *
+ * MEASURED, on the live repository. Each five-minute pass sees roughly 150
+ * distinct identities, and 150 identities spread across 256 shards touch
+ * nearly all of them: about 384 MB of new objects per pass, staged 32 times a
+ * day. GitHub reported the repository at 76.22 GB on 4 September, up from
+ * nothing on 25 August — a little over 7 GB a day — and answered a push with
+ * "Repository is approaching its size quota".
+ *
+ * THREE characters is 4,096 shards of about 670 identities and 200 KB. The
+ * same 150 identities now land in about 148 DIFFERENT shards, so almost every
+ * one of them is a shard of its own: 30 MB a pass instead of 384. Sixteen
+ * times less, for one character.
+ *
+ * The move itself is measured too: 44 seconds over the real 815 MB, once.
+ *
+ * Why not four, at 65,536 files of 12 KB? Because the repository already
+ * carries 141,884 files and a static host has its own opinion about how many
+ * files a deployment may contain. Three is the change that is large enough to
+ * matter and small enough not to trade one ceiling for another.
+ *
+ * The other half of the fix is in .github/workflows/archive.yml: this
+ * directory was staged on every third pass, and there is nothing a visitor
+ * can do with a profile that is fifteen minutes fresher rather than ninety.
+ * ═════════════════════════════════════════════════════════════════════════*/
+export const SHARD_CHARS = 3;
+export const shardOf = (did) =>
+  createHash("sha256").update(did, "utf8").digest("hex").slice(0, SHARD_CHARS);
+const OLD_SHARD = /^[0-9a-f]{2}\.json$/;
 
 async function loadState() {
   return {
@@ -647,7 +681,84 @@ function trimDeals(deals) {
   return deals;
 }
 
-async function profileShard(state, shard) {
+/** One shard, on disk. One identity per line — still valid JSON, but a
+ *  single identity's update changes one short line rather than shuffling the
+ *  whole object onto one line, which is the difference between git storing a
+ *  delta and storing the file again. */
+async function writeShard(state, shard) {
+  const bucket = state.profiles.get(shard);
+  const body = Object.keys(bucket).sort()
+    .map((did) => ` ${JSON.stringify(did)}:${JSON.stringify(bucket[did])}`)
+    .join(",\n");
+  await writeAtomic(path.join(OUT, "profiles", `${shard}.json`), `{\n${body}\n}\n`);
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+ * THE ONE-TIME MOVE FROM 256 SHARDS TO 4,096
+ *
+ * Without this the widening would be silent data loss of the worst kind. The
+ * archiver reads a shard on demand — profileShard() — and a read of a file
+ * that does not exist returns {}. So on the first pass after the change, the
+ * ~150 identities seen in that window would be written into new three-
+ * character shards holding only themselves, the 256 two-character files would
+ * sit there unread, and the card page — which now asks for the new name —
+ * would report 97,000 identities as never having spoken. Nothing would throw
+ * and no test that did not know to look would notice.
+ *
+ * So every old shard is read, its identities redistributed by the new rule,
+ * and the old file removed, before anything else runs. Sixteen new shards out
+ * of each old one, since it is the third hex character that is new.
+ *
+ * IT MERGES RATHER THAN OVERWRITES. A run that is interrupted halfway leaves
+ * some identities in the new layout and some still in the old; the next run
+ * has to finish the job without discarding what the first one wrote. And it
+ * costs nothing once done — the filter finds no two-character files and it
+ * returns immediately, on every pass for the rest of the archive's life.
+ * ═════════════════════════════════════════════════════════════════════════*/
+export async function migrateShards(state) {
+  const dir = path.join(OUT, "profiles");
+  if (!existsSync(dir)) return 0;
+  const old = (await readdir(dir)).filter((f) => OLD_SHARD.test(f));
+  if (!old.length) return 0;
+
+  let moved = 0;
+  for (const file of old) {
+    const bucket = await readJson(path.join(dir, file), {});
+    const touched = new Set();
+    for (const [did, v] of Object.entries(bucket)) {
+      const s = shardOf(did);
+      /* Through profileShard, so anything already written by an interrupted
+         run is loaded and kept rather than replaced. */
+      const into = await profileShard(state, s);
+      into[did] = v;
+      touched.add(s);
+      moved++;
+    }
+    for (const s of touched) await writeShard(state, s);
+    /* Only after every identity in it has been written somewhere else. */
+    await rm(path.join(dir, file));
+
+    /* ── AND THEN FORGET ALL OF IT ────────────────────────────────────────
+       MEASURED on the real archive: 2,758,760 identities across 256 shards,
+       and holding the migrated ones in memory took the process to 1.9 GB of
+       resident set. A GitHub runner would survive that and should not have
+       to, and two other things read `state.profiles` afterwards — writeRecent
+       walks every entry in it and sorts them, which on the migration pass
+       would be a 2.7-million-element sort for a list of sixty.
+
+       Safe because the first two characters are PRESERVED: everything in
+       `ab.json` goes to `ab0`…`abf` and no other old shard can ever write
+       there. Each new shard is finished the moment its parent is, so nothing
+       here will be read again — and if the run does need one later,
+       profileShard() reads it back from disk. */
+    state.profiles.delete(file.replace(/\.json$/, ""));
+    for (const s of touched) state.profiles.delete(s);
+  }
+  console.log(`  profiles: moved ${moved} identities out of ${old.length} old shards into ${SHARD_CHARS}-character ones`);
+  return moved;
+}
+
+export async function profileShard(state, shard) {
   if (!state.profiles.has(shard)) {
     state.profiles.set(shard, await readJson(path.join(OUT, "profiles", `${shard}.json`), {}));
   }
@@ -1035,17 +1146,7 @@ async function flush(state, rows, total, standings = false) {
   const { work, shards } = detach(state);
 
   await mkdir(path.join(OUT, "profiles"), { recursive: true });
-  for (const shard of shards) {
-    // One identity per line. Still valid JSON, but a single identity's
-    // update now changes one short line instead of shuffling a 100 KB
-    // single-line object — which is the difference between git storing a
-    // small delta and storing the file again.
-    const bucket = state.profiles.get(shard);
-    const body = Object.keys(bucket).sort()
-      .map((did) => ` ${JSON.stringify(did)}:${JSON.stringify(bucket[did])}`)
-      .join(",\n");
-    await writeAtomic(path.join(OUT, "profiles", `${shard}.json`), `{\n${body}\n}\n`);
-  }
+  for (const shard of shards) await writeShard(state, shard);
 
   for (const { room, days, gaps, p } of work) {
     const roomDir = path.join(OUT, room);
@@ -1263,8 +1364,14 @@ async function writeRecent(state) {
    your hour ended", both of which are counts, not estimates.
 
    Read from disk rather than from `state.profiles`, and deliberately NOT on
-   every flush: it walks all 256 shards, and the reads now come every few
+   every flush: it walks every shard, and the reads now come every few
    seconds where they used to come every five minutes.
+
+   THAT WALK IS 4,096 FILES NOW rather than 256 — the shards were widened to
+   stop the repository growing seven gigabytes a day. The same bytes are read
+   either way; what is added is per-file overhead, about a second on a runner,
+   and it is paid only on the passes that ask for standings rather than on
+   every flush. That is the trade this gate already exists to make.
    ─────────────────────────────────────────────────────────────────────── */
 const ACTIVE_MIN = 5;   // below this, "100% original" only means "posted once"
 
@@ -1469,6 +1576,10 @@ function pick(sched, now, minRisk = 0) {
 async function main() {
   await mkdir(OUT, { recursive: true });
   const state = await loadState();
+  /* Before anything reads a profile. See migrateShards for why doing this
+     lazily, or later, or not at all, would silently empty the archive's
+     largest dataset rather than failing. */
+  await migrateShards(state);
   const sched = new Map();
   console.log(`Archiving from ${BASE} — ${Math.round(RUN_MS / 1000)}s window, ${READS_PER_MIN} reads/min, ${CONCURRENCY} at a time`);
 
@@ -1610,4 +1721,11 @@ async function main() {
   }
 }
 
-main().catch((err) => { console.error(err); process.exit(1); });
+/* ONLY WHEN THIS FILE IS THE PROGRAM. A few pieces of this module are now
+   imported by tests — the shard rule and the one-time migration, which are
+   exactly the parts where being wrong is silent — and a bare `main()` would
+   have every one of those imports start a five-hour archive run against the
+   live network. `process.argv[1]` is the script node was asked to run. */
+if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1])) {
+  main().catch((err) => { console.error(err); process.exit(1); });
+}

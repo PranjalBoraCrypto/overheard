@@ -40,12 +40,20 @@ const json = (body, status = 200, ttl = 60) =>
     },
   });
 
-/** Profiles are sharded by the first byte of SHA-256(did) — the archiver's
- *  own rule, so this fetches one small file rather than the whole network. */
+/** Profiles are sharded by the first THREE hex characters of SHA-256(did) —
+ *  the archiver's own rule, so this fetches one small file rather than the
+ *  whole network.
+ *
+ *  It was two, and two put 10,650 identities and 3.2 MB in every file. Since
+ *  git stores the file rather than the change, that made one identity posting
+ *  one message cost 3.2 MB of repository, about seven gigabytes a day. Three
+ *  is 4,096 shards of roughly 200 KB. The number lives in three places — here,
+ *  scripts/archive.mjs and web/index.html — and all three have to agree or a
+ *  profile is simply not found; see SHARD_CHARS in the archiver. */
 async function shardOf(did) {
   const bytes = new TextEncoder().encode(did);
   const hash = await crypto.subtle.digest("SHA-256", bytes);
-  return [...new Uint8Array(hash)].map((b) => b.toString(16).padStart(2, "0")).join("").slice(0, 2);
+  return [...new Uint8Array(hash)].map((b) => b.toString(16).padStart(2, "0")).join("").slice(0, 3);
 }
 
 /* ── where this identity stands ───────────────────────────────────────────
@@ -134,12 +142,27 @@ export default async function handler(request) {
     grab("owners.json"),
   ]);
 
-  if (!bucket) {
+  /* THE OLD SHARD NAME, TRIED SECOND, AND THIS IS TEMPORARY.
+     The shards were widened from two hex characters to three, and this reads
+     whatever the last COMMIT holds — which carries the old layout until the
+     archiver's next publish pass, up to ninety minutes after the migration
+     runs. Without this, every identity would come back unknown for that hour
+     and a half. Delete once a publish has carried the new layout out. */
+  const oldName = shard.slice(0, 2);
+  const older = (!bucket || !bucket[did])
+    ? await grab(`profiles/${oldName}.json`) : null;
+  /* The bucket the identity was actually FOUND in, which is the only one any
+     of the rest of this should read. */
+  const found = bucket?.[did] ? bucket : (older?.[did] ? older : (bucket ?? older));
+
+  /* Unavailable means neither name could be read at all — not that the
+     identity is unknown, which is `p` below being null. */
+  if (!found) {
     return json({ did, shard, source: "unavailable", profile: null,
                   note: "could not read the archive from the repository; the page falls back to the deployed copy" }, 200, 30);
   }
 
-  const p = bucket[did] ?? null;
+  const p = found[did] ?? null;
   const owns = Array.isArray(owners?.owners?.[did]) ? owners.owners[did] : [];
   return json({
     did,

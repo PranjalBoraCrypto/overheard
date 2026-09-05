@@ -145,13 +145,18 @@ jobs:
             #   every pass    cursors, recent, standings, index, owners,
             #                 roster -- ~250 KB total, and `recent` is the
             #                 homepage strip people watch
-            #   every 3rd     profiles -- these drive rank and history, and
-            #                 nobody needs their rank to the minute. The
-            #                 card's immediacy comes from the live room scan
-            #                 and the "Look again" button, not from here.
             #   every 12th    room day shards, per-room meta, templates,
-            #                 spam -- the bulk, and the least time-critical
-            #                 data in the project. It is an ARCHIVE.
+            #                 spam, AND PROFILES -- the bulk, and the least
+            #                 time-critical data in the project. It is an
+            #                 ARCHIVE.
+            #
+            # Profiles used to have a tier of their own, every 3rd pass. They
+            # were the single largest thing this repository was spending
+            # itself on: 32 stagings a day, each one writing new objects for
+            # nearly every shard that had seen a message. Nobody needs their
+            # rank fifteen minutes fresher rather than ninety, and the card's
+            # immediacy comes from the live room scan and the "Look again"
+            # button rather than from here.
             #
             # Collection is unaffected: the archiver still reads every room
             # on its own schedule and writes to disk continuously. This only
@@ -182,7 +187,19 @@ jobs:
             # one that only runs after something has already gone wrong.
             stage_this_pass() {
               for f in $SMALL; do [ -f "$f" ] && nice -n 15 git add "$f"; done
-              if [ $(( pass % 3 )) -eq 0 ]; then nice -n 15 git add web/data/profiles; fi
+              # PROFILES ARE NOT STAGED ON THEIR OWN ANY MORE. They used to
+              # go in on every third pass, which is 32 times a day, and each
+              # of those wrote new git objects for nearly every shard that had
+              # seen a message — measured at about 384 MB a pass before the
+              # shards were widened, and the largest single reason this
+              # repository reached 76 GB in ten days and answered a push with
+              # "approaching its size quota".
+              #
+              # They still go in with the publish tier below, which is the
+              # `git add web/data` on every 12th pass. Nothing a visitor can
+              # do needs a profile that is fifteen minutes fresher rather than
+              # ninety, and /api/profile reads whatever the last commit holds
+              # either way.
               if [ $(( (pass - 1) % 12 )) -eq 0 ]; then nice -n 15 git add web/data; fi
             }
             stage_this_pass

@@ -2785,11 +2785,25 @@ async function lookupStats(did){
     }catch{}
 
     if(!p){
-      const h=[...new Uint8Array(await crypto.subtle.digest("SHA-256",new TextEncoder().encode(did)))]
-        .map(b=>b.toString(16).padStart(2,"0")).join("").slice(0,2);
-      const r=await fetch(`./data/profiles/${h}.json`,{cache:"no-cache"});
-      if(!r.ok) return null;
-      p=(await r.json())[did];
+      // Three characters, matching SHARD_CHARS in scripts/archive.mjs and
+      // shardOf in api/profile.js. All three have to agree: a mismatch does
+      // not throw, it fetches a file that is not there and reports an
+      // identity as never having spoken.
+      const hex=[...new Uint8Array(await crypto.subtle.digest("SHA-256",new TextEncoder().encode(did)))]
+        .map(b=>b.toString(16).padStart(2,"0")).join("");
+      // THE OLD NAME IS TRIED SECOND, and this fallback is temporary.
+      // Widening the shard changes the file a reader asks for, and the
+      // deployed copy only changes on the next PUBLISH pass — up to ninety
+      // minutes later. Without this, every identity on the site would read
+      // as having never spoken for that hour and a half. Delete the second
+      // name once a publish has carried the new layout out.
+      for(const h of [hex.slice(0,3), hex.slice(0,2)]){
+        const r=await fetch(`./data/profiles/${h}.json`,{cache:"no-cache"});
+        if(!r.ok) continue;
+        p=(await r.json())[did];
+        if(p) break;
+      }
+      if(!p) return null;
     }
     if(!p||!p.unique) return null;
     return {
