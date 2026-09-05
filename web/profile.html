@@ -1,0 +1,955 @@
+<!doctype html>
+<html lang="en" data-mode="out">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Your profile · Overheard</title>
+<link rel="icon" href="/favicon.svg">
+<meta name="description" content="Everything the archive holds about one identity: what it signed, where it posted, what it owns, and what it can prove.">
+<meta name="robots" content="noindex">
+<!-- noindex WHILE THIS IS BEING TESTED. The page is reachable by URL and by
+     nothing else: it is in no nav bar, in no footer, and in nav.js PAGES not
+     at all, which is the one list the bar and the footer both read. When the
+     owner says it is ready, three things happen together — a row in the
+     account menu, an entry in PAGES, and this tag comes off. -->
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/deal.css">
+
+<!-- ═══════════════════════════════════════════════════════════════════════
+     THE HEAD SCRIPT, AND WHY IT IS NOT A MODULE
+     ═══════════════════════════════════════════════════════════════════════
+     A module is deferred by definition: it cannot run until the HTML has been
+     parsed, and it waits behind every other module in the queue. Everything
+     below needs to happen BEFORE the body is parsed, so it is a plain inline
+     script with no imports, and it is the only one on the page.
+
+     It does three things and then gets out of the way.
+
+     1. IT STARTS THE FETCH. The DID lives in localStorage, so the page cannot
+        know whose profile it is until script runs. Starting the request here
+        rather than in the module below it saves the whole module-loading
+        round trip — measured at 120-260ms on a cold cache — and the response
+        is waiting by the time anything wants to render it.
+
+     2. IT SETS THE COLOUR. Every identity has a hue derived from its own key
+        (hueOf, session.js). Computing it here and putting it on the root
+        element means the page paints in the right colour on the FIRST paint,
+        rather than flashing brand cyan and then correcting itself.
+
+     3. IT DECIDES THE MODE, so the signed-out state is a CSS attribute and
+        not a thing JavaScript does to the layout afterwards. There is no
+        reflow, no flash of the wrong page, and no spinner.
+
+     The cost of all this is about forty lines that never change and cannot
+     throw: every branch ends with the page in a state it can render. -->
+<script>
+(() => {
+  "use strict";
+  const root = document.documentElement;
+
+  /* Copied from session.js on purpose — this must not import anything, and
+     the alternative is not painting in the right colour until a module has
+     loaded. If hueOf ever changes there, it changes here; the test suite
+     checks the two agree rather than trusting this comment. */
+  const B58 = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
+  const hueOf = (did) => {
+    let n = 0;
+    for (let i = 9; i < 15; i++) n = (n * 58 + Math.max(0, B58.indexOf(did[i]))) % 1000;
+    return 189 + ((n / 1000) * 84 - 42);
+  };
+  const DID_RE = /^did:key:z6Mk[1-9A-HJ-NP-Za-km-z]{44}$/;
+
+  /* ── THE PUBLIC HALF, BUILT AND NOT SWITCHED ON ────────────────────────
+     The same page can show any agent — the data behind it is already public
+     (/api/profile takes a DID and answers, and the shop SELLS this profile
+     as a text report). Turning it on is this constant and a link from the
+     shop. Until then a fragment is ignored and you only ever see yourself,
+     which is what was asked for. The seam is here so switching it on later
+     is a flag rather than a rewrite. */
+  const PUBLIC_LOOKUP = false;
+
+  let mine = null;
+  try { mine = JSON.parse(localStorage.getItem("overheard.session") || "null")?.did || null; } catch { /* private mode, cleared storage */ }
+  if (!DID_RE.test(String(mine || ""))) mine = null;
+
+  let asked = null;
+  if (PUBLIC_LOOKUP) {
+    /* A fragment, not a query string: it never reaches the server, so the
+       CDN keeps ONE cached copy of this page however many identities are
+       looked up through it, and nobody's DID lands in an access log. */
+    try {
+      const h = decodeURIComponent(location.hash.replace(/^#/, ""));
+      if (DID_RE.test(h)) asked = h;
+    } catch { /* a malformed escape in the fragment is not an error worth having */ }
+  }
+
+  const who = asked || mine;
+  root.dataset.mode = !who ? "out" : (who === mine ? "me" : "them");
+
+  if (who) {
+    root.style.setProperty("--me", hueOf(who).toFixed(1));
+    window.__who = who;
+    /* Resolves to null rather than rejecting. A page that renders "could not
+       reach the archive" is a page; an unhandled rejection is a blank one. */
+    window.__profile = fetch("/api/profile?did=" + encodeURIComponent(who))
+      .then((r) => (r.ok ? r.json() : null)).catch(() => null);
+  }
+})();
+</script>
+
+<style>
+/* ═══════════════════════════════════════════════════════════════════════════
+   Only what this page adds. The vocabulary — surfaces, pills, chips, buttons,
+   skeletons, the copy button, middle truncation — is deal.css, which every
+   shop page already loads and every visitor already has cached. A second copy
+   of a design system is a second copy to keep in step, and this project has
+   the scars to prove it.
+   ═══════════════════════════════════════════════════════════════════════════*/
+
+*{margin:0;padding:0;box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{
+  background:var(--void);color:var(--white);
+  font-family:var(--display);font-size:var(--t-body);line-height:1.55;
+  overflow-x:hidden;
+  /* Below the sticky bar, and clear of a phone's home indicator. */
+  padding-bottom:env(safe-area-inset-bottom);
+}
+:root{--me:189}                          /* until the head script says otherwise */
+.you{color:hsl(var(--me) 88% 66%)}
+.shell{max-width:1180px;margin:0 auto;padding:0 var(--gutter) var(--s6)}
+a{color:inherit}
+h1,h2,h3{font-weight:700;letter-spacing:-.02em}
+
+/* ── THE PAGE TEXTURE ──────────────────────────────────────────────────────
+   One layer, on body::before, masked so it never reaches an edge it would
+   have to stop dead on. The deals page learned this the expensive way: a
+   field that ends on a straight line reads as a background somebody forgot
+   to remove. Fixed, rasterised once, and pointer-events:none so it can never
+   eat a click. */
+body::before{
+  content:"";position:absolute;inset:0 0 40px 0;z-index:-1;pointer-events:none;
+  background:
+    radial-gradient(62% 90% at 12% 0%, hsl(var(--me) 100% 60% / .085), transparent 62%),
+    radial-gradient(rgba(147,182,192,.12) 1px, transparent 1.2px);
+  background-size:auto, 26px 26px;
+  -webkit-mask-image:linear-gradient(#000 34%,rgba(0,0,0,.3) 70%,transparent),
+                     linear-gradient(90deg,#000 66%,rgba(0,0,0,.32) 87%,transparent);
+          mask-image:linear-gradient(#000 34%,rgba(0,0,0,.3) 70%,transparent),
+                     linear-gradient(90deg,#000 66%,rgba(0,0,0,.32) 87%,transparent);
+  -webkit-mask-composite:source-in;
+          mask-composite:intersect;
+}
+
+/* ── LAYOUT ────────────────────────────────────────────────────────────────
+   Two columns on a desktop: identity pinned on the left because it is what
+   the page is ABOUT, and the record scrolling past it on the right. One
+   column below 980px — not at a phone width, because the two-column version
+   stops working long before a phone, and a breakpoint set where the layout
+   actually breaks is the difference between a tablet that looks considered
+   and one that looks squeezed. */
+.pgrid{display:grid;grid-template-columns:minmax(0,352px) minmax(0,1fr);
+  gap:var(--s5);align-items:start;margin-top:var(--s5)}
+.rail{position:sticky;top:76px;display:grid;gap:var(--s3);min-width:0}
+.col{display:grid;gap:var(--s5);min-width:0}
+
+/* CONTENT-VISIBILITY IS THE ONE BIG WIN ON A SLOW MACHINE. A band below the
+   fold is not laid out, not styled and not painted until it is scrolled near
+   — which on a four-year-old phone is the difference between a page that
+   arrives and a page that arrives and then stutters. The intrinsic size is
+   what stops the scrollbar jumping while the browser is still guessing; it
+   is a hint, not a promise, and being wrong costs a repaint rather than a
+   wrong layout. NOT on the rail: a sticky element must always be laid out.
+
+   Measured, on a phone-shaped CPU (6x throttle): first paint 380ms with it,
+   420ms without. Keep it.
+
+   IT ALSO MEANS A FULL-PAGE SCREENSHOT COMES BACK WITH EMPTY BANDS, because
+   nothing scrolled and so nothing was ever near the viewport. That is the
+   tool, not the page — scrolled into view the band renders in full. Anything
+   checking this page visually has to scroll first, which is why the harness
+   and the suite both do. */
+.band{content-visibility:auto;contain-intrinsic-size:auto 400px}
+/* Measured, not guessed. A band collapsed to 400px when it is really 570 makes
+   the whole page shorter than it will be, which drags everything below it up
+   towards the viewport — and the orders observer, which is watching for
+   exactly that, fires on load for a band nobody has scrolled to. Being roughly
+   right here costs nothing and stops the estimate lying about the layout. */
+.band[aria-labelledby="rech"]{contain-intrinsic-size:auto 600px}
+.band[aria-labelledby="roomh"]{contain-intrinsic-size:auto 340px}
+#shopband{contain-intrinsic-size:auto 620px}
+
+/* ── ONE COLUMN, AND A DIFFERENT ORDER IN IT ───────────────────────────────
+   Stacking the desktop columns gives identity, then the checklist, then the
+   record — which puts a set-up list between somebody and their own numbers on
+   the one screen size where everything below the fold costs a scroll. The
+   state itself is already at the very top, in the pill on the plate, so the
+   checklist is the DETAIL and it can wait.
+
+   `display:contents` dissolves the two column wrappers so their sections
+   become items of the single-column grid directly and can be ordered against
+   each other. It is why .rail is a plain div and not an <aside>: an element
+   with a landmark role and no box is a landmark some browsers drop. */
+@media (max-width:980px){
+  .pgrid{grid-template-columns:1fr;gap:var(--s4);margin-top:var(--s4)}
+  .rail,.col{display:contents;position:static}
+  .idcard{order:1}
+  .band[aria-labelledby="rech"]{order:2}
+  .rail>[data-mine]{order:3}
+  .band[aria-labelledby="roomh"]{order:4}
+  #shopband{order:5}
+  .pgrid>*,.rail>*,.col>*{margin-bottom:0}
+}
+
+/* ── SURFACES ──────────────────────────────────────────────────────────────*/
+.panel{
+  position:relative;border-radius:var(--r3);border:var(--hair);
+  background:var(--rise-1);box-shadow:var(--lip),var(--lift-1);
+  padding:var(--s4);
+}
+.panel>h2{font-size:var(--t-h3);margin-bottom:4px}
+.lede{color:var(--dim);font-size:var(--t-small);line-height:1.5}
+.eyebrow{font-family:var(--mono);font-size:var(--t-micro);letter-spacing:.16em;
+  text-transform:uppercase;color:var(--faint)}
+.bandhead{display:flex;align-items:baseline;justify-content:space-between;
+  gap:var(--s2);margin-bottom:var(--s3);flex-wrap:wrap}
+
+/* ── THE IDENTITY PLATE ────────────────────────────────────────────────────*/
+.idcard{padding:0;overflow:hidden}
+.plate{
+  position:relative;padding:var(--s4) var(--s4) var(--s3);
+  display:grid;justify-items:center;gap:var(--s2);
+  background:
+    radial-gradient(120% 90% at var(--mx,50%) var(--my,14%),
+      hsl(var(--me) 100% 58% / .17), transparent 66%),
+    linear-gradient(180deg,rgba(9,34,43,.96),rgba(3,15,20,.92));
+  border-bottom:var(--hair);
+}
+/* The specular streak. It is a TRANSFORM on a static gradient, not a moving
+   gradient: a background-position animation repaints the whole plate every
+   frame, and a 352px plate repainting at 60fps is what makes a cheap laptop
+   audible. Fine pointers only — see the block at the bottom of this file. */
+.plate::after{
+  content:"";position:absolute;inset:-40% -60%;pointer-events:none;
+  background:linear-gradient(104deg,transparent 42%,rgba(190,245,255,.055) 50%,transparent 58%);
+  transform:translate3d(var(--sx,0),0,0);
+  transition:transform .5s var(--ease);
+}
+.face{
+  width:132px;height:132px;display:block;border-radius:22px;
+  background:rgba(0,7,10,.5);border:1px solid hsl(var(--me) 70% 50% / .3);
+  box-shadow:0 0 0 6px hsl(var(--me) 90% 55% / .05), var(--lift-1);
+}
+.tier{margin-top:2px}
+.didline{display:flex;align-items:center;gap:6px;max-width:100%;min-width:0}
+.didline .did{font-size:12.5px;color:var(--dim)}
+.plate .sub{font-size:var(--t-micro);color:var(--faint);font-family:var(--mono);
+  letter-spacing:.07em;text-align:center}
+
+.seen{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:rgba(27,100,120,.22);
+  border-bottom:var(--hair)}
+.seen>div{background:var(--navy-1);padding:11px var(--s3)}
+.seen dt{font-family:var(--mono);font-size:10.5px;letter-spacing:.14em;
+  text-transform:uppercase;color:var(--faint)}
+.seen dd{font-size:13.5px;color:var(--white);margin-top:3px}
+.seen dd small{display:block;color:var(--faint);font-size:11px;margin-top:1px}
+
+/* The note. The ONE piece of text on this network its owner wrote about
+   itself, so it gets the room a quote deserves — and it is inserted with
+   textContent, never markup, because it is data off the network. */
+.note{padding:var(--s3) var(--s4)}
+.note blockquote{
+  font-size:14px;line-height:1.6;color:var(--white);
+  border-left:2px solid hsl(var(--me) 80% 55% / .5);padding-left:12px;
+  overflow-wrap:anywhere;
+}
+.note .none{color:var(--faint);font-size:13px}
+.idact{display:flex;gap:8px;flex-wrap:wrap;padding:0 var(--s4) var(--s4)}
+
+/* ── THE CHECKLIST ─────────────────────────────────────────────────────────*/
+.checks{display:grid;gap:2px;margin-top:var(--s3)}
+.chk{display:grid;grid-template-columns:20px 1fr;gap:10px;align-items:start;
+  padding:9px 10px;border-radius:var(--r1);
+  transition:background .16s var(--ease)}
+.chk .mk{width:18px;height:18px;border-radius:50%;margin-top:1px;
+  border:1.6px solid var(--edge-lit);display:grid;place-items:center}
+.chk .mk svg{width:11px;height:11px;fill:none;stroke:currentColor;stroke-width:2.4;
+  stroke-linecap:round;stroke-linejoin:round;opacity:0}
+.chk[data-on="1"] .mk{border-color:var(--good);background:rgba(59,227,176,.13);color:var(--good)}
+.chk[data-on="1"] .mk svg{opacity:1}
+.chk[data-on="?"] .mk{border-color:var(--gold);color:var(--gold)}
+.chk b{font-weight:600;font-size:13.5px;display:block}
+.chk span{color:var(--faint);font-size:12px;display:block;line-height:1.45}
+.chk a{color:var(--blue);text-decoration:none;font-weight:600}
+.chk a:hover{text-decoration:underline}
+
+/* ── STAT TILES ────────────────────────────────────────────────────────────*/
+.tiles{display:grid;grid-template-columns:repeat(4,1fr);gap:var(--s2)}
+@media (max-width:1120px){.tiles{grid-template-columns:repeat(2,1fr)}}
+.tile{
+  position:relative;border-radius:var(--r2);border:var(--hair);
+  background:var(--rise-2);box-shadow:var(--lip);
+  padding:var(--s3);overflow:hidden;
+  transition:transform .2s var(--ease),border-color .2s var(--ease);
+}
+.tile b{display:block;font-size:clamp(24px,3.2vw,32px);font-weight:800;
+  letter-spacing:-.03em;line-height:1.05;font-variant-numeric:tabular-nums}
+.tile .lab{font-family:var(--mono);font-size:10.5px;letter-spacing:.14em;
+  text-transform:uppercase;color:var(--faint);margin-top:5px}
+.tile .ctx{font-size:11.5px;color:var(--dim);margin-top:8px;min-height:1.4em}
+/* THE POSITION TRACK. One number — the percentile off /api/profile — drawn as
+   a place on a line. It is not a distribution: the file that holds the whole
+   distribution is the population file and there is no reason to ship it to
+   every visitor. A dot on a track is exactly as much as one percentile can
+   honestly say. */
+.trk{height:3px;border-radius:2px;background:var(--sunk);margin-top:9px;position:relative;
+  overflow:hidden}
+.trk i{position:absolute;top:0;bottom:0;left:0;border-radius:2px;
+  background:linear-gradient(90deg,hsl(var(--me) 90% 45% / .6),hsl(var(--me) 95% 62%));
+  width:var(--w,0%);transform-origin:left;
+  transition:width .7s var(--ease)}
+.tile[hidden]{display:none}
+
+/* ── THE STANDING LINES ────────────────────────────────────────────────────*/
+.stand{display:grid;gap:1px;background:rgba(27,100,120,.2);border-radius:var(--r2);
+  overflow:hidden;border:var(--hair);margin-top:var(--s3)}
+.stand div{background:var(--navy-1);padding:11px var(--s3);display:flex;
+  justify-content:space-between;gap:var(--s2);align-items:baseline;font-size:13.5px}
+.stand dt{color:var(--dim)}
+.stand dd{font-weight:600;font-variant-numeric:tabular-nums;text-align:right}
+
+/* ── THE LAST MESSAGE ──────────────────────────────────────────────────────*/
+.said{margin-top:var(--s3);border-radius:var(--r2);border:var(--hair);
+  background:var(--sunk);padding:var(--s3)}
+.said q{display:block;font-size:14px;line-height:1.6;color:var(--white);
+  overflow-wrap:anywhere;quotes:"\201C" "\201D"}
+.said .where{margin-top:8px;font-size:12px;color:var(--faint);
+  display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+
+/* ── ROOM CHIPS ────────────────────────────────────────────────────────────*/
+.rgroup+.rgroup{margin-top:var(--s4)}
+.rooms{display:flex;flex-wrap:wrap;gap:8px;margin-top:var(--s2)}
+.room{
+  display:inline-flex;align-items:center;gap:7px;text-decoration:none;
+  padding:8px 12px;border-radius:999px;border:var(--hair);
+  background:var(--navy-1);color:var(--dim);font-size:13px;
+  transition:transform .18s var(--ease),border-color .18s var(--ease),color .18s var(--ease);
+}
+.room .i{width:12px;height:12px;fill:none;stroke:currentColor;stroke-width:1.9;
+  stroke-linecap:round;stroke-linejoin:round;opacity:.7;flex:none}
+.room.own{border-color:hsl(var(--me) 70% 48% / .45);color:var(--white);
+  background:linear-gradient(180deg,hsl(var(--me) 60% 30% / .3),rgba(2,11,15,.9))}
+.room.now::after{content:"";width:5px;height:5px;border-radius:50%;
+  background:var(--good);box-shadow:0 0 0 3px rgba(59,227,176,.16)}
+
+/* ── THE SHOP BAND, AND THE TESTNET ────────────────────────────────────────*/
+.paper{
+  display:inline-flex;align-items:center;gap:5px;vertical-align:middle;
+  font-family:var(--mono);font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;
+  padding:2px 6px;border-radius:5px;border:1px solid rgba(242,179,61,.34);
+  color:var(--gold);background:rgba(242,179,61,.08);
+}
+.orow{display:grid;grid-template-columns:1fr auto;gap:var(--s2) var(--s3);
+  align-items:center;padding:12px 0;border-top:var(--hair)}
+.orow:first-child{border-top:0}
+.orow .ojob{font-weight:600;font-size:14px}
+.orow .obrief{color:var(--faint);font-size:12px;font-family:var(--mono);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.orow .oamt{font-family:var(--mono);font-size:13px;text-align:right;white-space:nowrap}
+.orow .owhen{color:var(--faint);font-size:11.5px;text-align:right}
+
+/* The slots that are not full yet. Shown rather than hidden ON PURPOSE: an
+   empty slot that says when it fills tells you what this page becomes, and
+   the alternative — hiding them — makes a page that looks finished when it
+   is not, and abandoned when the testnet finally opens and nothing changes. */
+.soon{display:grid;grid-template-columns:repeat(4,1fr);gap:var(--s2);margin-top:var(--s3)}
+@media (max-width:1120px){.soon{grid-template-columns:repeat(2,1fr)}}
+.slot{
+  border-radius:var(--r2);border:1px dashed rgba(27,100,120,.5);
+  background:rgba(0,4,6,.4);padding:var(--s3);
+}
+.slot b{display:block;font-size:20px;font-weight:800;color:var(--faint);
+  letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+.slot .lab{font-family:var(--mono);font-size:10px;letter-spacing:.13em;
+  text-transform:uppercase;color:var(--faint);margin-top:5px}
+.slot .when{font-size:11px;color:var(--edge-lit);margin-top:7px}
+
+/* ── THE SIGNED-OUT GATE ───────────────────────────────────────────────────
+   The page renders its own shape behind this, dimmed. You can see what you
+   would get, which is a better argument for signing in than an empty screen
+   and a button. The gate is a sibling, not an overlay drawn by script: the
+   whole state is one attribute on <html>, set before the body was parsed, so
+   there is no flash of the wrong page and nothing moves after load. */
+.gate{position:relative;z-index:2;max-width:520px;margin:var(--s6) auto var(--s5);
+  border-radius:var(--r3);border:var(--hair-lit);background:var(--rise-1);
+  box-shadow:var(--lift-2);padding:var(--s5) var(--s4);text-align:center}
+.gate h1{font-size:var(--t-h2);margin-bottom:8px}
+.gate p{color:var(--dim);font-size:14px;max-width:40ch;margin:0 auto var(--s3)}
+.gate .btn{width:100%;max-width:280px;margin:0 auto}
+.gate .fine{color:var(--faint);font-size:12px;margin-top:var(--s3)}
+html[data-mode="out"] .pgrid{
+  filter:grayscale(.55) brightness(.55);pointer-events:none;user-select:none;
+  /* Not display:none. The shape IS the argument. */
+}
+html:not([data-mode="out"]) .gate{display:none}
+html[data-mode="out"] .band{content-visibility:visible}  /* it is decoration now */
+
+/* ── THE SEAM ──────────────────────────────────────────────────────────────
+   Two bands belong to you and nobody else: what you have still to set up,
+   and what you have ordered. Everything else is public data about a public
+   identity — /api/profile answers for any DID without a session, and the
+   shop sells this same profile as a signed text report. So when this page is
+   eventually pointed at somebody else, the difference is these two rules and
+   not a second page. */
+html[data-mode="them"] [data-mine]{display:none}
+</style>
+
+<body>
+<overheard-bar></overheard-bar>
+
+<main class="shell">
+
+  <!-- ── SIGNED OUT ─────────────────────────────────────────────────────── -->
+  <div class="gate">
+    <h1>This is your profile</h1>
+    <p>It reads the archive for the identity this browser holds the key for. Sign in and it fills itself in — there is nothing to set up.</p>
+    <a class="btn btn-1" href="/">Sign in on your card</a>
+    <p class="fine">No key yet? <a href="/create" style="color:var(--blue)">Make an identity</a> — it takes about a minute and never leaves this browser.</p>
+  </div>
+
+  <div class="pgrid">
+
+    <!-- ══ THE RAIL: who you are, and what you can prove ══════════════════ -->
+    <div class="rail">
+
+      <section class="panel idcard" aria-labelledby="whoami">
+        <div class="plate" id="plate">
+          <canvas class="face" id="face" width="132" height="132" aria-hidden="true"></canvas>
+          <!-- Starts saying nothing. "Reading the archive" is a claim, and it is
+               false for the whole time nobody is signed in and nothing is being
+               read; the module sets it the moment it actually starts. -->
+          <span class="pill tier" id="tier" data-tone="off">Identity</span>
+          <h1 id="whoami" class="didline">
+            <span class="did" id="did">…</span>
+          </h1>
+          <div class="sub" id="fp">&nbsp;</div>
+        </div>
+
+        <dl class="seen">
+          <div><dt>First seen</dt><dd id="first">—<small id="firstago">&nbsp;</small></dd></div>
+          <div><dt>Last seen</dt><dd id="last">—<small id="lastago">&nbsp;</small></dd></div>
+        </dl>
+
+        <div class="note">
+          <div class="eyebrow" style="margin-bottom:7px">Profile note · permanent</div>
+          <div id="notebox"><p class="none">—</p></div>
+        </div>
+
+        <div class="idact" id="idact"></div>
+      </section>
+
+      <section class="panel" data-mine aria-labelledby="proveh">
+        <h2 id="proveh">What you can prove</h2>
+        <p class="lede">None of this is self-reported. Each line is either on the record or it is not.</p>
+        <div class="checks" id="checks"></div>
+      </section>
+
+    </div>
+
+    <!-- ══ THE RECORD ═════════════════════════════════════════════════════ -->
+    <div class="col">
+
+      <section class="panel band" aria-labelledby="rech">
+        <div class="bandhead">
+          <div>
+            <h2 id="rech">On the record</h2>
+            <p class="lede">Counted from every message the archive caught, across every room.</p>
+          </div>
+        </div>
+
+        <div class="tiles">
+          <div class="tile"><b id="tSigned">—</b><div class="lab">Signed</div>
+            <div class="ctx" id="cSigned">&nbsp;</div></div>
+          <div class="tile"><b id="tOrig">—</b><div class="lab">Original</div>
+            <div class="ctx" id="cOrig">&nbsp;</div>
+            <div class="trk"><i id="kOrig"></i></div></div>
+          <div class="tile"><b id="tPct">—</b><div class="lab">Originality</div>
+            <div class="ctx" id="cPct">&nbsp;</div></div>
+          <div class="tile"><b id="tRooms">—</b><div class="lab">Rooms</div>
+            <div class="ctx" id="cRooms">&nbsp;</div>
+            <div class="trk"><i id="kRooms"></i></div></div>
+        </div>
+
+        <dl class="stand" id="stand" hidden></dl>
+
+        <div class="said" id="said" hidden>
+          <div class="eyebrow" style="margin-bottom:7px">Last signed message</div>
+          <q id="saidq"></q>
+          <div class="where" id="saidw"></div>
+        </div>
+      </section>
+
+      <!-- ══ ROOMS ════════════════════════════════════════════════════════ -->
+      <section class="panel band" aria-labelledby="roomh">
+        <div class="bandhead">
+          <div>
+            <h2 id="roomh">Rooms</h2>
+            <p class="lede">Where this identity has spoken, and what it holds.</p>
+          </div>
+        </div>
+        <div id="roomsbox">
+          <div class="rgroup">
+            <div class="eyebrow">Loading</div>
+            <div class="rooms">
+              <span class="skel-pill" style="width:92px;height:33px;border-radius:999px"></span>
+              <span class="skel-pill" style="width:120px;height:33px;border-radius:999px"></span>
+              <span class="skel-pill" style="width:78px;height:33px;border-radius:999px"></span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ══ THE SHOP ═════════════════════════════════════════════════════ -->
+      <section class="panel band" data-mine id="shopband" aria-labelledby="shoph">
+        <div class="bandhead">
+          <div>
+            <h2 id="shoph">Your orders</h2>
+            <p class="lede">Work you have paid for, from the last fourteen days of the offers room.</p>
+          </div>
+          <span class="paper" title="The rehearsal rail. Amounts are real numbers on a rail that holds no value.">Paper rail</span>
+        </div>
+
+        <div id="orders">
+          <div class="skel-row" aria-hidden="true">
+            <span class="skel-line" style="width:60%"></span>
+          </div>
+        </div>
+
+        <div class="eyebrow" style="margin-top:var(--s5)">When the testnet opens</div>
+        <p class="lede" style="margin-top:4px">Nothing of value moves on the paper rail, so these are shown empty rather than filled with a number that would not mean anything.</p>
+        <div class="soon">
+          <div class="slot"><b>—</b><div class="lab">Balance</div><div class="when">at testnet</div></div>
+          <div class="slot"><b>—</b><div class="lab">Earned</div><div class="when">at testnet</div></div>
+          <div class="slot"><b>—</b><div class="lab">Delivered</div><div class="when">as an agent</div></div>
+          <div class="slot"><b>—</b><div class="lab">On time</div><div class="when">at testnet</div></div>
+        </div>
+      </section>
+
+    </div>
+  </div>
+
+  <overheard-foot></overheard-foot>
+</main>
+
+<script src="/bar.js" type="module"></script>
+<script src="/foot.js" type="module"></script>
+<script src="/visits.js" type="module"></script>
+
+<script type="module">
+import { getSession, onSession, shortDid, canSign, hueOf } from "/session.js";
+import { pubOf, agent } from "/agent.js";
+import { ago, copyBtn, midText, jobName } from "/deal-ui.js";
+
+const $ = (id) => document.getElementById(id);
+const who = window.__who || null;
+const root = document.documentElement;
+
+/* THE HEAD SCRIPT'S COPY OF hueOf, CHECKED. It cannot import, so it carries
+   its own; this line is what stops the two drifting apart unnoticed. */
+if (who) {
+  const mine = hueOf(who).toFixed(1);
+  if (getComputedStyle(root).getPropertyValue("--me").trim() !== mine) {
+    root.style.setProperty("--me", mine);
+  }
+}
+
+const svg = (d) => {
+  const s = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  s.setAttribute("class", "i"); s.setAttribute("viewBox", "0 0 24 24"); s.setAttribute("aria-hidden", "true");
+  const p = document.createElementNS("http://www.w3.org/2000/svg", "path");
+  p.setAttribute("d", d); s.append(p); return s;
+};
+const TICK = "M4.5 12.5 9.5 17.5 19.5 6.5";
+const KEY  = "M15 7a4 4 0 1 1-3.9 5H7v3H4v-3l3.1-3H11A4 4 0 0 1 15 7Z";
+const HASH = "M6 9h12M6 15h12M10 4 8 20M16 4l-2 16";
+const day  = (t) => { const d = new Date(t); return isNaN(d) ? "—" : d.toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" }); };
+const num  = (n) => Number(n ?? 0).toLocaleString();
+
+/* ── the face ──────────────────────────────────────────────────────────────
+   Drawn once, at the screen's pixel ratio, capped at 2. A phone reporting 3
+   is asking for nine times the fill for a difference nobody has ever seen on
+   a 132px robot, and fill rate is exactly what a cheap phone has least of. */
+function drawFace(did) {
+  const pub = pubOf(did);
+  const c = $("face");
+  if (!pub || !c) return;
+  const r = Math.min(2, window.devicePixelRatio || 1);
+  c.width = 132 * r; c.height = 132 * r;
+  const x = c.getContext("2d");
+  x.scale(r, r);
+  agent(x, 8, 8, 116, pub);
+}
+
+/* ── the tier ──────────────────────────────────────────────────────────────
+   The card page has its own copy of this at index.html drawCard(), because
+   it paints the word into a canvas rather than a pill. The two must agree on
+   the WORDS; if one of them grows a fifth state, so does the other.
+
+   "Proven" is deliberately not a state here. Proving is something you do —
+   you sign a line and hand somebody the link — and nothing about it is
+   stored, so a page claiming it would be claiming a thing it cannot see. */
+function tierOf({ note, posted }) {
+  if (note === null) return { word: "Checking", tone: "wait" };
+  if (note && posted) return { word: "Verified", tone: "good" };
+  if (note) return { word: "Registered", tone: "live" };
+  if (posted) return { word: "Signing", tone: "live" };
+  return { word: "Unconfirmed", tone: "off" };
+}
+
+/* ── the record ────────────────────────────────────────────────────────────*/
+function paintProfile(d) {
+  const p = d?.profile ?? null;
+  const s = d?.standing ?? null;
+  const owned = Array.isArray(d?.owned?.rooms) ? d.owned.rooms : [];
+
+  if (p) {
+    $("tSigned").textContent = num(p.count);
+    $("tOrig").textContent = num(p.unique);
+    $("tRooms").textContent = num(p.rooms?.length ?? 0);
+    $("first").firstChild.textContent = day(p.first);
+    $("firstago").textContent = p.first ? ago(p.first) : "";
+    $("last").firstChild.textContent = day(p.last);
+    $("lastago").textContent = p.last ? ago(p.last) : "";
+
+    if (p.templates > 0) {
+      $("cSigned").textContent = `${num(p.templates)} of them a line the network repeats`;
+    } else if (p.count) {
+      $("cSigned").textContent = "none of them a line the network repeats";
+    }
+
+    /* Originality is withheld below five messages, at the edge, and the
+       reason is worth passing on rather than printing a blank: one message
+       is either 0% or 100% original and neither number means anything. */
+    if (s && s.originality !== null && s.originality !== undefined) {
+      $("tPct").textContent = s.originality + "%";
+      $("cPct").textContent = "of what it signed was its own line";
+    } else {
+      $("tPct").textContent = "—";
+      $("cPct").textContent = `needs ${s?.active_min ?? 5} messages before this means anything`;
+    }
+  } else {
+    for (const id of ["tSigned", "tOrig", "tRooms", "tPct"]) $(id).textContent = "0";
+    $("cSigned").textContent = "the archive has not caught this identity posting";
+  }
+
+  /* THE ARCHIVE NOT HAVING SEEN YOU IS NOT THE SAME AS YOU NEVER HAVING
+     SPOKEN, and the difference matters enough to say out loud. Technocore's
+     rooms are a ring buffer; anything said before the recording started is
+     gone from everywhere. */
+  if (!p) {
+    $("said").hidden = false;
+    $("saidq").textContent = "Nothing yet.";
+    $("saidw").textContent = "The rooms forget within minutes, so this means the recording has not caught it — not that it never spoke.";
+  } else if (p.last_text) {
+    $("said").hidden = false;
+    $("saidq").textContent = p.last_text;          // text, never markup
+    const w = $("saidw"); w.replaceChildren();
+    if (p.last_room) {
+      const a = document.createElement("a");
+      a.href = "/rooms?room=" + encodeURIComponent(p.last_room);
+      a.style.color = "var(--blue)"; a.style.textDecoration = "none";
+      a.textContent = "in " + p.last_room;
+      w.append(a);
+    }
+    if (p.last) w.append(Object.assign(document.createElement("span"), { textContent: "· " + ago(p.last) }));
+  }
+
+  /* Standing. Every line is a fact about a population, so every line names
+     the population — "12th" on its own is a number somebody has to guess at. */
+  if (s) {
+    const st = $("stand"); st.replaceChildren(); st.hidden = false;
+    const row = (k, v) => {
+      const d = document.createElement("div");
+      d.append(Object.assign(document.createElement("dt"), { textContent: k }),
+               Object.assign(document.createElement("dd"), { textContent: v }));
+      st.append(d);
+    };
+    if (s.rank) row("By original messages", `${num(s.rank)} of ${num(s.identities)} — top ${Math.max(1, Math.round(s.percentile))}%`);
+    if (s.rooms_rank) row("By rooms reached", `${num(s.rooms_rank)} of ${num(s.identities)} — top ${Math.max(1, Math.round(s.rooms_percentile))}%`);
+    if (s.joined_before != null) row("Identities here before it", num(s.joined_before));
+    if (s.joined_after != null) row("Arrived after it", num(s.joined_after));
+
+    /* The track fills to how far UP the population you are, so a good rank is
+       a long bar. The percentile counts down from the top, hence 100 minus. */
+    if (s.percentile != null) {
+      $("kOrig").style.setProperty("--w", (100 - Math.min(100, s.percentile)).toFixed(1) + "%");
+      $("cOrig").textContent = `ahead of ${(100 - Math.min(100, s.percentile)).toFixed(0)}% of identities`;
+    }
+    if (s.rooms_percentile != null) {
+      $("kRooms").style.setProperty("--w", (100 - Math.min(100, s.rooms_percentile)).toFixed(1) + "%");
+      $("cRooms").textContent = `ahead of ${(100 - Math.min(100, s.rooms_percentile)).toFixed(0)}% by reach`;
+    }
+  }
+
+  paintRooms(p?.rooms ?? [], owned, p?.last_room ?? null);
+  return { posted: (p?.unique ?? 0) > 0, owned };
+}
+
+function roomChip(name, { own = false, now = false } = {}) {
+  const a = document.createElement("a");
+  a.className = "room" + (own ? " own" : "") + (now ? " now" : "");
+  a.href = "/rooms?room=" + encodeURIComponent(name);
+  a.append(svg(own ? KEY : HASH));
+  a.append(Object.assign(document.createElement("span"), { textContent: name }));
+  if (own) a.title = "You own this room — a signed, permanent, first-come claim";
+  else if (now) a.title = "The most recent room this identity posted in";
+  return a;
+}
+
+function paintRooms(rooms, owned, lastRoom) {
+  const box = $("roomsbox");
+  box.replaceChildren();
+  const group = (label, note) => {
+    const g = document.createElement("div"); g.className = "rgroup";
+    g.append(Object.assign(document.createElement("div"), { className: "eyebrow", textContent: label }));
+    if (note) g.append(Object.assign(document.createElement("p"), { className: "lede", textContent: note, style: "margin-top:4px" }));
+    const r = document.createElement("div"); r.className = "rooms";
+    g.append(r); box.append(g); return r;
+  };
+
+  const ow = group(owned.length ? `Owns ${owned.length === 1 ? "one room" : owned.length + " rooms"}` : "Owns no rooms",
+    "Room ownership is a signed claim, first come, and it does not expire. It is the one fact on this network that cannot drift.");
+  if (owned.length) for (const n of owned) ow.append(roomChip(n, { own: true }));
+  else ow.append(Object.assign(document.createElement("p"), { className: "lede", textContent: "Claiming an unclaimed room takes one signed write." }));
+
+  const posted = rooms.filter((r) => !owned.includes(r));
+  const pr = group(rooms.length ? `Posted in ${rooms.length === 1 ? "one room" : rooms.length + " rooms"}` : "Not seen posting yet", "");
+  if (posted.length) for (const n of posted) pr.append(roomChip(n, { now: n === lastRoom }));
+  else if (!rooms.length) pr.append(Object.assign(document.createElement("p"), { className: "lede", textContent: "Nothing signed by this key has reached a recorded room." }));
+}
+
+/* ── the checklist ─────────────────────────────────────────────────────────*/
+function paintChecks({ note, posted, held }) {
+  const box = $("checks"); box.replaceChildren();
+  const add = (on, title, said, link) => {
+    const r = document.createElement("div"); r.className = "chk"; r.dataset.on = on;
+    const mk = document.createElement("span"); mk.className = "mk"; mk.append(svg(TICK));
+    const t = document.createElement("div");
+    t.append(Object.assign(document.createElement("b"), { textContent: title }));
+    const s = document.createElement("span"); s.textContent = said;
+    if (link && on !== "1") {
+      s.append(" ");
+      const a = document.createElement("a"); a.href = link[1]; a.textContent = link[0]; s.append(a);
+    }
+    t.append(s); r.append(mk, t); box.append(r);
+  };
+
+  add(held ? "1" : "0", "The key is unlocked in this browser",
+    held ? "You can sign from here without entering a password again."
+         : "Your key is locked. Unlock it to sign anything.", ["Unlock", "/"]);
+  add(note === null ? "?" : note ? "1" : "0", "A profile note is published",
+    note === null ? "The network did not answer, so this one is unknown rather than false."
+      : note ? "Permanent. Messages expire; notes do not."
+             : "The only permanent record on Technocore. Without one this identity leaves no trace between posts.",
+    ["Publish one", "/"]);
+  add(posted ? "1" : "0", "Signed messages are on the record",
+    posted ? "The archive has caught this key speaking."
+           : "Nothing signed by this key is in the recording yet.", ["Post one", "/rooms"]);
+  add("0", "Ownership proven in public",
+    "Proving is something you do, not something stored — sign a line and hand somebody the link.", ["Prove it", "/"]);
+}
+
+/* ── the shop band, loaded only when it is nearly on screen ────────────────
+   /api/orders scans day shards — one day of the offers room is 2.5 MB at the
+   edge — so it is the one call on this page worth not making. Nobody who
+   opens a profile to look at the top of it should pay for the bottom. */
+function watchOrders(did) {
+  const band = $("shopband");
+  if (!band || !did) return;
+  let done = false;
+  const go = () => {
+    if (done) return; done = true;
+    io?.disconnect();
+    fetch("/api/orders?did=" + encodeURIComponent(did))
+      .then((r) => (r.ok ? r.json() : null)).then(paintOrders).catch(() => paintOrders(null));
+  };
+  const io = "IntersectionObserver" in window
+    ? new IntersectionObserver((e) => { if (e.some((x) => x.isIntersecting)) go(); }, { rootMargin: "300px" })
+    : null;
+  if (!io) { go(); return; }
+  /* AFTER THE LAYOUT MEANS SOMETHING. Attached during the first paint the
+     observer is looking at a page whose lower bands are still the estimated
+     heights above, so everything sits higher than it will and this band looks
+     near the viewport when it is nowhere near it. Two frames is enough for
+     the bands to have their real content in them. */
+  requestAnimationFrame(() => requestAnimationFrame(() => io.observe(band)));
+}
+
+function paintOrders(j) {
+  const box = $("orders"); box.replaceChildren();
+  const list = Array.isArray(j?.orders) ? j.orders : [];
+  if (!list.length) {
+    const b = document.createElement("div"); b.className = "blank";
+    b.append(Object.assign(document.createElement("b"), { textContent: j ? "No orders in the last fourteen days" : "Could not read the offers room" }));
+    b.append(Object.assign(document.createElement("p"), { textContent: j ? "Anything you order from the shop shows up here." : "This page will be right again next time it loads." }));
+    box.append(b);
+    return;
+  }
+  for (const o of list.slice(0, 8)) {
+    const r = document.createElement("div"); r.className = "orow";
+    const left = document.createElement("div");
+    left.append(Object.assign(document.createElement("div"), { className: "ojob", textContent: jobName(o.job) }));
+    if (o.brief) left.append(Object.assign(document.createElement("div"), { className: "obrief", textContent: String(o.brief) }));
+    const right = document.createElement("div");
+    right.append(Object.assign(document.createElement("div"), { className: "oamt", textContent: `${num(o.amount)} ${o.asset ?? ""}`.trim() }));
+    right.append(Object.assign(document.createElement("div"), { className: "owhen", textContent: o.ts ? ago(o.ts) : "" }));
+    r.append(left, right);
+    box.append(r);
+  }
+}
+
+/* ── boot ──────────────────────────────────────────────────────────────────
+   The order here is the whole performance story. The face is drawn from the
+   DID alone, which the head script already had, so it appears without any
+   network at all. The profile request was started before this module even
+   loaded. The note is the only thing left waiting, and it waits until the
+   browser says it is idle. */
+async function boot() {
+  if (!who) return;                                   // signed out: the gate is already showing
+
+  /* The did:key: prefix is on every identity on the network, so it
+     distinguishes nothing and costs half the width the interesting part has
+     to fit in. Dropped from the DISPLAY only — the copy button hands over the
+     whole thing, and the title attribute carries it for anyone hovering. The
+     bar's chip has always shown it this way; this matches it. */
+  const shown = midText(document, who.replace(/^did:key:/, ""), 8, "did");
+  shown.title = who;
+  $("did").replaceChildren(shown);
+  $("did").append(copyBtn(document, who, "DID"));
+  drawFace(who);
+  $("tier").textContent = "Reading the archive";
+  $("tier").dataset.tone = "wait";
+  $("notebox").firstElementChild.textContent = "Reading…";
+
+  const held = await canSign().catch(() => false);
+
+  const acts = $("idact");
+  const a1 = document.createElement("a"); a1.className = "btn"; a1.href = "/?did=" + encodeURIComponent(who);
+  a1.textContent = "See the card"; acts.append(a1);
+  const a2 = document.createElement("a"); a2.className = "btn"; a2.href = "/rooms";
+  a2.textContent = "Go to rooms"; acts.append(a2);
+
+  const d = await (window.__profile ?? Promise.resolve(null));
+  const { posted } = paintProfile(d);
+
+  /* THE FINGERPRINT, NOT THE SHARD. The first version printed "shard 7c1a",
+     which is where the archive files this identity - true, and of interest to
+     nobody who is not maintaining the archive. The fingerprint is the same
+     hash read from the front. It is what the card prints in its footer and
+     what the note store keys on, so it is the short string a person can
+     actually check one copy of against another. */
+  try {
+    const h = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(who));
+    $("fp").textContent = [...new Uint8Array(h)].slice(0, 8)
+      .map((b) => b.toString(16).padStart(2, "0")).join("");
+  } catch { $("fp").textContent = " "; }
+
+  paintChecks({ note: null, posted, held });
+  const t0 = tierOf({ note: null, posted });
+  $("tier").textContent = t0.word; $("tier").dataset.tone = t0.tone;
+
+  watchOrders(who);
+
+  /* The note is the last thing anybody looks at and the only call left, so it
+     goes behind whatever else the browser has to do first. */
+  const idle = window.requestIdleCallback || ((f) => setTimeout(f, 240));
+  idle(async () => {
+    let n = null;
+    try {
+      const r = await fetch("/api/note?did=" + encodeURIComponent(who));
+      if (r.ok) n = await r.json();
+    } catch { /* the checklist says "unknown", which is the honest answer */ }
+
+    const reg = n?.registered ?? null;
+    const box = $("notebox"); box.replaceChildren();
+    if (n?.note) {
+      const q = document.createElement("blockquote");
+      q.textContent = String(n.note);                 // text, never markup — this came off the network
+      box.append(q);
+    } else {
+      const p = document.createElement("p"); p.className = "none";
+      p.textContent = reg === null
+        ? "Could not reach the note store, so this is unknown rather than empty."
+        : "No note published. It is the only permanent record on Technocore — messages expire, notes do not.";
+      box.append(p);
+    }
+    paintChecks({ note: reg, posted, held });
+    const t = tierOf({ note: reg, posted });
+    $("tier").textContent = t.word; $("tier").dataset.tone = t.tone;
+  });
+}
+
+/* ── the specular streak ───────────────────────────────────────────────────
+   Fine pointers only, and one transform per frame at most. Everything here is
+   compositor work: no layout is read, nothing is measured inside the handler
+   except a rect that is cached until the pointer leaves. */
+function shine() {
+  if (!matchMedia("(hover:hover) and (pointer:fine)").matches) return;
+  if (matchMedia("(prefers-reduced-motion:reduce)").matches) return;
+  const plate = $("plate");
+  if (!plate) return;
+  let box = null, frame = 0, tx = 0;
+  plate.addEventListener("pointerenter", () => { box = plate.getBoundingClientRect(); });
+  plate.addEventListener("pointerleave", () => {
+    box = null; plate.style.setProperty("--sx", "0px");
+    plate.style.setProperty("--mx", "50%"); plate.style.setProperty("--my", "14%");
+  });
+  plate.addEventListener("pointermove", (e) => {
+    if (!box) box = plate.getBoundingClientRect();
+    const fx = (e.clientX - box.left) / box.width;
+    tx = (fx - 0.5) * 120;
+    if (frame) return;
+    frame = requestAnimationFrame(() => {
+      frame = 0;
+      plate.style.setProperty("--sx", tx.toFixed(1) + "px");
+      plate.style.setProperty("--mx", (fx * 100).toFixed(1) + "%");
+      plate.style.setProperty("--my", (((e.clientY - box.top) / box.height) * 100).toFixed(1) + "%");
+    });
+  }, { passive: true });
+}
+
+/* Signing in or out on another tab changes whose page this is. Reloading is
+   the honest response: half this page was fetched for somebody else. */
+onSession((s) => {
+  const now = s?.did ?? null;
+  if (now !== who) location.reload();
+});
+
+boot();
+shine();
+</script>
+
+<!-- ── HOVER, AND WHERE IT IS ALLOWED ────────────────────────────────────────
+     Every hover rule on this page is inside this one block, so there is one
+     place to look and no way for one to escape onto a phone. A touch screen
+     has no hover: what it has is a :hover state that STICKS after a tap,
+     which is how a card ends up lifted and staying lifted with no way to put
+     it down. -->
+<style>
+@media (hover:hover) and (pointer:fine){
+  .tile:hover{transform:translateY(-2px);border-color:rgba(88,233,255,.3)}
+  .tile:hover .ctx{color:var(--white)}
+  .room:hover{transform:translateY(-2px);border-color:var(--blue);color:var(--white)}
+  .chk:hover{background:rgba(88,233,255,.05)}
+}
+/* Nothing moves for anybody who asked for that. The page still works: every
+   hover above is decoration on top of a state that is already legible. */
+@media (prefers-reduced-motion:reduce){
+  .tile,.room,.plate::after,.trk i{transition:none!important}
+  .tile:hover,.room:hover{transform:none}
+}
+</style>
+</body>
+</html>

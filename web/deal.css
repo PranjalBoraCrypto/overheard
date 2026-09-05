@@ -244,6 +244,10 @@
   transition:transform .16s var(--ease),filter .16s var(--ease),box-shadow .16s var(--ease);
   min-height:44px;                     /* a touch target, everywhere, always */
 }
+/* An anchor styled as a button is a button, and a button is not underlined.
+   Every page that used .btn on an <a> had to remember to say this; two of
+   them did and the third shipped underlined buttons. It belongs here. */
+a.btn{text-decoration:none}
 .btn-1{
   color:var(--void);border-color:rgba(88,233,255,.5);
   background:linear-gradient(180deg,#7ff0ff,var(--blue));
