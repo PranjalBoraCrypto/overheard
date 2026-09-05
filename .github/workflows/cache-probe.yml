@@ -1,0 +1,105 @@
+# Is the edge cache in front of /api/room actually collapsing anything?
+#
+# THE CLAIM, written in three places in this codebase: "every visitor's read
+# arrives from this site's IP, against an allowance of 600 reads/minute shared
+# by all of them. A four-second edge cache collapses a thousand viewers of the
+# lobby into one upstream request."
+#
+# THE SUSPICION. A CDN caches by URL. The steady-state poll in rooms.html is
+#
+#     /api/room?room=X&since=${since}&limit=200
+#
+# and `since` is each viewer's own last-seen sequence number, so no two
+# viewers in a room ask the same URL. If that is right, the cache collapses
+# nothing on the only path that runs continuously, a hundred viewers cost a
+# hundred upstream reads every poll, the 600/minute allowance goes, and the
+# endpoint answers 429 — which is what Vercel is reporting as a 6% error rate
+# across 24,000 invocations.
+#
+# Neither the cloud container nor a laptop can reach the site. A runner can.
+#
+# THIS IS READ-ONLY AND DELIBERATELY SMALL. Worst case it costs twelve
+# upstream reads, because the thing being measured is a shared allowance the
+# archiver also depends on. It never signs and never posts.
+name: cache-probe
+
+on:
+  workflow_dispatch:
+    inputs:
+      site:
+        description: origin to probe
+        default: https://overheard-five.vercel.app
+      room:
+        description: room to read
+        default: lobby
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cache-probe
+
+jobs:
+  ask:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: ask the same question four times, then four different ones
+        env:
+          SITE: ${{ inputs.site }}
+          ROOM: ${{ inputs.room }}
+        run: |
+          set -uo pipefail
+          # The inputs go in through the ENVIRONMENT and are never interpolated
+          # into the shell line: ${{ }} in a run: block is free text a
+          # dispatcher wrote, pasted into bash before bash sees it.
+          say() { echo "::notice title=cache-probe::$*"; }
+
+          # status | x-vercel-cache | seconds | bytes | the source field
+          hit() {
+            local url=$1 extra=${2:-}
+            local out
+            out=$(curl -sS -m 20 -D /tmp/h -o /tmp/b -w '%{http_code} %{time_total} %{size_download}' \
+                  ${extra:+-H "$extra"} "$url")
+            local cache
+            cache=$(grep -i '^x-vercel-cache:' /tmp/h | tr -d '\r' | awk '{print $2}')
+            local src
+            src=$(python3 -c "import json;print(json.load(open('/tmp/b')).get('source','?'))" 2>/dev/null || echo '-')
+            echo "$out ${cache:--} $src"
+          }
+
+          echo "== A. the SAME url four times (this is the case the claim is about)"
+          A=""
+          for i in 1 2 3 4; do
+            R=$(hit "$SITE/api/room?room=$ROOM&limit=200")
+            echo "   $R"; A="$A[$R] "
+            sleep 1
+          done
+
+          echo "== B. four DIFFERENT since values (this is what the poll actually sends)"
+          B=""
+          for s in 101 202 303 404; do
+            R=$(hit "$SITE/api/room?room=$ROOM&since=$s&limit=200")
+            echo "   $R"; B="$B[$R] "
+            sleep 1
+          done
+
+          echo "== C. same url, but with the request header the browser sends"
+          C=""
+          for i in 1 2; do
+            R=$(hit "$SITE/api/room?room=$ROOM&limit=200" "Cache-Control: no-store")
+            echo "   $R"; C="$C[$R] "
+            sleep 1
+          done
+
+          echo "== D. two spellings of the same question"
+          D1=$(hit "$SITE/api/room?room=$ROOM&limit=200")
+          D2=$(hit "$SITE/api/room?room=$ROOM&since=0&limit=200")
+          echo "   no-since: $D1"
+          echo "   since=0 : $D2"
+
+          say "A same url x4: $A"
+          say "B distinct since x4: $B"
+          say "C same url, no-store header x2: $C"
+          say "D no-since [$D1] vs since=0 [$D2]"
+          say "columns: http | seconds | bytes | x-vercel-cache | source"
