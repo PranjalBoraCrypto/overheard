@@ -105,6 +105,52 @@ jobs:
           echo "   no-since: $D1"
           echo "   since=0 : $D2"
 
+          echo "== E. does the since filter actually filter, against REAL sequence numbers"
+          # THE CHECK THE OTHER FOUR CANNOT MAKE. A, B, C and D all measure
+          # cache state, and a filter that silently dropped every message —
+          # or silently dropped none — would look exactly the same in every
+          # one of them. This asks the endpoint for a room, takes sequence
+          # numbers out of its own answer, and asks again from there.
+          curl -sS -m 20 -o /tmp/full "$SITE/api/room?room=$ROOM&limit=200"
+          python3 - > /tmp/seqs <<'EOF'
+          import json
+          d = json.load(open("/tmp/full"))
+          m = d.get("messages") or []
+          print(d.get("last_seq") or "", (m[len(m)//2]["seq"] if m else ""), len(m))
+          EOF
+          read LAST MID N < /tmp/seqs
+          echo "   room holds $N messages, last_seq $LAST, midpoint $MID"
+
+          E="messages=$N"
+          if [ -n "$LAST" ] && [ "$N" -gt 4 ]; then
+            curl -sS -m 20 -o /tmp/c1 "$SITE/api/room?room=$ROOM&since=$LAST&limit=200"
+            C1=$(python3 -c "import json;d=json.load(open('/tmp/c1'));print(d.get('count'),d.get('source'))")
+            curl -sS -m 20 -o /tmp/c2 "$SITE/api/room?room=$ROOM&since=$MID&limit=200"
+            C2=$(python3 -c "import json;d=json.load(open('/tmp/c2'));print(d.get('count'),d.get('source'))")
+            # And the one that would catch an off-by-one: the message AT
+            # `since` must not come back. You already have it.
+            # A FILE, not a heredoc inside $( ). Three constraints collide
+            # here: python refuses a leading indent, a YAML block scalar ends
+            # at the first line not indented past its key so column zero is
+            # unavailable inside one, and bash would not parse a heredoc
+            # nested in a command substitution. Ten spaces dedents to column
+            # zero; writing the file first sidesteps the third.
+            cat > /tmp/boundary.py <<'EOF'
+          import json, os
+          d = json.load(open("/tmp/c2"))
+          mid = os.environ["MID"]
+          print("leaks-the-boundary" if any(str(x.get("seq")) == mid for x in (d.get("messages") or [])) else "boundary-clean")
+          EOF
+            HAS=$(MID="$MID" python3 /tmp/boundary.py)
+            echo "   since=last_seq -> count $C1   (want 0)"
+            echo "   since=midpoint -> count $C2   (want about $((N/2)), never $N)"
+            echo "   $HAS"
+            E="$E | since=last:[$C1] since=mid:[$C2] $HAS"
+          else
+            E="$E | room too quiet to test the filter"
+          fi
+          say "E filter: $E"
+
           say "A same url x4: $A"
           say "B distinct since x4: $B"
           say "C same url, no-store header x2: $C"
