@@ -15,7 +15,7 @@ on:
       probe:
         description: "Which probe to run"
         type: choice
-        options: [room-window, deal-room]
+        options: [room-window, deal-room, owed]
         default: room-window
       deal:
         description: "For deal-room: the contract id (0x…) or the room name (mb-p-tclk-…)"
@@ -52,3 +52,13 @@ jobs:
         env:
           PROBE_DEAL: ${{ inputs.deal }}
         run: node scripts/probe-deal-room.mjs
+
+      # "Somebody paid and got nothing — why?" Every wake for nine hours has
+      # reported `1 owed` and `nothing was written` together, and the stall
+      # annotation built to explain exactly that has not appeared. This does
+      # the wake's own read with the wake's own exported functions, then walks
+      # the delivery guards in wake()'s order and names the first one that
+      # refuses.
+      - name: why has a paid deal not been delivered
+        if: ${{ inputs.probe == 'owed' }}
+        run: node scripts/probe-owed.mjs
