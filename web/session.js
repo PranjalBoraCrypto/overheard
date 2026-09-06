@@ -224,6 +224,45 @@ export async function signTextB64u(text) {
   return b64u(await signText(text));
 }
 
+/* ══════════════════════════════════════════════════════════════════════════
+ * THE NONCE ON A SIGNED WRITE, WHICH HAS TO GO UP
+ *
+ * Technocore refuses a write whose nonce is not STRICTLY GREATER than the last
+ * one that key used in that room — a signed URL is single-use, and the nonce is
+ * how it knows. Its refusal is exact and worth quoting, because it is what
+ * finally explained this:
+ *
+ *   400 nonce 178872218369713 is not greater than 1788722176337723,
+ *   the last one this key used in /r/overheard-calls
+ *
+ * Look at the lengths. Every page here built its nonce as
+ * `String(Date.now()) + String(Math.floor(Math.random() * 1000))`, and that
+ * random part is 1 TO 3 DIGITS: 7 gives a 14-digit nonce, 137 a 16-digit one.
+ * So the value did not track the clock at all. It jumped between three orders
+ * of magnitude at random, and any write that happened to draw a short one
+ * after a long one went BACKWARDS and was refused.
+ *
+ * It is one in ten, roughly, on every signed write this site makes — the
+ * market, the shop's checkout and the orders page all had it — and it looked
+ * like the network being flaky rather than like a bug, because a retry usually
+ * drew a longer number and worked.
+ *
+ * Microseconds since the epoch: sixteen digits, always, and always rising with
+ * the clock. The counter is only for two writes inside the same millisecond,
+ * where the clock cannot separate them and something must.
+ * ═════════════════════════════════════════════════════════════════════════*/
+let lastNonce = 0;
+export function postNonce() {
+  /* Fresh page, fresh module, lastNonce back to 0 — and that is fine: what has
+     to keep rising is the NUMBER, and the clock does that across reloads. The
+     old scheme's largest possible value was Date.now()*1000 + 999, so one
+     millisecond of elapsed time is enough for this to clear anything a key
+     wrote under it. */
+  const n = Math.max(Date.now() * 1000, lastNonce + 1);
+  lastNonce = n;
+  return String(n);
+}
+
 /** The encrypted backup this browser holds, whether or not anyone is signed
  *  in. Its presence is what makes "enter your passphrase" a sensible thing to
  *  ask; without it the answer is "make one first". */

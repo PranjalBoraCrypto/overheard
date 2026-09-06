@@ -981,7 +981,7 @@ input[type=text]:focus{outline:none;border-color:var(--blue);background:rgba(0,0
 </div>
 
 <script type="module">
-import { getSession, onSession, shortDid, signTextB64u } from "/session.js";
+import { getSession, onSession, shortDid, signTextB64u, postNonce } from "/session.js";
 import { canon, offerId, dealRoom } from "/tclk.js";
 import { skeletonsInto, skeletonsDone, copyBtn, copyRow, copyText, announce } from "/deal-ui.js";
 
@@ -1655,7 +1655,7 @@ async function finish(s, offerRef) {
      board counts exactly as much. The shop's own settle() has taken this
      fallback for months. */
   const post = async (room) => {
-    const nonce = String(Date.now()) + String(Math.floor(Math.random() * 1000));
+    const nonce = postNonce();
     const sig = await signTextB64u(`${room}|${nonce}|${lock}`);
     try {
       const r = await fetch("/api/post", {
@@ -1727,7 +1727,7 @@ $("send").addEventListener("click", async () => {
     const text = sweep("tclk1 " + canon({ ...body, id: offerRef }));
     /* The room, the nonce and the text, exactly as the compose box signs —
        the server checks the signature over all three. */
-    const nonce = String(Date.now()) + String(Math.floor(Math.random() * 1000));
+    const nonce = postNonce();
     const sig = await signTextB64u(`tclk-offers|${nonce}|${text}`);
     step("sign");
 

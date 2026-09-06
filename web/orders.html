@@ -602,7 +602,7 @@ h1{font-weight:800;font-size:clamp(30px,5vw,42px);line-height:1;letter-spacing:-
 </div>
 
 <script type="module">
-import { getSession, onSession, shortDid, signTextB64u } from "/session.js";
+import { getSession, onSession, shortDid, signTextB64u, postNonce } from "/session.js";
 import { canon, readFrame } from "/tclk.js";
 import { statusOf as sharedStatus, DECLINED, declineReason, railEl, JOBS as SHELF, ago as sharedAgo,
          skeletonsInto, skeletonsDone, copyBtn, copyRow, announce } from "/deal-ui.js";
@@ -1430,7 +1430,7 @@ function actionFor(o, pill = null, det = null) {
          months; the buyer needs the identical one, or the two halves of the
          same deal disagree about where they are allowed to stand. */
       const post = async (room) => {
-        const nonce = String(Date.now()) + String(Math.floor(Math.random() * 1000));
+        const nonce = postNonce();
         const sig = await signTextB64u(`${room}|${nonce}|${text}`);
         const r = await fetch("/api/post", {
           method: "POST", headers: { "Content-Type": "application/json" },

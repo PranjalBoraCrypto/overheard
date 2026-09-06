@@ -781,7 +781,16 @@ if (!chromium) {
       shortDid: '(d)=>String(d).slice(0,12)+"…"+String(d).slice(-4)',
       hueOf: "()=>200",
       PW_MIN: "6",
-      signTextB64u: '(async (t) => "sig:" + t)',
+      /* THE NONCE, AND WHY THE STUB HAS TO MAKE A REAL ONE. Every other export
+       here can be a function returning null; this one cannot, because its
+       value is signed AND sent, and the server checks that the two match. The
+       generic fallback is an async function, so `nonce` became a Promise, the
+       signed string said "[object Promise]" and the body carried `{}` — a
+       page that would be refused by the real server for a reason this stub
+       had invented. It also has to RISE: Technocore refuses a nonce that is
+       not greater than the last one that key used in that room. */
+    postNonce: '(() => { let n = 0; return () => String(n = Math.max(Date.now() * 1000, n + 1)); })()',
+    signTextB64u: '(async (t) => "sig:" + t)',
     };
     return EXPORTED.map((n) => `export const ${n} = ${over[n] ?? "(()=>{ const f = async () => null; return f; })()"};`).join("\n");
   };

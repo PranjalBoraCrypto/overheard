@@ -688,7 +688,7 @@ h1{font-size:clamp(26px,4.4vw,42px);line-height:1.12;letter-spacing:-.025em;
 </div>
 
 <script type="module">
-import { getSession, onSession, shortDid, signTextB64u } from "/session.js";
+import { getSession, onSession, shortDid, signTextB64u, postNonce } from "/session.js";
 import { group } from "/deal-ui.js";
 import { ROOM, MARKET, QUESTION, CLOSES_MS, TAP, SIDES, PREFIX,
          tapFrame, callFrame, foldMarket, seatOf, leftUntil } from "/call.js";
@@ -1040,7 +1040,7 @@ function keep() {
 async function post(text) {
   const s = getSession();
   if (!s) return { ok: false, why: "not signed in" };
-  const nonce = String(Date.now()) + String(Math.floor(Math.random() * 1000));
+  const nonce = postNonce();
   const sig = await signTextB64u(`${ROOM}|${nonce}|${text}`);
   try {
     const r = await fetch("/api/post", {

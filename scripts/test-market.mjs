@@ -321,6 +321,64 @@ console.log("\n=== Q. how anybody finds it");
     /nothing of value moves/i.test(play));
 }
 
+console.log("\n=== T. the nonce on a signed write, which has to go up");
+{
+  /* THE REFUSAL THAT EXPLAINED IT, quoted from the network on the very first
+     real call anybody made here:
+       400 nonce 178872218369713 is not greater than 1788722176337723,
+       the last one this key used in /r/overheard-calls
+     Fifteen digits against sixteen. Every page built its nonce as
+     `Date.now()` concatenated with `Math.floor(Math.random()*1000)`, and that
+     tail is ONE TO THREE digits — so the value jumped between three orders of
+     magnitude at random and did not track the clock at all. Any write that
+     drew a short one after a long one went backwards and was refused.
+     It looked like a flaky network, because a retry usually drew a longer
+     number and worked. */
+  const sess = read("web/session.js");
+  ok("there is one nonce maker for the whole site", /export function postNonce\(/.test(sess));
+  ok("and it is microseconds, so it rises with the clock",
+    /Date\.now\(\) \* 1000/.test(sess), "sixteen digits, always the same width");
+  ok("with a counter for two writes in one millisecond",
+    /Math\.max\(Date\.now\(\) \* 1000, lastNonce \+ 1\)/.test(sess),
+    "the clock cannot separate them and something must");
+
+  /* Run it. A rule about monotonicity is worth exactly as much as a run that
+     tries to break it. */
+  let last = 0n, back = 0, n = 0;
+  const seen = new Set();
+  const make = (() => { let lastN = 0; return () => { const v = Math.max(Date.now() * 1000, lastN + 1); lastN = v; return String(v); }; })();
+  for (let i = 0; i < 50000; i++) {
+    const s2 = make(); const v = BigInt(s2);
+    if (v <= last) back++;
+    last = v; seen.add(s2); n++;
+  }
+  ok("fifty thousand of them, none of which goes backwards", back === 0, `${back} regressions`);
+  ok("and none of which repeats", seen.size === n, `${seen.size} of ${n} distinct`);
+  ok("each one short enough for /api/post to accept",
+    make().length <= 19 && /^[0-9]+$/.test(make()), `${make().length} digits, cap is 19`);
+
+  /* The old one, as the control. Without it "none of which goes backwards"
+     proves only that this test cannot count. */
+  let oldBack = 0; last = 0n;
+  for (let i = 0; i < 3000; i++) {
+    const v = BigInt(String(Date.now()) + String(Math.floor(Math.random() * 1000)));
+    if (v <= last) oldBack++;
+    last = v;
+  }
+  ok("where the old one went backwards constantly", oldBack > 0,
+    `${oldBack} regressions in 3000 — the network refused every one of them`);
+
+  /* EVERY page that signs a write, not just this one. The shop's checkout and
+     the orders page had the identical line, so a real order could fail to
+     post its payment lock for the same reason and read as a flaky network. */
+  for (const f of ["web/market.html", "web/hire.html", "web/orders.html"]) {
+    const src = read(f);
+    ok(`${f.split("/").pop()} uses it`,
+      /postNonce\(\)/.test(src) && !/Math\.random\(\) \* 1000/.test(src),
+      /Math\.random\(\) \* 1000/.test(src) ? "still rolling a die for its nonce" : "");
+  }
+}
+
 console.log("\n=== S. the second keeper");
 {
   /* One keeper is a market that loses positions the afternoon a GitHub Action
