@@ -32,6 +32,7 @@ export const ICON = {
   city:   '<path d="M3 20.5h18"/><path d="M5.5 20.5V11l4-2.5V20.5"/><path d="M9.5 20.5V6l5-2.5v17"/><path d="M14.5 20.5v-8l4 2v6"/><path d="M7.4 13.5v.01M12 9v.01M12 13v.01M16.6 16v.01"/>',
   play:   '<circle cx="12" cy="12" r="8.6"/><circle cx="12" cy="12" r="3.4"/><path d="M12 3.4v2.4M12 18.2v2.4M3.4 12h2.4M18.2 12h2.4"/>',
   create: '<path d="M12 4.5v15M4.5 12h15"/><circle cx="12" cy="12" r="8.6"/>',
+  coin:   '<circle cx="12" cy="12" r="8.6"/><path d="M12 7.2v9.6"/><path d="M14.7 9.4a3 3 0 0 0-2.7-1.3c-1.6 0-2.7.8-2.7 2s1 1.8 2.7 2.1 2.8.8 2.8 2.1-1.2 2-2.8 2a3 3 0 0 1-2.7-1.3"/>',
   verify: '<path d="M12 2.6 4.5 5.8v6.1c0 4.6 3.2 8.8 7.5 9.9 4.3-1.1 7.5-5.3 7.5-9.9V5.8z"/><polyline points="8.7 11.9 11.2 14.4 15.5 9.8"/>',
   what:   '<circle cx="12" cy="12" r="8.6"/><path d="M9.6 9.4a2.5 2.5 0 1 1 3.4 2.3c-.7.3-1 .9-1 1.6v.3"/><path d="M12 16.9v.01"/>',
   out:    '<path d="M14 4h6v6"/><path d="M20 4 11.5 12.5"/><path d="M18 14.5V19a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h4.5"/>',
@@ -62,6 +63,16 @@ export const PAGES = [
   { href: "/v", label: "Verify", icon: "verify", bar: true,
     match: (p) => p === "/v" || p.startsWith("/v.html"),
     blurb: "Check a signature" },
+  /* ── THE PAPER MARKET ─────────────────────────────────────────────────
+     Sixth tab, and it goes before City for the same reason City goes last:
+     City carries the live dot and pulls the eye, and a new tab placed after
+     it would be read as an afterthought. "Market" rather than "Call", which
+     is the action the page asks for — a tab row already holding "Card"
+     cannot also hold "Call" and expect anybody to tell them apart at a
+     glance. */
+  { href: "/market", label: "Market", icon: "coin", bar: true,
+    match: (p) => p.startsWith("/market"),
+    blurb: "One question, in paper" },
   /* LAST, AND ON PURPOSE. City is the loudest tab on the bar — it carries the
      live dot — and sitting third it pulled the eye away from the four tabs
      that are the actual working surface of the site. At the end of the row it

@@ -117,7 +117,13 @@ const COLLECTOR = NARROW;
 
 const harness = (script, collector = COLLECTOR) =>
   script
-    .replace(/^node scripts\/archive\.mjs &$/m, collector)
+    /* ANCHORED ON THE SCRIPT, NOT ON THE WHOLE LINE. This matched the exact
+       string `node scripts/archive.mjs &`, and the day the workflow gained a
+       `--max-old-space-size` flag the substitution stopped matching — so this
+       harness quietly started launching the REAL collector against the real
+       network instead of the fake writer, every pass failed, and six
+       assertions went red with no hint that the cause was a flag. */
+    .replace(/^node .*scripts\/archive\.mjs &$/m, collector)
     .replace(/^(\s*)sleep 300$/m, "$1sleep 0.4")
     .replace(/^(\s*)sleep [35]$/gm, "$1sleep 0.1");
 

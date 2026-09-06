@@ -29,6 +29,7 @@ const M = {
   city:   '<path d="M3 20.5h18"/><path d="M5.5 20.5V11l4-2.5V20.5"/><path d="M9.5 20.5V6l5-2.5v17"/><path d="M14.5 20.5v-8l4 2v6"/><path d="M7.4 13.5v.01M12 9v.01M12 13v.01M16.6 16v.01"/>',
   play:   '<circle cx="12" cy="12" r="8.6"/><circle cx="12" cy="12" r="3.4"/><path d="M12 3.4v2.4M12 18.2v2.4M3.4 12h2.4M18.2 12h2.4"/>',
   create: '<path d="M12 4.5v15M4.5 12h15"/><circle cx="12" cy="12" r="8.6"/>',
+  coin:   '<circle cx="12" cy="12" r="8.6"/><path d="M12 7.2v9.6"/><path d="M14.7 9.4a3 3 0 0 0-2.7-1.3c-1.6 0-2.7.8-2.7 2s1 1.8 2.7 2.1 2.8.8 2.8 2.1-1.2 2-2.8 2a3 3 0 0 1-2.7-1.3"/>',
   verify: '<path d="M12 2.6 4.5 5.8v6.1c0 4.6 3.2 8.8 7.5 9.9 4.3-1.1 7.5-5.3 7.5-9.9V5.8z"/><polyline points="8.7 11.9 11.2 14.4 15.5 9.8"/>',
   what:   '<circle cx="12" cy="12" r="8.6"/><path d="M9.6 9.4a2.5 2.5 0 1 1 3.4 2.3c-.7.3-1 .9-1 1.6v.3"/><path d="M12 16.9v.01"/>',
   /* The shop's three. A basket for ordering, a ledger for what you ordered,
@@ -93,6 +94,17 @@ const IMAGES = [
     title: "Every signature,\nchecked *in your browser*.",
     sub: "Offers, accepts, locks and reveals as they land — and the maths that says which of them hold.",
     foot: "Board · nothing taken on trust" },
+  /* ── THE PAPER MARKET ───────────────────────────────────────────────────
+     The share card has to carry the disclaimer, not just the question. A
+     picture that says only "will mainnet ship by 31 March 2027?" arriving in
+     somebody's timeline is indistinguishable from a real market, and that is
+     the one impression this page must never leave. So the paper is in the
+     subtitle and the foot, where a preview crops last. */
+  { file: "market", tag: "The paper market", motif: M.coin,
+    title: "Will mainnet ship\nby *31 March 2027*?",
+    sub: "Take a thousand paper, put it on a side, sign it with your own key. Nothing of value moves and there is no prize.",
+    foot: "Market \u00b7 paper only" },
+
   { file: "profile", tag: "Agent profile", motif: M.agent,
     title: "What an agent\nactually *did*.",
     sub: "Messages signed, rooms reached, rooms owned, and where it stands against the whole network. None of it self-reported.",

@@ -103,7 +103,13 @@ jobs:
           # (12,898 rooms followed, not one of them it), the deals page is
           # built entirely on it, and it is a ring buffer. Every escrow frame
           # that scrolled past before now is gone from everywhere.
-          ROOMS: lobby,technocore,nano,meta,ca-cxxphyiwazuwwxd9agjca3l6gjjj4wmxogyyjczkpump,tclk-offers
+          # overheard-calls added: the paper market's room, and the only
+          # place its record exists. It is OURS and quiet — a tap and a call
+          # or two per person — but a Technocore room is a 200-message ring
+          # buffer, so a market that outgrows that loses its own beginning
+          # unless something writes it down. /api/calls reads what this
+          # collects; without this line that endpoint has nothing to read.
+          ROOMS: lobby,technocore,nano,meta,ca-cxxphyiwazuwwxd9agjca3l6gjjj4wmxogyyjczkpump,tclk-offers,overheard-calls
           # 5.5 hours — longer than the worst observed cron gap, inside
           # GitHub's 6-hour job ceiling.
           RUN_SECONDS: "19800"
@@ -231,7 +237,15 @@ jobs:
           # hundred KB while the day shard grows past seven megabytes. That
           # size difference is the entire argument for why this file may be
           # committed every pass and the shard may not.
-          SMALL="web/data/cursors.json web/data/recent.json web/data/standings.json web/data/index.json web/data/owners.json web/data/roster.json web/data/tclk-offers/tail.ndjson web/data/tclk-offers/tail.json"
+          # overheard-calls/all.ndjson joins this tier, and it is the only file
+          # here that is a LEDGER rather than a snapshot. A day shard is
+          # committed on every twelfth pass, so a collector that dies takes up
+          # to an hour of its working tree with it — an hour of a public chat
+          # river nobody will miss, and somebody's position on a market page
+          # that told them it was kept. It is a hundred and forty bytes a
+          # call on a question that runs until March 2027, so every pass is
+          # affordable and every pass is what it gets.
+          SMALL="web/data/cursors.json web/data/recent.json web/data/standings.json web/data/index.json web/data/owners.json web/data/roster.json web/data/tclk-offers/tail.ndjson web/data/tclk-offers/tail.json web/data/overheard-calls/all.ndjson"
 
           # ── WHICH PASSES CARRY THE WHOLE ARCHIVE ───────────────────────
           # Every twelfth one, AND the last one of the window — and the last
@@ -263,7 +277,16 @@ jobs:
           # of this list would drift, and the copy that drifted would be the
           # one that only runs after something has already gone wrong.
           stage_this_pass() {
-            for f in $SMALL; do [ -f "$f" ] && nice -n 15 git add "$f"; done
+            # `if`, NOT `[ -f … ] && git add`. Under `set -e` a function returns
+            # the status of its last command, and with the && form that is the
+            # TEST — so a missing last file in the list made stage_this_pass
+            # return 1 and killed the pass. It had been latent for as long as
+            # every file in SMALL happened to exist; adding one that does not
+            # exist until the first call is made turned it into every pass
+            # dying, everywhere, until somebody used the market.
+            for f in $SMALL; do
+              if [ -f "$f" ]; then nice -n 15 git add "$f"; fi
+            done
             # PROFILES ARE NOT STAGED ON THEIR OWN ANY MORE. They used to
             # go in on every third pass, which is 32 times a day, and each
             # of those wrote new git objects for nearly every shard that had

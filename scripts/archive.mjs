@@ -474,6 +474,64 @@ const TAIL_MAX_BYTES = Number(process.env.TAIL_MAX_BYTES ?? 1_500_000);
    no extra coverage. Whichever binds first, binds. */
 const TAIL_MAX = Number(process.env.TAIL_MAX ?? 4000);
 
+/* ══════════════════════════════════════════════════════════════════════════
+ * AND ONE LEDGER THAT IS NOT A WINDOW
+ *
+ * The paper market's room. Everything in this project is a window over
+ * something bigger — the tail is the newest frames, the shards are one day —
+ * because everything in this project is bigger than a commit can carry every
+ * five minutes. This is the exception, and it is the exception because it is
+ * TINY: a hundred-and-forty-byte frame, once or twice per person, on a
+ * question that runs until March 2027. Ten thousand calls is under two
+ * megabytes, and there will not be ten thousand.
+ *
+ * Why it is worth an exception at all: a day shard is committed on every
+ * TWELFTH pass, roughly hourly. Every window this month that ended early
+ * ended by the collector dying, and a collector that dies takes the last hour
+ * of its working tree with it. For an archive of a public chat network that
+ * is an hour of a river nobody will miss. For a market it is somebody's
+ * position, gone, on a page that told them it was signed and kept.
+ *
+ * So the calls go in a file of their own, appended and never trimmed, and
+ * archive.yml commits it on EVERY pass alongside the other small files. The
+ * worst case stops being an hour and becomes five minutes.
+ * ═════════════════════════════════════════════════════════════════════════*/
+const CALLS_ROOM = process.env.CALLS_ROOM ?? "overheard-calls";
+const CALLS_PREFIX = "call1 ";
+const CALLS_MAX = Number(process.env.CALLS_MAX ?? 200_000);
+
+/** One arriving call, kept for good. Deduplicated on the server's sequence
+ *  number, which is the only identifier a reader and this both agree on. */
+function pushCall(state, r) {
+  if (!state.ledger) state.ledger = { rows: [], seqs: new Set() };
+  const L = state.ledger;
+  if (!String(r?.text ?? "").startsWith(CALLS_PREFIX)) return;
+  const k = String(r?.seq ?? "");
+  if (!k || L.seqs.has(k)) return;
+  /* A ceiling, because "append for ever" with no bound is how a small file
+     stops being small. It is a hundred times more than this market can
+     plausibly hold; if it is ever reached, the shards still have everything
+     and /api/calls still reads them. */
+  if (L.rows.length >= CALLS_MAX) return;
+  L.rows.push(JSON.stringify(r));
+  L.seqs.add(k);
+}
+
+/** Seeded from the last run's file, exactly as the tail is: a fresh process
+ *  starts with an empty ledger, and writing that over the real one would
+ *  delete every call made before this window. */
+async function loadCalls() {
+  const holder = { ledger: { rows: [], seqs: new Set() } };
+  try {
+    const text = await fs.readFile(path.join(OUT, CALLS_ROOM, "all.ndjson"), "utf8");
+    for (const line of text.split("\n")) {
+      if (!line) continue;
+      try { pushCall(holder, JSON.parse(line)); } catch { /* torn line: skip it */ }
+    }
+  } catch { /* no ledger yet, which is the state on the first ever pass */ }
+  return holder.ledger;
+}
+
 /** One arriving record, appended to the rolling window. */
 function pushTail(state, r) {
   if (!state.tail) state.tail = { rows: [], bytes: 0, seqs: new Set() };
@@ -565,6 +623,18 @@ async function loadTail() {
  * ONE ROOM ONLY, deliberately. tclk-offers is where money is agreed. No other
  * room's freshness is worth a commit every five minutes.
  * ═════════════════════════════════════════════════════════════════════════*/
+/** The call ledger, written whole on every flush. Whole rather than appended
+ *  because writeAtomic is a rename and a rename is the only way this file can
+ *  never be caught half-written by `git add` — the race that killed four
+ *  collection windows. It is kilobytes; rewriting it costs nothing. */
+async function writeCalls(state) {
+  const L = state.ledger;
+  if (!L?.rows.length) return;
+  const dir = path.join(OUT, CALLS_ROOM);
+  await mkdir(dir, { recursive: true });
+  await writeAtomic(path.join(dir, "all.ndjson"), L.rows.join("\n") + "\n");
+}
+
 async function writeTail(state) {
   const t = state.tail;
   if (!t?.rows.length) return;
@@ -835,6 +905,7 @@ async function loadState() {
     deals: trimDeals(await readJson(path.join(OUT, "tclk-deals.json"), { updated: null, rooms: {} })),
     /* Carried over the run boundary — see loadTail(). */
     tail: await loadTail(),
+    ledger: await loadCalls(),
   };
 }
 
@@ -1459,6 +1530,10 @@ async function flush(state, rows, total, standings = false) {
            recording newest frames. It is fed from the arriving records and
            bounded by its own rules, so a capped shard cannot silence it. */
         if (room === OFFERS_ROOM) pushTail(state, r);
+        /* Fed from the arriving records for the same reason the tail is, and
+           BEFORE the body cap: a capped shard must not be able to silence the
+           one file that is somebody's position. */
+        if (room === CALLS_ROOM) pushCall(state, r);
         if (sh.n >= cap) { capped++; continue; }
         sh.seqs.add(r.seq); sh.n++;
         add += JSON.stringify(r) + "\n";
@@ -1492,6 +1567,7 @@ async function flush(state, rows, total, standings = false) {
   }
 
   await writeTail(state);
+  await writeCalls(state);
 
   await writeCursors(state, cursors);
 

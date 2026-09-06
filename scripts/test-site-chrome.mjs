@@ -493,7 +493,8 @@ console.log("\n=== 9. a pasted link arrives with a picture");
   const PAIRS = [["/", "home"], ["/rooms", "rooms"], ["/create", "create"], ["/v", "verify"],
                  ["/play", "play"], ["/city", "city"], ["/what", "what"],
                  ["/hire", "hire"], ["/orders", "orders"], ["/profile", "profile"],
-                 ["/deals-preview-78cb4a1be923c6b4.html", "deals"]];
+                 ["/deals-preview-78cb4a1be923c6b4.html", "deals"],
+                 ["/market", "market"]];
   for (const [route, img] of PAIRS) {
     await pg.goto("http://localhost:8971" + route);
     const m = await pg.evaluate(() => ({
