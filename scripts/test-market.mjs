@@ -273,9 +273,38 @@ console.log("\n=== L. the page, as text");
      one layout that shrinks. */
   ok("there is a phone layout at all", /@media \(max-width:900px\)/.test(page));
   ok("the panel is sticky on a wide screen", /\.aside\{[^}]*position:sticky/.test(page));
-  ok("and not on a narrow one", /@media \(max-width:900px\)\{[\s\S]*?\.aside\{position:static/.test(page));
-  ok("the panel comes before the standings on a phone",
-    /@media \(max-width:900px\)\{[\s\S]*?\.aside\{[^}]*order:2[\s\S]*?\.board\{order:3/.test(page));
+  /* On a phone it stops being a column and becomes a surface docked to the
+     bottom edge: always under the thumb, never scrolled past. */
+  ok("and on a narrow one it docks to the bottom edge instead",
+    /@media \(max-width:900px\)\{[\s\S]*?\.aside\{position:fixed;left:0;right:0;bottom:0/.test(page));
+  ok("the dock clears the home indicator",
+    /@media \(max-width:900px\)\{[\s\S]*?env\(safe-area-inset-bottom/.test(page));
+  /* A surface fixed over the page hides what is under it unless the page is
+     told how tall it is, so the height is measured and reserved. */
+  ok("the page reserves the dock's height so nothing ends up behind it",
+    /--dock-h:\s*0px/.test(page) &&
+    /\.shell\{[\s\S]{0,200}?padding:[^;}]*var\(--dock-h\)/.test(page) &&
+    /setProperty\("--dock-h"/.test(page));
+  /* A different running order, not the desktop one narrowed: question, then
+     the ring, then the two figures. .ask dissolves into the hero's own grid
+     so its children can be ordered one by one. */
+  ok("the phone puts the ring between the question and the figures",
+    /@media \(max-width:900px\)\{[\s\S]*?\.ask\{display:contents/.test(page) &&
+    /\.corewrap\{order:4[\s\S]{0,120}?\.sides2\{order:5/.test(page));
+  /* overflow-x:hidden on the body turns it into a scroll container, and a
+     scroll container is where position:sticky quietly stops working. This
+     page lost its sticky rail to exactly that once. */
+  ok("the body clips sideways overflow without becoming a scroller",
+    /overflow-x:hidden;overflow-x:clip/.test(page));
+  /* Both of these are read inside calc(). An undefined custom property makes
+     the whole declaration invalid at computed-value time, which drops the
+     sticky offset and the reserved bottom padding together and in silence. */
+  const calcVars = [...page.matchAll(/calc\([^;}]*?var\((--[a-z0-9-]+)/g)]
+    .map((m) => m[1]).filter((v, i, a) => a.indexOf(v) === i);
+  const undeclared = calcVars.filter((v) => !new RegExp(`${v}\\s*:`).test(page)
+    && !/^--(s\d|gutter|line|void|edge)$/.test(v));
+  ok("every variable this page does arithmetic with is declared on this page",
+    undeclared.length === 0, undeclared.join(", ") || calcVars.join(" "));
   /* Hover states behind a hover query, because a :hover rule on a touchscreen
      sticks after the tap and leaves a control looking pressed. */
   const hovers = [...page.matchAll(/^\s*\.[^\n{]*:hover/gm)].length;
@@ -292,8 +321,33 @@ console.log("\n=== L. the page, as text");
   ok("nothing animates for longer than about half a second",
     transitions.every((t) => !/\b([1-9]\d*(\.\d+)?)s\b/.test(t.replace(/0?\.\d+s/g, ""))),
     transitions.filter((t) => /\b[1-9]\d*s\b/.test(t)).join(" | ") || "longest is .52s");
-  ok("and there is no animation loop on the page",
-    !/requestAnimationFrame|setInterval/.test(page));
+  /* ── WHAT THE MACHINE GETS ────────────────────────────────────────────
+     The page decides how much motion the machine in front of it can afford
+     before it paints anything, and says so in data-fx. Ambient motion is
+     gated on that; state changes are not, because a ring that moves when the
+     numbers move is information rather than decoration. */
+  ok("the page grades the machine before it paints",
+    /data-fx/.test(page) && /prefers-reduced-motion/.test(page) &&
+    /hardwareConcurrency/.test(page) && /deviceMemory/.test(page));
+  ok("and demotes itself if the frames do not keep up",
+    /data-fx="lean"/.test(page) && /requestAnimationFrame/.test(page));
+  ok("the ambient loop is off on a lean machine",
+    /\[data-fx="lean"\][^{]*\.beltrun\{animation:none!important/.test(page));
+  ok("and the ambient loop only runs where it was earned",
+    /\[data-fx="standard"\] \.beltrun\.loop,\[data-fx="full"\] \.beltrun\.loop\{/.test(page));
+  /* Every rAF loop on this page has to be able to end. One that re-queues
+     unconditionally is a phone battery running down behind a page nobody is
+     looking at any more. */
+  const rafs = [...page.matchAll(/requestAnimationFrame\(([A-Za-z_$][\w$]*)\)/g)]
+    .map((m) => m[1]).filter((v, i, a) => a.indexOf(v) === i);
+  ok("every animation loop can stop itself", rafs.length > 0 && rafs.every((fn) => {
+    const body = page.slice(page.indexOf(`const ${fn} =`) >= 0
+      ? page.indexOf(`const ${fn} =`) : page.indexOf(`function ${fn}`));
+    const end = body.indexOf("\n};") >= 0 ? body.indexOf("\n};") : body.indexOf("\n}");
+    const src = body.slice(0, end + 3);
+    return /\bif\s*\(/.test(src) && /requestAnimationFrame/.test(src);
+  }), rafs.join(", "));
+  ok("nothing on the page polls on a timer", !/setInterval/.test(page));
 }
 
 console.log("\n=== Q. how anybody finds it");

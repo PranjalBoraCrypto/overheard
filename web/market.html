@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <link rel="icon" href="/favicon.svg">
 <meta name="description" content="One question, answered in paper: will Flop Labs ship mainnet by 31 March 2027? Take a thousand paper from the tap, put it on Yes or No, and sign it with your own key. The paper is worth nothing. The signature is real.">
 <title>The Paper Market — will mainnet ship by 31 March 2027?</title>
@@ -24,6 +24,42 @@
 <meta name="twitter:image:alt" content="The Paper Market — Overheard">
 <meta name="theme-color" content="#00070A">
 
+<!-- ══ WHAT THIS MACHINE CAN AFFORD, DECIDED BEFORE THE FIRST PAINT ═══════
+     Inline and synchronous on purpose. Everything expensive on this page is
+     gated on `data-fx`, and reading it after the stylesheet has applied would
+     mean starting the effects and then taking them away — a flash of animation
+     on exactly the machine least able to draw it.
+
+     THREE TIERS, and the default is the middle one. `lean` is not a punishment
+     and it is not a blank page: the ring still moves when the numbers move and
+     every control still answers a press. What it drops is the ambient half —
+     the belt, the travelling signals, the parallax — which is the half that
+     costs a machine something every second whether anybody is looking or not.
+
+     The signals used are the ones actually about the machine.
+     hardwareConcurrency and deviceMemory are absent on Safari and coarse
+     everywhere (deviceMemory is capped at 8 and rounded to a power of two),
+     which is why they are a floor rather than a score, and why the sampler in
+     the module below can still demote a device that flattered itself.
+     saveData is a person telling us directly, and it is obeyed. -->
+<script>
+(function () {
+  var r = document.documentElement;
+  var m = function (q) { try { return matchMedia(q).matches; } catch (e) { return false; } };
+  var still = m("(prefers-reduced-motion:reduce)");
+  var fine = m("(hover:hover) and (pointer:fine)");
+  var save = false;
+  try { save = !!(navigator.connection && navigator.connection.saveData); } catch (e) {}
+  var cores = navigator.hardwareConcurrency || 4;
+  var mem = navigator.deviceMemory || 4;
+  var tier = "standard";
+  if (still || save || cores <= 2 || mem <= 2) tier = "lean";
+  else if (fine && cores >= 8 && mem >= 8) tier = "full";
+  r.setAttribute("data-fx", tier);
+  r.setAttribute("data-point", fine ? "fine" : "coarse");
+})();
+</script>
+
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -33,57 +69,76 @@
 /* ═══════════════════════════════════════════════════════════════════════════
    THE PAPER MARKET
    ───────────────────────────────────────────────────────────────────────────
-   A prediction market is a well-solved layout and there is no prize for
-   pretending otherwise: a question, a bar showing what everybody thinks, a
-   panel to add your own opinion, and a list of who said what. Polymarket and
-   its neighbours all arrive at that because it is the order a person reads it
-   in — what is being asked, what the room thinks, what do I do, who else is
-   here.
+   THE PROBLEM THIS LAYOUT SOLVES. The first version was six dark rounded cards
+   down a page, and opening it meant reading four paragraphs before reaching
+   the one number the whole thing exists to report. The question, the reading
+   and the action were three boxes of equal weight, so none of them was the
+   thing you saw first.
 
-   What is NOT borrowed is the machinery underneath, and that changes the page
-   in two visible ways.
+   So there is ONE object at the top and everything else is subordinate to it.
+   The core is not decoration: its arc IS the split, its inner ring IS the time
+   left, its signals ARE the calls people have made. Every mark on it is a
+   number this page already had, drawn instead of tabulated. Nothing on it
+   would still be there if the market were empty — an empty market draws an
+   empty ring and says so in words.
 
-   NO PRICES. There are no shares, no order book and no counterparty. Paper is
-   not bought from anyone; it is taken from a tap and put on a side. So there
-   is nothing to show as "61¢" and nothing that moves when you hover it — the
-   split is a share of the paper on the board, which is one number and reads as
-   one bar rather than two prices.
+   WHAT IS DELIBERATELY ABSENT. No price chart: there is no price, and a line
+   through four points on a Tuesday is decoration pretending to be data. No
+   order book, no depth, no ticker of invented trades. Nothing on this page
+   comes from anywhere except the fold in /call.js.
 
-   NO CHART. A price line over time is the most recognisable thing on those
-   pages and it would be a lie here twice over: there is no price, and the room
-   holds one question that will not resolve for months. A line drawn through
-   four points on a Tuesday is decoration pretending to be data.
+   ── AND THE TWO COMPOSITIONS ─────────────────────────────────────────────
+   DESKTOP is a command centre: the question and its reading on the left, the
+   core on the right at a size that makes it an object rather than an icon, the
+   call panel in a rail that stays put while the record scrolls past it. The
+   eye goes question → core → panel, which is the order the three are needed in.
 
-   ── AND THE TWO SHAPES, WHICH ARE NOT ONE SHAPE THAT SHRINKS ──────────────
-   On a desktop the panel that takes your call sits to the right and STAYS
-   there while the standings scroll, because a wide screen has room for the
-   action and the record at once and a person comparing the two should not have
-   to remember one while looking at the other.
-
-   On a phone that is impossible, so the order changes rather than the widths:
-   question, split, YOUR CALL, then the standings underneath. The panel moves
-   above the list because on a phone the list is long and the action must not
-   be at the bottom of it. Nothing is sticky — a sticky panel on a phone is a
-   third of the screen permanently spent — and nothing reacts to hover, because
-   there is no pointer to hover with and a :hover rule on a touchscreen sticks
-   after the tap and looks broken.
+   THE PHONE IS NOT THAT SHRUNK. The core comes first, at a size a thumb can
+   sit under, with the question above it — and the panel LEAVES THE PAGE: it
+   becomes a surface docked to the bottom of the screen, always in reach, with
+   the amount row appearing only once a side has been chosen so its resting
+   height is two rows rather than four. The page reserves the dock's measured
+   height so nothing is ever hidden behind it, and it clears the home indicator
+   rather than sitting under it.
    ═══════════════════════════════════════════════════════════════════════════ */
 *{box-sizing:border-box;margin:0;padding:0}
 html{-webkit-text-size-adjust:100%}
-/* --void, not --bg. `--bg` exists in deal.css only INSIDE .btn, so this
-   resolved to nothing, the body painted transparent, and the page came up
-   white — the one bug on this page that every other page here already knew
-   about, because every other page says --void. */
+/* --void, not --bg. `--bg` exists in deal.css only INSIDE .btn, so anywhere
+   else it resolves to nothing — it cost this page a white background once and
+   grey text on a bright button an hour later. */
+/* `clip`, NOT `hidden`. overflow-x:hidden quietly turns the body into a
+   scroll container, and a scroll container is where position:sticky stops
+   sticking — it cost the call rail its whole reason for existing. `clip`
+   trims the same overflow without making a scroller. The hidden line stays
+   first as the fallback for anything that does not know `clip`. */
 body{background:var(--void);color:var(--dim);font-family:var(--display);
-  font-size:15px;line-height:1.6;min-height:100svh;overflow-x:hidden}
+  font-size:15px;line-height:1.6;min-height:100svh;
+  overflow-x:hidden;overflow-x:clip}
 
-.shell{max-width:1120px;margin:0 auto;padding:calc(var(--barh) + var(--s5)) var(--s4) 90px}
+/* The two sides, named once, so a change of mind about the colour of Yes is
+   one line rather than thirty. */
+:root{
+  --yes:#3BE3B0; --yes-lit:#8CF6D8; --yes-dim:rgba(59,227,176,.16);
+  --no:#F2B33D;  --no-lit:#FFD489;  --no-dim:rgba(242,179,61,.14);
+  --dock-h:0px;
+  /* The site bar scrolls with the page rather than sitting fixed over it, so
+     nothing has to be cleared at the top. It is a variable and not a zero
+     because .shell's padding and the rail's sticky offset both read it, and
+     an undefined variable makes the whole declaration invalid — which is how
+     the rail lost its sticky offset and the page lost the bottom padding
+     that keeps the phone dock off the last card. */
+  --barh:0px;
+}
 
+.shell{max-width:1280px;margin:0 auto;position:relative;z-index:1;
+  padding:calc(var(--barh) + var(--s4)) var(--s4) calc(96px + var(--dock-h))}
+
+/* ── the way back, and the room ────────────────────────────────────────────*/
 .topbar{display:flex;align-items:center;justify-content:space-between;gap:var(--s3);
-  margin-bottom:var(--s4);flex-wrap:wrap}
+  margin-bottom:var(--s3);flex-wrap:wrap}
 .back,.barlink{display:inline-flex;align-items:center;gap:8px;text-decoration:none;
   font-size:var(--t-small);color:var(--dim);border:1px solid var(--line);
-  padding:9px 14px;border-radius:999px;background:var(--sunk);transition:.16s}
+  padding:8px 13px;border-radius:999px;background:var(--sunk);transition:.16s}
 .back .i{transform:rotate(180deg)}
 .back .i,.barlink .i{width:14px;height:14px}
 .barlink b{font-family:var(--mono);font-weight:500;color:var(--white)}
@@ -91,192 +146,210 @@ body{background:var(--void);color:var(--dim);font-family:var(--display);
   .back:hover,.barlink:hover{color:var(--white);border-color:rgba(88,233,255,.34)}
 }
 
-/* ── the grid ──────────────────────────────────────────────────────────────*/
-.wrap{display:grid;gap:var(--s4);grid-template-columns:minmax(0,1fr) 350px;align-items:start}
-.hero{grid-column:1 / -1}
-/* SPANNING BOTH ROWS, or the row it shares with the split card is as tall as
-   the panel and the standings start below an empty half-screen. */
-/* THE TWO LEFT-HAND CARDS ARE ONE COLUMN, not two rows of the outer grid.
-   As two rows they shared their rows with the sticky panel, and grid grows the
-   rows a spanning item does not fit in — so the panel being taller than the
-   split card opened a hundred-pixel hole between the split and the standings.
-   Nesting them takes the panel out of that arithmetic entirely. */
-.mainc{grid-column:1;display:grid;gap:var(--s4);align-content:start}
+/* ── the page grid ─────────────────────────────────────────────────────────*/
+.page{display:grid;grid-template-columns:minmax(0,1fr) 344px;gap:var(--s4);align-items:start}
+.col{grid-column:1;display:grid;gap:var(--s4);align-content:start;min-width:0}
 .aside{grid-column:2;position:sticky;top:calc(var(--barh) + var(--s3));
-  display:grid;gap:var(--s4);align-content:start}
+  display:grid;gap:var(--s3);align-content:start}
 
-/* ── the question ──────────────────────────────────────────────────────────*/
-/* TWO COLUMNS INSIDE THE HERO on a wide screen: the question and its
-   explanation on the left, the post it came from on the right. In one column
-   the prose stops at 62ch — as it must, or it is unreadable — and leaves a
-   third of a 1280px hero empty, which reads as a page that has not finished
-   loading rather than as space. */
-.hero{background:var(--rise-1);border:1px solid var(--line);border-radius:20px;
-  padding:var(--s5);position:relative;overflow:hidden;
-  display:grid;grid-template-columns:minmax(0,1fr) minmax(0,340px);column-gap:var(--s5)}
-.hero > .eyebrow,.hero > .facts{grid-column:1 / -1}
-.hero > h1,.hero > .whence{grid-column:1}
-.hero > .quote{grid-column:2;grid-row:2 / span 3;align-self:start;max-width:none}
+/* ══ THE HERO ══════════════════════════════════════════════════════════════
+   One panel, two halves, and the second half is the object. It bleeds its own
+   light rather than sitting on a flat surface: one radial behind the core,
+   painted once, never animated. */
+.hero{position:relative;overflow:hidden;border:1px solid var(--line);border-radius:22px;
+  background:var(--rise-1);
+  display:grid;grid-template-columns:minmax(0,1fr) minmax(0,.92fr);
+  gap:var(--s4);align-items:center;padding:var(--s5) var(--s4)}
+.hero::before{content:"";position:absolute;inset:0;pointer-events:none;
+  background:radial-gradient(56% 78% at 78% 46%, rgba(0,180,215,.13), transparent 68%)}
+.ask{position:relative;z-index:1;min-width:0}
 .eyebrow{display:inline-flex;align-items:center;gap:8px;font-family:var(--mono);
   font-size:var(--t-micro);letter-spacing:.14em;text-transform:uppercase;color:var(--gold)}
 .eyebrow .i{width:13px;height:13px}
-h1{font-size:clamp(26px,4.4vw,42px);line-height:1.12;letter-spacing:-.025em;
-  color:var(--white);font-weight:700;margin:14px 0 0;max-width:20ch}
-.whence{margin-top:14px;font-size:var(--t-small);line-height:1.65;max-width:62ch;color:var(--dim)}
-.whence a{color:var(--blue);text-decoration:none;border-bottom:1px solid rgba(88,233,255,.3)}
-.whence b{color:var(--white);font-weight:600}
+h1{font-size:clamp(27px,3.1vw,40px);line-height:1.1;letter-spacing:-.028em;
+  color:var(--white);font-weight:700;margin:13px 0 0;max-width:16ch}
 
-/* ── THE POST THIS CAME FROM ───────────────────────────────────────────────
-   Drawn here rather than embedded, and that is not a preference. This site's
-   Content-Security-Policy is `default-src 'none'` with `script-src 'self'`
-   and no frame-src at all, so X's widget script cannot load and an iframe
-   cannot open. Loosening either to decorate one card would be trading the
-   whole site's safety for a logo.
-   It is also the better card. A real embed is a third party watching everyone
-   who reads this page, several hundred kilobytes of script, and a box that
-   goes blank the day the post is deleted. This is a quotation with its
-   author's name on it and a link to the original, which is what an embed is
-   pretending to be — and it says "quoted from X" so that it cannot be
-   mistaken for the platform's own rendering of the post. */
-.quote{display:block;margin-top:var(--s3);text-decoration:none;color:inherit;
-  border:1px solid var(--line);border-left:2px solid var(--gold);border-radius:14px;
-  padding:var(--s3) var(--s4);background:var(--sunk);max-width:62ch;transition:.16s}
-@media (hover:hover){
-  .quote:hover{border-color:rgba(88,233,255,.3);background:rgba(88,233,255,.04);
-    transform:translateY(-2px);box-shadow:0 12px 28px -18px rgba(0,0,0,.9)}
-  .quote:hover .qfoot{color:var(--blue)}
-  .quote:hover .qfoot::after{transform:translateX(4px)}
-  .quote:hover .qx{color:var(--white)}
-  .quote:hover .qav{transform:rotate(-6deg) scale(1.06)}
-}
-.qav{transition:transform .22s cubic-bezier(.34,1.4,.64,1)}
-.qx{transition:color .16s}
-.quote:focus-visible{outline:none;box-shadow:var(--focus)}
-.qtop{display:flex;align-items:center;gap:11px}
-.qav{width:34px;height:34px;flex:none;border-radius:50%;display:grid;place-items:center;
-  font-family:var(--mono);font-size:12px;font-weight:600;
-  color:var(--void);background:linear-gradient(160deg,#FFD489,var(--gold))}
-.qwho{display:flex;flex-direction:column;line-height:1.25;min-width:0}
-.qwho b{color:var(--white);font-size:14px;font-weight:600}
-.qwho em{font-style:normal;font-family:var(--mono);font-size:var(--t-micro);color:var(--faint)}
-.qx{width:15px;height:15px;margin-left:auto;color:var(--faint);flex:none}
-.qtext{margin-top:12px;font-size:15px;line-height:1.55;color:var(--white)}
-.qfoot{display:block;margin-top:11px;font-family:var(--mono);font-size:var(--t-micro);
-  letter-spacing:.1em;text-transform:uppercase;color:var(--faint);transition:.16s}
-/* The arrow is part of the sentence, so it is content and not a background
-   image, and it slides rather than appearing — an element that pops into
-   existence on hover shifts the line it is in. */
-.qfoot::after{content:" →";display:inline-block;transition:transform .2s cubic-bezier(.22,.61,.36,1)}
+/* THE READING, IN A SENTENCE. The core says it as a shape; this says it in
+   English, because a shape cannot be read aloud and a screen reader gets this
+   one. It is also the only place both numbers stand side by side. */
+.verdict{margin-top:16px;font-size:16px;line-height:1.55;color:var(--dim);max-width:34ch}
+.verdict b{font-weight:600}
+.verdict .vy{color:var(--yes-lit)}
+.verdict .vn{color:var(--no-lit)}
 
-.facts{display:flex;flex-wrap:wrap;gap:var(--s2) var(--s4);margin-top:var(--s4);
+/* A GRID, NOT A WRAP. Five facts of different widths flowing freely land
+   4+1 at one width and 3+2 at another, and a single orphan under four
+   siblings reads as something that fell off. Three columns always: two tidy
+   rows, and the labels line up down the page. */
+.facts{display:grid;grid-template-columns:repeat(3,minmax(0,auto));
+  justify-content:start;gap:var(--s3) var(--s5);margin-top:var(--s4);
   padding-top:var(--s3);border-top:1px solid var(--line)}
-.fact{display:flex;flex-direction:column;gap:3px}
-.fact span{font-family:var(--mono);font-size:var(--t-micro);letter-spacing:.12em;
+.fact{display:flex;flex-direction:column;gap:2px}
+.fact span{font-family:var(--mono);font-size:var(--t-micro);letter-spacing:.11em;
   text-transform:uppercase;color:var(--faint)}
-.fact b{font-family:var(--mono);font-size:15px;color:var(--white);font-weight:600;
+.fact b{white-space:nowrap;font-family:var(--mono);font-size:15px;color:var(--white);font-weight:600;
   font-variant-numeric:tabular-nums}
 
-/* ── the split ─────────────────────────────────────────────────────────────*/
+/* ══ THE CORE ══════════════════════════════════════════════════════════════
+   Inline SVG, and inline for three reasons: it is styled by the same tokens as
+   everything else, it is written by the same script that folds the market, and
+   it costs no request. Four rings and a number:
+
+     the verdict arc  two strokes on one circle, mint and amber, sized by the
+                      share of the paper — this is the whole answer
+     the time ring    how far the market has come from its first call to its
+                      close: two real instants, nothing between them guessed
+     the field        three faint circles, static, so the object has depth
+                      without anything moving
+     the signals      one dot per real call, travelling inward, coloured by the
+                      side it took and sized by the paper on it
+
+   An empty market draws an empty ring. */
+.corewrap{position:relative;z-index:1;justify-self:center;width:100%;max-width:430px;
+  aspect-ratio:1;display:grid;place-items:center;
+  transform:perspective(900px) rotateX(var(--rx,0deg)) rotateY(var(--ry,0deg));
+  transition:transform .5s cubic-bezier(.22,.61,.36,1)}
+[data-fx="full"] .corewrap{transition:none}
+.core{width:100%;height:100%;display:block;overflow:visible}
+.core .field{fill:none;stroke:rgba(88,233,255,.11);stroke-width:1}
+.core .track{fill:none;stroke:rgba(147,182,192,.13);stroke-width:13;stroke-linecap:round}
+.core .arc{fill:none;stroke-width:13;stroke-linecap:round;
+  transition:stroke-dasharray .8s cubic-bezier(.22,.61,.36,1),
+             transform .8s cubic-bezier(.22,.61,.36,1)}
+.core .arcY{stroke:var(--yes)}
+.core .arcN{stroke:var(--no)}
+.core .timetrack{fill:none;stroke:rgba(147,182,192,.1);stroke-width:2}
+.core .timearc{fill:none;stroke:rgba(88,233,255,.5);stroke-width:2;stroke-linecap:round;
+  transition:stroke-dasharray .8s ease}
+.core .hub{fill:rgba(2,11,15,.72);stroke:rgba(88,233,255,.14)}
+.core .sig{opacity:0}
+[data-fx="standard"] .core .sig,[data-fx="full"] .core .sig{
+  animation:sigin 5.6s cubic-bezier(.4,0,.5,1) infinite;animation-delay:var(--d,0s)}
+@keyframes sigin{
+  0%   {transform:translateX(0);opacity:0}
+  12%  {opacity:.95}
+  78%  {opacity:.5}
+  100% {transform:translateX(var(--travel,-150px));opacity:0}
+}
+.core .sig.y{fill:var(--yes-lit)}
+.core .sig.n{fill:var(--no-lit)}
+
+/* The face sits over the ring rather than inside the SVG: real text, real
+   font, selectable, and it reflows without touching the drawing. */
+.coreface{position:absolute;inset:0;display:grid;place-content:center;text-align:center;
+  pointer-events:none;padding:0 12%}
+.coreface .pc{font-family:var(--mono);font-weight:600;font-size:clamp(40px,5.4vw,60px);
+  line-height:1;letter-spacing:-.04em;color:var(--yes-lit);font-variant-numeric:tabular-nums}
+.coreface .pk{display:block;margin-top:9px;font-family:var(--mono);font-size:var(--t-micro);
+  letter-spacing:.16em;text-transform:uppercase;color:var(--faint)}
+.coreface .pn{display:block;margin-top:15px;font-family:var(--mono);font-size:var(--t-small);
+  color:var(--no-lit);font-variant-numeric:tabular-nums}
+.coreface.empty .pc{font-size:clamp(16px,1.9vw,20px);color:var(--dim);letter-spacing:-.01em;
+  font-family:var(--display);line-height:1.3}
+
+/* ══ THE BELT ══════════════════════════════════════════════════════════════
+   Real calls, moving. The only thing on the page that moves on its own, and
+   bounded three ways: it carries real frames and nothing else, it stops dead
+   on hover or keyboard focus so it can be read, and it does not run at all on
+   a machine that said it could not afford to.
+   Below three calls it does not loop — there is nothing to stream, and a
+   marquee of one item sliding past is a page pretending to be busy. */
+.belt{display:grid;grid-template-columns:auto minmax(0,1fr);align-items:stretch;
+  border:1px solid var(--line);border-radius:14px;background:var(--sunk);overflow:hidden}
+.belt[hidden]{display:none}
+.belttag{display:flex;align-items:center;gap:8px;padding:0 15px;white-space:nowrap;
+  border-right:1px solid var(--line);background:var(--rise-1);
+  font-family:var(--mono);font-size:var(--t-micro);letter-spacing:.11em;
+  text-transform:uppercase;color:var(--faint)}
+.belttag i{width:6px;height:6px;border-radius:50%;background:var(--blue);flex:none;
+  box-shadow:0 0 0 0 rgba(88,233,255,.5)}
+[data-fx="standard"] .belttag i,[data-fx="full"] .belttag i{animation:pulse 2.6s ease-out infinite}
+@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(88,233,255,.45)}70%,100%{box-shadow:0 0 0 7px rgba(88,233,255,0)}}
+.beltlane{position:relative;overflow:hidden;min-width:0;
+  -webkit-mask-image:linear-gradient(90deg,transparent,#000 4%,#000 88%,transparent);
+          mask-image:linear-gradient(90deg,transparent,#000 4%,#000 88%,transparent)}
+.beltrun{display:flex;width:max-content}
+[data-fx="standard"] .beltrun.loop,[data-fx="full"] .beltrun.loop{
+  animation:belt var(--dur,60s) linear infinite}
+.belt:hover .beltrun,.belt:focus-within .beltrun{animation-play-state:paused}
+@keyframes belt{from{transform:translateX(0)}to{transform:translateX(-50%)}}
+.beltrun.still{overflow-x:auto;width:100%;scrollbar-width:none}
+.sigchip{display:inline-flex;align-items:center;gap:9px;padding:11px 16px;white-space:nowrap;
+  font-size:var(--t-small);color:var(--dim);border-right:1px solid var(--line)}
+.sigchip .dot{width:6px;height:6px;border-radius:50%;flex:none}
+.sigchip.y .dot{background:var(--yes)} .sigchip.n .dot{background:var(--no)}
+.sigchip .w{font-family:var(--mono);color:var(--white)}
+.sigchip .s{font-family:var(--mono);font-size:var(--t-micro);letter-spacing:.1em;
+  text-transform:uppercase}
+.sigchip.y .s{color:var(--yes-lit)} .sigchip.n .s{color:var(--no-lit)}
+.sigchip .t{font-family:var(--mono);font-size:var(--t-micro);color:var(--faint)}
+
+/* ══ CARDS ═════════════════════════════════════════════════════════════════*/
 .card{background:var(--rise-1);border:1px solid var(--line);border-radius:18px;padding:var(--s4)}
-.ch{display:flex;align-items:baseline;justify-content:space-between;gap:var(--s3);margin-bottom:var(--s3)}
+.ch{display:flex;align-items:baseline;justify-content:space-between;gap:var(--s3);
+  margin-bottom:var(--s3)}
 .ch h2{font-size:15px;color:var(--white);font-weight:600;letter-spacing:-.01em}
 .ch em{font-style:normal;font-family:var(--mono);font-size:var(--t-micro);
-  letter-spacing:.12em;text-transform:uppercase;color:var(--faint)}
+  letter-spacing:.11em;text-transform:uppercase;color:var(--faint)}
 
-/* One bar, two segments. The width is the only thing that animates on this
-   page: 520ms once, when the numbers land, and never again unless they
-   change. A market that pulses is a market pretending something is happening.*/
-.bar{display:flex;height:52px;border-radius:12px;overflow:hidden;background:var(--sunk);
-  border:1px solid var(--line);position:relative}
-/* A light that crosses the bar once when the pointer arrives. It is a single
-   translated pseudo-element — one composited layer, no repaint, no timer —
-   and it exists because this bar is the whole answer to "what does the room
-   think" and it should feel like a thing rather than a rectangle. */
-.bar::after{content:"";position:absolute;inset:0;pointer-events:none;opacity:0;
-  background:linear-gradient(100deg,transparent 38%,rgba(255,255,255,.13) 50%,transparent 62%);
-  transform:translateX(-60%)}
-.seg{display:flex;align-items:center;transition:width .52s cubic-bezier(.22,.61,.36,1);
-  min-width:0;overflow:hidden}
-.seg b{font-family:var(--mono);font-weight:600;font-size:17px;padding:0 14px;
-  white-space:nowrap;font-variant-numeric:tabular-nums}
-.seg.y{background:linear-gradient(180deg,rgba(59,227,176,.34),rgba(59,227,176,.20))}
-.seg.y b{color:#8CF6D8}
-.seg.n{background:linear-gradient(180deg,rgba(242,179,61,.30),rgba(242,179,61,.17));
-  justify-content:flex-end}
-.seg.n b{color:#FFD489}
-@media (hover:hover){
-  .bar:hover::after{opacity:1;transform:translateX(60%);
-    transition:transform .62s cubic-bezier(.32,.5,.3,1),opacity .12s}
-  .bar:hover .seg b{color:#fff}
-  .leg:hover b{color:#fff}
-}
-.seg b{transition:color .16s}
-.leg b{transition:color .16s}
-
-.bar[data-empty="1"] .seg{width:50%!important;background:none}
-.bar[data-empty="1"]::after{display:none}
-.bar[data-empty="1"] .seg b{color:var(--faint);font-size:13px}
-
-.legend{display:flex;justify-content:space-between;gap:var(--s3);margin-top:12px}
-.leg{display:flex;align-items:center;gap:9px;font-size:var(--t-small)}
-.leg i{width:10px;height:10px;border-radius:3px;flex:none}
-.leg.y i{background:#3BE3B0}
-.leg.n i{background:var(--gold)}
-.leg b{font-family:var(--mono);color:var(--white);font-weight:600;font-variant-numeric:tabular-nums}
-.leg.n{text-align:right}
-
-/* ── the panel that takes a call ───────────────────────────────────────────*/
-.purse{display:flex;align-items:center;justify-content:space-between;gap:var(--s3);
-  padding:15px var(--s3);border:1px solid var(--line);border-radius:13px;background:var(--sunk);
-  transition:border-color .2s,background .2s}
-.purse .k{font-family:var(--mono);font-size:var(--t-micro);letter-spacing:.12em;
-  text-transform:uppercase;color:var(--faint)}
-.purse .v{font-family:var(--mono);font-size:26px;font-weight:600;color:var(--white);
+/* ── the two sides, as numbers ─────────────────────────────────────────────*/
+.sides2{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--line);
+  border:1px solid var(--line);border-radius:14px;overflow:hidden;margin-top:var(--s4);
+  position:relative;z-index:1}
+.s2{background:var(--surf-b);padding:15px var(--s3);display:grid;gap:3px}
+.s2 .k{display:flex;align-items:center;gap:8px;font-family:var(--mono);font-size:var(--t-micro);
+  letter-spacing:.11em;text-transform:uppercase;color:var(--faint)}
+.s2 .k i{width:8px;height:8px;border-radius:2px;flex:none}
+.s2.y .k i{background:var(--yes)} .s2.n .k i{background:var(--no)}
+.s2 .v{font-family:var(--mono);font-size:22px;font-weight:600;color:var(--white);
   font-variant-numeric:tabular-nums;letter-spacing:-.02em}
+.s2 .v em{font-style:normal;font-size:var(--t-micro);color:var(--faint);margin-left:6px;
+  letter-spacing:.1em}
+.s2 .u{font-size:var(--t-small);color:var(--dim)}
+.s2.y{box-shadow:inset 2px 0 0 var(--yes)}
+.s2.n{box-shadow:inset 2px 0 0 var(--no)}
+
+/* ══ THE CALL PANEL ════════════════════════════════════════════════════════
+   ONE PANEL, THREE STEPS, and that is the whole answer to "the tap and the
+   call feel like two disconnected things". They were two cards with two
+   headings, so they read as two features. They are one sequence: take paper,
+   pick a side, put it down. Nothing about the mechanics changes — the tap is
+   still its own signed frame, still once per key — only the telling. */
+.panel{padding:var(--s4)}
+.step{display:grid;gap:10px;padding:var(--s3) 0;border-top:1px solid var(--line)}
+.step:first-of-type{border-top:0;padding-top:0}
+.step[data-on="0"]{opacity:.42}
+.step[data-on="0"] .side,.step[data-on="0"] .amt,.step[data-on="0"] .go{pointer-events:none}
+.stepk{display:flex;align-items:center;gap:9px;font-family:var(--mono);font-size:var(--t-micro);
+  letter-spacing:.12em;text-transform:uppercase;color:var(--faint)}
+.stepk i{width:17px;height:17px;flex:none;border-radius:50%;display:grid;place-items:center;
+  font-size:9px;border:1px solid var(--line);color:var(--faint);font-style:normal}
+.step[data-on="1"] .stepk{color:var(--dim)}
+.step[data-on="1"] .stepk i{border-color:rgba(88,233,255,.4);color:var(--blue)}
+.step[data-done="1"] .stepk i{background:rgba(59,227,176,.16);border-color:rgba(59,227,176,.45);
+  color:var(--yes-lit)}
+
+.purse{display:flex;align-items:baseline;justify-content:space-between;gap:var(--s3)}
+.purse .v{font-family:var(--mono);font-size:27px;font-weight:600;color:var(--white);
+  font-variant-numeric:tabular-nums;letter-spacing:-.03em}
 .purse .u{font-family:var(--mono);font-size:var(--t-micro);color:var(--faint);margin-left:6px}
-/* Full, and it looks it. The one moment on this page worth a small flourish is
-   the tap actually landing, so the card it lives in warms up and the number
-   counts itself into place. */
-.tapcard[data-full="1"] .purse{border-color:rgba(242,179,61,.4);background:rgba(242,179,61,.07)}
-.tapcard[data-full="1"] .purse .v{color:#FFD489}
-#tap[hidden]{display:none}
+.purse .k{font-size:var(--t-small);color:var(--faint);text-align:right;max-width:15ch}
 
-
-/* ── THE STATE ALMOST EVERYBODY ARRIVES IN ─────────────────────────────────
-   Signed out. The first version showed two disabled buttons and a grey line
-   pointing at the top bar, which is a page saying "you cannot do this" and
-   leaving the reader to work out why and what to do about it.
-   So the signed-out panel is not a dimmed version of the signed-in one. The
-   buttons are LIVE and they open the sign-in themselves, the sentence under
-   them says the one thing a stranger needs to hear about a key on a website —
-   that it is made here and stays here — and there is a way out for somebody
-   who has not got one yet. */
-.nokey{margin-top:10px;font-size:var(--t-small);line-height:1.55;color:var(--faint)}
-.nokey a{color:var(--blue);text-decoration:none;border-bottom:1px solid rgba(88,233,255,.3)}
-@media (hover:hover){ .nokey a:hover{color:#fff;border-bottom-color:currentColor} }
-.locked .purse{border-color:rgba(88,233,255,.22)}
-.tapcard.locked{border-color:rgba(88,233,255,.24)}
-
-.sides{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:var(--s3)}
-/* 56px, not 40. This is the one control on the page that matters and on a
-   phone it is hit with a thumb. */
-.side{min-height:56px;display:flex;flex-direction:column;align-items:center;justify-content:center;
+.sides{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+.side{min-height:58px;display:flex;flex-direction:column;align-items:center;justify-content:center;
   gap:2px;border-radius:13px;border:1px solid var(--line);background:var(--sunk);
   color:var(--dim);font:inherit;font-weight:600;cursor:pointer;position:relative;overflow:hidden;
   transition:transform .18s cubic-bezier(.34,1.4,.64,1),border-color .16s,background .16s,color .16s}
-/* The wash that arrives from below on hover. A gradient element rather than a
-   background transition, because a gradient cannot be animated cheaply and
-   this one is a transform — one composited layer, no repaint. */
+.side small{font-family:var(--mono);font-size:var(--t-micro);color:var(--faint);font-weight:400}
 .side::before{content:"";position:absolute;inset:0;opacity:0;transform:translateY(100%);
   transition:transform .26s cubic-bezier(.22,.61,.36,1),opacity .2s;pointer-events:none}
-.side.y::before{background:linear-gradient(0deg,rgba(59,227,176,.22),transparent)}
-.side.n::before{background:linear-gradient(0deg,rgba(242,179,61,.2),transparent)}
-.side small{font-family:var(--mono);font-size:var(--t-micro);color:var(--faint);font-weight:400}
+.side.y::before{background:linear-gradient(0deg,var(--yes-dim),transparent)}
+.side.n::before{background:linear-gradient(0deg,var(--no-dim),transparent)}
 .side[aria-pressed="true"]{color:var(--white)}
-.side.y[aria-pressed="true"]{background:rgba(59,227,176,.15);border-color:rgba(59,227,176,.55)}
-.side.y[aria-pressed="true"] small{color:#8CF6D8}
-.side.n[aria-pressed="true"]{background:rgba(242,179,61,.14);border-color:rgba(242,179,61,.5)}
-.side.n[aria-pressed="true"] small{color:#FFD489}
+.side.y[aria-pressed="true"]{background:var(--yes-dim);border-color:rgba(59,227,176,.55)}
+.side.y[aria-pressed="true"] small{color:var(--yes-lit)}
+.side.n[aria-pressed="true"]{background:var(--no-dim);border-color:rgba(242,179,61,.5)}
+.side.n[aria-pressed="true"] small{color:var(--no-lit)}
 @media (hover:hover){
   .side:hover{color:var(--white);transform:translateY(-3px)}
   .side:hover::before{opacity:1;transform:translateY(0)}
@@ -286,7 +359,7 @@ h1{font-size:clamp(26px,4.4vw,42px);line-height:1.12;letter-spacing:-.025em;
 }
 .side:focus-visible{outline:none;box-shadow:var(--focus)}
 
-.amts{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:10px}
+.amts{display:grid;grid-template-columns:repeat(4,1fr);gap:7px}
 .amt{min-height:44px;border-radius:11px;border:1px solid var(--line);background:var(--sunk);
   color:var(--dim);font-family:var(--mono);font-size:var(--t-small);font-weight:600;
   cursor:pointer;font-variant-numeric:tabular-nums;
@@ -301,18 +374,12 @@ h1{font-size:clamp(26px,4.4vw,42px);line-height:1.12;letter-spacing:-.025em;
 .amt:focus-visible{outline:none;box-shadow:var(--focus)}
 .amt[disabled]{opacity:.35;cursor:not-allowed}
 
-.go{width:100%;min-height:54px;margin-top:12px;border:0;border-radius:13px;
+.go{width:100%;min-height:54px;border:0;border-radius:13px;
   font:inherit;font-weight:700;font-size:15px;letter-spacing:-.01em;cursor:pointer;
-  /* --void, for the third time on this page. `--bg` is scoped to .btn inside
-     deal.css, so it resolved to nothing and the label inherited the body's
-     grey — grey text on a bright cyan button, which is the one control here
-     nobody can afford to misread. */
   color:var(--void);background:linear-gradient(180deg,#7ff0ff,var(--blue));
   transition:transform .18s cubic-bezier(.34,1.4,.64,1),filter .14s,box-shadow .18s,opacity .14s}
-/* A disabled button still has to be READ: before anybody signs in, both
-   buttons on this panel are disabled and their labels are the instructions —
-   "sign in to claim it", "claim your paper first". At .42 the whole gradient
-   and the dark label on it faded together and the sentence went with them. */
+/* A disabled button still has to be READ — before anybody signs in, its label
+   is the instruction. */
 .go[disabled]{opacity:.62;cursor:not-allowed}
 @media (hover:hover){
   .go:not([disabled]):hover{filter:brightness(1.08);transform:translateY(-2px);
@@ -321,78 +388,129 @@ h1{font-size:clamp(26px,4.4vw,42px);line-height:1.12;letter-spacing:-.025em;
   .go:not([disabled]):active{transform:translateY(0);box-shadow:none}
 }
 .go:focus-visible{outline:none;box-shadow:var(--focus)}
-.go.tap{background:linear-gradient(180deg,#FFD489,var(--gold))}
+.go.tap{color:var(--void);background:linear-gradient(180deg,#FFD489,var(--gold))}
+.go[hidden]{display:none}
 
-.say{margin-top:11px;font-size:var(--t-small);line-height:1.55;color:var(--dim)}
-.say.ok{color:var(--good)}
-.say.bad{color:var(--gold)}
-.say a{color:var(--blue)}
-
-.mine{margin-top:var(--s3);padding-top:var(--s3);border-top:1px solid var(--line);
-  font-size:var(--t-small);line-height:1.6}
+.say{font-size:var(--t-small);line-height:1.55;color:var(--dim)}
+.say.ok{color:var(--good)} .say.bad{color:var(--gold)}
+.nokey{font-size:var(--t-small);line-height:1.55;color:var(--faint)}
+.nokey a{color:var(--blue);text-decoration:none;border-bottom:1px solid rgba(88,233,255,.3)}
+@media (hover:hover){ .nokey a:hover{color:#fff;border-bottom-color:currentColor} }
+.mine{font-size:var(--t-small);line-height:1.6}
 .mine b{color:var(--white);font-family:var(--mono);font-variant-numeric:tabular-nums}
 
-/* ── the standings ─────────────────────────────────────────────────────────*/
-.rows{display:grid;gap:1px;background:var(--line);border:1px solid var(--line);
-  border-radius:13px;overflow:hidden}
-.rowhead{display:grid;grid-template-columns:26px minmax(0,1fr) 84px 96px 92px;
-  gap:var(--s3);padding:0 var(--s3) 9px;font-family:var(--mono);font-size:var(--t-micro);
-  letter-spacing:.12em;text-transform:uppercase;color:var(--faint)}
-.rowhead span:nth-child(4),.rowhead span:nth-child(5){text-align:right}
-.row{display:grid;grid-template-columns:26px minmax(0,1fr) 84px 96px 92px;align-items:center;
-  gap:var(--s3);padding:12px var(--s3);background:var(--surf-b);position:relative;
-  transition:background .16s}
-/* A rail in the colour of the side they took, growing from nothing. It is the
-   one place on the page where hovering a row TELLS you something — which way
-   that person called it — rather than just acknowledging the pointer. */
-.row::before{content:"";position:absolute;left:0;top:0;bottom:0;width:2px;
-  transform:scaleY(0);transform-origin:50% 50%;transition:transform .2s cubic-bezier(.22,.61,.36,1)}
-.row.y::before{background:#3BE3B0}
-.row.n::before{background:var(--gold)}
-.row.b::before{background:linear-gradient(180deg,#3BE3B0,var(--gold))}
+/* ══ THE FEED ══════════════════════════════════════════════════════════════
+   Not a table. Every row is one person's call, and what is worth seeing at a
+   glance is which way they went and what it pays them — so the side is a rail
+   down the edge, always visible, and the payoff is the number on the right. */
+.feed{display:grid;gap:8px}
+.fr{display:grid;grid-template-columns:26px minmax(0,1fr) auto auto;align-items:center;
+  gap:var(--s3);padding:13px var(--s3) 13px 15px;border:1px solid var(--line);
+  border-radius:13px;background:var(--surf-b);position:relative;overflow:hidden;
+  transition:transform .18s cubic-bezier(.22,.61,.36,1),border-color .16s,background .16s}
+.fr::before{content:"";position:absolute;left:0;top:0;bottom:0;width:2px}
+.fr.y::before{background:var(--yes)}
+.fr.n::before{background:var(--no)}
+.fr.b::before{background:linear-gradient(180deg,var(--yes),var(--no))}
+@media (hover:hover){
+  .fr:hover{transform:translateX(3px);border-color:rgba(88,233,255,.26);background:#08171d}
+  .fr:hover .who{color:#fff}
+}
 .rk{font-family:var(--mono);font-size:var(--t-micro);color:var(--faint);text-align:right}
 .who{font-family:var(--mono);font-size:var(--t-small);color:var(--white);
-  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;transition:color .16s}
 .who .me{color:var(--blue);font-size:var(--t-micro);letter-spacing:.1em;margin-left:7px;
   text-transform:uppercase}
-.pick{font-family:var(--mono);font-size:var(--t-micro);letter-spacing:.1em;text-transform:uppercase}
-.pick.y{color:#8CF6D8} .pick.n{color:#FFD489} .pick.b{color:var(--faint)}
-.amtn{font-family:var(--mono);font-size:var(--t-small);color:var(--white);text-align:right;
-  font-variant-numeric:tabular-nums}
-.amtn i{font-style:normal;color:var(--faint);font-size:var(--t-micro);margin-left:5px}
-/* WHAT IT PAYS IF IT IS RIGHT. Parimutuel, so a lonely call against the room
-   is worth several times a popular one — which is the whole game, and the
-   reason this column is here rather than the stake standing alone. */
-.pay{font-family:var(--mono);font-size:var(--t-small);text-align:right;
+.stake{display:flex;flex-direction:column;align-items:flex-end;gap:1px}
+.stake b{font-family:var(--mono);font-size:var(--t-small);color:var(--white);
+  font-variant-numeric:tabular-nums;font-weight:600}
+.stake span{font-family:var(--mono);font-size:var(--t-micro);letter-spacing:.09em;
+  text-transform:uppercase}
+.stake.y span{color:var(--yes-lit)} .stake.n span{color:var(--no-lit)}
+.stake.b span{color:var(--faint)}
+.pay{font-family:var(--mono);font-size:var(--t-small);text-align:right;min-width:66px;
   font-variant-numeric:tabular-nums;color:var(--dim)}
-.pay.up{color:#8CF6D8} .pay.down{color:var(--gold)} .pay.na{color:var(--faint)}
+.pay.up{color:var(--yes-lit)} .pay.down{color:var(--no-lit)} .pay.na{color:var(--faint)}
+.pay em{display:block;font-style:normal;font-size:var(--t-micro);color:var(--faint);
+  letter-spacing:.08em}
+
+.blank{padding:var(--s5) var(--s4);text-align:center;display:grid;gap:8px;justify-items:center;
+  border:1px dashed var(--line);border-radius:14px}
+.blank b{color:var(--white);font-size:16px}
+.blank p{font-size:var(--t-small);color:var(--faint);max-width:38ch}
+
+/* ══ CONTEXT: the post this came from ══════════════════════════════════════
+   Drawn, not embedded. This site's CSP is `default-src 'none'` with
+   `script-src 'self'` and no frame-src, so X's widget cannot load and an
+   iframe cannot open — and loosening either to decorate one card would trade
+   the site's safety for a logo. It is a quotation with its author's name and a
+   link to the original, and it says "quoted from X" so it cannot be mistaken
+   for the platform's own rendering of the post. */
+.ctx summary{list-style:none;cursor:pointer;display:flex;align-items:center;gap:11px;
+  padding:13px var(--s3);border:1px solid var(--line);border-radius:13px;background:var(--sunk);
+  transition:border-color .16s,background .16s}
+.ctx summary::-webkit-details-marker{display:none}
+.ctx summary:focus-visible{outline:none;box-shadow:var(--focus)}
+.qx{transition:color .18s}
+.qcar{width:15px;height:15px;flex:none;fill:none;stroke:currentColor;stroke-width:2.1;
+  stroke-linecap:round;stroke-linejoin:round;color:var(--faint);
+  transition:transform .26s cubic-bezier(.22,.61,.36,1),color .18s}
+.ctx[open] .qcar{transform:rotate(180deg)}
+/* THE HOVER, WITH A LITTLE WEIGHT. The row lifts a hair, the picture comes
+   forward, the mark and the chevron light up — one gesture out of four
+   properties rather than four separate effects. Bounded well under half a
+   second, and only where there is a real pointer to do it with. */
+.ctx summary{transform:translateZ(0)}
+.qav{transition:transform .26s cubic-bezier(.22,.61,.36,1),border-color .18s}
 @media (hover:hover){
-  .row:hover{background:#08171d}
-  .row:hover::before{transform:scaleY(1)}
-  .row:hover .who{color:#fff}
+  .ctx summary:hover{border-color:rgba(88,233,255,.3);background:var(--surf-b)}
+  .ctx summary:hover .qav{transform:translateY(-1.5px) scale(1.06);
+    border-color:rgba(88,233,255,.34)}
+  .ctx summary:hover .qx,.ctx summary:hover .qcar{color:var(--blue)}
 }
+[data-fx="lean"] .qav,[data-fx="lean"] .qcar{transition:none}
+.ctx[open] summary{border-bottom-left-radius:0;border-bottom-right-radius:0;
+  border-bottom-color:transparent;background:var(--surf-b)}
+/* HIS OWN PICTURE, AT ITS OWN SHAPE. The file is square and the octagon in
+   it runs to the edges, so no border-radius and no object-fit crop — a round
+   mask would clip four corners off somebody else's mark. Fixed width and
+   height so the row never jumps while it loads. */
+.qav{width:34px;height:34px;flex:none;display:block;background:#000;
+  border:1px solid var(--line)}
+.qwho{display:flex;flex-direction:column;line-height:1.25;min-width:0}
+.qwho b{color:var(--white);font-size:14px;font-weight:600}
+.qwho em{font-style:normal;font-family:var(--mono);font-size:var(--t-micro);color:var(--faint)}
+.qx{width:14px;height:14px;margin-left:auto;color:var(--faint);flex:none}
+.qbody{border:1px solid var(--line);border-top:0;border-radius:0 0 13px 13px;
+  padding:var(--s3);background:var(--surf-b)}
+.qtext{font-size:15px;line-height:1.55;color:var(--white)}
+.qlink{display:inline-block;margin-top:11px;font-family:var(--mono);font-size:var(--t-micro);
+  letter-spacing:.1em;text-transform:uppercase;color:var(--faint);text-decoration:none;
+  transition:color .16s}
+.qlink::after{content:" →";display:inline-block;transition:transform .2s cubic-bezier(.22,.61,.36,1)}
+@media (hover:hover){ .qlink:hover{color:var(--blue)} .qlink:hover::after{transform:translateX(4px)} }
+.qlink:focus-visible{outline:none;box-shadow:var(--focus);border-radius:4px}
 
-.blank{padding:var(--s5) var(--s4);text-align:center;display:grid;gap:8px;justify-items:center}
+/* ══ HOW IT SETTLES ════════════════════════════════════════════════════════*/
+.rules{display:grid;gap:1px;background:var(--line);border:1px solid var(--line);
+  border-radius:14px;overflow:hidden}
+.rule{background:var(--surf-b);padding:15px var(--s3);display:grid;gap:4px}
+.rule b{font-size:var(--t-small);color:var(--white);font-weight:600}
+.rule p{font-size:var(--t-small);line-height:1.6;color:var(--faint)}
 
-.foot{margin-top:var(--s5);font-size:var(--t-small);line-height:1.7;color:var(--faint);
-  max-width:76ch}
-.foot b{color:var(--dim);font-weight:600}
-.foot a{color:var(--dim)}
-
-
-/* ── THE FAQ ───────────────────────────────────────────────────────────────
-   <details>, not a scripted accordion. It opens with the keyboard, it is
-   announced correctly by a screen reader, it survives JavaScript failing to
-   load, and Ctrl+F finds the text inside a closed one in every current
-   browser. A hand-rolled version of this would be forty lines of script to be
-   slightly worse.
-   The first one is open on arrival, because it is the disclaimer and a
-   disclaimer nobody clicks is a disclaimer nobody read. */
-.faq{grid-column:1 / -1}
-.faq details{border:1px solid var(--line);border-radius:13px;background:var(--sunk);
-  margin-top:8px;overflow:hidden;transition:border-color .16s,background .16s}
-.faq details[open]{background:var(--surf-b)}
-.faq summary{list-style:none;cursor:pointer;padding:14px var(--s4);
+/* ══ THE FAQ ═══════════════════════════════════════════════════════════════
+   Grouped, not a wall of identical bars. Three headings — is it real, how it
+   works, who is behind it — with air between them, so it reads as something
+   somebody wrote rather than as a control panel. Every question and every
+   answer is the one that was there before.
+   <details>, not a scripted accordion: it opens with a keyboard, survives the
+   script failing, and Ctrl+F finds the text inside a closed one. */
+.faqgroup + .faqgroup{margin-top:var(--s4)}
+.faqh{font-family:var(--mono);font-size:var(--t-micro);letter-spacing:.14em;
+  text-transform:uppercase;color:var(--faint);margin-bottom:8px}
+.faq details{border-bottom:1px solid var(--line);overflow:hidden}
+.faq details:first-of-type{border-top:1px solid var(--line)}
+.faq summary{list-style:none;cursor:pointer;padding:15px 2px;
   display:flex;align-items:center;gap:var(--s3);color:var(--white);font-weight:600;
   font-size:var(--t-small);min-height:52px}
 .faq summary::-webkit-details-marker{display:none}
@@ -403,59 +521,147 @@ h1{font-size:clamp(26px,4.4vw,42px);line-height:1.12;letter-spacing:-.025em;
 .faq details[open] summary::after{transform:rotate(-135deg) translate(-2px,-2px);
   border-color:var(--blue)}
 .faq summary:focus-visible{outline:none;box-shadow:var(--focus)}
-.faq .a{padding:0 var(--s4) 16px;font-size:var(--t-small);line-height:1.7;max-width:74ch}
+.faq .a{padding:0 2px 17px;font-size:var(--t-small);line-height:1.7;max-width:74ch;
+  color:var(--dim)}
 .faq .a b{color:var(--white);font-weight:600}
 .faq .a + .a{margin-top:10px}
-.faq details.loud{border-color:rgba(242,179,61,.34)}
-.faq details.loud summary{color:#FFD489}
+.faq details.loud summary{color:var(--no-lit)}
 @media (hover:hover){
   .faq summary:hover{color:#fff}
-  .faq summary:hover::after{border-color:var(--blue);transform:rotate(45deg) translate(0,0)}
-  .faq details[open] summary:hover::after{transform:rotate(-135deg) translate(-2px,-2px)}
-  .faq details:hover{border-color:rgba(88,233,255,.26)}
+  .faq summary:hover::after{border-color:var(--blue)}
 }
 
-/* ── THE PHONE ─────────────────────────────────────────────────────────────
-   One column, and the panel moves ABOVE the standings — see the note at the
-   top for why. Nothing sticky, nothing that reacts to a pointer that is not
-   there, and every control at least 44px through. */
+.foot{font-size:var(--t-small);line-height:1.7;color:var(--faint);max-width:76ch}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   THE PHONE — a different composition, not this one narrowed
+   ═════════════════════════════════════════════════════════════════════════*/
 @media (max-width:900px){
   .shell{padding-left:var(--s3);padding-right:var(--s3)}
-  .wrap{grid-template-columns:1fr;gap:var(--s3)}
-  .hero{grid-column:auto;padding:var(--s4);border-radius:17px;grid-template-columns:1fr}
-  .hero > h1,.hero > .whence,.hero > .quote{grid-column:1}
-  .hero > .quote{grid-row:auto;margin-top:var(--s3)}
-  .aside{grid-column:auto;grid-row:auto}
-  .split,.board{grid-column:auto}
-  /* display:contents dissolves the wrapper so its two cards become items of
-     this grid again — which is what lets the panel sit BETWEEN them, and the
-     order below is the whole reason the phone layout is a different layout
-     rather than the same one narrower. */
-  .mainc{display:contents}
-  .aside{position:static;order:2;gap:var(--s3)}
-  .split{order:1}
-  .board{order:3}
-  .faq{order:4}
-  .facts{gap:var(--s2) var(--s3)}
-  .bar{height:46px}
-  /* TWO LINES, NOT FIVE COLUMNS. Five columns in 360px gives each about
-     sixty pixels, and a did:key does not go in sixty pixels. So the row folds:
-     who and what they put on the top line, which way and what it pays
-     underneath. The rank goes — the list is already in order, and the number
-     beside it is a second way of saying so. */
-  .rowhead{display:none}
-  .row{grid-template-columns:minmax(0,1fr) auto;gap:2px 10px;padding:11px 12px}
-  .row .rk{display:none}
-  .row .who{grid-column:1;grid-row:1}
-  .row .amtn{grid-column:2;grid-row:1}
-  .row .pick{grid-column:1;grid-row:2}
-  .row .pay{grid-column:2;grid-row:2}
-  /* The rail is the only thing that says which side a row took at a glance,
-     and on a phone there is no hover to reveal it. So it is simply there. */
-  .row::before{transform:scaleY(1)}
+  /* Both pills on one row. Two rows of navigation before the question is two
+     rows of a small screen spent on getting back out of the page. */
+  .topbar{flex-wrap:nowrap;margin-bottom:var(--s2)}
+  .back,.barlink{padding:7px 11px;min-width:0}
+  .back{flex:none;white-space:nowrap}
+  .barlink{overflow:hidden;flex:0 1 auto}
+  .barlink b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .only-wide{display:none}
+  .page{grid-template-columns:1fr;gap:var(--s3)}
+  .col{grid-column:auto;gap:var(--s3)}
+
+  /* The core comes FIRST and the question sits on top of it, because a phone's
+     first screen has room for one object and one sentence. */
+  .hero{grid-template-columns:1fr;gap:var(--s2);padding:var(--s3) var(--s3) var(--s3);
+    border-radius:18px;text-align:center}
+  .hero::before{background:radial-gradient(70% 46% at 50% 62%, rgba(0,180,215,.14), transparent 70%)}
+  /* .ask stops being a box and lets its children into the hero's own grid, so
+     the phone can put the ring between the question and the two figures —
+     an order the desktop column cannot have, and the reason this is not the
+     desktop layout narrowed. */
+  .ask{display:contents}
+  /* On a narrow screen the label wraps, and an inline-flex icon leaves the
+     second line hanging off-centre. Letting it run as text with the icon
+     inline keeps both lines centred under each other. */
+  .eyebrow{order:1;display:block;text-align:center;letter-spacing:.1em}
+  .eyebrow .i{vertical-align:-2px;margin-right:6px}
+  h1{order:2;max-width:none;margin-top:9px;font-size:clamp(23px,6.1vw,29px)}
+  .verdict{order:3;margin:9px auto 0;max-width:30ch;font-size:14.5px}
+  .corewrap{order:4;max-width:min(70vw,290px);transform:none;margin-top:2px}
+  .sides2{order:5;margin-top:var(--s3)}
+  .facts{order:6;grid-template-columns:repeat(3,minmax(0,1fr));
+    justify-content:stretch;gap:var(--s3) var(--s2);margin-top:var(--s2)}
+  .fact{align-items:center}
+
+  /* THE PANEL LEAVES THE PAGE. It becomes a surface docked to the bottom of
+     the screen: always in reach of a thumb, never scrolled past, and the
+     amount row appears only once a side has been chosen so the resting height
+     is two rows rather than four. The shell reserves --dock-h at the bottom so
+     nothing is ever hidden behind it, and the padding clears the home
+     indicator on the phones that have one. */
+  .aside{position:fixed;left:0;right:0;bottom:0;top:auto;z-index:40;
+    grid-column:auto;gap:0;
+    background:rgba(2,11,15,.96);
+    -webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);
+    border-top:1px solid rgba(88,233,255,.16);
+    box-shadow:0 -18px 44px -30px #000;
+    padding:11px var(--s3) calc(11px + env(safe-area-inset-bottom,0px))}
+  .panel{border:0;background:none;border-radius:0;padding:0}
+  .panel > .ch{display:none}
+  .step{border-top:0;padding:0}
+  .step + .step{margin-top:9px}
+  .step[data-on="0"]{display:none}
+  .stepk{display:none}
+  .side{min-height:52px}
+  .amt{min-height:46px}
+  .go{min-height:52px}
+  .purse{align-items:center}
+  .purse .v{font-size:19px}
+  .purse .k{font-size:var(--t-micro);max-width:none}
+  /* THE DOCK STAYS SHORT. Every line in here is a line of the screen the
+     reader does not get to use, so the two explanatory paragraphs come out —
+     "where does my key live" is answered in the FAQ and on the sign-in
+     sheet — and the status line is capped at two lines so a long error
+     cannot grow the dock under the page. */
+  .mine{font-size:var(--t-micro)}
+  .aside .nokey{display:none}
+  .aside .say{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;
+    overflow:hidden;font-size:var(--t-micro)}
+  .aside .say:empty{display:none}
+
+  .fr{grid-template-columns:minmax(0,1fr) auto;gap:2px 10px;padding:12px 13px 12px 15px}
+  .fr .rk{display:none}
+  .fr .who{grid-column:1;grid-row:1}
+  .fr .stake{grid-column:2;grid-row:1;align-items:flex-end}
+  .fr .pay{grid-column:2;grid-row:2;text-align:right}
+  .fr .stake span{display:none}
+  .frside{grid-column:1;grid-row:2;font-family:var(--mono);font-size:var(--t-micro);
+    letter-spacing:.09em;text-transform:uppercase;color:var(--faint)}
+  .fr.y .frside{color:var(--yes-lit)} .fr.n .frside{color:var(--no-lit)}
+  /* The label, the figure and the line under it all centre together — on a
+     wide block a left-hung label with a centred number reads as two
+     different things that happen to share a box. */
+  .s2{justify-items:center;text-align:center}
 }
+
+/* ── BETWEEN THE TWO ───────────────────────────────────────────────────────
+   A tablet gets the phone's composition — one column, the ring in the middle,
+   the dock under the thumb — but not the phone's proportions. A measure keeps
+   the lines readable and stops two figures stretching a metre apart. */
+@media (min-width:561px) and (max-width:900px){
+  .shell{max-width:calc(720px + 2 * var(--s3))}
+  .panel{max-width:720px;margin:0 auto}
+}
+@media (max-width:560px){
+  .sides2{grid-template-columns:1fr}
+}
+@media (min-width:901px){ .frside{display:none} }
+
+/* ── THE LAPTOP ────────────────────────────────────────────────────────────
+   Same composition as the big screen, less of it. Between 901 and 1240 the
+   rail takes a third of the width off the hero, and without this the question
+   sets in five lines and the two figures break mid-phrase. The rail narrows,
+   the headline steps down, and the ring shrinks with its column rather than
+   squeezing the words next to it. */
+@media (min-width:901px) and (max-width:1240px){
+  .page{grid-template-columns:minmax(0,1fr) 308px;gap:var(--s3)}
+  .hero{padding:var(--s4);gap:var(--s3)}
+  h1{font-size:clamp(25px,2.7vw,33px);max-width:14ch}
+  .verdict{font-size:15px}
+  .s2{padding:13px var(--s2)}
+  .facts{gap:var(--s3) var(--s2)}
+}
+
+/* ══ MOTION, AND WHO GETS IT ═══════════════════════════════════════════════
+   `lean` is where a low-end machine, a data-saver, or anybody who asked for
+   reduced motion lands. It keeps every state change — a ring that moves when
+   the numbers move is information — and drops everything ambient. */
+[data-fx="lean"] .beltrun{animation:none!important}
+[data-fx="lean"] .core .sig{display:none}
+[data-fx="lean"] .corewrap{transform:none}
 @media (prefers-reduced-motion:reduce){
   *{transition:none!important;animation:none!important}
+  .core .sig{display:none}
+  .corewrap{transform:none}
 }
 </style>
 <script src="/sky.js" type="module"></script>
@@ -468,8 +674,6 @@ h1{font-size:clamp(26px,4.4vw,42px);line-height:1.12;letter-spacing:-.025em;
   <symbol id="i-coin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
     stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/>
     <path d="M12 7.5v9M14.6 9.6a3 3 0 0 0-2.6-1.2c-1.5 0-2.6.8-2.6 2s1 1.7 2.6 2 2.7.7 2.7 2-1.1 2-2.7 2a3 3 0 0 1-2.6-1.2"/></symbol>
-  <symbol id="i-clock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
-    stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><path d="M12 7v5.2l3.3 2"/></symbol>
   <symbol id="i-rooms" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
     stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h9M4 10h6M4 14h8M4 18h5"/>
     <path d="M16 8h4v8h-4z"/></symbol>
@@ -481,210 +685,268 @@ h1{font-size:clamp(26px,4.4vw,42px);line-height:1.12;letter-spacing:-.025em;
 
 <div class="shell">
   <div class="topbar">
-    <a class="back" href="/city.html"><svg class="i"><use href="#i-caret"/></svg>Back to the city</a>
-    <!-- Rooms has no way to be pointed at one room, so this does not pretend
-         to be a deep link. The name is on the chip and it is the name to look
-         for once you are there. -->
+    <a class="back" href="/play"><svg class="i"><use href="#i-caret"/></svg>Back to Play</a>
+    <!-- Rooms cannot be pointed at one room, so this does not pretend to be a
+         deep link. The name is the one to look for once you are there. -->
     <a class="barlink" href="/rooms">
-      <svg class="i"><use href="#i-rooms"/></svg>Read <b id="roomname">the room</b> in Rooms</a>
+      <svg class="i"><use href="#i-rooms"/></svg><span class="only-wide">Read </span><b
+        id="roomname">the room</b><span class="only-wide"> in Rooms</span></a>
   </div>
 
-  <div class="wrap">
-    <header class="hero tex">
-      <span class="eyebrow"><svg class="i"><use href="#i-coin"/></svg>paper market · nothing of value moves</span>
-      <h1 id="q">Will Flop Labs ship mainnet by 31 March 2027?</h1>
-      <p class="whence">
-        <b>Arthur Hayes asked for a market on this. Here it is.</b> His date, our board,
-        Technocore underneath — and he has nothing to do with it.
-      </p>
+  <div class="page">
+    <div class="col">
 
-      <!-- Attribution, a quotation and a link. Not an embed — see the note in
-           the stylesheet for why this site cannot load one and would not want
-           to. The whole card is the link to the original post. -->
-      <a class="quote" href="https://x.com/CryptoHayes/status/2095036762863321479"
-         target="_blank" rel="noopener noreferrer">
-        <span class="qtop">
-          <span class="qav" aria-hidden="true">AH</span>
-          <span class="qwho"><b>Arthur Hayes</b><em>@CryptoHayes</em></span>
-          <svg class="qx" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-            <path d="M18.24 2.25h3.31l-7.23 8.26 8.5 11.24h-6.65l-5.21-6.82-5.96 6.82H1.68l7.73-8.84L1.25 2.25h6.82l4.71 6.23zm-1.16 17.52h1.83L7.08 4.13H5.11z"/>
+      <!-- ══ THE ENGINE ═══════════════════════════════════════════════════ -->
+      <header class="hero">
+        <div class="ask">
+          <span class="eyebrow"><svg class="i"><use href="#i-coin"/></svg>paper market · nothing of value moves</span>
+          <h1 id="q">Will Flop Labs ship mainnet by 31 March 2027?</h1>
+    <p class="verdict" id="verdict">Reading the room…</p>
+          <!-- ══ THE TWO SIDES, IN THE HERO ═══════════════════════════════
+               Not a card of its own further down. The brief was that the
+               numbers should feel attached to the live prediction rather than
+               be another row of boxes, and the ring is the live prediction —
+               so the two figures it is made of stand directly under it. One
+               card fewer on the page, and the hero is now tall enough to hold
+               the first screen on its own. -->
+          <div class="sides2 split">
+            <div class="s2 y">
+              <span class="k"><i></i>Yes, it ships</span>
+              <span class="v"><span id="onY">0</span><em>PAPER</em></span>
+              <span class="u" id="uY">—</span>
+            </div>
+            <div class="s2 n">
+              <span class="k"><i></i>No, it does not</span>
+              <span class="v"><span id="onN">0</span><em>PAPER</em></span>
+              <span class="u" id="uN">—</span>
+            </div>
+          </div>
+
+          <div class="facts">
+            <div class="fact"><span>closes</span><b id="fClose">—</b></div>
+            <div class="fact"><span>from now</span><b id="fLeft">—</b></div>
+            <div class="fact"><span>volume</span><b id="fPaper">—</b></div>
+            <div class="fact"><span>calls</span><b id="fCalls">—</b></div>
+            <div class="fact"><span>people</span><b id="fPeople">—</b></div>
+          </div>
+        </div>
+
+        <div class="corewrap" id="corewrap">
+          <svg class="core" viewBox="0 0 400 400" role="img" aria-labelledby="coretitle">
+            <title id="coretitle">The split, drawn as a ring</title>
+            <g class="field" aria-hidden="true">
+              <circle cx="200" cy="200" r="186" stroke-dasharray="1 9"/>
+              <circle cx="200" cy="200" r="169"/>
+              <circle cx="200" cy="200" r="96" stroke-dasharray="2 7"/>
+            </g>
+            <circle class="track" cx="200" cy="200" r="150"/>
+            <circle class="arc arcY" id="arcY" cx="200" cy="200" r="150"
+                    transform="rotate(-90 200 200)" stroke-dasharray="0 942"/>
+            <circle class="arc arcN" id="arcN" cx="200" cy="200" r="150"
+                    transform="rotate(-90 200 200)" stroke-dasharray="0 942"/>
+            <circle class="timetrack" cx="200" cy="200" r="126"/>
+            <circle class="timearc" id="timearc" cx="200" cy="200" r="126"
+                    transform="rotate(-90 200 200)" stroke-dasharray="0 792"/>
+            <circle class="hub" cx="200" cy="200" r="118"/>
+            <g id="signals" aria-hidden="true"></g>
           </svg>
-        </span>
-        <span class="qtext">“Wouldn’t it be cool if there was a FLOP/USDC 31Mar27 futures
-          contract to speculate on? It settles at 0 if we don’t ship mainnet by then...”</span>
-        <span class="qfoot">quoted from X</span>
-      </a>
+          <div class="coreface" id="coreface">
+            <b class="pc" id="pcY">—</b>
+            <span class="pk" id="pcK">on yes</span>
+            <span class="pn" id="pcN"></span>
+          </div>
+        </div>
+      </header>
 
-      <p class="whence">
-        Take a thousand paper. Put it on a side. Sign it with your own key.
-        The paper buys nothing and settles into nothing — the signature is the real part.
-      </p>
-      <div class="facts">
-        <div class="fact"><span>closes</span><b id="fClose">—</b></div>
-        <div class="fact"><span>from now</span><b id="fLeft">—</b></div>
-        <div class="fact"><span>volume</span><b id="fPaper">—</b></div>
-        <div class="fact"><span>calls</span><b id="fCalls">—</b></div>
-        <div class="fact"><span>people</span><b id="fPeople">—</b></div>
+      <!-- ══ THE TRANSMISSION BELT ════════════════════════════════════════
+           Real calls, moving. Hidden entirely when there is nothing to say. -->
+      <div class="belt" id="belt" hidden aria-label="calls as they landed">
+        <span class="belttag"><i></i>as they land</span>
+        <div class="beltlane"><div class="beltrun" id="beltrun"></div></div>
       </div>
-    </header>
 
-    <div class="mainc">
-    <section class="card split">
-      <div class="ch"><h2>What the room thinks</h2><em id="splitk">by paper committed</em></div>
-      <div class="bar" id="bar" data-empty="1" role="img" aria-label="the split, by paper committed">
-        <div class="seg y" id="segY" style="width:50%"><b id="pcY">—</b></div>
-        <div class="seg n" id="segN" style="width:50%"><b id="pcN"></b></div>
-      </div>
-      <div class="legend">
-        <span class="leg y"><i></i>Yes, it ships — <b id="onY">0</b></span>
-        <span class="leg n"><b id="onN">0</b> — No, it does not<i></i></span>
-      </div>
-    </section>
+      <!-- ══ THE FEED ═════════════════════════════════════════════════════ -->
+      <section class="card board">
+        <div class="ch"><h2>Who has called it</h2><em id="boardk">biggest first</em></div>
+        <div class="feed" id="rows"><div class="blank"><b>Reading the room…</b></div></div>
+      </section>
 
+      <!-- ══ WHERE THE QUESTION CAME FROM ═════════════════════════════════ -->
+      <section class="card">
+        <div class="ch"><h2>Where the date came from</h2><em>context</em></div>
+        <p class="foot" style="margin-bottom:13px">
+          <b style="color:var(--white)">Arthur Hayes asked for a market on this. Here it is.</b>
+          His date, our board, Technocore underneath — and he has nothing to do with it.
+        </p>
+        <details class="ctx" id="ctx" open>
+          <summary>
+            <img class="qav" src="/img/hayes.jpg" alt="" width="34" height="34"
+                 loading="lazy" decoding="async">
+            <span class="qwho"><b>Arthur Hayes</b><em>@CryptoHayes</em></span>
+            <svg class="qx" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+              <path d="M18.24 2.25h3.31l-7.23 8.26 8.5 11.24h-6.65l-5.21-6.82-5.96 6.82H1.68l7.73-8.84L1.25 2.25h6.82l4.71 6.23zm-1.16 17.52h1.83L7.08 4.13H5.11z"/>
+            </svg>
+            <!-- Only meaningful where the card starts folded, which is the
+                 phone; on a wide screen it is already open and the chevron
+                 just says so. -->
+            <svg class="qcar" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+          </summary>
+          <div class="qbody">
+            <p class="qtext">“Wouldn’t it be cool if there was a FLOP/USDC 31Mar27 futures
+              contract to speculate on? It settles at 0 if we don’t ship mainnet by then...”</p>
+            <a class="qlink" href="https://x.com/CryptoHayes/status/2095036762863321479"
+               target="_blank" rel="noopener noreferrer">quoted from X</a>
+          </div>
+        </details>
+      </section>
 
-    <section class="card board">
-      <div class="ch"><h2>Who has called it</h2><em id="boardk">biggest first</em></div>
-      <div class="rowhead" id="rowhead">
-        <span></span><span>who</span><span>side</span><span>paper</span><span id="hpay">if right</span>
-      </div>
-      <div class="rows" id="rows"><div class="blank"><b>Reading the room…</b></div></div>
-    </section>
+      <!-- ══ HOW IT SETTLES ═══════════════════════════════════════════════ -->
+      <section class="card">
+        <div class="ch"><h2>How it settles</h2><em>and what counts</em></div>
+        <div class="rules" id="rules"></div>
+      </section>
+
+      <!-- ══ THE SMALL PRINT ══════════════════════════════════════════════ -->
+      <section class="card faq">
+        <div class="ch"><h2>Before you call it</h2><em>the honest small print</em></div>
+
+        <div class="faqgroup">
+          <p class="faqh">Is any of this real</p>
+          <details class="loud" open>
+            <summary>Is any of this worth anything?</summary>
+            <p class="a">No. <b>Paper is not a token.</b> It cannot be bought, sold, sent, swapped or
+              withdrawn, it has no price, and on 31 March 2027 it converts into nothing at all.
+              There is no prize, no pot and no payout. What you win is being right in public, with
+              your own signature on it — which is the entire point of the page.</p>
+          </details>
+          <details>
+            <summary>So what is it for?</summary>
+            <p class="a">Fun, and a straight answer to a question a lot of people have an opinion
+              about. It is also a real use of the network underneath: every claim and every call is
+              a signed message in a public room, so the whole market is something anybody can read
+              back and check for themselves without trusting this site.</p>
+          </details>
+          <details>
+            <summary>Does this count for the airdrop?</summary>
+            <p class="a">Nobody knows, this page included, and anyone who tells you otherwise is
+              guessing. <b>Overheard makes no claim that any of this earns anything</b> from Flop
+              Labs or anyone else. Your calls are signed messages on Technocore — the same as
+              everything else you do here — and what, if anything, is ever made of them is not ours
+              to promise.</p>
+          </details>
+        </div>
+
+        <div class="faqgroup">
+          <p class="faqh">How it works</p>
+          <details>
+            <summary>Where does the paper come from?</summary>
+            <p class="a">The tap. <b>One claim per key, a thousand paper</b>, and that is all there
+              will ever be for that key — no refills, no top-ups, no second helping. Spend it in one
+              call or spread it over several; once it is down, it is down.</p>
+          </details>
+          <details>
+            <summary>What does “if right” mean?</summary>
+            <p class="a">If your side turns out to be the correct one, the winners split
+              <b>everything on the board</b> in proportion to what each of them put on it. So the
+              multiple next to your name is what your paper comes back as if you are right —
+              <b>×1.10 if you agreed with everybody, ×5.00 if you called it alone.</b> Going against
+              the room is worth more precisely because fewer people did it.</p>
+            <p class="a">It is still paper. Winning five times your paper is winning five times
+              nothing.</p>
+          </details>
+          <details>
+            <summary>Can I change my mind?</summary>
+            <p class="a">You can put more paper on the other side while you still have some, and
+              both calls stand — the board shows you on “Both”. What you cannot do is take a call
+              back. It is signed and it is in a public room; unsaying it is not one of the things a
+              signature lets you do.</p>
+          </details>
+          <details>
+            <summary>Who decides whether it shipped?</summary>
+            <p class="a">Overheard posts one signed settlement when the date arrives, and only this
+              shop's key counts — anybody else can post the word “settled” all day and no reader
+              will fold it. If mainnet is live by the end of 31 March 2027 it settles Yes. If it is
+              not, it settles No. A missed settlement leaves the standings exactly as they are,
+              which is the right way for it to fail.</p>
+          </details>
+        </div>
+
+        <div class="faqgroup">
+          <p class="faqh">Who is behind it, and what could go wrong</p>
+          <details>
+            <summary>Could somebody game this?</summary>
+            <p class="a">Yes, and there is no point pretending otherwise. <b>One key gets one
+              thousand paper, so ten keys get ten thousand.</b> Making a key is free and takes two
+              minutes on this very site. The rules stop the obvious things — a second tap gives
+              nothing, a call bigger than your purse does not count, and nobody can call it in
+              somebody else's name — but nothing here can tell one enthusiast with ten keys from ten
+              people. It is a paper market. The honest defence is that there is nothing worth
+              cheating for.</p>
+          </details>
+          <details>
+            <summary>Is Arthur Hayes involved?</summary>
+            <p class="a">No. He posted the idea of a contract on this question; the date comes from
+              that post and nothing else does. <b>This page is Overheard's, he has nothing to do
+              with it, and neither does Flop Labs.</b> The quotation above links to the original so
+              you can read it in his words rather than ours.</p>
+          </details>
+          <details>
+            <summary>Where does my call actually live?</summary>
+            <p class="a">In <b>overheard-calls</b>, a public room on technocore.chat, as a message
+              signed by your key. This site's archiver keeps a copy, so it outlives the room's
+              two-hundred-message window, and the page you are reading folds both together. Nothing
+              about the total depends on trusting Overheard: the messages are public and the rules
+              are in <b>/call.js</b>.</p>
+          </details>
+        </div>
+      </section>
+
+      <p class="foot" id="foot"></p>
     </div>
 
+    <!-- ══ THE CALL PANEL ═══════════════════════════════════════════════════
+         One panel, three steps. On a phone this element becomes the docked
+         surface at the bottom of the screen — same markup, same handlers, a
+         different composition. -->
     <aside class="aside">
-      <!-- ── THE TAP ────────────────────────────────────────────────────────
-           Its own card, above the one that spends it, because it is the first
-           thing anybody has to do and a claim button folded into a panel
-           called "make your call" is a step hidden inside the step after it.
-           It stays on the page once claimed: it is where your paper is, and
-           the number in it is the one that decides what you can put down. -->
-      <section class="card tapcard" id="tapcard">
-        <div class="ch"><h2>The tap</h2><em>one claim per key</em></div>
-        <div class="purse">
-          <span class="k" id="pursek">yours to put down</span>
-          <span><span class="v" id="purse">—</span><span class="u">PAPER</span></span>
-        </div>
-        <button class="go tap" type="button" id="tap" disabled>Claim your 1,000 paper</button>
-        <p class="say" id="tapsay"></p>
-        <p class="nokey" id="nokey" hidden>No key yet?
-          <a href="/create">Make one in this browser</a> — two minutes, and it never leaves the tab.</p>
-      </section>
+      <section class="card panel" id="panel">
+        <div class="ch"><h2>Make your call</h2><em id="panelk">three steps</em></div>
 
-      <section class="card">
-        <div class="ch"><h2 id="panelh">Make your call</h2><em id="panelk">yes or no</em></div>
-
-        <div class="sides" id="sides">
-          <button class="side y" type="button" id="sideY" aria-pressed="false">Yes<small>it ships</small></button>
-          <button class="side n" type="button" id="sideN" aria-pressed="false">No<small>it does not</small></button>
+        <div class="step" id="step1" data-on="1">
+          <span class="stepk"><i>1</i>take your paper</span>
+          <div class="purse">
+            <span><span class="v" id="purse">—</span><span class="u">PAPER</span></span>
+            <span class="k" id="pursek">the tap gives</span>
+          </div>
+          <button class="go tap" type="button" id="tap" disabled>Claim your 1,000 paper</button>
+          <p class="say" id="tapsay"></p>
+          <p class="nokey" id="nokey" hidden>No key yet?
+            <a href="/create">Make one in this browser</a> — two minutes, and it never leaves the tab.</p>
         </div>
 
-        <div class="amts" id="amts">
-          <button class="amt" type="button" data-v="100" aria-pressed="false">100</button>
-          <button class="amt" type="button" data-v="250" aria-pressed="true">250</button>
-          <button class="amt" type="button" data-v="500" aria-pressed="false">500</button>
-          <button class="amt" type="button" data-v="all" aria-pressed="false">All</button>
+        <div class="step" id="step2" data-on="0">
+          <span class="stepk"><i>2</i>pick a side</span>
+          <div class="sides" id="sides">
+            <button class="side y" type="button" id="sideY" aria-pressed="false">Yes<small>it ships</small></button>
+            <button class="side n" type="button" id="sideN" aria-pressed="false">No<small>it does not</small></button>
+          </div>
         </div>
 
-        <button class="go" type="button" id="go" disabled>Make your call</button>
-        <p class="say" id="say"></p>
-        <div class="mine" id="mine" hidden></div>
+        <div class="step" id="step3" data-on="0">
+          <span class="stepk"><i>3</i>put it down</span>
+          <div class="amts" id="amts">
+            <button class="amt" type="button" data-v="100" aria-pressed="false">100</button>
+            <button class="amt" type="button" data-v="250" aria-pressed="true">250</button>
+            <button class="amt" type="button" data-v="500" aria-pressed="false">500</button>
+            <button class="amt" type="button" data-v="all" aria-pressed="false">All</button>
+          </div>
+          <button class="go" type="button" id="go" disabled>Make your call</button>
+          <p class="say" id="say"></p>
+          <div class="mine" id="mine" hidden></div>
+        </div>
       </section>
     </aside>
-
-    <section class="card faq">
-      <div class="ch"><h2>Before you call it</h2><em>the honest small print</em></div>
-
-      <details class="loud" open>
-        <summary>Is any of this worth anything?</summary>
-        <p class="a">No. <b>Paper is not a token.</b> It cannot be bought, sold, sent, swapped or
-          withdrawn, it has no price, and on 31 March 2027 it converts into nothing at all.
-          There is no prize, no pot and no payout. What you win is being right in public, with
-          your own signature on it — which is the entire point of the page.</p>
-      </details>
-
-      <details>
-        <summary>So what is it for?</summary>
-        <p class="a">Fun, and a straight answer to a question a lot of people have an opinion
-          about. It is also a real use of the network underneath: every claim and every call is
-          a signed message in a public room, so the whole market is something anybody can read
-          back and check for themselves without trusting this site.</p>
-      </details>
-
-      <details>
-        <summary>Where does the paper come from?</summary>
-        <p class="a">The tap. <b>One claim per key, a thousand paper</b>, and that is all there
-          will ever be for that key — no refills, no top-ups, no second helping. Spend it in one
-          call or spread it over several; once it is down, it is down.</p>
-      </details>
-
-      <details>
-        <summary>What does “if right” mean?</summary>
-        <p class="a">If your side turns out to be the correct one, the winners split
-          <b>everything on the board</b> in proportion to what each of them put on it. So the
-          multiple next to your name is what your paper comes back as if you are right —
-          <b>×1.10 if you agreed with everybody, ×5.00 if you called it alone.</b> Going against
-          the room is worth more precisely because fewer people did it.</p>
-        <p class="a">It is still paper. Winning five times your paper is winning five times
-          nothing.</p>
-      </details>
-
-      <details>
-        <summary>Can I change my mind?</summary>
-        <p class="a">You can put more paper on the other side while you still have some, and
-          both calls stand — the board shows you on “Both”. What you cannot do is take a call
-          back. It is signed and it is in a public room; unsaying it is not one of the things a
-          signature lets you do.</p>
-      </details>
-
-      <details>
-        <summary>Who decides whether it shipped?</summary>
-        <p class="a">Overheard posts one signed settlement when the date arrives, and only this
-          shop's key counts — anybody else can post the word “settled” all day and no reader
-          will fold it. If mainnet is live by the end of 31 March 2027 it settles Yes. If it is
-          not, it settles No. A missed settlement leaves the standings exactly as they are,
-          which is the right way for it to fail.</p>
-      </details>
-
-      <details>
-        <summary>Could somebody game this?</summary>
-        <p class="a">Yes, and there is no point pretending otherwise. <b>One key gets one
-          thousand paper, so ten keys get ten thousand.</b> Making a key is free and takes two
-          minutes on this very site. The rules stop the obvious things — a second tap gives
-          nothing, a call bigger than your purse does not count, and nobody can call it in
-          somebody else's name — but nothing here can tell one enthusiast with ten keys from ten
-          people. It is a paper market. The honest defence is that there is nothing worth
-          cheating for.</p>
-      </details>
-
-      <details>
-        <summary>Does this count for the airdrop?</summary>
-        <p class="a">Nobody knows, this page included, and anyone who tells you otherwise is
-          guessing. <b>Overheard makes no claim that any of this earns anything</b> from Flop
-          Labs or anyone else. Your calls are signed messages on Technocore — the same as
-          everything else you do here — and what, if anything, is ever made of them is not ours
-          to promise.</p>
-      </details>
-
-      <details>
-        <summary>Is Arthur Hayes involved?</summary>
-        <p class="a">No. He posted the idea of a contract on this question; the date comes from
-          that post and nothing else does. <b>This page is Overheard's, he has nothing to do
-          with it, and neither does Flop Labs.</b> The quotation at the top links to the
-          original so you can read it in his words rather than ours.</p>
-      </details>
-
-      <details>
-        <summary>Where does my call actually live?</summary>
-        <p class="a">In <b>overheard-calls</b>, a public room on technocore.chat, as a message
-          signed by your key. This site's archiver keeps a copy, so it outlives the room's
-          two-hundred-message window, and the page you are reading folds both together. Nothing
-          about the total depends on trusting Overheard: the messages are public and the rules
-          are in <b>/call.js</b>.</p>
-      </details>
-    </section>
   </div>
-
-  <p class="foot" id="foot"></p>
 </div>
 
 <script type="module">
@@ -694,16 +956,49 @@ import { ROOM, MARKET, QUESTION, CLOSES_MS, TAP, SIDES, PREFIX,
          tapFrame, callFrame, foldMarket, seatOf, leftUntil } from "/call.js";
 
 const $ = (id) => document.getElementById(id);
+const ROOT = document.documentElement;
+const TIER = () => ROOT.getAttribute("data-fx");
+const FINE = ROOT.getAttribute("data-point") === "fine";
+
+/* ── AND THE MACHINE GETS A SECOND OPINION ────────────────────────────────
+ * The tier in the head is decided from what the browser claims: cores, memory,
+ * a data-saver flag. Safari reports none of it, Chrome rounds deviceMemory to
+ * a power of two and caps it at 8, and a four-year-old phone with eight cores
+ * is not a fast machine. So those numbers are a floor, and this is the check.
+ *
+ * It samples frame times for two and a half seconds and demotes a tier that
+ * cannot hold them. It measures ONCE, near the start, and then stops — a
+ * permanent frame-rate monitor is itself a cost, and the answer does not
+ * change often enough to be worth paying for twice.
+ */
+function watchFrames() {
+  if (TIER() === "lean") return;
+  const START = performance.now();
+  let last = START, slow = 0, seen = 0;
+  const tick = (now) => {
+    const dt = now - last; last = now; seen++;
+    /* 34ms is two missed frames at 60Hz. One is noise — a collection, a font
+       landing, the bar upgrading. A sustained run of them is a machine that is
+       not keeping up. */
+    if (dt > 34) slow++;
+    if (seen > 150 || now - START > 2500) {
+      if (seen > 20 && slow / seen > 0.25) {
+        ROOT.setAttribute("data-fx", TIER() === "full" ? "standard" : "lean");
+      }
+      return;
+    }
+    requestAnimationFrame(tick);
+  };
+  requestAnimationFrame(tick);
+}
 
 /* ── OPENING THE SIGN-IN FROM HERE ────────────────────────────────────────
    The bar owns it, and the bar is a custom element with an OPEN shadow root,
-   so its button is reachable. Reaching into another component is not
-   something to do lightly; it is right here because the alternative is a page
-   that says "use the bar at the top" and leaves a stranger hunting for it,
-   and because both halves are ours.
-   Everything about it is guarded: if the bar has not upgraded yet, or its
-   internals ever change, the fallback is /create — which is the honest next
-   step for the reader most likely to be reading this, the one with no key. */
+   so its button is reachable. Reaching into another component is not something
+   to do lightly; it is right here because the alternative is a page that says
+   "use the bar at the top" and leaves a stranger hunting for it, and because
+   both halves are ours. Guarded: no bar, or changed internals, and the fallback
+   is /create — the honest next step for somebody with no key. */
 function openSignIn() {
   const btn = document.querySelector("overheard-bar")?.shadowRoot?.querySelector("button.in");
   if (btn) { btn.click(); btn.scrollIntoView({ block: "nearest" }); return true; }
@@ -722,11 +1017,11 @@ $("q").textContent = QUESTION;
 $("roomname").textContent = ROOM;
 
 /* ── reading ───────────────────────────────────────────────────────────────
- * Two sources and neither is complete on its own, exactly as on the orders
- * page. The archive is the whole record but lands on every twelfth collector
- * pass; the room is current and two hundred messages deep. Merged on the
- * sender's own nonce, because a timestamp would collide the moment two people
- * called it in the same second — and on a page with one button, they will. */
+ * Two sources and neither is complete on its own. The archive is the whole
+ * record but lands on every twelfth collector pass; the room is current and two
+ * hundred messages deep. Merged on the sender's own nonce, because a timestamp
+ * would collide the moment two people called it in the same second — and on a
+ * page with one button, they will. */
 const nonceOf = (m) => {
   const s = String(m.text ?? "");
   if (!s.startsWith(PREFIX)) return null;
@@ -770,87 +1065,11 @@ async function load() {
 
 /* ── painting ──────────────────────────────────────────────────────────────*/
 /* IN UTC, and said so. The deadline is the end of 31 March UTC, and drawn in
-   the reader's own zone that is "Apr 1, 2027" for anybody east of Greenwich —
-   a date directly under a headline that says 31 March. The rule is one instant
+   the reader's own zone that is "Apr 1, 2027" for anybody east of Greenwich — a
+   date directly under a headline that says 31 March. The rule is one instant
    for everybody, so the label is the instant's own date. */
 const closesWhen = new Date(CLOSES_MS).toLocaleDateString("en-GB",
   { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" }) + " UTC";
-
-function paintSplit() {
-  const { yes, no, share, total } = fold;
-  const bar = $("bar");
-  if (share === null) {
-    bar.dataset.empty = "1";
-    $("pcY").textContent = "nobody has called it yet";
-    $("pcN").textContent = "";
-    bar.setAttribute("aria-label", "nobody has called it yet");
-  } else {
-    delete bar.dataset.empty;
-    const y = Math.round(share * 100);
-    $("segY").style.width = `${share * 100}%`;
-    $("segN").style.width = `${(1 - share) * 100}%`;
-    /* The number goes inside its own segment, and a segment three per cent
-       wide cannot hold "3%". Below a tenth the label steps outside rather than
-       being clipped to a vertical sliver of a digit. */
-    $("pcY").textContent = share >= 0.1 ? `${y}%` : "";
-    $("pcN").textContent = share <= 0.9 ? `${100 - y}%` : "";
-    bar.setAttribute("aria-label", `${y}% of the paper is on yes, ${100 - y}% on no`);
-  }
-  $("onY").textContent = group(yes);
-  $("onN").textContent = group(no);
-  $("fPaper").textContent = group(total);
-  $("fPeople").textContent = group(fold.people);
-  $("fCalls").textContent = group(fold.calls);
-  $("fClose").textContent = closesWhen;
-  $("fLeft").textContent = leftUntil(CLOSES_MS);
-}
-
-function paintBoard() {
-  const box = $("rows");
-  const settled = Boolean(fold.settled);
-  $("hpay").textContent = settled ? "profit" : "if right";
-  $("boardk").textContent = settled ? "best first" : "biggest first";
-  if (!fold.standings.length) {
-    $("rowhead").hidden = true;
-    box.replaceChildren(el("div", "blank", [
-      el("b", "", "Nobody has called it yet"),
-      el("p", "", "Take your thousand paper and be the first."),
-    ]));
-    return;
-  }
-  $("rowhead").hidden = false;
-  box.replaceChildren(...fold.standings.slice(0, 25).map((r, i) => {
-    const pick = r.both ? "b" : r.side === "yes" ? "y" : "n";
-    const word = r.both ? "Both" : r.side === "yes" ? "Yes" : "No";
-    const who = el("div", "who", shortDid(r.did));
-    if (ID && r.did === ID.did) who.append(el("span", "me", "you"));
-
-    /* BEFORE IT SETTLES the useful number is what the call pays if it is
-       right; after, it is what it actually made. Somebody who took both sides
-       has no single multiple, and inventing one for them would be worse than
-       the dash. */
-    let pay;
-    if (settled) {
-      const n = Math.round(r.pnl);
-      pay = el("div", `pay ${n > 0 ? "up" : n < 0 ? "down" : "na"}`,
-        `${n > 0 ? "+" : n < 0 ? "−" : ""}${group(Math.abs(n))}`);
-    } else if (r.both) {
-      pay = el("div", "pay na", "—");
-    } else {
-      pay = el("div", `pay ${r.multiple >= 1.5 ? "up" : ""}`.trim(), `×${r.multiple.toFixed(2)}`);
-    }
-
-    /* The side is on the ROW, not only on its label: the rail down the left
-       edge is coloured from it. */
-    return el("div", `row ${pick}`, [
-      el("div", "rk", String(i + 1)),
-      who,
-      el("div", `pick ${pick}`, word),
-      el("div", "amtn", [document.createTextNode(group(r.put)), el("i", "", "paper")]),
-      pay,
-    ]);
-  }));
-}
 
 function el(tag, cls, kids) {
   const n = document.createElement(tag);
@@ -860,7 +1079,268 @@ function el(tag, cls, kids) {
   return n;
 }
 
-/** The amount actually meant right now: a chip, capped by what is held. */
+/* A number that arrives rather than appears. Eased, bounded to half a second,
+   and skipped entirely on a lean machine or for a first paint — counting up
+   from nothing on load is a stunt, not information. */
+let pcRun = 0;
+function countTo(node, to, from) {
+  if (TIER() === "lean" || from === null || Math.round(from) === Math.round(to)) {
+    node.textContent = `${Math.round(to)}%`;
+    return;
+  }
+  const t0 = performance.now(), run = ++pcRun;
+  const step = (now) => {
+    if (run !== pcRun) return;
+    const k = Math.min(1, (now - t0) / 480);
+    const e = 1 - Math.pow(1 - k, 3);
+    node.textContent = `${Math.round(from + (to - from) * e)}%`;
+    if (k < 1) requestAnimationFrame(step);
+  };
+  requestAnimationFrame(step);
+}
+
+const C150 = 2 * Math.PI * 150;      // the verdict ring
+const C126 = 2 * Math.PI * 126;      // the time ring
+let lastShare = null;
+
+function paintCore(unread) {
+  const { share, standings } = fold;
+  const face = $("coreface");
+
+  if (share === null) {
+    if (unread) {
+      $("arcY").setAttribute("stroke-dasharray", `0 ${C150}`);
+      $("arcN").setAttribute("stroke-dasharray", `0 ${C150}`);
+      face.classList.add("empty");
+      $("pcY").textContent = "Could not read the room";
+      $("pcK").textContent = "try again in a moment";
+      $("pcN").textContent = "";
+      lastShare = null;
+      return;
+    }
+    /* An empty market is not a fifty-fifty one. Drawing half a ring for it
+       would be the page inventing an opinion nobody has expressed. */
+    $("arcY").setAttribute("stroke-dasharray", `0 ${C150}`);
+    $("arcN").setAttribute("stroke-dasharray", `0 ${C150}`);
+    face.classList.add("empty");
+    $("pcY").textContent = "Nobody has called it yet";
+    $("pcK").textContent = "be the first";
+    $("pcN").textContent = "";
+    lastShare = null;
+  } else {
+    face.classList.remove("empty");
+    /* Two arcs on one circle with a gap at each join, so the sides read as two
+       things meeting rather than one ring changing colour. */
+    const gap = 10;
+    const y = Math.max(0, share * C150 - gap);
+    const n = Math.max(0, (1 - share) * C150 - gap);
+    $("arcY").setAttribute("stroke-dasharray", `${y} ${C150}`);
+    $("arcN").setAttribute("stroke-dasharray", `${n} ${C150}`);
+    $("arcN").setAttribute("transform",
+      `rotate(${-90 + share * 360 + (gap / C150) * 360} 200 200)`);
+    countTo($("pcY"), share * 100, lastShare === null ? null : lastShare * 100);
+    lastShare = share;
+    $("pcK").textContent = "say it ships";
+    $("pcN").textContent = `${Math.round((1 - share) * 100)}% say it does not`;
+  }
+
+  /* ── THE TIME RING ───────────────────────────────────────────────────────
+     Two real instants and nothing between them invented: the first call ever
+     made, and the close. Before there is a first call there is no elapsed
+     fraction to draw, and the ring stays empty rather than guessing one. */
+  const times = [...fold.by.values()].map((r) => r.last).filter(Boolean);
+  const first = times.length ? Math.min(...times) : 0;
+  const t = first && CLOSES_MS > first
+    ? Math.min(1, Math.max(0, (Date.now() - first) / (CLOSES_MS - first)))
+    : 0;
+  $("timearc").setAttribute("stroke-dasharray", `${t * C126} ${C126}`);
+
+  /* ── THE SIGNALS ─────────────────────────────────────────────────────────
+     One dot per real call, travelling inward. Capped at eighteen, because that
+     is as many as still read as individual things and because a dot is an
+     element with an animation on it. Nothing is generated: no calls, no dots. */
+  const g = $("signals");
+  const take = standings.slice(0, 18);
+  const NS = "http://www.w3.org/2000/svg";
+  g.replaceChildren(...take.map((r, i) => {
+    const wrap = document.createElementNS(NS, "g");
+    const a = (i / Math.max(1, take.length)) * 360 + (i % 3) * 7;
+    wrap.setAttribute("transform", `rotate(${a} 200 200)`);
+    const dot = document.createElementNS(NS, "circle");
+    const s = r.both ? "y" : r.side === "no" ? "n" : "y";
+    dot.setAttribute("class", `sig ${s}`);
+    dot.setAttribute("cx", "376");
+    dot.setAttribute("cy", "200");
+    /* Sized by paper, bounded: a 1,000-paper call is not ten times the dot of a
+       100-paper one, it is a slightly bigger one. */
+    dot.setAttribute("r", String((2 + Math.min(3, Math.sqrt(r.put) / 12)).toFixed(2)));
+    dot.style.setProperty("--travel", "-150px");
+    dot.style.setProperty("--d", `${(i * 0.42).toFixed(2)}s`);
+    wrap.append(dot);
+    return wrap;
+  }));
+}
+
+function paintVerdict(unread) {
+  const v = $("verdict");
+  const { share, people, total } = fold;
+  /* AN UNREAD ROOM IS NOT AN EMPTY ONE. Both look the same from in here —
+     no frames — and saying "nobody has called it" when the truth is "this
+     page could not reach the room" is the page stating a fact about the
+     market that it does not know. */
+  if (unread) {
+    v.replaceChildren(document.createTextNode(
+      "Could not reach the room just now, so the numbers below are not the "
+      + "whole story. The calls themselves are safe — they live in the room, "
+      + "not on this page."));
+    return;
+  }
+  if (share === null) {
+    v.replaceChildren(document.createTextNode(
+      "Nobody has put paper on it yet. Take a thousand from the tap and be the first."));
+    return;
+  }
+  const y = Math.round(share * 100);
+  v.replaceChildren(
+    document.createTextNode("The room says "),
+    el("b", "vy", `${y}% yes`),
+    document.createTextNode(" against "),
+    el("b", "vn", `${100 - y}% no`),
+    document.createTextNode(`, on ${group(total)} paper from ${group(people)} ${people === 1 ? "person" : "people"}.`),
+  );
+}
+
+function paintFacts() {
+  $("fClose").textContent = closesWhen;
+  $("fLeft").textContent = leftUntil(CLOSES_MS);
+  $("fPaper").textContent = group(fold.total);
+  $("fCalls").textContent = group(fold.calls);
+  $("fPeople").textContent = group(fold.people);
+  $("onY").textContent = group(fold.yes);
+  $("onN").textContent = group(fold.no);
+  const ppl = (n) => `${group(n)} ${n === 1 ? "person" : "people"}`;
+  const yn = fold.standings.filter((r) => r.yes > 0).length;
+  const nn = fold.standings.filter((r) => r.no > 0).length;
+  $("uY").textContent = fold.yes
+    ? `${ppl(yn)}, paying ×${(fold.total / fold.yes).toFixed(2)} if right` : "nobody yet";
+  $("uN").textContent = fold.no
+    ? `${ppl(nn)}, paying ×${(fold.total / fold.no).toFixed(2)} if right` : "nobody yet";
+}
+
+/* ── THE BELT ──────────────────────────────────────────────────────────────
+   Every call, newest first, as chips. Doubled so the loop has something to
+   arrive from — and only looped when there are enough of them that a loop is a
+   stream rather than one item sliding past. */
+const ago = (ms) => {
+  const d = (Date.now() - ms) / 1000;
+  if (!isFinite(d) || d < 0) return "";
+  if (d < 90) return "just now";
+  if (d < 5400) return `${Math.round(d / 60)}m ago`;
+  if (d < 129600) return `${Math.round(d / 3600)}h ago`;
+  return `${Math.round(d / 86400)}d ago`;
+};
+
+function paintBelt() {
+  const belt = $("belt"), run = $("beltrun");
+  const rows = [...fold.by.values()].filter((r) => r.put > 0).sort((a, b) => b.last - a.last);
+  if (!rows.length) { belt.hidden = true; return; }
+  belt.hidden = false;
+
+  const chip = (r) => {
+    const s = r.both ? null : r.side;
+    const c = el("span", `sigchip ${s === "no" ? "n" : "y"}`);
+    c.append(
+      el("span", "dot"),
+      el("span", "w", shortDid(r.did)),
+      el("span", "s", r.both ? "both" : s === "yes" ? "yes" : "no"),
+      el("span", "w", `${group(r.put)} paper`),
+      el("span", "t", ago(r.last)),
+    );
+    return c;
+  };
+  /* THREE IS THE FLOOR. Below it there is nothing to stream, and a marquee of
+     one chip sliding past is a page pretending to be busier than it is. */
+  if (rows.length < 3) {
+    run.className = "beltrun still";
+    run.replaceChildren(...rows.map(chip));
+    return;
+  }
+  run.className = "beltrun loop";
+  run.replaceChildren(...rows.map(chip), ...rows.map(chip));
+  /* Paced by content rather than by a constant: about seven seconds a chip, so
+     a belt of four and a belt of forty read at the same speed. */
+  run.style.setProperty("--dur", `${Math.max(24, rows.length * 7)}s`);
+}
+
+function paintFeed(unread) {
+  const box = $("rows");
+  const settled = Boolean(fold.settled);
+  $("boardk").textContent = settled ? "best first" : "biggest first";
+  if (!fold.standings.length) {
+    box.replaceChildren(unread
+      ? el("div", "blank", [
+          el("b", "", "Could not read the room"),
+          el("p", "", "This is a problem with the page, not with the calls. "
+            + "They are messages in a public room and they are still there."),
+        ])
+      : el("div", "blank", [
+          el("b", "", "Nobody has called it yet"),
+          el("p", "", "Take your thousand paper and be the first name on it."),
+        ]));
+    return;
+  }
+  box.replaceChildren(...fold.standings.slice(0, 25).map((r, i) => {
+    const pick = r.both ? "b" : r.side === "yes" ? "y" : "n";
+    const word = r.both ? "Both" : r.side === "yes" ? "Yes" : "No";
+    const who = el("div", "who", shortDid(r.did));
+    if (ID && r.did === ID.did) who.append(el("span", "me", "you"));
+
+    /* BEFORE IT SETTLES the useful number is what the call pays if it is right;
+       after, it is what it actually made. Somebody on both sides has no single
+       multiple, and inventing one for them would be worse than a dash. */
+    let pay;
+    if (settled) {
+      const n = Math.round(r.pnl);
+      pay = el("div", `pay ${n > 0 ? "up" : n < 0 ? "down" : "na"}`,
+        `${n > 0 ? "+" : n < 0 ? "−" : ""}${group(Math.abs(n))}`);
+      pay.append(el("em", "", "profit"));
+    } else if (r.both) {
+      pay = el("div", "pay na", "—");
+    } else {
+      pay = el("div", `pay ${r.multiple >= 1.5 ? "up" : ""}`.trim(), `×${r.multiple.toFixed(2)}`);
+      pay.append(el("em", "", "if right"));
+    }
+
+    return el("div", `fr ${pick}`, [
+      el("div", "rk", String(i + 1)),
+      who,
+      el("div", `stake ${pick}`, [el("b", "", `${group(r.put)} paper`), el("span", "", word)]),
+      pay,
+      el("div", "frside", word),
+    ]);
+  }));
+}
+
+function paintRules(unread) {
+  $("rules").replaceChildren(
+    el("div", "rule", [
+      el("b", "", "Where the record lives"),
+      el("p", "", unread
+        ? "Neither the archive nor the live room answered just now, so what is above is not the whole picture — try again in a moment."
+        : `Read from the archive and from the live room, merged. Every call is a message signed by its own key in the public room ${ROOM}, so anyone can check who said what without trusting this page.`),
+    ]),
+    el("div", "rule", [
+      el("b", "", "What it settles into"),
+      el("p", "", "Paper is not a token, cannot be sent, sold or swapped, and settles into nothing. There is no prize. When 31 March 2027 arrives the shop posts one signed settlement and the standings stand as they are."),
+    ]),
+    el("div", "rule", [
+      el("b", "", "What counts"),
+      el("p", "", "One tap per key; a call has to be paid for out of paper already taken; a call bigger than what is left does not count at all; nothing counts after the question closes."),
+    ]),
+  );
+}
+
+/* The amount actually meant right now: a chip, capped by what is held. */
 function amount() {
   const left = ID ? seatOf(fold, ID.did).left : 0;
   if (want === "all") return left;
@@ -874,32 +1354,34 @@ function paintPanel() {
   const go = $("go");
   const say = $("say");
 
-  /* ── THE TAP ──────────────────────────────────────────────────────────*/
+  /* ── STEP 1 · TAKE YOUR PAPER ─────────────────────────────────────────*/
   const tapBtn = $("tap");
   const tapSay = $("tapsay");
-  $("purse").textContent = seat ? group(left) : "—";
-  $("tapcard").dataset.full = seat && seat.tapped && left > 0 ? "1" : "0";
-  $("tapcard").classList.toggle("locked", !ID);
+  $("purse").textContent = seat && seat.tapped ? group(left) : group(TAP);
   $("nokey").hidden = Boolean(ID);
+  $("step1").dataset.done = seat && seat.tapped ? "1" : "0";
+
   if (!ID) {
     $("pursek").textContent = "the tap gives";
-    $("purse").textContent = group(TAP);
-    /* LIVE, not disabled. It is the way in, and a way in that cannot be
-       pressed is a locked door with the key taped to the other side. */
+    /* LIVE, not disabled. It is the way in, and a way in that cannot be pressed
+       is a locked door with the key taped to the other side. */
     tapBtn.hidden = false; tapBtn.disabled = shut;
     tapBtn.dataset.signin = "1";
-    tapBtn.textContent = shut ? "The question has closed" : `Sign in to claim your ${group(TAP)} paper`;
+    /* Short. The amount is already the biggest thing on the panel directly
+       above this button, so repeating it in the label only made the label
+       too long to read at a glance. */
+    tapBtn.textContent = shut ? "The question has closed" : "Sign in to claim";
     tapSay.className = "say";
     tapSay.textContent = "Your key is made in this browser and never leaves it. It only signs.";
   } else if (!seat.tapped) {
     delete tapBtn.dataset.signin;
     $("pursek").textContent = "the tap gives";
-    $("purse").textContent = group(TAP);
     tapBtn.hidden = false; tapBtn.disabled = shut;
     tapBtn.textContent = shut ? "The question has closed" : `Claim your ${group(TAP)} paper`;
     tapSay.className = "say";
     tapSay.textContent = "Once per key, and it is a signed message like everything else here.";
   } else {
+    delete tapBtn.dataset.signin;
     $("pursek").textContent = left > 0 ? "yours to put down" : "all of it is on the board";
     tapBtn.hidden = true;
     tapSay.className = "say";
@@ -908,21 +1390,27 @@ function paintPanel() {
       : "Claimed, and every last sheet of it is called.";
   }
 
-  /* ── THE CALL ─────────────────────────────────────────────────────────*/
+  /* ── STEPS 2 AND 3 ────────────────────────────────────────────────────
+     Step two is live from the start, signed in or not: picking a side costs
+     nothing and it is the whole reason somebody is looking at this panel.
+     Step three lights when there is a side to spend on. */
+  $("step2").dataset.on = shut ? "0" : "1";
+  $("step3").dataset.on = side && !shut ? "1" : "0";
+  $("step2").dataset.done = side ? "1" : "0";
+  $("step3").dataset.done = seat && seat.put > 0 ? "1" : "0";
+
   for (const c of $("amts").children) {
     const v = c.dataset.v;
-    /* Usable signed out: the purse is unknown rather than empty, and a
-       stranger deciding how much before they have a key is the sequence this
-       page wants. Once there is a seat, a chip bigger than the purse is a
-       control that cannot do anything, so it says so. */
+    /* Usable signed out: the purse is unknown rather than empty, and a stranger
+       deciding how much before they have a key is the sequence this page wants.
+       Once there is a seat, a chip bigger than the purse is a control that
+       cannot do anything, so it says so. */
     c.disabled = seat ? (left <= 0 || (v !== "all" && Number(v) > left)) : false;
     c.setAttribute("aria-pressed", String(String(want) === v));
   }
   $("sideY").setAttribute("aria-pressed", String(side === "yes"));
   $("sideN").setAttribute("aria-pressed", String(side === "no"));
 
-  /* The button says which state it is in rather than being grey and
-     unexplained, and every one of these is a state somebody arrives in. */
   if (fold?.settled) {
     go.disabled = true;
     go.textContent = `Settled — ${fold.settled.outcome === "yes" ? "it shipped" : "it did not"}`;
@@ -930,9 +1418,8 @@ function paintPanel() {
     go.disabled = true;
     go.textContent = "The question has closed";
   } else if (!ID) {
-    /* A side can be picked signed out — it costs nothing and it is the whole
-       reason somebody is looking at this panel. The button then carries the
-       choice into the sign-in rather than throwing it away. */
+    /* The button carries the choice into the sign-in rather than throwing it
+       away: "Sign in to put paper on Yes". */
     go.disabled = !side;
     go.dataset.signin = "1";
     go.textContent = side
@@ -943,6 +1430,7 @@ function paintPanel() {
     go.disabled = true;
     go.textContent = "Claim your paper first";
   } else if (left <= 0) {
+    delete go.dataset.signin;
     go.disabled = true;
     go.textContent = "All your paper is on the board";
   } else if (!side) {
@@ -967,34 +1455,73 @@ function paintPanel() {
       el("b", "", bits.join(" and ")),
       document.createTextNode(`. ${group(left)} paper left.`));
   } else mine.hidden = true;
+
+  measureDock();
 }
 
-function paintFoot(unread) {
-  const f = $("foot");
-  const bits = [
-    unread
-      ? "Neither the archive nor the live room answered just now, so what is above is not the whole picture — try again in a moment."
-      : `Read from the archive and from the live room, merged. Every call is a message signed by its own key in the public room ${ROOM}, so anyone can check who said what without trusting this page.`,
-    "Paper is not a token, cannot be sent, sold or swapped, and settles into nothing. There is no prize. When 31 March 2027 arrives the shop posts one signed settlement and the standings stand as they are.",
-    "Rules that decide what counts: one tap per key; a call has to be paid for out of paper already taken; a call bigger than what is left does not count at all; nothing counts after the question closes.",
-  ];
-  f.replaceChildren(...bits.map((t, i) => {
-    const p = el("p", "", t);
-    if (i) p.style.marginTop = "10px";
-    return p;
-  }));
-}
-
-function paint(unread = false) {
-  paintSplit();
-  paintBoard();
+/* `unread` is remembered, because paint() is called again on every session
+   change and a repaint must not quietly turn "could not read the room" back
+   into "nobody has called it". */
+let unreadNow = false;
+function paint(unread = unreadNow) {
+  unreadNow = unread;
+  paintCore(unread);
+  paintVerdict(unread);
+  paintFacts();
+  paintBelt();
+  paintFeed(unread);
+  paintRules(unread);
   paintPanel();
-  paintFoot(unread);
+}
+
+/* ── THE DOCK MUST NOT COVER ANYTHING ──────────────────────────────────────
+   On a phone the panel is fixed to the bottom of the screen, so the page has to
+   end above it. Its height changes — the amount row appears when a side is
+   picked — so the reservation is measured rather than guessed, and written to a
+   custom property the shell's padding reads. */
+function measureDock() {
+  const aside = document.querySelector(".aside");
+  if (!aside) return;
+  const fixed = getComputedStyle(aside).position === "fixed";
+  ROOT.style.setProperty("--dock-h",
+    fixed ? `${Math.ceil(aside.getBoundingClientRect().height)}px` : "0px");
+}
+addEventListener("resize", measureDock, { passive: true });
+
+/* ── DEPTH, ON A MACHINE THAT CAN AFFORD IT ────────────────────────────────
+   The core leans a few degrees toward the pointer. One transform on one
+   element, written from a damped position, in a loop that STOPS as soon as it
+   has caught up — the same shape as the site's spotlight, for the same reason:
+   a rAF that never ends is a cost the page keeps paying while nothing moves.
+   Never on a touch screen, where there is no pointer to lean toward. */
+function lean() {
+  if (!FINE) return;
+  const wrap = $("corewrap");
+  if (!wrap) return;
+  let tx = 0, ty = 0, cx = 0, cy = 0, running = false;
+  const paintLean = () => {
+    cx += (tx - cx) * 0.12;
+    cy += (ty - cy) * 0.12;
+    wrap.style.setProperty("--ry", `${cx.toFixed(2)}deg`);
+    wrap.style.setProperty("--rx", `${cy.toFixed(2)}deg`);
+    if (Math.abs(tx - cx) > 0.02 || Math.abs(ty - cy) > 0.02) requestAnimationFrame(paintLean);
+    else running = false;
+  };
+  addEventListener("pointermove", (e) => {
+    if (TIER() !== "full") { tx = 0; ty = 0; }
+    else {
+      const r = wrap.getBoundingClientRect();
+      if (!r.width) return;
+      tx = ((e.clientX - (r.left + r.width / 2)) / r.width) * 7;
+      ty = -((e.clientY - (r.top + r.height / 2)) / r.height) * 7;
+    }
+    if (!running) { running = true; requestAnimationFrame(paintLean); }
+  }, { passive: true });
 }
 
 /* ── posting ───────────────────────────────────────────────────────────────*/
-/* `keep` so the next paintPanel does not wipe the sentence off the screen
-   half a second after somebody read it. Cleared when they touch anything. */
+/* `keep` so the next paintPanel does not wipe the sentence off the screen half
+   a second after somebody read it. Cleared when they touch anything. */
 const tell = (t, cls) => {
   const s = $("say");
   s.className = "say " + (cls || "");
@@ -1004,14 +1531,14 @@ const tell = (t, cls) => {
 
 /* ── WHEN IT DOES NOT LAND, SAY WHAT THE NETWORK SAID ────────────────────
    /api/post hands back Technocore's own status and body, and the first time
-   anybody uses this page is exactly when that matters: this room does not
-   exist until the first message creates one, and Technocore is near its
-   20,480-room cap and refuses new names with a bare `400 room limit reached`.
-   "Try again" would be the wrong advice and no help in finding out why.
-   A timeout is NOT a failure. The request reached the network and outlived
-   our patience, so the write may well have landed — telling somebody nothing
-   was written and then showing them their own call is worse than saying we
-   do not know. */
+   anybody uses this page is exactly when that matters: this room does not exist
+   until the first message creates one, and Technocore is near its 20,480-room
+   cap and refuses new names with a bare `400 room limit reached`. "Try again"
+   would be the wrong advice and no help in finding out why.
+   A timeout is NOT a failure. The request reached the network and outlived our
+   patience, so the write may well have landed — telling somebody nothing was
+   written and then showing them their own call is worse than saying we do not
+   know. */
 function whyNot(r) {
   if (r?.unknown) {
     return "Technocore did not answer in time. It may still have gone through — "
@@ -1030,8 +1557,8 @@ function whyNot(r) {
    stores what it finds there, so this call carries nothing and proves nothing;
    it is a nudge, not a payload. Its failure is not the caller's problem — the
    call is signed and posted either way — so nothing waits on it and nothing is
-   shown about it. It is also idempotent, which makes anybody's call a repair
-   of anything the collector missed. */
+   shown about it. It is also idempotent, which makes anybody's call a repair of
+   anything the collector missed. */
 function keep() {
   try { fetch("/api/keep", { method: "POST", cache: "no-store" }).catch(() => {}); }
   catch { /* the copy is best-effort by design */ }
@@ -1103,7 +1630,10 @@ for (const b of [$("sideY"), $("sideN")]) {
   });
 }
 for (const c of $("amts").children) {
-  c.addEventListener("click", () => { want = c.dataset.v === "all" ? "all" : Number(c.dataset.v); paintPanel(); });
+  c.addEventListener("click", () => {
+    want = c.dataset.v === "all" ? "all" : Number(c.dataset.v);
+    paintPanel();
+  });
 }
 
 /* ── start ─────────────────────────────────────────────────────────────────*/
@@ -1111,6 +1641,16 @@ function begin(s) { ID = s; if (fold) paint(); }
 begin(getSession());
 onSession((s) => { begin(s); load(); });
 load();
+watchFrames();
+lean();
+measureDock();
+
+/* The quote is the point of the context card, so it stands open on a desktop
+   where there is room for it. On a phone it starts folded — the brief asked
+   for an expandable context card there — and the reader opens it if they want
+   it. Written with the `open` attribute in the markup so a reader with no
+   JavaScript gets the quote rather than a closed box. */
+if (!matchMedia("(min-width:901px)").matches) $("ctx").open = false;
 </script>
 </body>
 </html>

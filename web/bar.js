@@ -1598,6 +1598,21 @@ function deskHint() {
   wrap.addEventListener("click", close);
   addEventListener("keydown", esc, true);
 
+  /* GET OUT OF THE WAY OF A DOCKED SURFACE. A page with a bar of controls
+     fixed to the bottom of the phone screen — the market's call dock — tells
+     everyone how tall it is in --dock-h on the root element. This note sits
+     above it rather than across it. Pages that set nothing get 0px and the
+     note stays where it always was. */
+  const lift = () => {
+    const d = getComputedStyle(document.documentElement)
+      .getPropertyValue("--dock-h").trim() || "0px";
+    wrap.style.bottom = `calc(14px + ${d})`;
+  };
+  lift();
+  addEventListener("resize", lift, { passive: true });
+  /* --dock-h is measured after layout, so read it again on the next frames. */
+  requestAnimationFrame(() => { lift(); setTimeout(lift, 400); });
+
   wrap.append(ic, tx, x);
   root.append(st, wrap);
   document.body.appendChild(host);
