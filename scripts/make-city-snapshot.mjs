@@ -38,7 +38,11 @@ import path from "path";
 import { fileURLToPath } from "url";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
-const DATA = path.join(HERE, "..", "web", "data");
+/* OUT_DIR, for the same reason as make-room-snapshots.mjs: the archiver runs
+   this and the archiver's output directory is not always the repository's. A
+   test run that rewrites the real city snapshot with two fake rooms in it is
+   a test that breaks the checkout it is testing. */
+const DATA = path.resolve(process.env.OUT_DIR ?? path.join(HERE, "..", "web", "data"));
 const OUT = path.join(DATA, "city-snapshot.json");
 
 /* Kept in step with api/city.js on purpose. If the districts ever change

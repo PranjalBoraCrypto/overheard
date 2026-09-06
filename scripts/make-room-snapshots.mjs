@@ -36,7 +36,15 @@ import path from "path";
 import { fileURLToPath } from "url";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
-const DATA = path.join(HERE, "..", "web", "data");
+/* ── WHERE THIS WRITES, AND WHY IT IS NOT web/data ─────────────────────────
+   The archiver takes its output directory from OUT_DIR and this script is
+   run BY the archiver, so it has to read the same variable. It did not: it
+   went straight to the repository's own web/data whatever it had been told,
+   which meant every test run of the archiver — pointed at a temporary
+   directory and a fake network with two rooms in it — reached into the real
+   checkout, emptied room-snapshots/, and left it that way. Two suites broke
+   on it three times in one night before anybody looked at why. */
+const DATA = path.resolve(process.env.OUT_DIR ?? path.join(HERE, "..", "web", "data"));
 const OUT = path.join(DATA, "room-snapshots");
 
 /** How much of a room's tail is worth shipping. Enough to fill a feed and
@@ -55,8 +63,27 @@ const city = JSON.parse(fs.readFileSync(cityPath, "utf8"));
    room with no door to walk through would never be read. */
 const rooms = [...city.landmarks.filter((l) => l.present), ...city.named].map((r) => r.room);
 
-fs.mkdirSync(OUT, { recursive: true });
-for (const f of fs.readdirSync(OUT)) fs.rmSync(path.join(OUT, f));
+/* ── BUILT BESIDE, THEN SWAPPED IN ─────────────────────────────────────────
+   This used to empty room-snapshots/ and then refill it. The archiver calls
+   it best-effort and says so out loud — "the previous one stands" — and that
+   was not true: the previous one had already been deleted by the time
+   anything could go wrong, so a rebuild that ran out of time, lost the
+   network or hit a torn shard left the site with NO room snapshots at all
+   and every room page falling back to nothing until the next pass.
+
+   So the new set is built in a directory of its own and only replaces the
+   old one once it is complete. A crash anywhere above leaves the previous
+   snapshots exactly where they were, which is what the archiver has been
+   promising all along. */
+/* ".tmp", DELIBERATELY, and not ".new": the archiver stages web/data while
+   this is running, and a half-built directory that git can see is the exact
+   race that killed four collection windows — `git add` stats a path, the
+   rename takes it away, git exits 128 and the window dies with it. The
+   repository ignores *.tmp for that reason, and this borrows the same rule
+   rather than inventing a second one somebody has to remember. */
+const STAGE = OUT + ".tmp";
+fs.rmSync(STAGE, { recursive: true, force: true });
+fs.mkdirSync(STAGE, { recursive: true });
 
 let made = 0, skipped = 0, bytes = 0;
 
@@ -136,13 +163,29 @@ for (const room of rooms) {
       "Archived public messages from this room, read at the time stamped above. Not a live reading, and not replayed as if it were.",
   };
 
-  const file = path.join(OUT, `${room}.json`);
+  const file = path.join(STAGE, `${room}.json`);
   fs.writeFileSync(file, JSON.stringify(out));
   bytes += fs.statSync(file).size;
   made++;
 }
 
-console.log(
+/* THE SWAP. A rebuild that produced nothing is not a rebuild — it is a
+   failure that happens to have exited zero — and replacing a good set with an
+   empty directory is the exact outcome this whole arrangement exists to
+   prevent. So an empty build is thrown away and the previous set is left
+   standing, loudly. */
+if (!made) {
+  fs.rmSync(STAGE, { recursive: true, force: true });
+  console.warn(`room-snapshots/  nothing to write from ${rooms.length} rooms — the previous set stands`);
+} else {
+  const OLD = OUT + ".old.tmp";        // ignored too, for the same reason
+  fs.rmSync(OLD, { recursive: true, force: true });
+  if (fs.existsSync(OUT)) fs.renameSync(OUT, OLD);
+  fs.renameSync(STAGE, OUT);
+  fs.rmSync(OLD, { recursive: true, force: true });
+}
+
+if (made) console.log(
   `room-snapshots/  ${made} rooms  ${(bytes / 1024).toFixed(0)}KB total` +
   `  ·  ${skipped} of ${rooms.length} had nothing archived`
 );
