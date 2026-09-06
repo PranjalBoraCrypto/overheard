@@ -298,14 +298,16 @@ console.log("\n=== L. the page, as text");
 
 console.log("\n=== Q. how anybody finds it");
 {
-  /* NOT ON THE NAV BAR, deliberately: six tabs is the width of the bar and
-     this is one game rather than a seventh section of the site. Which makes
-     the shelf on /play the only way in, so the shelf has to exist. */
+  /* TWO WAYS IN, and both have to hold. The bar is how somebody who came for
+     something else finds it; the shelf on /play is how somebody looking for
+     something to play does. Losing either is losing half the traffic to a
+     page nothing else links. */
   const nav = read("web/nav.js");
   ok("the market is in the site's own page list", /href: "\/market"/.test(nav));
-  ok("but not as a tab on the bar",
-    /\{ href: "\/market",[^}]*bar: false/.test(nav),
-    "it goes on the bar the day it has earned one");
+  ok("and on the bar, before City",
+    /\{ href: "\/market",[^}]*bar: true/.test(nav) &&
+    nav.indexOf('href: "/market"') < nav.indexOf('href: "/city"'),
+    "City carries the live dot; a tab after it reads as an afterthought");
   const play = read("web/play.html");
   ok("Play links it, which is where things you can play live",
     /<a class="tile" href="\/market">/.test(play));
