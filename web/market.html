@@ -636,55 +636,68 @@ h1{font-size:clamp(27px,3.1vw,40px);line-height:1.1;letter-spacing:-.028em;
 /* A QUOTE AT A QUOTE'S WIDTH. Stretched across the whole card the two
    sentences set in one 100-character line each and stopped reading like
    something somebody typed on a phone. So the card keeps its own measure and
-   the sentence that introduces it sits beside rather than above — which also
-   means the section is one row instead of a narrow box under a wide gap. */
-.ctxrow{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,430px);
-  gap:var(--s4);align-items:center}
-.ctx{min-width:0}
-.ctx summary{list-style:none;cursor:pointer;display:flex;align-items:center;gap:11px;
-  padding:13px var(--s3);border:1px solid var(--line);border-radius:13px;background:var(--sunk);
-  transition:border-color .16s,background .16s}
-.ctx summary::-webkit-details-marker{display:none}
-.ctx summary:focus-visible{outline:none;box-shadow:var(--focus)}
-.qx{transition:color .18s}
-.qcar{width:15px;height:15px;flex:none;fill:none;stroke:currentColor;stroke-width:2.1;
-  stroke-linecap:round;stroke-linejoin:round;color:var(--faint);
-  transition:transform .26s cubic-bezier(.22,.61,.36,1),color .18s}
-.ctx[open] .qcar{transform:rotate(180deg)}
-/* THE HOVER, WITH A LITTLE WEIGHT. The row lifts a hair, the picture comes
-   forward, the mark and the chevron light up — one gesture out of four
-   properties rather than four separate effects. Bounded well under half a
-   second, and only where there is a real pointer to do it with. */
-.ctx summary{transform:translateZ(0)}
-.qav{transition:transform .26s cubic-bezier(.22,.61,.36,1),border-color .18s}
+   the sentence that introduces it sits beside rather than above.
+
+   ALIGNED TO THE TOP, not centred: the quote is the taller of the two, and
+   centring the sentence against it left a band of nothing above and below a
+   paragraph that has an obvious place to start — level with the card it is
+   introducing. */
+.ctxrow{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,440px);
+  gap:var(--s4);align-items:start}
+
+/* ── THE QUOTE ─────────────────────────────────────────────────────────────
+   The whole card is the link. It is a quotation with its author's name and a
+   pointer to the original — which is what an embed is pretending to be —
+   and it says "quoted from X" so it cannot be mistaken for the platform's
+   own rendering of the post.
+
+   Drawn here rather than embedded, and that is not a preference. This site's
+   CSP is `default-src 'none'` with `script-src 'self'` and no frame-src, so
+   X's widget cannot load and an iframe cannot open; loosening either to
+   decorate one card would trade the site's safety for a logo. It is also the
+   better card: no third party watching everyone who reads this page, no few
+   hundred kilobytes of script, and no box that goes blank the day the post
+   is deleted.
+
+   THE HOVER IS ONE GESTURE OUT OF FIVE PROPERTIES. At rest the rail down the
+   left is gold, the same amber as the No side. Under a pointer the whole card
+   turns toward cyan and lifts: the border cools, the ground takes a wash of
+   it, the footer and its arrow light up and slide, the X mark goes white, and
+   the picture turns a few degrees on a spring. Five things, one motion. */
+.quote{display:block;text-decoration:none;color:inherit;
+  border:1px solid var(--line);border-left:2px solid var(--gold);border-radius:14px;
+  padding:var(--s3) var(--s4);background:var(--sunk);transition:.16s}
 @media (hover:hover){
-  .ctx summary:hover{border-color:rgba(88,233,255,.3);background:var(--surf-b)}
-  .ctx summary:hover .qav{transform:translateY(-1.5px) scale(1.06);
-    border-color:rgba(88,233,255,.34)}
-  .ctx summary:hover .qx,.ctx summary:hover .qcar{color:var(--blue)}
+  .quote:hover{border-color:rgba(88,233,255,.3);background:rgba(88,233,255,.04);
+    transform:translateY(-2px);box-shadow:0 12px 28px -18px rgba(0,0,0,.9)}
+  .quote:hover .qfoot{color:var(--blue)}
+  .quote:hover .qfoot::after{transform:translateX(4px)}
+  .quote:hover .qx{color:var(--white)}
+  .quote:hover .qav{transform:rotate(-6deg) scale(1.06)}
 }
-[data-fx="lean"] .qav,[data-fx="lean"] .qcar{transition:none}
-.ctx[open] summary{border-bottom-left-radius:0;border-bottom-right-radius:0;
-  border-bottom-color:transparent;background:var(--surf-b)}
-/* HIS OWN PICTURE, AT ITS OWN SHAPE. The file is square and the octagon in
-   it runs to the edges, so no border-radius and no object-fit crop — a round
+.qav{transition:transform .22s cubic-bezier(.34,1.4,.64,1)}
+.qx{transition:color .16s}
+.quote:focus-visible{outline:none;box-shadow:var(--focus)}
+.qtop{display:flex;align-items:center;gap:11px}
+/* HIS OWN PICTURE, AT ITS OWN SHAPE. The file is square and the octagon in it
+   runs to the edges, so no border-radius and no object-fit crop — a round
    mask would clip four corners off somebody else's mark. Fixed width and
    height so the row never jumps while it loads. */
 .qav{width:34px;height:34px;flex:none;display:block;background:#000;
   border:1px solid var(--line)}
 .qwho{display:flex;flex-direction:column;line-height:1.25;min-width:0}
-.qwho b{color:var(--white);font-size:14px;font-weight:600}
-.qwho em{font-style:normal;font-family:var(--mono);font-size:var(--t-micro);color:var(--faint)}
-.qx{width:14px;height:14px;margin-left:auto;color:var(--faint);flex:none}
-.qbody{border:1px solid var(--line);border-top:0;border-radius:0 0 13px 13px;
-  padding:var(--s3);background:var(--surf-b)}
-.qtext{font-size:15px;line-height:1.55;color:var(--white)}
-.qlink{display:inline-block;margin-top:11px;font-family:var(--mono);font-size:var(--t-micro);
-  letter-spacing:.1em;text-transform:uppercase;color:var(--faint);text-decoration:none;
-  transition:color .16s}
-.qlink::after{content:" →";display:inline-block;transition:transform .2s cubic-bezier(.22,.61,.36,1)}
-@media (hover:hover){ .qlink:hover{color:var(--blue)} .qlink:hover::after{transform:translateX(4px)} }
-.qlink:focus-visible{outline:none;box-shadow:var(--focus);border-radius:4px}
+.qwho b{display:block;color:var(--white);font-size:14px;font-weight:600}
+.qwho em{display:block;font-style:normal;font-family:var(--mono);
+  font-size:var(--t-micro);color:var(--faint)}
+.qx{width:15px;height:15px;margin-left:auto;color:var(--faint);flex:none}
+.qtext{display:block;margin-top:12px;font-size:15px;line-height:1.55;color:var(--white)}
+.qfoot{display:block;margin-top:11px;font-family:var(--mono);font-size:var(--t-micro);
+  letter-spacing:.1em;text-transform:uppercase;color:var(--faint);transition:.16s}
+/* The arrow is part of the sentence, so it is content and not a background
+   image, and it slides rather than appearing — an element that pops into
+   existence on hover shifts the line it is in. */
+.qfoot::after{content:" →";display:inline-block;transition:transform .2s cubic-bezier(.22,.61,.36,1)}
+[data-fx="lean"] .quote,[data-fx="lean"] .qav{transition:none}
 
 /* ══ HOW IT SETTLES ════════════════════════════════════════════════════════*/
 .rules{display:grid;gap:1px;background:var(--line);border:1px solid var(--line);
@@ -1081,26 +1094,24 @@ h1{font-size:clamp(27px,3.1vw,40px);line-height:1.1;letter-spacing:-.028em;
           <b style="color:var(--white)">Arthur Hayes asked for a market on this. Here it is.</b>
           His date, our board, Technocore underneath — and he has nothing to do with it.
         </p>
-        <details class="ctx" id="ctx" open>
-          <summary>
+        <!-- ONE LINK, NOT A FOLD. The whole card goes to the post, which is
+             what somebody expects of a quoted tweet, and there is nothing to
+             open because there is nothing hidden — the quote is short enough
+             to simply be there. -->
+        <a class="quote" href="https://x.com/CryptoHayes/status/2095036762863321479"
+           target="_blank" rel="noopener noreferrer">
+          <span class="qtop">
             <img class="qav" src="/img/hayes.jpg" alt="" width="34" height="34"
                  loading="lazy" decoding="async">
             <span class="qwho"><b>Arthur Hayes</b><em>@CryptoHayes</em></span>
             <svg class="qx" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
               <path d="M18.24 2.25h3.31l-7.23 8.26 8.5 11.24h-6.65l-5.21-6.82-5.96 6.82H1.68l7.73-8.84L1.25 2.25h6.82l4.71 6.23zm-1.16 17.52h1.83L7.08 4.13H5.11z"/>
             </svg>
-            <!-- Only meaningful where the card starts folded, which is the
-                 phone; on a wide screen it is already open and the chevron
-                 just says so. -->
-            <svg class="qcar" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
-          </summary>
-          <div class="qbody">
-            <p class="qtext">“Wouldn’t it be cool if there was a FLOP/USDC 31Mar27 futures
-              contract to speculate on? It settles at 0 if we don’t ship mainnet by then...”</p>
-            <a class="qlink" href="https://x.com/CryptoHayes/status/2095036762863321479"
-               target="_blank" rel="noopener noreferrer">quoted from X</a>
-          </div>
-        </details>
+          </span>
+          <span class="qtext">“Wouldn’t it be cool if there was a FLOP/USDC 31Mar27 futures
+            contract to speculate on? It settles at 0 if we don’t ship mainnet by then...”</span>
+          <span class="qfoot">quoted from X</span>
+        </a>
         </div>
       </section>
 
@@ -2445,12 +2456,6 @@ watchFrames();
 lean();
 measureDock();
 
-/* The quote is the point of the context card, so it stands open on a desktop
-   where there is room for it. On a phone it starts folded — the brief asked
-   for an expandable context card there — and the reader opens it if they want
-   it. Written with the `open` attribute in the markup so a reader with no
-   JavaScript gets the quote rather than a closed box. */
-if (!matchMedia("(min-width:901px)").matches) $("ctx").open = false;
 </script>
 </body>
 </html>
