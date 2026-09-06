@@ -38,9 +38,25 @@
 web/data/*/20??-??-??.ndjson
 web/data/*/20??-??-??.json
 
-# The two families now read from GitHub at request time instead (see the
-# rewrites in vercel.json): 65,536 profile shards and 65,809 room _meta.json.
-# Same URLs, fresher answers, and 131,345 fewer files in every deployment.
+# ── THE TWO BIG FAMILIES, NOW READ FROM GitHUB AT REQUEST TIME ────────────
+# 65,536 profile shards and 65,809 room _meta.json — 131,345 of the 131,435
+# files a deployment used to carry. A CDN copy of those buys nothing: they are
+# read one at a time, by hash or by room name, and the reader wants the
+# CURRENT one, which the deployed copy never was — it froze at whatever the
+# last publish happened to carry.
+#
+# Two rewrites in vercel.json fetch them from raw.githubusercontent instead.
+# The URLs the pages use do not change; a rewrite is server-side, so it stays
+# same-origin for the browser and for the CSP, and GitHub's max-age=300 lets
+# Vercel's edge hold each file rather than fetching it per visitor. Checked
+# against the real URLs before this was written: 200 with content, and 404 for
+# a room that does not exist — which is exactly what hire.html needs, since a
+# 404 there means "no history here" and anything else means "could not tell".
+#
+# THE EXPLANATION LIVES HERE AND NOT IN vercel.json ON PURPOSE. That file is
+# validated against a schema and a key Vercel does not recognise fails the
+# deployment in zero seconds — which is how the first version of this change
+# went out. See section G of scripts/test-deploy-gate.mjs.
 web/data/profiles/
 web/data/*/_meta.json
 

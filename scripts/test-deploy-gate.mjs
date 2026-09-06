@@ -271,5 +271,36 @@ console.log("\n=== F. the rewrites point at this repository's own archive");
     /PranjalBoraCrypto/.test(fn) && /"overheard"/.test(fn));
 }
 
+/* ── G. vercel.json IS VALIDATED, AND A STRAY KEY IS NOT A WARNING ────────
+ * Vercel checks vercel.json against a schema before it does anything else. A
+ * key it does not recognise fails the deployment in ZERO SECONDS, with the
+ * words "Deployment failed." and a link to the configuration docs — no line
+ * number, no key name, nothing pointing at what you added.
+ *
+ * And the site does not change, because the previous deployment keeps
+ * serving. So the whole symptom is a push that appears to have done nothing.
+ * That is exactly how it happened: two explanatory "_why" keys, added to
+ * document this arrangement, killed the deployment that carried it.
+ *
+ * The explanation now lives in .vercelignore and in this file. vercel.json
+ * carries configuration and nothing else, and here is the list.
+ */
+console.log("\n=== G. vercel.json carries configuration and nothing else");
+{
+  const cfg = JSON.parse(read("vercel.json") || "{}");
+  const ALLOWED = new Set(["$schema", "outputDirectory", "cleanUrls", "git", "rewrites", "headers"]);
+  const strays = Object.keys(cfg).filter((k) => !ALLOWED.has(k));
+  ok("no key at the top level that Vercel would reject", strays.length === 0,
+    strays.length ? `${strays.join(", ")} — this fails the deployment in 0s` : [...ALLOWED].join(" "));
+  /* Nested objects are validated too, and `git` is the one this project puts
+     something unusual in. */
+  const gitStrays = Object.keys(cfg.git ?? {}).filter((k) => k !== "deploymentEnabled");
+  ok("and none inside git either", gitStrays.length === 0, gitStrays.join(", ") || "deploymentEnabled");
+  /* A comment is the obvious thing to reach for and JSON does not have one.
+     Saying so here is cheaper than the next person rediscovering it. */
+  ok("nothing is trying to be a comment", !JSON.stringify(cfg).includes("_why"),
+    "the reasoning lives in .vercelignore and in this file");
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
