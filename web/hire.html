@@ -1636,7 +1636,16 @@ async function finish(s, offerRef) {
 
   step("accept");
   say("The shop accepted. Locking your payment…");
-  const body = { type: "lock", from: s.did, contract: a.contract, rail: "paper", ref: hex16() };
+  /* ── `ref` NAMES THE PAPER RECORD, IT IS NOT A FRESH NONCE ───────────────
+     hex16() here was the checkout's version of a fault the shop's own buy
+     side had too: under tclk the lock's `ref` points at the rail record that
+     backs it, and on the paper rail that record's address is derived from the
+     CONTRACT. A random value points at nothing, so the frame claims a payment
+     is held somewhere that does not exist. Seventy-six such locks were counted
+     on this network on 5 September, and every order placed through this page
+     was one of them. `nonce` is the field that wants to be fresh; post() below
+     makes one per attempt. */
+  const body = { type: "lock", from: s.did, contract: a.contract, rail: "paper", ref: a.contract };
   const lock = sweep("tclk1 " + canon(body));
 
   /* Try the room the spec names, then the board. On this network the deal

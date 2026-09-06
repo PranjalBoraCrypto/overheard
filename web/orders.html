@@ -771,11 +771,29 @@ function statusOf(o) {
      came. The clock is what knows, so the clock is asked. */
   const dead = Number.isFinite(refund) && refund > 0 && now >= refund;
   const state = o.dealState;
+  /* ── AN ACCEPT OUTRANKS THE OFFER'S CLOCK, AND THAT IS NOT A NICETY ─────
+     The last resort below is the offer's own expiry, and the words it hands
+     the reader are "Expired — nobody took it on before the deadline, so no
+     payment was ever locked". That sentence is either true or it is a false
+     statement about somebody else's work. There is no middle reading of it.
+     MEASURED, 6 September, on this shop's own orders: five placed on the 4th,
+     every one accepted by the shop within three seconds, every one shown to
+     the buyer with those words. The accept had been in the archive all along
+     — the endpoint had stopped looking three days back, which api/orders.js
+     now fixes — but even holding the accept this fell through to the clock,
+     because the clock was consulted whenever the DEAL ROOM had not been read,
+     and past the refund deadline the page had stopped reading it at all.
+     An accept is a signed frame from the shop saying it took the order on. It
+     cannot coexist with "nobody took it on", whatever the offer's clock says.
+     Past the refund deadline an accepted deal that was never funded is
+     closed — the same rule the line above applies to a known `accepted`. */
   const st = state === "accepted" && dead
     ? sharedStatus({ state: "cancelled" }, null)
     : state
       ? sharedStatus({ state }, null)
-      : sharedStatus({ state: "proposed" }, { phase: isOpen(o) ? "open" : "expired" });
+      : o.accept?.contract
+        ? sharedStatus({ state: dead ? "cancelled" : "accepted" }, null)
+        : sharedStatus({ state: "proposed" }, { phase: isOpen(o) ? "open" : "expired" });
   /* `open` means STILL GOING, which is not the same as unexpired: a delivered
      deal is finished however long its offer had left to run. */
   return { word: st.word, tone: st.tone, key: st.key, step: st.step, ends: st.ends,
@@ -1111,13 +1129,24 @@ function restat() {
   $("cShut").textContent = orders.length - open;
 }
 
-/** The strip under a row, or null when there is nothing for the buyer to do. */
+/** The strip under a row: what became of this deal, and — while there is
+ *  still time — the one button that can move it on. */
 function actionFor(o, pill = null, det = null) {
   if (!o.accept?.room || !o.accept?.contract) return null;
-  /* Past refundAfterMs a lock leads nowhere: reveal is refused at
+  /* ── THE DEADLINE ENDS THE BUTTON, NOT THE QUESTION ─────────────────────
+     Past refundAfterMs a lock leads nowhere: a reveal is refused at
      `at >= refundAfter` and a refund needs a lock that never came. Offering
-     the button there would be offering a payment that cannot buy anything. */
-  if (o.refundAfterMs && Date.now() >= o.refundAfterMs) return null;
+     the button there would be offering a payment that cannot buy anything.
+     That was written as `return null` — no strip at all — and it took the
+     ANSWER with it. Reading the deal's own room is the only way this page
+     learns that an order was funded and delivered, and it is the panel below
+     that does the reading, so an order stopped being knowable the moment it
+     stopped being actionable. Every finished order in the history therefore
+     fell back to the offer's clock and read "Expired".
+     A record is mostly made of things nobody can act on any more. So the
+     strip is built either way and the deadline governs one thing only: the
+     button. */
+  const actionable = !(o.refundAfterMs && Date.now() >= o.refundAfterMs);
 
   const box = document.createElement("div");
   box.className = "hact";
@@ -1237,9 +1266,20 @@ function actionFor(o, pill = null, det = null) {
       return;
     }
     /* state === "accepted": the shop answered and no lock reached either the
-       deal room or the board. The checkout normally posts that lock in the
-       same click, so this is the rare path where it did not land — and the
-       words have to say so, or it reads as a step everyone is meant to take. */
+       deal room or the board. */
+    if (!actionable) {
+      /* And the deadline for one has gone. There is nothing to press and
+         nothing owed in either direction, so this is a closing sentence
+         rather than a step — the same end the reaper writes, arrived at by
+         the clock instead of by a frame. */
+      b.textContent = "Closed before it was funded";
+      p.textContent = "The shop took this order on, but no payment lock reached the network and the deadline for one has passed. Nothing was charged — on the paper rail nothing could have been.";
+      box.classList.add("done");
+      return;
+    }
+    /* The checkout normally posts that lock in the same click, so this is the
+       rare path where it did not land — and the words have to say so, or it
+       reads as a step everyone is meant to take. */
     b.textContent = "Your payment did not land";
     p.textContent = "Ordering normally locks the payment for you in the same click. That did not reach the network this time — one press finishes it. On the paper rail this moves no value; it is the signal that the work may begin.";
     go.hidden = false;
@@ -1294,7 +1334,19 @@ function actionFor(o, pill = null, det = null) {
       if (state !== "accepted") { tell(`This deal is ${state} — there is nothing to pay into.`, "bad"); go.remove(); return; }
 
       go.textContent = "Signing…";
-      const body = { type: "lock", from: s.did, contract: o.accept.contract, rail: "paper", ref: hex16() };
+      /* ── `ref` NAMES THE PAPER RECORD, IT IS NOT A FRESH NONCE ───────────
+         It was hex16(), a random sixteen-hex value, on both browser paths and
+         in the shop's own buy side. Under tclk the lock's `ref` is what points
+         at the rail record that backs it, and the record for the paper rail
+         lives at a path derived from the CONTRACT. A random ref points at
+         nothing, so the lock says "the money is over there" about an address
+         that does not exist and never did. Counted publicly on 5 September:
+         seventy-six locks on this network pointing at nothing, and every order
+         ever placed through this site was one of them.
+         The shop's side was corrected first; this is the same one line on the
+         buyer's. `nonce` is the field that wants to be fresh, and it already
+         is — see the post below. */
+      const body = { type: "lock", from: s.did, contract: o.accept.contract, rail: "paper", ref: o.accept.contract };
       const text = "tclk1 " + canon(body);
 
       go.textContent = "Posting…";
@@ -1340,8 +1392,9 @@ function actionFor(o, pill = null, det = null) {
   return box;
 }
 
-const hex16 = () => [...crypto.getRandomValues(new Uint8Array(8))]
-  .map((x) => x.toString(16).padStart(2, "0")).join("");
+/* hex16() lived here and had exactly one caller: the lock frame's `ref`,
+   which was the wrong thing to put there. The transport nonce is made inline
+   at the post, so nothing is left that needs a random hex string. */
 
 /** Fold one deal room into its state. Null when it cannot be read, which is
  *  deliberately NOT treated as "safe to post" by the caller's own check. */

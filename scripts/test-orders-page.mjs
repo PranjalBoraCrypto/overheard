@@ -184,13 +184,24 @@ ok("it reports how much it actually read",
      shared allowance and left the deals board empty. */
   ok("and every read it makes is one of three kinds", grabs === 4,
     `${grabs - 1} call sites: the archive index, the tail, and one day shard at a time`);
-  ok("none of them sits inside a per-order loop",
-    !/for \(const o of live[\s\S]{0,400}?\bawait\b/.test(s),
-    "a read per order is what once made the deals board render empty");
-  ok("so the accept hunt reads bytes already in hand",
-    /for \(const text of recent\)/.test(s) &&
-    !/for \(const text of recent\)[\s\S]{0,300}?\bawait\b/.test(s),
+  /* ── THE HUNT MOVED INSIDE THE FETCH LOOP, AND THE RULE DID NOT CHANGE ──
+     It used to run once at the end, over a list of the newest few shard texts
+     — which held the tail and TWO days rather than the three it was written
+     for, because the tail was pushed in first and took one of the slots. So
+     an order placed on the 4th and accepted three seconds later was reported
+     on the 6th with no accept at all, and the page went on to tell its buyer
+     that nobody had taken it on. The hunt now runs per shard, while that
+     shard is in hand, which is what lets it cover the whole window.
+     What has to stay true is the property, not the shape: NO UPSTREAM READ
+     PER ORDER. So the per-order half is the thing asserted about. */
+  const at = s.indexOf("const findAccept");
+  const hunt = at < 0 ? "" : s.slice(at, at + 700);
+  ok("the per-order half of the accept hunt is pure searching",
+    at > 0 && !/\bawait\b/.test(hunt) && !/\bfetch\(/.test(hunt),
     "searching what we already paid for is free; fetching per order is not");
+  ok("and it is handed texts rather than paths",
+    /findAccept\(o, \[/.test(s),
+    "a path would have to become a read; an array of strings cannot");
 }
 
 console.log("\n=== D2. the endpoint, driven for real, against the gap that hid an order");
@@ -310,6 +321,85 @@ console.log("\n=== D2. the endpoint, driven for real, against the gap that hid a
       String(r3.archive_lag).slice(0, 60));
   }
 
+  /* ══════════════════════════════════════════════════════════════════════
+   * THE ACCEPT THAT WAS THREE DAYS BACK, WHICH IS TO SAY: THE DAY BEFORE
+   * YESTERDAY
+   *
+   * The accept hunt used to search a list of the three newest texts — except
+   * the tail was pushed into that list first and took one of the three slots,
+   * so it was really the tail and TWO days. An order placed on the 4th and
+   * accepted three seconds later was, by the 6th, in the third shard back and
+   * never searched.
+   *
+   * MEASURED, 6 September, on this shop's own orders: five placed on the 4th,
+   * every one accepted by the shop within three seconds, every one returned
+   * here with no accept. The orders page then had no deal to look up, fell
+   * back to the offer's clock, and told the buyer "nobody took it on before
+   * the deadline" — about work that had been accepted, funded and delivered.
+   * One of the five still had three hours left in which to fund it.
+   *
+   * The fixture is that day, exactly: the offer and its accept together in
+   * the oldest of four shards.
+   * ═══════════════════════════════════════════════════════════════════*/
+  {
+    const CONTRACT = "0x" + "5a".repeat(32);
+    const accept = JSON.stringify({
+      seq: 70002, ts: new Date(t).toISOString(),
+      from: "did:key:z6MkiuhfekPgiihLWarPAzhuvoMjg86F8dqmLiCTmtQgMrR3", sig: "s",
+      text: "tclk1 " + JSON.stringify({ type: "accept",
+        from: "did:key:z6MkiuhfekPgiihLWarPAzhuvoMjg86F8dqmLiCTmtQgMrR3",
+        contract: CONTRACT, ref: id, statement: "0x" + "d9".repeat(32) }),
+    });
+    /* Four days, newest first as the endpoint reads them. The order lives in
+       the oldest — the one the old code stopped one short of. */
+    const days = ["2026-09-03", "2026-09-04", "2026-09-05", "2026-09-06"];
+    const shard = { "2026-09-03": row + "\n" + accept };
+    globalThis.fetch = async (u) => {
+      const q = String(u);
+      if (q.endsWith("_meta.json")) return new Response(JSON.stringify({ days }), { status: 200 });
+      if (q.endsWith("tail.ndjson")) return new Response("", { status: 200 });
+      const day = q.slice(-("2026-09-03.ndjson".length), -".ndjson".length);
+      return new Response(shard[day] ?? "", { status: 200 });
+    };
+    let r4 = await call();
+    ok("an order three shards back is still found", (r4.orders || []).length === 1,
+      `${(r4.orders || []).length} orders`);
+    ok("AND the shop's answer to it is found with it", Boolean(r4.orders?.[0]?.accept),
+      r4.orders?.[0]?.accept ? "accept attached" : "no accept — the page will say nobody took it on");
+    ok("naming the contract the accept named",
+      r4.orders?.[0]?.accept?.contract === CONTRACT, String(r4.orders?.[0]?.accept?.contract));
+    ok("and the deal room derived from it",
+      r4.orders?.[0]?.accept?.room === "mb-p-tclk-" + "5a".repeat(8),
+      String(r4.orders?.[0]?.accept?.room));
+
+    /* ── AND PAST THE REFUND DEADLINE, WHICH IS WHERE IT USED TO STOP ─────
+       The hunt skipped any order whose refundAfterMs had passed, on the
+       reasoning that nothing can be done about it. True, and beside the
+       point: what an order's history SAYS is a question about every order
+       ever placed. Refusing to answer it after 48 hours is what turned a
+       record into a page that forgets. */
+    const oldOffer = { ...offer, nonce: "old1old1old1old1",
+      expiresMs: t - 72 * 3600e3, claimByMs: t - 72 * 3600e3, refundAfterMs: t - 48 * 3600e3 };
+    const oldId = await offerId(oldOffer);
+    shard["2026-09-03"] = JSON.stringify({ seq: 70003, ts: new Date(t - 96 * 3600e3).toISOString(),
+      from: BUYER, sig: "s", text: "tclk1 " + canon({ ...oldOffer, id: oldId }) })
+      + "\n" + accept.replace(id, oldId);
+    r4 = await call();
+    ok("an order long past its refund deadline still gets its accept",
+      Boolean(r4.orders?.[0]?.accept),
+      r4.orders?.[0]?.accept ? "accept attached" : "no accept — and the page would call it Expired");
+
+    /* THE CONTROL. A stranger's accept must never be attached, whatever the
+       age of the order: that is the path to a buyer locking a payment against
+       somebody else's contract, and it is checked on `row.from`, which is the
+       transport's account of who signed rather than the body's claim. */
+    shard["2026-09-03"] = row + "\n" + accept.replace(
+      /"from":"did:key:z6Mkiuhfek[^"]*"/, '"from":"did:key:z6MkngD8RZKCgJQCkJvHfGyYoCcNCG5rz9Tc7yRmWrMZExaz"');
+    r4 = await call();
+    ok("but a stranger's accept is not the shop's answer", !r4.orders?.[0]?.accept,
+      "answering a stranger's offer is a legal move; showing it as ours is not");
+  }
+
   globalThis.fetch = real;
 }
 
@@ -407,10 +497,13 @@ FIXTURE[ANSWERED].accept = {
   contract: CONTRACT, statement: "0x" + "7".repeat(64), room: DEALROOM,
 };
 /* An order the shop also answered, but too late to matter: past its refund
-   deadline a lock buys nothing, so the strip must not appear. */
+   deadline a lock buys nothing, so the strip must offer nothing to press.
+   It must still SAY something, which is the change of 6 September — see the
+   block at the end of section K. */
+const LATEROOM = "mb-p-tclk-cdcdcdcdcdcdcdcd";
 FIXTURE[LATE].id = "0x" + "8".repeat(64);
 FIXTURE[LATE].refundAfterMs = now - 3600000;
-FIXTURE[LATE].accept = { ...FIXTURE[ANSWERED].accept, contract: "0x" + "cd".repeat(32), room: "mb-p-tclk-cdcdcdcdcdcdcdcd" };
+FIXTURE[LATE].accept = { ...FIXTURE[ANSWERED].accept, contract: "0x" + "cd".repeat(32), room: LATEROOM };
 
 let signedInAs = DID;
 let archiveAnswers = true;
@@ -422,6 +515,19 @@ let liveOverlap = 3;
 /* What the deal room contains when the page goes looking, and what the page
    posted when it stopped. Both are the point of section K. */
 let dealFrames = [];
+/* And what the LATE order's room contains, separately. Empty is the honest
+   default: the shop accepted it and no lock ever arrived, which is exactly
+   the deal this fixture is for. */
+let lateFrames = [];
+/* The shop's accept, and nothing after it: a deal that was taken on and never
+   funded. Put in the room rather than left empty so the fold is decided here
+   and not by a fallback read of the board. */
+const lateAccepted = () => [{
+  seq: 1, ts: new Date(now - 172800000).toISOString(),
+  from: "did:key:z6MkiuhfekPgiihLWarPAzhuvoMjg86F8dqmLiCTmtQgMrR3",
+  text: "tclk1 " + JSON.stringify({ type: "accept", from: "did:key:z6MkiuhfekPgiihLWarPAzhuvoMjg86F8dqmLiCTmtQgMrR3",
+    contract: "0x" + "cd".repeat(32), ref: "0x" + "8".repeat(64), statement: "0x" + "7".repeat(64) }),
+}];
 /* A deal room that cannot be read at all — a 500, not an empty room. The
    difference decides whether a buyer is offered a second payment. */
 let roomBroken = false;
@@ -467,7 +573,16 @@ const srv = http.createServer((q, r) => {
     r.writeHead(200, { "content-type": "application/json" });
     /* A deal room is not the offers room and must not be answered with it —
        returning the board here would have let a broken page look fine. */
-    if (room !== "tclk-offers") return r.end(JSON.stringify({ source: "live", messages: dealFrames }));
+    /* ── ONE DEAL ROOM PER DEAL, WHICH THE STUB USED TO IGNORE ────────────
+       Every deal room got the same `dealFrames`, which was harmless while
+       exactly one row on the page read a room. Two do now — an order past its
+       refund deadline is still read, because what became of it is a question
+       a record has to answer — and handing both the same frames would have
+       every assertion about "the strip" quietly measuring two of them. */
+    if (room !== "tclk-offers") {
+      return r.end(JSON.stringify({ source: "live",
+        messages: room === LATEROOM ? lateFrames : dealFrames }));
+    }
     if (boardBroken) return r.end(JSON.stringify({ source: "none", messages: [] }));
     /* The overlap is the point: these are the SAME orders the archive
        returned, arriving by the other road. */
@@ -713,26 +828,31 @@ console.log("\n=== K. the buyer can actually pay — and is never asked to pay t
      no button at all until the answer says the payment is genuinely missing.
      The cost rule that used to forbid this still holds and is asserted below:
      bounded, one at a time, and only for rows that would show a button. */
-  roomReads = []; posts = []; dealFrames = [];
+  roomReads = []; posts = []; dealFrames = []; lateFrames = lateAccepted();
   const { ctx, pg } = await open();
   await pg.goto("http://localhost:9441/orders.html", { waitUntil: "domcontentloaded" });
   await pg.waitForTimeout(1600);
 
+  /* TWO, and the second one is the change of 6 September. A strip is where
+     this page reads the deal's own room, and reading that room is the only
+     way it ever learns an order was funded and delivered. It used to be built
+     only for orders somebody could still act on — so every finished order in
+     the history fell back to the offer's clock and read "Expired". */
   const strips = await pg.$$eval(".hact", (n) => n.length);
-  ok("the answered order grows a strip", strips === 1, `${strips} strips on page one`);
-  ok("and the twenty-two unanswered ones do not",
-    await pg.$$eval(".hrow", (n) => n.length) === 10 && strips === 1,
-    "a strip on every row would pass a test that only counted one");
+  ok("both answered orders grow a strip", strips === 2, `${strips} strips on page one`);
+  ok("and the unanswered ones do not",
+    await pg.$$eval(".hrow", (n) => n.length) === 10 && strips === 2,
+    "a strip on every row would pass a test that only counted two");
 
   /* THE BUDGET RULE, still tested as behaviour. One read per ROW on every
-     paint is what once left the deals board rendering empty. One read for the
-     one row that would otherwise ask somebody for money is not that. */
+     paint is what once left the deals board rendering empty. One read for
+     each row the shop actually answered is not that. */
   const painted = roomReads.filter((x) => x !== "tclk-offers");
-  ok("only the rows that would ask for money read a room",
-    painted.length === 1 && painted[0] === DEALROOM,
-    `read on paint: ${painted.join(", ") || "none"} — ten rows, one read`);
+  ok("only the rows the shop answered read a room",
+    painted.length === 2 && painted.includes(DEALROOM) && painted.includes(LATEROOM),
+    `read on paint: ${painted.join(", ") || "none"} — ten rows, two reads`);
 
-  ok("with no lock anywhere, the button does appear", 
+  ok("with no lock anywhere, the button does appear",
     await pg.$$eval(".hbtn:not([hidden])", (n) => n.length) === 1);
   ok("and it says the automatic payment did not land, not that this is a step",
     /did not land/i.test(await pg.$eval(".hactwords b", (e) => e.textContent)),
@@ -753,8 +873,11 @@ console.log("\n=== K. the buyer can actually pay — and is never asked to pay t
     sent.sig === `sig:${sent.room}|${sent.nonce}|${sent.text}`,
     "/api/post verifies over exactly those three; signing anything else is rejected");
 
+  /* Visible ones. The order past its deadline has a button element too and it
+     is hidden — counting elements rather than offers would have made this
+     assertion about the wrong strip. */
   ok("the button goes once it has been pressed",
-    await pg.$$eval(".hbtn", (n) => n.length) === 0,
+    await pg.$$eval(".hbtn:not([hidden])", (n) => n.length) === 0,
     "a second lock is a frame the state machine refuses");
   ok("and the strip says what happened",
     /funded/i.test(await pg.$eval(".hsaid", (e) => e.textContent)));
@@ -787,8 +910,10 @@ console.log("\n=== K. the buyer can actually pay — and is never asked to pay t
     await pg.$eval(".hactwords span", (e) => e.textContent));
   ok("and that there is nothing for them to do",
     /do not need to do anything/i.test(await pg.$eval(".hactwords span", (e) => e.textContent)));
+  /* THIS ROW'S strip, not every strip on the page. It counted all of them,
+     which was the same number only while one row on the page had one. */
   ok("the strip stops looking like a call to action",
-    await pg.$$eval(".hact.done", (n) => n.length) === 1);
+    await pg.$eval(".hitem", (e) => e.querySelectorAll(".hact.done").length) === 1);
   ok("and nothing was posted merely by looking", posts.length === 0, `${posts.length} posts`);
   /* ── WHEN THE MONEY COMES BACK ────────────────────────────────────────
      `refundAfterMs` is on every offer and had never been shown to anybody.
@@ -1021,22 +1146,76 @@ console.log("\n=== K. the buyer can actually pay — and is never asked to pay t
   await ctx.close();
 }
 {
-  /* FIXTURE[LATE] is accepted too, and past refundAfterMs. A lock there buys
-     nothing: reveal is refused at `at >= refundAfter`, and a refund needs a
-     lock that never came. It sits on page one of the closed filter. */
-  dealFrames = [];
+  /* ══════════════════════════════════════════════════════════════════════
+   * THE ORDER NOBODY CAN ACT ON ANY MORE — AND WHAT THE PAGE OWES IT
+   *
+   * FIXTURE[LATE] is accepted and past refundAfterMs. A lock there buys
+   * nothing: a reveal is refused at `at >= refundAfter`, and a refund needs a
+   * lock that never came. So there is no button, and there never was.
+   *
+   * There was also no STRIP, and that turned out to be the more expensive
+   * half. The strip is where this page reads the deal's own room, and that
+   * room is the only place it can learn an order was funded and delivered —
+   * so the moment an order stopped being actionable it also stopped being
+   * knowable, fell back to the offer's clock, and rendered as "Expired:
+   * nobody took it on before the deadline". About work the shop had accepted,
+   * done and revealed.
+   *
+   * MEASURED, 6 September, on this shop's real orders: five placed on the
+   * 4th, all five accepted within three seconds, all five reading "Expired".
+   *
+   * A record is mostly made of things nobody can act on. The deadline governs
+   * the button; it does not govern the answer.
+   * ═══════════════════════════════════════════════════════════════════*/
+  dealFrames = []; lateFrames = lateAccepted();
   const { ctx, pg } = await open();
   await pg.goto("http://localhost:9441/orders.html", { waitUntil: "domcontentloaded" });
   await pg.waitForTimeout(1600);
-  /* COUNTED BY THE STRIP AND NOT BY THE WRAPPER. This read `.hitem`, which
-     was the same number only because a wrapper existed only when there was a
-     strip to put in it. Every row has a wrapper now — they all open — so the
-     proxy stopped meaning anything while still being a number. The thing this
-     is about has always been `.hact`: an order past its refund deadline must
-     not be offered a payment that can buy nothing. */
-  const late = await pg.evaluate(() => document.querySelectorAll(".hact").length);
-  ok("an accepted order past its refund deadline gets no strip", late === 1,
-    `${late} strips — the expired one must not offer a payment that cannot buy anything`);
+  const late = await pg.evaluate(() => {
+    const boxes = [...document.querySelectorAll(".hact")];
+    const rows = [...document.querySelectorAll(".hitem")];
+    /* The LATE order is the second row: the list sorts by seq descending and
+       FIXTURE[LATE] is one below FIXTURE[ANSWERED]. */
+    const r = rows[1];
+    return {
+      strips: boxes.length,
+      pill: r?.querySelector(".pill")?.textContent ?? "",
+      head: r?.querySelector(".hactwords b")?.textContent ?? "",
+      body: r?.querySelector(".hactwords span")?.textContent ?? "",
+      buttons: r?.querySelectorAll(".hbtn:not([hidden])").length ?? -1,
+    };
+  });
+  ok("an accepted order past its refund deadline still gets a strip",
+    late.strips === 2, `${late.strips} strips`);
+  ok("and it offers nothing to press", late.buttons === 0, `${late.buttons} buttons`);
+  ok("it says the order was taken on and never funded, not that it expired",
+    /closed before it was funded/i.test(late.head), late.head);
+  ok("and never that nobody took it on",
+    !/nobody took it on/i.test(late.body) && /took this order on/i.test(late.body), late.body);
+  ok("with nothing charged, because on the paper rail nothing could be",
+    /nothing was charged/i.test(late.body), late.body);
+  /* And the pill agrees with the sentence under it, which is the failure this
+     page has now made twice: two answers on one row is worse than one wrong
+     answer, because then neither can be believed. */
+  ok("the pill agrees with it rather than saying Expired",
+    late.pill !== "Expired" && late.pill.length > 0, late.pill);
+  await ctx.close();
+}
+{
+  /* ── AND THE SAME ORDER WITH NO DEAL ROOM TO READ ───────────────────────
+     The accept alone is proof somebody took the order on. Even when the deal
+     room cannot be read at all — which is the common case, since technocore
+     is at its room cap and most deal rooms were never created — the page
+     must not fall back to "nobody took it on". */
+  dealFrames = []; lateFrames = [];
+  roomBroken = true;
+  const { ctx, pg } = await open();
+  await pg.goto("http://localhost:9441/orders.html", { waitUntil: "domcontentloaded" });
+  await pg.waitForTimeout(1600);
+  const pills = await pg.$$eval(".hitem .pill", (n) => n.slice(0, 2).map((e) => e.textContent));
+  ok("an unreadable deal room does not make the accept disappear",
+    !pills.includes("Expired"), pills.join(" | "));
+  roomBroken = false;
   await ctx.close();
 }
 {

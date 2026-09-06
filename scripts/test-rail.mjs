@@ -221,5 +221,33 @@ console.log("\n=== G. and the frame that points at it");
   ok("and is still a lock for that contract", f.type === "lock" && f.contract === OURS);
 }
 
+console.log("\n=== H. and the two lock frames the BROWSER writes");
+{
+  /* Correcting the shop's buy side fixed ONE of the three places this project
+     posts a lock. The other two are pages: /hire locks in the same click as
+     the order, and /orders has the button for when that one did not land.
+     Both still said `ref: hex16()`.
+     Which means every order ever placed through this site posted a lock whose
+     ref addressed nothing — the buyers' half of the seventy-six counted
+     publicly on 5 September, sitting there while the shop's half was fixed.
+     Read as text, because these are pages and not modules: a browser file
+     cannot be imported into this process, and the rule is one line in each. */
+  const fs = await import("node:fs");
+  const path = await import("node:path");
+  const url = await import("node:url");
+  const WEB = path.join(path.dirname(url.fileURLToPath(import.meta.url)), "..", "web");
+  const src = (f) => fs.readFileSync(path.join(WEB, f), "utf8");
+  for (const [file, contract] of [["hire.html", "a.contract"], ["orders.html", "o.accept.contract"]]) {
+    const line = src(file).split("\n").find((l) => /type: "lock"/.test(l)) ?? "";
+    ok(`${file} posts a lock at all`, Boolean(line), line.trim().slice(0, 50));
+    ok("  and its ref is the contract, not a fresh random",
+      line.includes(`ref: ${contract}`), line.trim().slice(0, 130));
+  }
+  /* And the reason this survived review twice: hex16() is a perfectly good
+     nonce, so a frame using it reads as correct. It was not a nonce field. */
+  ok("nothing in web/ puts a random value in a lock's ref",
+    !["hire.html", "orders.html"].some((f) => /ref: hex16\(\)/.test(src(f))));
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

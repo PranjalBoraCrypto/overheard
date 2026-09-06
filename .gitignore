@@ -11,3 +11,8 @@
 # builder stages its new set as `room-snapshots.tmp` before swapping it in:
 # one rule, rather than a second one somebody has to remember.
 *.tmp
+
+# npm working directory. The browser tests need playwright and pngjs, which
+# are installed on demand and never belong in a repository that is already
+# 376MB of archive at the tip.
+node_modules/

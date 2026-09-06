@@ -62,13 +62,8 @@ const MAX_DAYS = 14;
    a load test. The cap keeps one DID from turning a cached response into a
    megabyte. */
 const MAX_ORDERS = 500;
-/* How many of the newest shards are held in memory for the accept hunt. Two
-   covers the 36-hour actionable window in every case except an order placed
-   just before midnight, and three is one day of slack for that. */
-const ACCEPT_DAYS = 3;
-/* And how many orders that hunt runs for. Each is a substring sweep of those
-   shards, which is fast but not free, and a visitor with forty live orders is
-   not someone whose fortieth needs a button this millisecond. */
+/* How many orders the accept hunt runs for PER SHARD. Each is a substring
+   sweep of the few texts in hand, which is fast but not free. */
 const ACCEPT_LOOKUPS = 12;
 
 const json = (body, status = 200, ttl = 45) =>
@@ -204,13 +199,6 @@ export default async function handler(request) {
 
   const orders = [];
   let scanned = 0;
-  /* The newest few days, kept in memory so the accept hunt below needs no
-     further upstream reads. Bounded at ACCEPT_DAYS because an order that can
-     still be acted on is at most refundAfterMs old — 36 hours as this shop
-     writes them — and holding fourteen multi-megabyte shards to search two
-     days' worth of them would be paying for the whole archive to answer a
-     question about yesterday. */
-  const recent = [];
 
   /* ── THE TAIL, READ FIRST, BECAUSE THE SHARDS ARE NOT FRESH ──────────────
      This endpoint told visitors the archive "trails the network by about one
@@ -225,7 +213,6 @@ export default async function handler(request) {
      tail.ndjson is the archiver's bounded window over the same room, written
      every pass. Reading it first is what makes the three sources meet. */
   const tail = await grabText(`${ROOM}/tail.ndjson`);
-  if (tail !== null) recent.push(tail);      // the accept hunt wants it too
 
   /* ── SCANNED AS EACH ONE ARRIVES, NOT AFTER THEY ALL HAVE ────────────────
      An earlier version collected every text first and scanned afterwards.
@@ -259,54 +246,90 @@ export default async function handler(request) {
     }
   };
 
-  /* The tail first: it is the only source that is minutes rather than hours
-     old, so a budget spent before reaching it would spend it on history. */
-  if (tail !== null) eat(tail);
-  for (const day of days) {
-    if (orders.length >= MAX_ORDERS) break;
-    const text = await grabText(`${ROOM}/${day}.ndjson`);
-    if (text === null) continue;             // a missing shard is not an error
-    scanned++;
-    if (recent.length < ACCEPT_DAYS) recent.push(text);
-    eat(text);
-  }
-
-  /* Newest first, by the server's own sequence number rather than by a
-     timestamp any sender could have written.
-     Deduplication happens during the scan rather than after it, so the
-     MAX_ORDERS budget is spent on distinct orders — see `eat`. */
-  orders.sort((a, b) => b.seq - a.seq);
-
   /* ── DID THE SHOP ANSWER? ────────────────────────────────────────────────
-   * An order the shop has accepted is one the buyer must now FUND, and until
-   * this existed the page had no way to tell — the accept is a frame from the
-   * shop, so the `line.includes(did)` prefilter above steps straight over it.
+   * An order the shop has accepted is one the buyer must now FUND, and after
+   * that it is the only evidence this endpoint has that anybody took the
+   * order on at all — the accept is a frame from the SHOP, so the
+   * `line.includes(did)` prefilter in eat() steps straight over it.
    *
    * WHY NOT READ THE LIVE ROOM INSTEAD. Because it does not go back far
    * enough. MEASURED: 4,192 frames in one day of tclk-offers, so the 200-frame
-   * live window covers about an hour, and an order stays actionable for 36.
-   * A lock button that only worked on orders placed in the last hour would be
-   * a lock button that looks broken.
+   * live window covers about an hour, and an order stays actionable for 48.
    *
    * WHY THIS COSTS NO EXTRA UPSTREAM READS. It searches shards already
    * fetched and still in hand, and it searches them by SUBSTRING: an offer id
    * is 66 characters of hex, so a line containing one is a line about this
-   * order, and only those few lines are ever parsed. */
-  const live = orders.filter((o) => o.id && !(o.refundAfterMs && o.refundAfterMs < Date.now()));
-  for (const o of live.slice(0, ACCEPT_LOOKUPS)) {
-    for (const text of recent) {
+   * order, and only those few lines are ever parsed.
+   *
+   * ── AND WHY IT NOW HAPPENS INSIDE THE LOOP ──────────────────────────────
+   * It used to run at the end, over a `recent` list of the three newest texts
+   * — except the tail was pushed into that list first, so it held the tail
+   * and TWO days, not three. An order placed on the 4th was answered three
+   * seconds later in the 4th's shard, and by the 6th that shard was the third
+   * one back and never searched.
+   *
+   * MEASURED, 6 September, on this shop's own orders: five real orders placed
+   * on the 4th, every one of them accepted by the shop within three seconds,
+   * every one of them reported here with no accept — so the orders page found
+   * no deal to look up, fell back to the offer's own clock, and told the buyer
+   * "nobody took it on before the deadline" about work that had been accepted,
+   * funded and delivered. One of them still had three hours left to fund.
+   *
+   * The rule that replaces the day count is a fact about the protocol rather
+   * than a budget: an accept arrives seconds after the offer it answers, so it
+   * is in the SAME day shard, or — if the offer landed just before midnight —
+   * in the next one. Each order is therefore searched in the shard it was
+   * found in, the shard fetched just before it (which is the newer day), and
+   * the tail. Three texts, once, per order.
+   *
+   * That covers the whole fourteen-day window instead of two days, and holds
+   * at most two shards in memory instead of three. There is no filter on the
+   * order's age any more: what an order's history SAYS is a question about
+   * every order ever placed, and refusing to answer it after 48 hours is what
+   * turned this page from a record into a page that forgets. */
+  const findAccept = (o, texts) => {
+    for (const text of texts) {
+      if (!text) continue;
       let at = text.indexOf(o.id);
       while (at !== -1) {
         const start = text.lastIndexOf("\n", at) + 1;
         let end = text.indexOf("\n", at);
         if (end === -1) end = text.length;
         const a = acceptFrom(text.slice(start, end), o.id);
-        if (a) { o.accept = a; break; }
+        if (a) { o.accept = a; return; }
         at = text.indexOf(o.id, end);
       }
-      if (o.accept) break;
     }
+  };
+
+  /* The tail first: it is the only source that is minutes rather than hours
+     old, so a budget spent before reaching it would spend it on history.
+     Its orders wait for the first shard, because the tail is a window over
+     the newest day and the accept for anything in it is in that same day. */
+  if (tail !== null) eat(tail);
+  let waiting = orders.filter((o) => o.id);
+  let newer = null;                 // the shard fetched just before this one
+  for (const day of days) {
+    if (orders.length >= MAX_ORDERS) break;
+    const text = await grabText(`${ROOM}/${day}.ndjson`);
+    if (text === null) continue;             // a missing shard is not an error
+    scanned++;
+    const before = orders.length;
+    eat(text);
+    const hunt = [...waiting, ...orders.slice(before).filter((o) => o.id)];
+    for (const o of hunt.slice(0, ACCEPT_LOOKUPS)) findAccept(o, [text, newer, tail]);
+    waiting = [];
+    newer = text;
   }
+  /* No shards at all — a brand new room, or every fetch failed. The tail is
+     still worth searching on its own rather than dropping the question. */
+  for (const o of waiting.slice(0, ACCEPT_LOOKUPS)) findAccept(o, [tail]);
+
+  /* Newest first, by the server's own sequence number rather than by a
+     timestamp any sender could have written.
+     Deduplication happens during the scan rather than after it, so the
+     MAX_ORDERS budget is spent on distinct orders — see `eat`. */
+  orders.sort((a, b) => b.seq - a.seq);
 
   return json({
     did,
