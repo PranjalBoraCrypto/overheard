@@ -121,6 +121,10 @@ body{background:var(--void);color:var(--dim);font-family:var(--display);
   --yes:#3BE3B0; --yes-lit:#8CF6D8; --yes-dim:rgba(59,227,176,.16);
   --no:#F2B33D;  --no-lit:#FFD489;  --no-dim:rgba(242,179,61,.14);
   --dock-h:0px;
+  /* Set per frame on .corewrap while a pointer is near the ring. Declared
+     here too so the object has a defined resting state before any script
+     has run — and so nothing depends on a fallback to look right. */
+  --wake:0; --pop:1;
   /* The site bar scrolls with the page rather than sitting fixed over it, so
      nothing has to be cleared at the top. It is a variable and not a zero
      because .shell's padding and the rail's sticky offset both read it, and
@@ -226,9 +230,26 @@ h1{font-size:clamp(23px,2.4vw,31px);line-height:1.12;letter-spacing:-.028em;
    the height of the whole row — and at 430 it was making the section taller
    than anything in it needed. It is still the largest object here. */
 .corewrap{position:relative;z-index:1;justify-self:center;width:100%;max-width:348px;
-  aspect-ratio:1;display:grid;place-items:center}
+  aspect-ratio:1;display:grid;place-items:center;
+  transform:scale(var(--pop,1));will-change:transform}
 .core{width:100%;height:100%;display:block;overflow:visible}
 .core .field,.core .fieldstill{fill:none;stroke:rgba(88,233,255,.11);stroke-width:1}
+
+/* ── THE BEZEL ─────────────────────────────────────────────────────────────
+   `--wake` is how close the pointer is, 0 to 1, and everything the object
+   does on approach hangs off it: the teeth brighten, the hub's rim lights,
+   the specular arc appears. It is set once per frame from a spring, so the
+   object comes alive as a hand nears it and settles as the hand leaves —
+   before a single degree of rotation has happened. Half the feeling of
+   weight is in that anticipation. */
+.core .tk{stroke:rgba(88,233,255,calc(.14 + .30 * var(--wake,0)));
+  stroke-width:1.4;stroke-linecap:round}
+.core .tk.mj{stroke:rgba(88,233,255,calc(.30 + .48 * var(--wake,0)));stroke-width:2.4}
+.core .sheen{fill:none;stroke:var(--blue);stroke-width:2;stroke-linecap:round;
+  stroke-dasharray:52 689;opacity:calc(.16 + .5 * var(--wake,0))}
+[data-fx="lean"] .core .tk{stroke:rgba(88,233,255,.16)}
+[data-fx="lean"] .core .tk.mj{stroke:rgba(88,233,255,.34)}
+[data-fx="lean"] .core .sheen{display:none}
 .core .track{fill:none;stroke:rgba(147,182,192,.13);stroke-width:13;stroke-linecap:round}
 .core .arc{fill:none;stroke-width:13;stroke-linecap:round;
   transition:stroke-dasharray .8s cubic-bezier(.22,.61,.36,1),
@@ -1039,6 +1060,16 @@ h1{font-size:clamp(23px,2.4vw,31px);line-height:1.12;letter-spacing:-.028em;
             <circle class="timearc" id="timearc" cx="200" cy="200" r="126"
                     transform="rotate(-90 200 200)" stroke-dasharray="0 792"/>
             <circle class="hub" cx="200" cy="200" r="118"/>
+            <!-- The sheen is a short bright arc on the hub's rim. It turns
+                 with the bezel, so the hub reads as a machined face catching
+                 a light rather than a flat disc. -->
+            <circle class="sheen" id="sheen" cx="200" cy="200" r="118"
+                    transform="rotate(-90 200 200)"/>
+            <!-- Sixty teeth, built once in script. This is the part that makes
+                 the motion legible: a 1px ring at 11% opacity can rotate all
+                 day and nobody sees it, but teeth passing a fixed point are
+                 unmistakable. -->
+            <g id="bezel" aria-hidden="true"></g>
             <g id="signals" aria-hidden="true"></g>
           </svg>
           <div class="coreface" id="coreface">
@@ -1868,42 +1899,72 @@ addEventListener("resize", measureDock, { passive: true });
    a rAF that never ends is a cost the page keeps paying while nothing moves.
    Never on a touch screen, where there is no pointer to lean toward. */
 /* ── THE CORE HAS MASS ─────────────────────────────────────────────────────
-   The old version tilted the whole object toward the cursor. It moved, and it
-   said nothing: a flat plate on a hinge, the same gesture every mouse-over
-   ornament on the web makes.
+   The first version of this tilted the whole object toward the cursor: a flat
+   plate on a hinge, the same gesture every mouse-over ornament makes. The
+   second turned three faint circles behind the ring with real angular
+   physics — which was right, and invisible, because the things it was turning
+   were one pixel wide at eleven percent opacity. Correct motion nobody can
+   see is the same as no motion.
 
-   This is a different idea. The three faint circles behind the ring are three
-   bodies on one axle, and the pointer is coupled to them through something
-   viscous. Sweep around the ring and you are dragging them; they take up your
-   angular velocity, the light outer one almost at once, the heavy inner one
-   grudgingly and BACKWARDS, the way a gear train reverses. Stop, and nothing
-   stops with you — they coast, shedding speed to drag, and come to rest
-   wherever the momentum ran out. Flick fast and they spin hard. Cross the
-   middle slowly and they barely stir.
+   So the object grew teeth. Sixty of them, every fifth one longer, on a bezel
+   outside the arcs. A tooth passing a fixed point is unmistakable in a way
+   that a rotating dashed line is not, and it is the whole reason this now
+   reads as a machine being turned.
 
-   Three constants do all of it, and each is a physical fact rather than a
-   number that looked nice:
+   FOUR BODIES ON ONE AXLE, coupled to the pointer through something viscous.
+   Sweep around the ring and you drag them: the bezel takes your speed almost
+   at once, the inner ring grudgingly and BACKWARDS the way a gear train
+   reverses, the calls orbiting outside slowest of all. Stop, and nothing
+   stops with you — they coast, shed speed to drag, and settle wherever the
+   momentum ran out.
 
      inertia   how much of your motion it takes up. Bigger is heavier.
-     damp      how fast it gives that motion back to the medium, per second.
-     couple    the sign and strength of the linkage. Negative means it runs
-               against the others.
+     damp      how fast it gives that back to the medium, per second.
+     couple    the sign and strength of the linkage. Negative runs against.
 
-   The data never moves. The two arcs are the market's answer and the time ring
-   is the deadline; those are facts, and a fact that drifts because somebody
-   waved a mouse at it is a lie. Only the field turns.
+   AND IT ANTICIPATES. Before any of that, `--wake` rises as a hand nears —
+   teeth brighten, the hub's rim lights, a specular arc appears on it, the
+   whole object leans a per cent closer. Half the feeling of weight is in
+   that: a thing that notices you before you touch it.
 
-   THE ONLY REAL TORQUE IS THE POINTER'S OWN ANGULAR VELOCITY about the centre
-   of the ring — the z-component of r × v over r². Move straight at the middle
-   and it is zero, and rightly: pushing a wheel through its own axle does not
-   turn it. That is why this reads as a machine and the tilt read as a hinge. */
+   THE ONLY REAL TORQUE IS THE POINTER'S OWN ANGULAR VELOCITY about the
+   centre — the z-component of r × v over r². Move straight at the middle and
+   it is zero, and rightly: pushing a wheel through its own axle does not turn
+   it. That is why this reads as a machine and the tilt read as a hinge.
+
+   The data never moves. The two arcs are the market's answer and the time
+   ring is the deadline; a fact that drifts because somebody waved a mouse at
+   it is a lie. Only the field turns. */
 function lean() {
-  if (!FINE) return;
   const wrap = $("corewrap");
   if (!wrap) return;
 
+  /* The teeth, built once. Sixty at six degrees, every fifth one longer and
+     brighter, which is how an instrument dial is marked and why the eye reads
+     rotation off it so easily. */
+  const NS = "http://www.w3.org/2000/svg";
+  const bez = $("bezel");
+  if (bez && !bez.childElementCount) {
+    for (let i = 0; i < 60; i++) {
+      const mj = i % 5 === 0;
+      const a = (i / 60) * Math.PI * 2 - Math.PI / 2;
+      const r1 = mj ? 163 : 170, r2 = 179;
+      const ln = document.createElementNS(NS, "line");
+      ln.setAttribute("x1", (200 + Math.cos(a) * r1).toFixed(2));
+      ln.setAttribute("y1", (200 + Math.sin(a) * r1).toFixed(2));
+      ln.setAttribute("x2", (200 + Math.cos(a) * r2).toFixed(2));
+      ln.setAttribute("y2", (200 + Math.sin(a) * r2).toFixed(2));
+      ln.setAttribute("class", mj ? "tk mj" : "tk");
+      bez.append(ln);
+    }
+  }
+
+  if (!FINE) return;
+
   const bodies = [
-    { el: $("ring1"),   inertia: 1.00, damp: 1.90, couple: 1.00 },
+    { el: $("bezel"),   inertia: 0.85, damp: 1.60, couple: 1.00 },
+    { el: $("sheen"),   inertia: 0.85, damp: 1.60, couple: 1.00, off: -90 },
+    { el: $("ring1"),   inertia: 1.30, damp: 1.90, couple: 0.72 },
     { el: $("ring3"),   inertia: 2.40, damp: 2.30, couple: -0.62 },
     { el: $("signals"), inertia: 3.60, damp: 2.80, couple: 0.34 },
   ].filter((b) => b.el);
@@ -1911,28 +1972,47 @@ function lean() {
   for (const b of bodies) { b.a = 0; b.w = 0; }
 
   /* Below this the thing has stopped. Left open-ended it would re-queue a
-     frame forever to move a ring by a millionth of a degree, which is a phone
-     battery running down behind a page nobody is looking at. */
+     frame forever to move a bezel by a millionth of a degree, which is a
+     phone battery running down behind a page nobody is looking at. */
   const STILL = 0.4;          // degrees per second
   const MAXW = 420;           // and it will not become a food processor
 
+  let wake = 0, wakeTo = 0, pop = 1;
   let last = 0, running = false;
 
   const step = (now) => {
     const dt = last ? Math.min(0.05, (now - last) / 1000) : 0.016;
     last = now;
     let alive = false;
+
     for (const b of bodies) {
       /* Viscous drag: speed decays by a fixed FRACTION per unit time, so the
-         curve is the same whether the frame took 8ms or 40. Linear subtraction
-         would make a slow machine stop faster than a quick one. */
+         curve is the same whether the frame took 8ms or 40. Linear
+         subtraction would make a slow machine stop faster than a quick one. */
       b.w *= Math.exp(-b.damp * dt);
       b.a += b.w * dt;
       if (Math.abs(b.w) > STILL) alive = true;
-      b.el.setAttribute("transform", `rotate(${b.a.toFixed(2)} 200 200)`);
+      b.el.setAttribute("transform",
+        `rotate(${(b.a + (b.off ?? 0)).toFixed(2)} 200 200)`);
     }
+
+    /* The wake and the lean are the same spring, critically damped enough to
+       arrive without a wobble — this is a thing noticing a hand, not a thing
+       being flicked. */
+    const k = Math.min(1, 7 * dt);
+    wake += (wakeTo - wake) * k;
+    const want = 1 + wake * 0.022;
+    pop += (want - pop) * k;
+    wrap.style.setProperty("--wake", wake.toFixed(3));
+    wrap.style.setProperty("--pop", pop.toFixed(4));
+    if (Math.abs(wakeTo - wake) > 0.002) alive = true;
+
     if (alive) requestAnimationFrame(step);
     else { running = false; last = 0; }
+  };
+
+  const nudge = () => {
+    if (!running) { running = true; last = 0; requestAnimationFrame(step); }
   };
 
   let px = null, py = null, pt = 0;
@@ -1945,8 +2025,18 @@ function lean() {
     const now = performance.now();
     const x = e.clientX - (r.left + r.width / 2);
     const y = e.clientY - (r.top + r.height / 2);
-    /* A gap in the events is a tab coming back or a pointer jumping across the
-       screen, not a hand moving that fast. Re-anchor rather than read a
+    const dist = Math.hypot(x, y);
+
+    /* How near is near. One radius out it is fully awake; two radii out it
+       has forgotten you. Squared so the last stretch of the approach is
+       where most of the change happens, which is how attention feels. */
+    const rad = r.width / 2;
+    const near = Math.max(0, Math.min(1, (rad * 2 - dist) / rad));
+    wakeTo = near * near;
+    nudge();
+
+    /* A gap in the events is a tab coming back or a pointer jumping across
+       the screen, not a hand moving that fast. Re-anchor rather than read a
        thousand degrees a second off it. */
     const gap = now - pt;
     if (px === null || gap > 180) { px = x; py = y; pt = now; return; }
@@ -1956,31 +2046,36 @@ function lean() {
     px = x; py = y; pt = now;
 
     /* r × v over r², in degrees per second: how fast the pointer is going
-       round the middle, which is the only part of its motion a wheel can feel.
-       The floor on r² keeps the maths finite at the exact centre. */
+       round the middle, which is the only part of its motion a wheel can
+       feel. The floor on r² keeps the maths finite at the exact centre. */
     const d2 = Math.max(2500, x * x + y * y);
     const drive = ((x * vy - y * vx) / d2) * (180 / Math.PI);
 
-    /* And it has to let go. Past the edge of the ring the grip falls away over
-       about half a radius, so a pointer on its way to the sign-in button does
-       not set the thing spinning from across the page. */
-    const out = Math.sqrt(d2) - r.width / 2;
-    const grip = out <= 0 ? 1 : Math.exp(-out / (r.width * 0.42));
+    /* And it has to let go. Past the edge of the ring the grip falls away
+       over about half a radius, so a pointer on its way to the sign-in
+       button does not set the thing spinning from across the page. */
+    const out = dist - rad;
+    const grip = out <= 0 ? 1 : Math.exp(-out / (rad * 0.5));
     if (grip < 0.02) return;
 
-    const want = Math.max(-MAXW, Math.min(MAXW, drive));
-    const active = tier === "full" ? bodies : bodies.slice(0, 1);
+    const target = Math.max(-MAXW, Math.min(MAXW, drive));
+    const active = tier === "full" ? bodies : bodies.slice(0, 2);
     for (const b of active) {
-      /* Coupled, not kicked. It is pulled TOWARDS the speed you are moving at,
-         by an amount its own mass allows — so holding a steady sweep settles
-         it at that speed instead of winding it up without limit. */
-      const k = Math.min(1, (6.5 * dt * grip) / b.inertia);
-      b.w += (want * b.couple - b.w) * k;
+      /* Coupled, not kicked. It is pulled TOWARDS the speed you are moving
+         at, by an amount its own mass allows — so holding a steady sweep
+         settles it at that speed instead of winding it up without limit. */
+      const c = Math.min(1, (7 * dt * grip) / b.inertia);
+      b.w += (target * b.couple - b.w) * c;
     }
-    if (!running && bodies.some((b) => Math.abs(b.w) > STILL)) {
-      running = true; last = 0; requestAnimationFrame(step);
-    }
+    nudge();
   }, { passive: true });
+
+  /* A pointer that leaves the window never sends another move, so the object
+     would sit lit up for a page nobody is on. */
+  addEventListener("pointerleave", () => { wakeTo = 0; nudge(); }, { passive: true });
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden) { wakeTo = 0; wake = 0; }
+  });
 }
 
 /* ══ YOUR OWN CALLS ════════════════════════════════════════════════════════

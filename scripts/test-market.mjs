@@ -302,7 +302,10 @@ console.log("\n=== L. the page, as text");
   /* Both of these are read inside calc(). An undefined custom property makes
      the whole declaration invalid at computed-value time, which drops the
      sticky offset and the reserved bottom padding together and in silence. */
-  const calcVars = [...page.matchAll(/calc\([^;}]*?var\((--[a-z0-9-]+)/g)]
+  /* A var WITH a fallback — var(--wake,0) — cannot make a declaration
+     invalid, so it is not the failure mode this guards against. Only the
+     bare ones matter. */
+  const calcVars = [...page.matchAll(/calc\([^;}]*?var\((--[a-z0-9-]+)\s*\)/g)]
     .map((m) => m[1]).filter((v, i, a) => a.indexOf(v) === i);
   const undeclared = calcVars.filter((v) => !new RegExp(`${v}\\s*:`).test(page)
     && !/^--(s\d|gutter|line|void|edge)$/.test(v));
