@@ -911,7 +911,30 @@ h1{font-size:clamp(23px,2.4vw,31px);line-height:1.12;letter-spacing:-.028em;
   /* nowrap matters: a wrapping COLUMN flex lays items into several columns
      and then stretches each one to its own column's width, not the
      container's — which is why these came out three different widths. */
-  .sheetbar{flex-direction:column;align-items:stretch;flex-wrap:nowrap;gap:9px}
+  /* THE PANEL STOPS CENTRING ITS CHILDREN. .sheetin is a grid with
+     justify-items:center, which is right for the card and wrong for a stack
+     of buttons — as grid items they were sized to their own content and came
+     out 160px wide in the middle of a 390px screen. Everything but the card
+     stretches here. */
+  .sheetin{justify-items:stretch}
+  .sheetin > .stage{justify-self:center}
+  .sheetbar{flex-direction:column;align-items:stretch;flex-wrap:nowrap;gap:9px;width:100%}
+
+  /* ── TARGETS A THUMB CAN ACTUALLY HIT ───────────────────────────────────
+     35px and 34px controls are a miss waiting to happen; the guidance is 44
+     and these were built to a mouse's tolerance. Nothing moves — they simply
+     grow to a size a thumb lands on. */
+  .back,.barlink{min-height:42px}
+  .shbtn{min-height:44px}
+  .hnav button{width:42px;height:42px}
+  .keytog{min-height:44px}
+
+  /* ── AND TEXT A PHONE CAN READ ──────────────────────────────────────────
+     The micro scale is 11px, chosen against a desktop screen at desktop
+     distance. Uppercase mono with letterspacing at 11px on a phone is legible
+     to somebody who already knows what it says. One point up costs nothing
+     and is the difference for everyone else. */
+  :root{--t-micro:12px}
   .sbtn{justify-content:center;min-height:50px;font-size:15px}
   .keytog{justify-content:center;padding:4px 0}
   /* ON A PHONE IT HAS TO BE CLOSEABLE. The panel covers most of the screen,
@@ -919,7 +942,7 @@ h1{font-size:clamp(23px,2.4vw,31px);line-height:1.12;letter-spacing:-.028em;
      can only dismiss by tapping a 20px strip is a sheet people get stuck in.
      The control pins to the panel's own corner instead, and the grab handle
      above it says which direction the thing came from. */
-  .shclose{position:absolute;top:6px;right:2px;bottom:auto;left:auto;
+  .shclose{position:absolute;top:9px;right:9px;bottom:auto;left:auto;
     width:38px;height:38px;transform:none;display:grid}
   .sheetin::before{content:"";display:block;width:40px;height:4px;border-radius:999px;
     background:rgba(147,182,192,.32);margin:0 auto 4px}
@@ -935,6 +958,25 @@ h1{font-size:clamp(23px,2.4vw,31px);line-height:1.12;letter-spacing:-.028em;
 }
 @media (max-width:560px){
   .sides2{grid-template-columns:1fr}
+}
+
+/* ── A SMALL PHONE, OR A SHORT ONE ─────────────────────────────────────────
+   On a 568px screen the signed-out dock was 39% of everything the reader
+   could see — a bar of controls that had quietly become the page. It is the
+   same dock, wound in: less air around it, controls at the smallest size a
+   thumb still lands on reliably, and the line about where a key lives cut to
+   one, because it is reassurance rather than instruction and the FAQ says it
+   properly. Nothing is removed; a shorter screen simply gets a tighter
+   version of the same thing. */
+@media (max-width:900px) and (max-height:740px), (max-width:360px){
+  .aside{padding:8px var(--s3) calc(8px + env(safe-area-inset-bottom,0px))}
+  .step + .step{margin-top:7px}
+  .go{min-height:46px}
+  .side{min-height:46px}
+  .amt{min-height:42px}
+  .purse .v{font-size:17px}
+  .aside .say{-webkit-line-clamp:1}
+  .aside .nokey,.aside .mine{display:none}
 }
 @media (min-width:901px){ .frside{display:none} }
 
@@ -1323,7 +1365,14 @@ h1{font-size:clamp(23px,2.4vw,31px);line-height:1.12;letter-spacing:-.028em;
       </div>
     </div>
     <label class="keytog">
-      <input type="checkbox" id="showkey"><i></i>
+      <!-- ON BY DEFAULT. The key is already public — every call is a signed
+           message in a room anyone can read, and the leaderboard on this page
+           prints it — so the card showing it is the card matching the record.
+           It stays a switch because posting a card to a timeline is a louder
+           act than leaving a signature in a room, and somebody who would
+           rather not join those two things up can turn it off before they
+           copy anything. -->
+      <input type="checkbox" id="showkey" checked><i></i>
       <span>Put my key on the card</span>
     </label>
     <div class="sheetbar">

@@ -437,12 +437,16 @@ console.log("\n=== U. the card somebody puts their name to");
   ok("no class on this page silently inherits a shared component's rules",
     clash.length === 0, clash.join(", ") || `${mine.length} checked against deal.css`);
 
-  /* The key is a decision, not a default. Printing it on a card somebody
-     posts ties that key to their account for good. */
-  ok("the key is off the card unless it is asked for",
-    /<input type="checkbox" id="showkey">/.test(page) &&
-    !/id="showkey"[^>]*checked/.test(page));
-  ok("and the card only gets it when the box is ticked",
+  /* The key rides on the card by default: it is already public in the room
+     and on this page's own leaderboard, so a card without it is a card that
+     cannot be matched to the record it came from. What matters is that it
+     stays a CHOICE — posting to a timeline is louder than signing in a room,
+     and it has to be possible to take off before anything is copied. */
+  ok("the key is on the card by default", /id="showkey" checked/.test(page));
+  ok("but it is a switch, not a fact of life",
+    /id="showkey"/.test(page) && /class="keytog"/.test(page) &&
+    /\$\("showkey"\)\.addEventListener\("change"/.test(page));
+  ok("and the card reads the switch rather than assuming",
     /\$\("showkey"\)\.checked \? shortDid/.test(page));
 
   ok("the post it writes tags the project", /@flop_labs/.test(page));
