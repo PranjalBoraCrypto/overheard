@@ -623,7 +623,8 @@ const read = (pg) => pg.evaluate(() => ({
     /* A plain object, not an array with names bolted on: this crosses the
        browser boundary as JSON, and JSON drops every non-index property of an
        array. The named version came back as four undefineds. */
-    return { placed: n("nAll"), open: n("nOpen"), shut: n("nShut"), sum: n("nSum") };
+    return { placed: n("nAll"), open: n("nOpen"), shut: n("nShut"), sum: n("nSum"),
+             paid: n("nPaid"), line: n("sumline") };
   })(),
   chips: [...document.querySelectorAll(".chip")].map((c) => ({
     on: c.getAttribute("aria-pressed") === "true", n: c.querySelector("span").textContent })),
@@ -648,9 +649,91 @@ console.log("\n=== E. the two sources are merged, not stacked");
   ok("open and closed add up to the total",
     Number(s.stats.open) + Number(s.stats.shut) === Number(s.stats.placed),
     `${s.stats.open} + ${s.stats.shut} = ${s.stats.placed}`);
-  ok("the committed figure is the sum of the amounts, not a guess",
-    s.stats.sum === "13,000",
-    "8×500 + 8×250 + 7×1000 across the fixture");
+  /* ── THE FIGURE AND ITS LABEL MUST BE ABOUT THE SAME ORDERS ─────────────
+     They were not. The label said "orders still going" and the figure was
+     every order ever placed — which on a real page read "0 orders still
+     going — 4,000 FLOP committed across every one", about six orders that
+     had all finished. Both halves were right about a different set.
+     So the assertion is now the relationship rather than a constant: the
+     committed figure is the sum of the amounts of the OPEN orders, computed
+     here from the same fixture the page was given. */
+  const shown = Number(String(s.stats.sum).replace(/,/g, ""));
+  ok("the committed figure is not every order ever placed",
+    shown !== 13000, `${s.stats.sum} — 13,000 is the whole fixture, finished ones included`);
+  /* The seven inside their own expiry (500+250+1000+500+250+1000+500) plus
+     FIXTURE[ANSWERED], which the shop answered and nobody has funded, at 250.
+     Written out rather than recomputed here, because a test that repeats the
+     page's arithmetic passes whenever the page and the test are wrong in the
+     same way. */
+  ok("it is the sum of the orders still going", shown === 4250,
+    `${s.stats.sum} shown, 4,250 expected — "${s.stats.line}"`);
+  ok("and the sentence beside it is about those same orders",
+    /orders still going/.test(String(s.stats.line)), String(s.stats.line));
+  await ctx.close();
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+ * E2. WHAT THE SHOP ACTUALLY EARNED
+ *
+ * "Finished" counts every order that has stopped moving, and some of them
+ * stopped because the shop said it could not do the work. The page had no
+ * figure at all for the money that really changed hands — the only sum on it
+ * was every order ever placed, refusals included.
+ *
+ * Only a `claimed` deal moved anything: that is the protocol's word for the
+ * lock having been opened, which is the moment the work is on the wire and
+ * the payment is the payee's.
+ * ═════════════════════════════════════════════════════════════════════════*/
+console.log("\n=== E2. the delivered figure counts deliveries and nothing else");
+{
+  const SHOPDID = "did:key:z6MkiuhfekPgiihLWarPAzhuvoMjg86F8dqmLiCTmtQgMrR3";
+  const f = (o) => ({ seq: 0, ts: new Date().toISOString(), from: o.from,
+                      text: "tclk1 " + JSON.stringify(o.b) });
+  /* FIXTURE[ANSWERED] carried all the way to delivered: locked by the buyer,
+     then the shop opens it. 250 FLOP, and it is the only one. */
+  dealFrames = [
+    f({ from: DID, b: { type: "lock", from: DID, contract: CONTRACT, rail: "paper", ref: CONTRACT } }),
+    f({ from: SHOPDID, b: { type: "reveal", from: SHOPDID, contract: CONTRACT, preimage: "0x" + "ab".repeat(16) } }),
+  ];
+  /* And FIXTURE[LATE] accepted and never funded — finished, and worth nothing
+     to anybody. If the figure counted "finished" it would pick this up. */
+  lateFrames = lateAccepted();
+  const { ctx, pg } = await open();
+  await pg.goto("http://localhost:9441/orders.html", { waitUntil: "domcontentloaded" });
+  await pg.waitForTimeout(1800);
+  const s = await read(pg);
+  ok("one order was delivered, and the figure is its amount",
+    s.stats.paid === "250", `${s.stats.paid} — the delivered order is 250 FLOP`);
+  ok("it is not the same number as everything placed",
+    s.stats.paid !== s.stats.sum && s.stats.paid !== "13,000",
+    `delivered ${s.stats.paid} · committed ${s.stats.sum} · placed ${s.stats.placed}`);
+  ok("and an order that finished WITHOUT being delivered adds nothing to it",
+    Number(s.stats.shut) > 1 && s.stats.paid === "250",
+    `${s.stats.shut} finished, ${s.stats.paid} FLOP delivered`);
+  ok("the figure carries its unit, so it cannot be read as a count",
+    (await pg.$eval(".sumval .sumu", (e) => e.textContent.trim())) === "FLOP");
+  dealFrames = []; lateFrames = [];
+  await ctx.close();
+}
+{
+  /* ── AND THE PAGE EXACTLY AS IT WAS REPORTED ────────────────────────────
+     Nothing in flight at all, which is the state the fault was noticed in:
+     "0 orders still going — 4,000 FLOP committed across every one", with a
+     clause about orders that did not exist and a figure belonging to six that
+     had all finished. With nothing going, the line has to be a sentence of
+     its own rather than two zeroes propping up a clause. */
+  const saved = FIXTURE.map((o) => ({ expiresMs: o.expiresMs, accept: o.accept }));
+  for (const o of FIXTURE) { o.expiresMs = now - 3600000; delete o.accept; }
+  const { ctx, pg } = await open();
+  await pg.goto("http://localhost:9441/orders.html", { waitUntil: "domcontentloaded" });
+  await pg.waitForTimeout(1500);
+  const s = await read(pg);
+  ok("with nothing in flight the count is zero", s.stats.open === "0", String(s.stats.open));
+  ok("and the line does not claim a sum for orders still going",
+    !/still going/.test(String(s.stats.line)), String(s.stats.line));
+  ok("it says so plainly instead", /nothing is waiting/.test(String(s.stats.line)),
+    String(s.stats.line));
+  FIXTURE.forEach((o, i) => { o.expiresMs = saved[i].expiresMs; if (saved[i].accept) o.accept = saved[i].accept; });
   await ctx.close();
 }
 

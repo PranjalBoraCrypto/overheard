@@ -176,17 +176,26 @@ h1{font-weight:800;font-size:clamp(30px,5vw,42px);line-height:1;letter-spacing:-
   line-height:1;letter-spacing:-.03em;color:var(--gold);font-variant-numeric:tabular-nums}
 .sumsub{color:var(--dim);font-size:var(--t-small);line-height:1.55}
 .sumsub b{font-family:var(--mono);font-size:inherit;color:var(--white);letter-spacing:0}
-.sumside{display:grid;grid-template-rows:1fr 1fr;gap:1px;background:rgba(27,100,120,.22)}
+.sumside{display:grid;grid-template-rows:1fr 1fr 1fr;gap:1px;background:rgba(27,100,120,.22)}
 .sumbit{background:var(--surf-b);padding:var(--s3) var(--s4);
   display:flex;align-items:baseline;justify-content:space-between;gap:var(--s3)}
 .sumbit b{font-family:var(--mono);font-weight:600;font-size:20px;color:var(--white);
   font-variant-numeric:tabular-nums}
+/* The one figure here that is money rather than a count, so it carries its
+   unit. Three tallies in a column with no units is an invitation to read
+   3,750 as three thousand orders. */
+.sumval{display:inline-flex;align-items:baseline;gap:6px}
+.sumu{font-family:var(--mono);font-size:var(--t-micro);letter-spacing:.1em;color:var(--faint)}
 .sumk{display:inline-flex;align-items:center;gap:7px;font-family:var(--mono);
   font-size:var(--t-micro);letter-spacing:.12em;text-transform:uppercase;color:var(--faint)}
 .sumk .i{width:13px;height:13px;color:var(--blue)}
 @media (max-width:720px){
   .sum{grid-template-columns:1fr}
+  /* Two across, and the third spans the pair. Three across at 360px leaves
+     about a hundred pixels for an uppercase word, an icon and a number, and
+     the label is the half that loses. */
   .sumside{grid-template-rows:none;grid-template-columns:1fr 1fr}
+  .sumbit:last-child{grid-column:1/-1}
 }
 
 /* ── filters ──────────────────────────────────────────────────────────────*/
@@ -507,11 +516,23 @@ h1{font-weight:800;font-size:clamp(30px,5vw,42px);line-height:1;letter-spacing:-
     <div class="sumlead">
       <span class="sumk"><svg class="i"><use href="#i-clock"/></svg>in flight</span>
       <b id="nOpen">&mdash;</b>
-      <span class="sumsub">orders still going &mdash; <b id="nSum">&mdash;</b> FLOP committed across every one</span>
+      <!-- Written by paintSum(), because the figure and the sentence have to
+           be decided together — and they were not. The sentence was fixed
+           markup about orders still going; the figure was every order ever
+           placed. See paintSum() for what that read like on a real page. -->
+      <span class="sumsub" id="sumline">&mdash;</span>
     </div>
     <div class="sumside">
       <div class="sumbit"><span class="sumk"><svg class="i"><use href="#i-receipt"/></svg>placed</span><b id="nAll">&mdash;</b></div>
       <div class="sumbit"><span class="sumk"><svg class="i"><use href="#i-done"/></svg>finished</span><b id="nShut">&mdash;</b></div>
+      <!-- ── WHAT THE SHOP ACTUALLY EARNED ────────────────────────────────
+           "Finished" counts every order that has stopped moving, and some of
+           those stopped because the shop said it could not do them. Money
+           only ever changed hands on the ones that were DELIVERED, and until
+           this there was no figure on the page for that at all — the only
+           sum shown was every order ever placed, refused ones included. -->
+      <div class="sumbit"><span class="sumk"><svg class="i"><use href="#i-coin"/></svg>delivered</span>
+        <span class="sumval"><b id="nPaid">&mdash;</b><span class="sumu">FLOP</span></span></div>
     </div>
   </div>
 
@@ -846,11 +867,10 @@ function paint() {
   $("unread").hidden = true;
 
   const open = orders.filter(stillOpen).length;
-  const total = orders.reduce((s, o) => s + (Number(o.amount) || 0), 0);
   $("nAll").textContent = group(orders.length);
   $("nOpen").textContent = group(open);
   $("nShut").textContent = group(orders.length - open);
-  $("nSum").textContent = group(total);
+  paintSum();
   $("cAll").textContent = orders.length;
   $("cOpen").textContent = open;
   $("cShut").textContent = orders.length - open;
@@ -1117,6 +1137,45 @@ const shopSaid = (t) =>
     .replace(/\.?\s*$/, ".")
     .replace(/^./, (c) => c.toUpperCase());
 
+/* ── THE MONEY LINE, AND THE SET IT IS ABOUT ──────────────────────────────
+ * "0 orders still going — 4,000 FLOP committed across every one", on a page
+ * where all six orders were finished. Both halves were right about different
+ * sets: the count was the orders still going, the money was every order ever
+ * placed, and the sentence between them claimed they were the same set.
+ * It is the smaller cousin of the fault above it — a figure that stopped
+ * meaning what its label says — and it is fixed the same way: one function
+ * decides the number and the words together, so they cannot drift apart.
+ * Nothing in flight gets a sentence of its own rather than two zeroes and a
+ * clause about orders that do not exist.
+ */
+const flop = (list) => list.reduce((s, o) => s + (Number(o.amount) || 0), 0);
+
+function paintSum() {
+  const going = orders.filter(stillOpen);
+  /* ── AND THE ONE THAT IS EARNINGS RATHER THAN A TALLY ───────────────────
+     Only a DELIVERED deal moved anything. An order the shop refused, one that
+     closed unfunded and one whose offer nobody answered all end up under
+     "finished", and none of them was paid for. `claimed` is the protocol's
+     word for the lock having been opened, which is the moment the work is on
+     the wire and the money is the payee's — so it is the only state that
+     counts here, and it is read from the shared vocabulary rather than
+     re-derived, so this figure cannot disagree with the pill beside it. */
+  const paid = $("nPaid");
+  if (paid) paid.textContent = group(flop(orders.filter((o) => statusOf(o).key === "claimed")));
+
+  const el = $("sumline");
+  if (!el) return;
+  if (!going.length) { el.textContent = "nothing is waiting on the shop right now"; return; }
+  const b = document.createElement("b");
+  b.id = "nSum";
+  b.textContent = group(flop(going));
+  el.replaceChildren(
+    document.createTextNode(going.length === 1 ? "order still going — " : "orders still going — "),
+    b,
+    document.createTextNode(" FLOP committed across " + (going.length === 1 ? "it" : "them")),
+  );
+}
+
 /* The four figures at the top are counted from the same statusOf(), so they
    move when a row does. Called after each deal resolves rather than once at
    paint, because at paint nothing is known yet. */
@@ -1127,6 +1186,11 @@ function restat() {
   $("nShut").textContent = group(orders.length - open);
   $("cOpen").textContent = open;
   $("cShut").textContent = orders.length - open;
+  /* AND THE MONEY WITH THEM. It was not in here at all, so a page that opened
+     with three orders looking open and resolved them all to delivered kept a
+     sum from before anything had been read — the exact drift this whole
+     function exists to stop. */
+  paintSum();
 }
 
 /** The strip under a row: what became of this deal, and — while there is
