@@ -133,65 +133,93 @@ console.log("\n=== C. what deploy.yml does with each kind of commit");
     r.status === 0 && /::warning/.test(String(r.stdout)), String(r.stdout).trim().split("\n")[0]);
 }
 
-/* ── D. WHAT GETS UPLOADED, ASKED OF git RATHER THAN OF A REGEX ───────────
- * .vercelignore uses gitignore syntax, and the failure that matters is
- * excluding one file too many: a page fetching a path that is no longer in
- * the deployment gets a 404 and shows nothing, on a site whose whole subject
- * is an archive. So the patterns are run through git itself, against real
- * filenames, in every shape the pages actually ask for.
+/* ── D. EVERY /data PATH IS EITHER SHIPPED OR REWRITTEN ───────────────────
+ * There are now two ways for a page to get a file out of /data: it is in the
+ * deployment, or a rewrite in vercel.json fetches it from GitHub. The failure
+ * that matters is a path that is NEITHER — excluded from the upload and not
+ * covered by a rewrite. That is a 404 on a site whose whole subject is an
+ * archive, and nothing about it looks wrong until somebody opens the page.
+ *
+ * So both halves are asked together, of git and of the rewrite table, using
+ * real filenames in every shape the pages and the functions actually use.
  */
-console.log("\n=== D. the archive is trimmed from the upload, and nothing else is");
+console.log("=== D. every /data path is either shipped or rewritten");
 {
   const vi = read(".vercelignore");
+  const cfg = JSON.parse(read("vercel.json") || "{}");
+  const rewrites = cfg.rewrites ?? [];
   ok(".vercelignore exists", vi.length > 0);
+  ok("and vercel.json carries rewrites", rewrites.length > 0, `${rewrites.length} rule(s)`);
 
+  /* gitignore semantics, from git rather than from a regex of my own. */
   const W = fs.mkdtempSync(path.join(os.tmpdir(), "vign-"));
   execFileSync("git", ["init", "-q", "-b", "main"], { cwd: W });
   fs.writeFileSync(path.join(W, ".gitignore"), vi);
-  const ignored = (p) => spawnSync("git", ["check-ignore", "-q", "--no-index", p],
-    { cwd: W }).status === 0;
+  const shipped = (p) => spawnSync("git", ["check-ignore", "-q", "--no-index", p],
+    { cwd: W }).status !== 0;
 
-  /* LEFT OUT: 92,181 files, most of the bytes, and not one of them is fetched
-     by a page or read by a function from the deployment. */
-  for (const p of [
-    "web/data/lobby/2026-09-05.ndjson",
-    "web/data/technocore/2026-08-30.json",
-    "web/data/d-flop-market/2026-09-06.ndjson",
-  ]) ok(`left out: ${p}`, ignored(p));
+  /* Vercel's `:param` matches one segment, `:name*` matches the rest. */
+  const rewritten = (url) => rewrites.some((r) => {
+    const rx = new RegExp("^" + r.source
+      .replace(/[.+?^${}()|[\]\\]/g, "\\$&")
+      .replace(/:([A-Za-z]+)\*/g, "(?:.+)")
+      .replace(/:([A-Za-z]+)/g, "[^/]+") + "$");
+    return rx.test(url);
+  });
 
-  /* KEPT: every shape the pages ask for. Each is a real fetch in the source —
-     index.html, hire.html, rooms, the deals board — and losing any one of
-     them is a blank panel nobody would ever connect to a config file. */
-  for (const [p, who] of [
-    ["web/data/index.json", "the archive index"],
-    ["web/data/roster.json", "the city"],
-    ["web/data/recent.json", "recent rooms"],
-    ["web/data/city-snapshot.json", "the offline city"],
-    ["web/data/tclk-deals.json", "the deals board"],
-    ["web/data/room-snapshots/lobby.json", "the offline fallback for a room"],
-    ["web/data/profiles/ab/cd.ndjson", "the profile count on a card"],
-    ["web/data/profiles/abc.json", "an older profile shard"],
-    ["web/data/lobby/_meta.json", "the room history range on the hire page"],
-    ["web/data/tclk-offers/_meta.json", "the offers room"],
-    ["web/data/tclk-offers/tail.ndjson", "the offers tail"],
-  ]) ok(`kept: ${p} — ${who}`, !ignored(p));
+  /* Each row: the file in the repository, the URL a page asks for, and who
+     asks. Every one has to be reachable one way or the other. */
+  const NEEDED = [
+    ["web/data/index.json", "/data/index.json", "the archive index"],
+    ["web/data/roster.json", "/data/roster.json", "the city"],
+    ["web/data/recent.json", "/data/recent.json", "recent rooms"],
+    ["web/data/city-snapshot.json", "/data/city-snapshot.json", "api/city.js, when technocore refuses"],
+    ["web/data/tclk-deals.json", "/data/tclk-deals.json", "the deals board"],
+    ["web/data/room-snapshots/lobby.json", "/data/room-snapshots/lobby.json", "api/room.js, the offline fallback"],
+    ["web/data/profiles/ab/cd.ndjson", "/data/profiles/ab/cd.ndjson", "the count on a profile card"],
+    ["web/data/profiles/abc.json", "/data/profiles/abc.json", "an older profile shard"],
+    ["web/data/lobby/_meta.json", "/data/lobby/_meta.json", "the room history range"],
+    ["web/data/tclk-offers/_meta.json", "/data/tclk-offers/_meta.json", "the offers room"],
+  ];
+  for (const [file, url, who] of NEEDED) {
+    const s = shipped(file), r = rewritten(url);
+    ok(`reachable: ${url} — ${who}`, s || r,
+      s && r ? "shipped AND rewritten" : s ? "shipped" : r ? "rewritten to GitHub" : "NEITHER — this is a 404");
+  }
+
+  /* THE FALLBACK MUST NOT DEPEND ON GITHUB. It is what the site serves when
+     technocore is refusing; routing it through a third party means the two
+     outages that matter most are the same outage. */
+  for (const f of ["web/data/room-snapshots/lobby.json", "web/data/city-snapshot.json",
+                   "web/data/index.json", "web/data/roster.json"]) {
+    ok(`the fallback is in the deployment, not fetched: ${f.replace("web/data/", "")}`, shipped(f));
+  }
+
+  /* AND THE BULK IS GONE. If these ever come back into the upload the
+     deployment goes from ninety files to a hundred and thirty thousand, and
+     the only symptom is the bill. */
+  for (const [f, n] of [
+    ["web/data/lobby/2026-09-05.ndjson", "a dated day-shard"],
+    ["web/data/profiles/ab/cd.ndjson", "a profile shard"],
+    ["web/data/lobby/_meta.json", "a room's metadata"],
+  ]) ok(`left out of the upload: ${n}`, !shipped(f));
 
   fs.rmSync(W, { recursive: true, force: true });
 }
 
 /* ── E. AND THE LIST ABOVE IS NOT A GUESS ─────────────────────────────────
  * The way this breaks a year from now is something starting to fetch a new
- * path out of /data with nobody remembering .vercelignore exists. So the
- * pages AND the server functions are read, every /data path they ask the
- * DEPLOYMENT for is extracted, and any shape this test does not already cover
- * is reported rather than assumed safe.
+ * path out of /data with nobody remembering either file exists. So the pages
+ * AND the server functions are read, every /data path they ask the DEPLOYMENT
+ * for is extracted, and any shape the list above does not cover is reported
+ * rather than assumed safe.
  *
  * The functions are the half that was nearly missed. api/room.js and
  * api/city.js fetch out of the deployment with `new URL(..., request.url)`,
  * while api/orders.js and api/profile.js go to raw.githubusercontent.com
  * instead — same-looking paths, opposite consequences. Only the first kind
- * can be broken by leaving a file out of the upload, so a line that names
- * raw.githubusercontent is not this file's business.
+ * can be broken here, so a line naming raw.githubusercontent is not this
+ * file's business.
  */
 console.log("\n=== E. every /data path served FROM THE DEPLOYMENT is one this test knows about");
 {
@@ -214,12 +242,33 @@ console.log("\n=== E. every /data path served FROM THE DEPLOYMENT is one this te
   }
   const known = new Set(["(top level)", "profiles/", "room-snapshots/", "tclk-offers/"]);
   const surprises = [...found].filter(([f]) => !known.has(f));
-  ok("the functions are read too, not only the pages",
-    found.has("room-snapshots/"), `api/room.js fetches it from ${found.get("room-snapshots/") ?? "nowhere this test can see"}`);
+  ok("the functions are read too, not only the pages", found.has("room-snapshots/"),
+    `api/room.js fetches it from ${found.get("room-snapshots/") ?? "nowhere this test can see"}`);
   ok("nothing fetches a /data shape this test has not been told about",
     surprises.length === 0,
-    surprises.length ? `new: ${surprises.map(([f, w]) => `${f} (${w})`).join(", ")} — check each survives .vercelignore`
+    surprises.length ? `new: ${surprises.map(([f, w]) => `${f} (${w})`).join(", ")} — ship it or rewrite it`
                      : [...found.keys()].join("  "));
+}
+
+/* ── F. THE REWRITES POINT SOMEWHERE THAT EXISTS ──────────────────────────
+ * A rewrite with the wrong owner, repository or branch in it fails exactly
+ * like a missing file — a 404, on every profile card, silently. The string is
+ * checked against the repository this actually is.
+ */
+console.log("\n=== F. the rewrites point at this repository's own archive");
+{
+  const cfg = JSON.parse(read("vercel.json") || "{}");
+  const dests = (cfg.rewrites ?? []).map((r) => r.destination);
+  ok("every rewrite goes to raw.githubusercontent",
+    dests.length > 0 && dests.every((d) => d.startsWith("https://raw.githubusercontent.com/")),
+    dests.join("  "));
+  ok("and every one names the same owner, repo and branch as the functions do",
+    dests.every((d) => d.includes("/PranjalBoraCrypto/overheard/main/web/data/")));
+  /* The functions have carried these three strings for months; if the repo is
+     ever renamed or the branch moved, both halves have to move together. */
+  const fn = read("api/orders.js") + read("api/profile.js") + read("api/recent.js");
+  ok("which is what api/orders.js, api/profile.js and api/recent.js already use",
+    /PranjalBoraCrypto/.test(fn) && /"overheard"/.test(fn));
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);

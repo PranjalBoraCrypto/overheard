@@ -34,5 +34,19 @@
 # a page that starts fetching something new cannot silently lose it here.
 # ═══════════════════════════════════════════════════════════════════════════
 
+# The dated day-shards. Nothing serves them at all.
 web/data/*/20??-??-??.ndjson
 web/data/*/20??-??-??.json
+
+# The two families now read from GitHub at request time instead (see the
+# rewrites in vercel.json): 65,536 profile shards and 65,809 room _meta.json.
+# Same URLs, fresher answers, and 131,345 fewer files in every deployment.
+web/data/profiles/
+web/data/*/_meta.json
+
+# WHAT IS LEFT, and why each one stays:
+#   web/data/index.json, roster.json, recent.json, city-snapshot.json,
+#   tclk-deals.json, and web/data/room-snapshots/*.json
+# — ninety small files, and between them the whole offline fallback. They are
+# what /api/city and /api/room serve when Technocore refuses, so they must not
+# depend on a third party being up. A fallback with a dependency is not one.

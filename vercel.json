@@ -2,6 +2,41 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "outputDirectory": "web",
   "cleanUrls": true,
+  "_rewrites_why": [
+    "TWO FAMILIES OF FILES ARE NOT SHIPPED TO THE CDN ANY MORE, they are read",
+    "from GitHub when somebody asks for one. Between them they were 131,345 of",
+    "the 131,435 files in every deployment:",
+    "",
+    "  web/data/profiles/**      65,536   the message count on a profile card",
+    "  web/data/*/_meta.json     65,809   the room history range on the hire page",
+    "",
+    "A CDN copy of those buys nothing. They are read one at a time, by hash or",
+    "by room name, and the reader wants the CURRENT one — which the deployed",
+    "copy never was, because it froze at whatever the last publish carried.",
+    "Four of this project's own functions already read the archive this way",
+    "(api/orders, api/profile, api/recent, api/accept); this is the same idea",
+    "applied to the two paths the browser asks for directly.",
+    "",
+    "The URLs the pages use do not change. A rewrite is server-side, so it is",
+    "still same-origin as far as the browser and the CSP are concerned, and",
+    "GitHub's own cache headers let Vercel's edge hold each file for a few",
+    "minutes rather than fetching it per visitor.",
+    "",
+    "WHAT IS DELIBERATELY NOT HERE: room-snapshots/ and the top-level files.",
+    "That is the offline fallback — what /api/city and /api/room serve when",
+    "Technocore refuses — and a fallback that needs a third party to be up is",
+    "not a fallback. It is 90 small files. It stays in the deployment."
+  ],
+  "rewrites": [
+    {
+      "source": "/data/profiles/:path*",
+      "destination": "https://raw.githubusercontent.com/PranjalBoraCrypto/overheard/main/web/data/profiles/:path*"
+    },
+    {
+      "source": "/data/:room/_meta.json",
+      "destination": "https://raw.githubusercontent.com/PranjalBoraCrypto/overheard/main/web/data/:room/_meta.json"
+    }
+  ],
   "git": {
     "_why": [
       "A PUSH TO main MUST NOT START A DEPLOYMENT, and this is the only place",
