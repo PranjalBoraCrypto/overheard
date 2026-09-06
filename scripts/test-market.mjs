@@ -502,6 +502,54 @@ console.log("\n=== U. the card somebody puts their name to");
     /@media \(max-width:900px\)\{[\s\S]*?\.slab\{transform:none!important/.test(page));
 }
 
+console.log("\n=== V. the walk from arriving to sharing");
+{
+  const page = read("web/market.html");
+  const nav = read("web/nav.js");
+
+  /* THE TAP AND THE CALL ARE TWO SIGNATURES, and between them the panel used
+     to go quiet — the amber button vanished and nothing said the next thing
+     was a side. */
+  ok("claiming the paper points at the next step",
+    /pointAtSides\(\)/.test(page) && /sides\.classList\.add\("next"\)/.test(page));
+  ok("and picking a side takes the pointer down",
+    /unpoint\(\);\s*\n\s*paintPanel\(\)/.test(page));
+  /* A control that pulses forever is one the eye learns to ignore, and it
+     would still be flashing an hour later while somebody read the FAQ. */
+  ok("the cue stops on its own", /animation:nextUp [^;}]*\b3\b/.test(page) &&
+    /setTimeout\(unpoint/.test(page));
+  ok("and says it in words as well as light, for a machine with no animation",
+    /id="nextsay"/.test(page) && /Now pick a side/.test(page) &&
+    /\.stepk\.point\{color:var\(--blue\)\}/.test(page));
+
+  /* Making a call is the moment somebody is proudest of it. Asking them to go
+     find a Share button afterwards is asking at the wrong time. */
+  ok("the card opens itself once a call has landed",
+    /const landed = seat\?\.mine\?\.find\(\(e\) => e\.nonce === ref\)/.test(page) &&
+    /openSheet\("call", landed\)/.test(page));
+  ok("found by nonce rather than by taking the top row",
+    !/openSheet\("call", *(seat|mine)\.mine?\[0\]/.test(page));
+
+  /* HALF A READ IS NOT A READ. The archive and the room can fail separately,
+     and a page with one of them still has numbers. That is fine for a total
+     and not fine for "have you taken your paper" — somebody who tapped an
+     hour ago would be shown the button again, and pressing it spends a
+     signature on a frame the fold will refuse. */
+  ok("a half-read record does not assert that you have not claimed",
+    /partial = !unread && \(l === null \|\| a === null\)/.test(page) &&
+    /Only part of the record loaded/.test(page));
+  ok("but the button still works, so a real first-timer is never locked out",
+    /tapBtn\.hidden = false; tapBtn\.disabled = shut;[\s\S]{0,400}?partial \? "say bad"/.test(page));
+
+  /* An SVG <title> is also a browser tooltip, so hovering the object — the
+     whole point of the object — put a grey box over it. */
+  ok("the ring has no tooltip sitting on top of itself",
+    !/<title id="coretitle">/.test(page) && /class="core"[^>]*aria-hidden="true"/.test(page));
+  ok("and its numbers are still real text underneath", /class="coreface"/.test(page));
+
+  ok("no tab on the bar is lit any more", !/hot: true/.test(nav));
+}
+
 console.log("\n=== Q. how anybody finds it");
 {
   /* TWO WAYS IN, and both have to hold. The bar is how somebody who came for

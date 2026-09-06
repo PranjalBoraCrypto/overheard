@@ -81,11 +81,10 @@ export const PAGES = [
   { href: "/market", label: "Market", icon: "coin", bar: true,
     match: (p) => p.startsWith("/market"),
     blurb: "One question, in paper" },
-  /* LAST, AND ON PURPOSE. City is the loudest tab on the bar — it carries the
-     live dot — and sitting third it pulled the eye away from the four tabs
-     that are the actual working surface of the site. At the end of the row it
-     is still the thing that stands out, without standing in front. */
-  { href: "/city", label: "City", icon: "city", bar: true, hot: true,
+  /* LAST, AND ON PURPOSE — but no longer lit. It carried the live dot, which
+     made it the loudest thing on the bar for a page that is not more
+     important than the others. Last in the row is emphasis enough. */
+  { href: "/city", label: "City", icon: "city", bar: true,
     match: (p) => p.startsWith("/city"),
     blurb: "The network as a place" },
   { href: "/what", label: "What is Overheard?", icon: "what", bar: false,

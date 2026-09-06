@@ -394,6 +394,40 @@ h1{font-size:clamp(23px,2.4vw,31px);line-height:1.12;letter-spacing:-.028em;
   .hnav button:not(:disabled):hover{color:var(--white);border-color:rgba(88,233,255,.34)}
 }
 
+/* ── SAYING WHAT TO DO NEXT ────────────────────────────────────────────────
+   The tap and the call are two separate signatures, and between them the page
+   used to say nothing: the amber button vanished and somebody who had just
+   claimed a thousand paper was left looking at a panel that had gone quiet.
+
+   So the side buttons ask for the next press. Three pulses and then it stops
+   — a control that pulses forever is a control the eye learns to ignore, and
+   it would still be doing it an hour later while somebody read the FAQ. It
+   also stops the moment a side is picked, because the cue has been taken and
+   the thing it was pointing at is now the thing they chose.
+
+   Colour and a ring, not movement of the button itself: nothing reflows, so
+   a thumb already travelling towards Yes does not land on a target that
+   moved out from under it. */
+@keyframes nextUp{
+  0%,100%{box-shadow:0 0 0 0 rgba(88,233,255,0);border-color:var(--line)}
+  45%    {box-shadow:0 0 0 3px rgba(88,233,255,.20);border-color:rgba(88,233,255,.55)}
+}
+@keyframes nextTag{
+  from{opacity:0;transform:translateY(-4px)}
+  to  {opacity:1;transform:none}
+}
+[data-fx="standard"] .sides.next .side,[data-fx="full"] .sides.next .side{
+  animation:nextUp 1.35s ease-in-out 3}
+/* Lean and reduced-motion get the same message without the movement: the step
+   label brightens and stays brightened. A cue nobody can see is not a cue. */
+.step .stepk.point{color:var(--blue)}
+.step .stepk.point i{background:rgba(0,180,215,.28);color:var(--blue);
+  box-shadow:0 0 0 3px rgba(88,233,255,.14)}
+.nextsay{display:block;margin-top:9px;font-size:var(--t-small);color:var(--blue)}
+.nextsay[hidden]{display:none}
+[data-fx="standard"] .nextsay,[data-fx="full"] .nextsay{
+  animation:nextTag .4s cubic-bezier(.2,.9,.3,1.05) both}
+
 /* ── THE ARRIVAL ───────────────────────────────────────────────────────────
    A call landing is the one moment on this page worth an animation, so it
    gets one: the section rises into place, and the new row lights up and
@@ -1109,8 +1143,14 @@ h1{font-size:clamp(23px,2.4vw,31px);line-height:1.12;letter-spacing:-.028em;
         </div>
 
         <div class="corewrap" id="corewrap">
-          <svg class="core" viewBox="0 0 400 400" role="img" aria-labelledby="coretitle">
-            <title id="coretitle">The split, drawn as a ring</title>
+          <!-- aria-hidden, and no <title>. A <title> inside an SVG is also a
+               browser tooltip, so hovering the object — which is the whole
+               point of the object — produced a little grey box reading "The
+               split, drawn as a ring" over the thing it was describing.
+               Nothing is lost: every number the ring encodes is real text in
+               .coreface directly below, which is what a screen reader should
+               be given anyway. The drawing is decoration for that text. -->
+          <svg class="core" viewBox="0 0 400 400" aria-hidden="true">
             <!-- Three bodies on one axle. At rest they draw exactly the
                  field they always did; each is its own group so it can be
                  turned on its own, and the two dashed ones make the turning
@@ -1357,6 +1397,7 @@ h1{font-size:clamp(23px,2.4vw,31px);line-height:1.12;letter-spacing:-.028em;
             <button class="side y" type="button" id="sideY" aria-pressed="false">Yes<small>it ships</small></button>
             <button class="side n" type="button" id="sideN" aria-pressed="false">No<small>it does not</small></button>
           </div>
+          <p class="nextsay" id="nextsay" hidden>Now pick a side.</p>
         </div>
 
         <div class="step" id="step3" data-on="0">
@@ -1515,12 +1556,26 @@ async function readArchive() {
   } catch { return null; }
 }
 
+/* HALF A READ IS NOT A READ. The market lives in two places — the archive is
+   the record and the room is the last hour of it — and either can fail on its
+   own. When one does, the page still has numbers, and until now it presented
+   them as if they were the whole story.
+
+   That is fine for a total, which is only ever approximate between commits.
+   It is NOT fine for "have you taken your paper", because a person who tapped
+   an hour ago would be shown the tap button again, and pressing it costs them
+   a signature on a frame the fold will refuse. So a partial read is
+   remembered, and the panel says so rather than asserting something it cannot
+   know. */
+let partial = false;
+
 async function load() {
   const [l, a] = await Promise.all([readLive(), readArchive()]);
   /* NULL IS "COULD NOT LOOK" AND [] IS "NOTHING THERE", and the difference is
      the difference between a market with no calls in it and a market this page
      failed to read. Only the second one is worth apologising for. */
   const unread = l === null && a === null;
+  partial = !unread && (l === null || a === null);
   live = l ?? []; arch = a ?? [];
   const seen = new Map();
   for (const m of [...arch, ...live]) {
@@ -1877,8 +1932,13 @@ function paintPanel() {
     $("pursek").textContent = "the tap gives";
     tapBtn.hidden = false; tapBtn.disabled = shut;
     tapBtn.textContent = shut ? "The question has closed" : `Claim your ${group(TAP)} paper`;
-    tapSay.className = "say";
-    tapSay.textContent = "Once per key, and it is a signed message like everything else here.";
+    tapSay.className = partial ? "say bad" : "say";
+    /* The button stays pressable either way — somebody who genuinely has not
+       tapped must not be locked out because one source was slow — but it no
+       longer claims to know that they have not. */
+    tapSay.textContent = partial
+      ? "Only part of the record loaded, so if you have already claimed this may not know it yet. Reload before claiming again."
+      : "Once per key, and it is a signed message like everything else here.";
   } else {
     delete tapBtn.dataset.signin;
     $("pursek").textContent = left > 0 ? "yours to put down" : "all of it is on the board";
@@ -2600,8 +2660,30 @@ $("tap").addEventListener("click", async () => {
   keep();
   await load();
   const t = $("tapsay"); t.className = "say ok";
-  t.textContent = `${group(TAP)} paper, signed by your key. Pick a side.`;
+  t.textContent = `${group(TAP)} paper, signed by your key.`;
+  /* THE HAND-OFF. Two signatures, and between them the page used to go quiet:
+     the amber button vanished and nothing said the next thing was a side. */
+  pointAtSides();
 });
+
+/* Raised when the paper lands, taken down the moment a side is chosen. It
+   also un-points itself after the pulses finish, so a panel left open while
+   somebody reads the FAQ is not still flashing at them. */
+function pointAtSides() {
+  if (side) return;
+  const sides = $("sides");
+  sides.classList.add("next");
+  $("step2").querySelector(".stepk")?.classList.add("point");
+  $("nextsay").hidden = false;
+  clearTimeout(pointAtSides.t);
+  pointAtSides.t = setTimeout(unpoint, 4400);
+}
+function unpoint() {
+  clearTimeout(pointAtSides.t);
+  $("sides").classList.remove("next");
+  $("step2").querySelector(".stepk")?.classList.remove("point");
+  $("nextsay").hidden = true;
+}
 
 $("go").addEventListener("click", async () => {
   if ($("go").dataset.signin) return void openSignIn();
@@ -2645,12 +2727,29 @@ $("go").addEventListener("click", async () => {
       box.scrollIntoView({ behavior: TIER() === "lean" ? "auto" : "smooth", block: "center" });
     }
   }
+
+  /* ── AND THE CARD COMES UP BY ITSELF ────────────────────────────────────
+     Making a call is the moment somebody is proudest of it, and asking them
+     to find a Share button afterwards is asking at the wrong time. The card
+     for the call they just made opens on its own.
+
+     Found by nonce, not by taking the first row: the list is sorted and
+     re-sorted, and "the top one" is not reliably the one that just landed.
+     If it cannot be found — a slow room, a frame not back yet — nothing
+     opens, because a share sheet showing the wrong call is worse than none.
+
+     A short beat first, so the row's own arrival is seen rather than covered
+     by the sheet that follows it. */
+  const seat = ID ? seatOf(fold, ID.did) : null;
+  const landed = seat?.mine?.find((e) => e.nonce === ref);
+  if (landed) setTimeout(() => openSheet("call", landed), 620);
 });
 
 for (const b of [$("sideY"), $("sideN")]) {
   b.addEventListener("click", () => {
     side = b.id === "sideY" ? "yes" : "no";
     delete $("say").dataset.keep;
+    unpoint();
     paintPanel();
   });
 }
