@@ -31,6 +31,19 @@
  * nobody can dispute.
  */
 
+/* ── WHERE THIS ACTUALLY LIVES ─────────────────────────────────────────────
+   Imported rather than spelled again, because a card naming a room the market
+   does not write to would be a card pointing at nothing — and it is pointed
+   at precisely so somebody can go and look.
+
+   The foot used to say "signed in a public room", which is true and gives a
+   reader nothing to act on. Technocore is the network Flop Labs publishes and
+   `overheard-calls` is the room this market IS, so naming both turns a claim
+   into an address. It is not a badge. The two marks stay at opposite ends of
+   the head rail for the reason written up there, and this line says where the
+   signature is — not who approves of it. */
+import { ROOM } from "./call.js";
+
 const W = 1200;
 const H = 675;
 
@@ -458,7 +471,8 @@ export function drawCard(canvas, card, scale = 2) {
   g.fillText("overheard-five.vercel.app/market", W - 64, H - 48);
   g.fillStyle = C.faint;
   g.font = `500 13px ${MONO}`;
-  g.fillText("SIGNED IN A PUBLIC ROOM · ANYONE CAN CHECK IT", W - 64, H - 76);
+  g.fillText(`${ROOM.toUpperCase()} ON TECHNOCORE.CHAT · ANYONE CAN CHECK IT`,
+    W - 64, H - 76);
 
   return canvas;
 }

@@ -915,5 +915,84 @@ console.log("\n=== P. the FAQ, and the one thing it must say");
     faq.includes("<details") && !/faq[\s\S]{0,400}addEventListener/.test(page.slice(page.indexOf("<script type=\"module\">"))));
 }
 
+console.log("\n=== W. whose rails this runs on");
+{
+  /* THE MARKET RUNS ON SOMEBODY'S NETWORK AND THE PAGE SHOULD SAY WHOSE.
+     Not as a badge — nothing here is endorsed by anyone — but as an address.
+     "Signed in a public room" is the kind of sentence that sounds like
+     something and leaves the reader no network to look at and no room to
+     open. Three places carry it now: the page, the card and the post. */
+  const page = read("web/market.html");
+  const card = read("web/card.js");
+  const call = read("web/call.js");
+  const ROOM = /export const ROOM = "([^"]+)"/.exec(call)?.[1] ?? "";
+  ok("the room has a name to be named", ROOM.length > 3, ROOM);
+
+  /* ── on the page, right under the hero ── */
+  const rail = page.slice(page.indexOf('<aside class="rails">'),
+                          page.indexOf("</aside>", page.indexOf('<aside class="rails">')));
+  ok("the page says what is holding the market up", rail.length > 200);
+  ok("it names the network, and links somewhere you can go",
+    /technocore\.chat/.test(rail) && /href="https:\/\/technocore\.chat"/.test(rail));
+  ok("it names Flop Labs as who publishes that network, not who blessed this",
+    /network Flop Labs publishes/.test(rail) && /[Nn]ot affiliated\s+with Flop Labs/.test(rail));
+  ok("it names the exact room the market writes to",
+    rail.includes(ROOM), ROOM);
+  ok("and says what a call actually is", /Ed25519 signature/.test(rail));
+  /* The rules being readable is the whole claim, so the link has to reach a
+     file the site actually serves rather than a repo that may be private. */
+  ok("the rules it points at are a file this site serves",
+    /href="\/call\.js"/.test(rail));
+  /* Under the hero, above the facts: it answers "what is this" before
+     "how big is it". */
+  ok("it sits directly under the hero",
+    page.indexOf("</header>") < page.indexOf('<aside class="rails">') &&
+    page.indexOf('<aside class="rails">') < page.indexOf('<div class="facts">'));
+  /* A caption, not a fourth box to get through. */
+  ok("and reads as the hero's footnote rather than another card",
+    !/<aside class="rails">/.test(page.replace(/<aside class="rails">/, "")) &&
+    !/\.rails\{[^}]*border:1px/.test(page));
+
+  /* ── on the card, which travels furthest from the page ── */
+  ok("the card names the room and the network",
+    /ROOM\.toUpperCase\(\)\} ON TECHNOCORE\.CHAT/.test(card));
+  ok("and takes the room from the market rather than spelling it again",
+    /import \{ ROOM \} from "\.\/call\.js"/.test(card));
+  ok("the old sentence that named nothing is gone",
+    !/SIGNED IN A PUBLIC ROOM/.test(card));
+  /* The two marks stay at opposite ends. A card with both logos together
+     reads as a partnership, and there is no partnership. */
+  ok("the card still refuses to look like a partnership",
+    /opposite ends/.test(card) && card.indexOf('fillText("Overheard"') < card.indexOf('fillText("FLOP"'));
+
+  /* ── in the post, which is the only one of the three a stranger sees first ── */
+  /* From the function to its closing brace. NOT to the next `$("shx2")` —
+     openSheet focuses that button hundreds of lines earlier, so indexOf
+     found the wrong one and handed back an empty slice that passed nothing
+     and failed loudly, which is at least the right way round. */
+  const pStart = page.indexOf("function postText");
+  const post = page.slice(pStart, page.indexOf("\n}\n", pStart));
+  ok("every shape of post names the rail",
+    (post.match(/a public room on Technocore/g) ?? []).length === 3);
+  ok("and names the room from the constant rather than a typed copy",
+    post.includes("${ROOM}") && !post.includes(`into ${ROOM},`));
+  ok("the vague old wording is gone",
+    !/signed my position publicly in a room/.test(post) &&
+    !/every call signed publicly in a room/.test(post));
+  /* An @ handle this page does not know is an @ mention of a stranger. */
+  ok("it invents no handle for Technocore", !/@[Tt]echnocore/.test(post));
+  /* Still has to fit. X counts a URL as 23 whatever its length. */
+  for (const [what, n] of [["one call", 1], ["many calls", 12]]) {
+    const body = post.replace(/\$\{[^}]+\}/g, (m) =>
+      m.includes("SHARE_URL") ? "x".repeat(23) :
+      m.includes("SHARE_DATE") ? "March 31, 2027" :
+      m.includes("ROOM") ? "overheard-calls" :
+      m.includes("m.calls") ? String(n) : "1,000");
+    const longest = Math.max(...body.split("return ").slice(1)
+      .map((s) => s.split(";")[0].replace(/[`+\n]/g, "").length));
+    ok(`a post about ${what} still fits in a tweet`, longest < 280, `${longest} chars`);
+  }
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

@@ -210,6 +210,27 @@ h1{font-size:clamp(23px,2.4vw,31px);line-height:1.12;letter-spacing:-.028em;
    wraps — `nowrap` rather than hoping, because a wrapped row here put the
    fifth fact alone beside an empty half-row, which is the same orphan the
    headline had. Narrower than that it becomes a proper grid instead, below. */
+/* ══ WHOSE RAILS THIS RUNS ON ══════════════════════════════════════════════
+   Deliberately not a card. It is the hero's footnote, and a bordered box
+   here would read as a fourth thing to get through before the market. */
+.rails{display:grid;grid-template-columns:auto minmax(0,1fr);gap:11px;
+  align-items:start;padding:0 2px}
+.rails > .i{width:17px;height:17px;color:var(--blue);margin-top:3px}
+.rails p{margin:0;max-width:96ch;font-size:var(--t-small);line-height:1.6;
+  color:var(--dim);text-wrap:pretty}
+.rails b{color:var(--white);font-weight:600}
+.rails .rm{font-family:var(--mono);font-weight:600}
+/* A real underline rather than a bottom border, so the vertical padding that
+   makes these reachable with a thumb — an inline link in body copy is 16px
+   tall, which is half a tap target — does not push the line away from the
+   text it belongs to. The padding grows the hit area without touching the
+   line box, so nothing moves. */
+.rails a{color:var(--blue);padding:4px 0;text-decoration:underline;
+  text-decoration-thickness:1px;text-underline-offset:3px;
+  text-decoration-color:rgba(88,233,255,.38)}
+.rails a:hover{text-decoration-color:var(--blue)}
+.rails a:focus-visible{outline:none;box-shadow:var(--focus);border-radius:4px}
+
 .facts{display:flex;flex-wrap:nowrap;justify-content:space-between;
   gap:var(--s3);padding:11px var(--s4);
   border:1px solid var(--line);border-radius:14px;background:var(--sunk)}
@@ -1242,6 +1263,32 @@ h1{font-size:clamp(23px,2.4vw,31px);line-height:1.12;letter-spacing:-.028em;
           </div>
         </div>
       </header>
+
+      <!-- ══ WHOSE RAILS THIS RUNS ON ═════════════════════════════════════
+           Directly under the hero, because the first question anybody sane
+           asks of a market with no money in it is "what is actually holding
+           this up". Worth answering plainly and once: the calls are
+           signatures, the room is public, the network is Technocore, and the
+           rules that read it are a file the browser has already fetched.
+
+           A caption rather than another bordered box. The page has enough of
+           those, and this is the hero's footnote rather than a section of its
+           own.
+
+           It says where the market LIVES. It does not say anybody blessed it,
+           which is why the last sentence sits in the same breath as the rest
+           instead of being tucked somewhere nobody reads. -->
+      <aside class="rails">
+        <svg class="i" aria-hidden="true"><use href="#i-rooms"/></svg>
+        <p>Every call here is an <b>Ed25519 signature</b> in <b
+          class="rm">overheard-calls</b>, a public room on <a
+          href="https://technocore.chat" target="_blank"
+          rel="noopener noreferrer">technocore.chat</a> — the open agent
+          network Flop Labs publishes. No server keeps score: the room is the
+          record, and the <a href="/call.js" target="_blank"
+          rel="noopener">rules that read it</a> are one file. Not affiliated
+          with Flop Labs.</p>
+      </aside>
 
       <!-- ══ THE MARKET'S OWN FACTS ═══════════════════════════════════════
            A strip of its own, below the question rather than inside it. The
@@ -2684,7 +2731,15 @@ $("shdown").addEventListener("click", async () => {
    separate beats. The date is spelled the way a person says it rather than
    the way the frame stores it, and it is the market's own deadline rather than a string typed
    twice — a card that disagrees with the page about the date is worse than no
-   card. */
+   card.
+
+   AND THE MIDDLE LINE NAMES THE RAIL. It used to say "signed my position
+   publicly in a room", which is the sort of sentence that sounds like
+   something and means nothing: it left the reader no network to look at and
+   no room to open. Technocore is the network Flop Labs publishes and the
+   room is named in the constant the market actually writes to, so the post
+   now carries an address. No @ on Technocore — the handle is not something
+   this page knows, and inventing one is how a post @-mentions a stranger. */
 const SHARE_URL = "https://overheard-five.vercel.app/market";
 const SHARE_DATE = new Date(CLOSES_MS).toLocaleDateString("en-US",
   { month: "long", day: "numeric", year: "numeric", timeZone: "UTC" });
@@ -2697,7 +2752,7 @@ function postText(m) {
      written out plainly rather than assembled from parts. */
   if (m.kind === "call" || m.calls === 1) {
     return `${m.side === "yes" ? yes : no}\n\n`
-      + `Put ${group(m.put)} paper on ${m.side === "yes" ? "YES" : "NO"} and signed my position publicly in a room.\n\n`
+      + `Put ${group(m.put)} paper on ${m.side === "yes" ? "YES" : "NO"} — signed with my own key into ${ROOM}, a public room on Technocore.\n\n`
       + `Enter yours: ${SHARE_URL}`;
   }
 
@@ -2706,12 +2761,12 @@ function postText(m) {
      somebody's mouth that they never said with their key. */
   if (m.side === null) {
     return `I have paper on both sides of @flop_labs shipping mainnet by ${SHARE_DATE}.\n\n`
-      + `${group(m.yes)} on YES, ${group(m.no)} on NO, every call signed publicly in a room.\n\n`
+      + `${group(m.yes)} on YES, ${group(m.no)} on NO — every call signed with my own key into ${ROOM}, a public room on Technocore.\n\n`
       + `Enter yours: ${SHARE_URL}`;
   }
 
   return `${m.side === "yes" ? yes : no}\n\n`
-    + `Put ${group(m.put)} paper on ${m.side === "yes" ? "YES" : "NO"} across ${m.calls} calls and signed my position publicly in a room.\n\n`
+    + `Put ${group(m.put)} paper on ${m.side === "yes" ? "YES" : "NO"} across ${m.calls} calls — every one signed with my own key into ${ROOM}, a public room on Technocore.\n\n`
     + `Enter yours: ${SHARE_URL}`;
 }
 
