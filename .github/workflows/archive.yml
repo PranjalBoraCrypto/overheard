@@ -108,6 +108,10 @@ jobs:
           # GitHub's 6-hour job ceiling.
           RUN_SECONDS: "19800"
           FLUSH_SECONDS: "45"
+          # THE SITE'S COPY OF THE ARCHIVE, PUBLISHED FROM IN HERE. See the
+          # block in the loop below for why the hourly publish lives inside a
+          # running process instead of on a schedule.
+          VERCEL_DEPLOY_HOOK: ${{ secrets.VERCEL_DEPLOY_HOOK }}
         run: |
           git config user.name  "overheard-archiver"
           git config user.email "archiver@users.noreply.github.com"
@@ -317,6 +321,24 @@ jobs:
 
           pass=0
           published=0; quiet=0; unpublished=0; failed=0
+          # ── PUTTING THE ARCHIVE ON THE SITE, ONCE AN HOUR ─────────────────
+          #
+          # Vercel no longer deploys when this workflow pushes — see the note
+          # in vercel.json. It could not be allowed to: a commit every five
+          # minutes against a deployment that takes five meant Vercel built
+          # this site continuously, twenty-four hours a day, for $102 a month
+          # against a $20 plan.
+          #
+          # So the site's copy of the archive is published deliberately, once
+          # an hour, from here. From HERE rather than from a scheduled
+          # workflow because a schedule on this repository is a suggestion:
+          # eleven firings delivered out of roughly eight hundred and sixty
+          # requested, measured over three days. This loop is alive 97.9% of
+          # the time and it already knows whether there is anything new to
+          # publish, which a schedule would have to go and find out.
+          DEPLOY_EVERY=3600
+          last_deploy=$(date +%s)
+          published_when_deployed=0
           while true; do
             sleep 300
             pass=$((pass + 1))
@@ -345,6 +367,28 @@ jobs:
                 const r=JSON.parse(fs.readFileSync("web/data/index.json","utf8")).last_run;
                 if(r) console.log(`  coverage ${(r.coverage*100).toFixed(2)}% — produced ${r.produced}, missed ${r.missed}, ${r.reads} reads`);
               }catch{}' || true
+
+            # ── THE HOURLY PUBLISH ────────────────────────────────────────
+            # Only when there is something new to publish. An hourly
+            # deployment of a tree nobody has changed is a build paid for and
+            # a CDN rewritten with the bytes already on it.
+            now=$(date +%s)
+            if [ -n "${VERCEL_DEPLOY_HOOK:-}" ] \
+               && [ "$published" -gt "$published_when_deployed" ] \
+               && [ $(( now - last_deploy )) -ge "$DEPLOY_EVERY" ]; then
+              code=$(curl -sS -o /dev/null -w '%{http_code}' -X POST "$VERCEL_DEPLOY_HOOK" 2>/dev/null) || code=000
+              if [ "$code" = "200" ] || [ "$code" = "201" ]; then
+                echo "  asked the site to pick up the last $(( published - published_when_deployed )) publish(es)"
+                last_deploy=$now
+                published_when_deployed=$published
+              else
+                # Not fatal, and deliberately not retried here: the next pass
+                # is five minutes away and will try again. A collection window
+                # must never end because a deployment could not be requested.
+                echo "::warning title=archive::the deploy hook answered HTTP $code — the site is still on its previous copy"
+                last_deploy=$now
+              fi
+            fi
 
             # Keep the run's own clone from bloating over five and a half
             # hours. Cheap, and it stops the push slowing down as the day

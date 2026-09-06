@@ -1,0 +1,38 @@
+# What does NOT need to be uploaded to the CDN on every deployment.
+#
+# ═══════════════════════════════════════════════════════════════════════════
+# WHY THIS EXISTS
+#
+# web/data holds 223,618 files at the tip. Every deployment shallow-clones ten
+# commits of that and uploads the lot, which is why one deployment of this
+# site — a static site with no build step at all — takes about five minutes.
+#
+#   dated day-shards   92,181     rooms/2026-09-05.ndjson and friends
+#   room _meta.json    65,809     one per room directory
+#   profile shards     65,536
+#   room snapshots         80
+#   top-level              10     index, roster, recent, city-snapshot, deals
+#
+# THE DAY-SHARDS ARE NOT SERVED TO ANYBODY. Checked every reference in the
+# repository before writing this: no page fetches them, and the two server
+# functions that read them — api/orders.js and api/profile.js — already go to
+# raw.githubusercontent.com rather than to the deployment. No function reads
+# the deployed filesystem at all. So 92,181 files, and most of the bytes, were
+# being uploaded to a CDN that has never once been asked for them.
+#
+# Leaving a file out of the deployment does not remove it from the repository.
+# The archive is untouched and stays exactly where it is on GitHub, which is
+# where everything that actually reads it already looks.
+#
+# WHAT MUST STAY, because the browser fetches it directly:
+#   web/data/index.json, roster.json, recent.json, city-snapshot.json
+#   web/data/room-snapshots/*.json          the offline fallback (api/room.js)
+#   web/data/profiles/**                    the profile count (index.html)
+#   web/data/*/_meta.json                   the room history range (hire.html)
+#   web/data/tclk-offers/**                 the deals board
+# scripts/test-deploy-gate.mjs pins that list against the pages themselves, so
+# a page that starts fetching something new cannot silently lose it here.
+# ═══════════════════════════════════════════════════════════════════════════
+
+web/data/*/20??-??-??.ndjson
+web/data/*/20??-??-??.json

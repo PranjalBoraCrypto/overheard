@@ -2,7 +2,32 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "outputDirectory": "web",
   "cleanUrls": true,
-  "ignoreCommand": "bash scripts/vercel-build-or-skip.sh",
+  "git": {
+    "_why": [
+      "A PUSH TO main MUST NOT START A DEPLOYMENT, and this is the only place",
+      "that can stop it. Measured on the September invoice: 20d 8h 34m of build",
+      "CPU in ten days, which on a two-core machine is 24.4 hours of building",
+      "per DAY. The archiver commits every five minutes and a deployment of",
+      "this repository takes about five, so Vercel was building continuously,",
+      "for ever, at $102 a month.",
+      "",
+      "ignoreCommand could never have fixed it: Vercel clones the repository",
+      "and THEN runs the ignore script, so the money is spent before the script",
+      "is asked. deploymentEnabled is decided before any of that happens.",
+      "",
+      "Deployments are now asked for deliberately, in two places, both of them",
+      "events rather than cron because cron on this repository delivered 11",
+      "firings out of 860 requested:",
+      "  .github/workflows/deploy.yml   a real change was pushed",
+      "  .github/workflows/archive.yml  the hourly publish of fresh archive data",
+      "Both POST the same Vercel deploy hook, held in the VERCEL_DEPLOY_HOOK",
+      "secret. With no secret set, nothing deploys automatically at all and",
+      "both places say so in the log rather than failing."
+    ],
+    "deploymentEnabled": {
+      "main": false
+    }
+  },
   "headers": [
     {
       "source": "/(.*)",

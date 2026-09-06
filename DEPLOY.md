@@ -180,11 +180,49 @@ orders arrive at once.
 
 ## After this
 
-Every push to GitHub redeploys the site automatically. Every archiver run
-commits new data, which also redeploys. You never touch it again.
+**One more secret, or nothing reaches the site.** See "Why deploys are asked
+for, not automatic" below — this is a five-minute job and it is the difference
+between a $3 month and a $102 one.
 
 **One cleanup:** the `web/data` folder ships with sample data so the design can
 be previewed. Delete its contents after your first real archiver run.
+
+---
+
+## Why deploys are asked for, not automatic
+
+Vercel used to deploy on every push. The archiver pushes every five minutes,
+and a deployment of this repository takes about five, so Vercel built the site
+**continuously, day and night**: 20d 8h 34m of build CPU in ten days — 24.4
+hours of building per day — and **$102.14 on one invoice** against a $20 plan.
+
+`vercel.json` now switches automatic deployments off, and two things ask for
+the deployments that are actually wanted:
+
+| when | who asks |
+|---|---|
+| a real change is pushed | `.github/workflows/deploy.yml` |
+| fresh archive data, hourly | the collection loop in `.github/workflows/archive.yml` |
+
+Both POST the same **deploy hook**. Set it up once:
+
+1. Vercel → your project → **Settings** → **Git** → **Deploy Hooks**
+2. Name it `overheard`, branch `main`, **Create Hook**, copy the URL
+3. GitHub → the repo → **Settings** → **Secrets and variables** → **Actions**
+4. **New repository secret**, name `VERCEL_DEPLOY_HOOK`, paste the URL
+
+Until that secret exists nothing deploys automatically. Both workflows say so
+in their logs rather than failing quietly, and you can always deploy by hand
+from the **Actions** tab → **deploy** → **Run workflow**.
+
+`.vercelignore` leaves the archive's 92,181 dated day-shards out of the upload.
+Nothing serves them: no page fetches them, and the functions that read them go
+to `raw.githubusercontent.com`, not to the deployment. Leaving a file out of a
+deployment does not remove it from the repository.
+
+`scripts/test-deploy-gate.mjs` checks all four of those files agree — including
+that no page or function has started fetching something `.vercelignore` would
+now withhold.
 
 ---
 
@@ -192,7 +230,7 @@ be previewed. Delete its contents after your first real archiver run.
 
 | | |
 |---|---|
-| Vercel Hobby | free — site and API |
+| Vercel | the plan, plus build time — see above; roughly $2–4 a month of builds once the deploy hook is set, and $102 a month if it is not |
 | GitHub Actions | free — unlimited minutes on public repos |
 | Technocore | free, no account |
 

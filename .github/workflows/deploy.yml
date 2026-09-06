@@ -1,0 +1,92 @@
+name: deploy
+
+# Ask Vercel for a deployment when a REAL change lands on main.
+#
+# ═══════════════════════════════════════════════════════════════════════════
+# WHY THIS EXISTS, AND WHAT IT COST NOT TO HAVE IT
+#
+# Vercel used to deploy on every push to main. The archiver pushes every five
+# minutes and a deployment of this repository takes about five, so it built
+# continuously, day and night: 20d 8h 34m of build CPU in ten days — 24.4
+# hours of building per DAY — and $102.14 on one invoice against a $20 plan.
+#
+# vercel.json now sets git.deploymentEnabled.main to false, so a push starts
+# nothing. That is the whole saving, and it means somebody has to ask for the
+# deployments we actually want. There are two askers and this is one:
+#
+#   here            a real change was pushed → deploy immediately
+#   archive.yml     fresh archive data, once an hour, from the collection loop
+#
+# ═══════════════════════════════════════════════════════════════════════════
+# WHY THE HOURLY HALF IS NOT A CRON IN THIS FILE
+#
+# Because cron does not work here. Measured on this repository over three
+# days: eleven scheduled firings delivered out of roughly eight hundred and
+# sixty requested. The archive workflow, by contrast, is alive 97.9% of the
+# time — so the hourly data publish is fired from inside its collection loop,
+# where there is a process actually running, rather than from a schedule that
+# has never once been kept. A push, unlike a schedule, is an event: it
+# arrives.
+# ═══════════════════════════════════════════════════════════════════════════
+
+on:
+  push:
+    branches: [main]
+  # A button, for the times somebody wants the site refreshed now.
+  workflow_dispatch:
+
+# Never two at once, and never a queue of them: if three pushes land while a
+# deployment is being asked for, the newest is the one that matters.
+concurrency:
+  group: deploy-main
+  cancel-in-progress: true
+
+jobs:
+  ask:
+    runs-on: ubuntu-latest
+    steps:
+      - name: ask Vercel for a deployment, if this was a real change
+        env:
+          HOOK: ${{ secrets.VERCEL_DEPLOY_HOOK }}
+          # The message of the commit at the tip of what was just pushed.
+          # Read from the event rather than from a checkout: this repository
+          # is 376MB at the tip and cloning it to read one string would be a
+          # slower, more expensive version of nothing.
+          MSG: ${{ github.event.head_commit.message }}
+          WHY: ${{ github.event_name }}
+        run: |
+          set -eu
+
+          if [ -z "${HOOK:-}" ]; then
+            echo "::warning title=deploy::no VERCEL_DEPLOY_HOOK secret — nothing will reach the site automatically"
+            echo "Create one at: Vercel → the project → Settings → Git → Deploy Hooks"
+            echo "then add the URL to this repository as the secret VERCEL_DEPLOY_HOOK."
+            exit 0
+          fi
+
+          # THE ARCHIVER'S OWN COMMITS ARE NOT A REASON TO DEPLOY. They carry
+          # [skip ci] and they arrive every five minutes; the hourly publish in
+          # archive.yml is what puts their data on the site.
+          #
+          # A change cannot be BURIED behind them the way it used to be, when
+          # Vercel read whichever commit it happened to see: this job runs on
+          # the push that carries the change, so the change is always the thing
+          # being judged. And if the judgement is ever wrong, the hourly
+          # publish deploys it within the hour anyway.
+          if [ "$WHY" = "push" ]; then
+            case "${MSG:-}" in
+              *"[skip ci]"*)
+                echo "archive commit — the hourly publish will carry its data; nothing to deploy"
+                exit 0 ;;
+            esac
+          fi
+
+          echo "asking for a deployment (${WHY})"
+          code=$(curl -sS -o /tmp/hook.out -w '%{http_code}' -X POST "$HOOK") || code=000
+          if [ "$code" = "200" ] || [ "$code" = "201" ]; then
+            echo "queued — Vercel takes a few minutes from here"
+          else
+            echo "::error title=deploy::the deploy hook answered HTTP $code — the change is on main but not on the site"
+            head -c 400 /tmp/hook.out || true
+            exit 1
+          fi
