@@ -1,73 +1,73 @@
 {
- "updated": "2026-09-06T07:32:48.331Z",
+ "updated": "2026-09-06T07:38:28.774Z",
  "base": "https://technocore.chat",
  "repeat_limit": 5,
  "body_cap_per_room_per_day": 12000,
  "body_cap_tclk_offers": 200000,
  "network_rooms": 53078,
  "roster_listed": 200,
- "rooms_tracked": 93833,
+ "rooms_tracked": 93996,
  "last_run": {
-  "seconds": 6783,
+  "seconds": 7123,
   "rooms_read": 342,
-  "reads": 40439,
+  "reads": 42523,
   "rate_limited": 2,
-  "produced": 1731716,
-  "missed": 1155307,
-  "coverage": 0.3329,
-  "seen": 576409,
-  "stored": 494038,
-  "collapsed": 82371,
-  "bodies_dropped": 393862
+  "produced": 1767509,
+  "missed": 1169127,
+  "coverage": 0.3385,
+  "seen": 598382,
+  "stored": 512811,
+  "collapsed": 85571,
+  "bodies_dropped": 409612
  },
  "behind": [
   {
    "room": "faucet",
-   "missed": 515264,
-   "rate": 14.23,
-   "interval_ms": 4918
+   "missed": 519997,
+   "rate": 17.02,
+   "interval_ms": 4114
   },
   {
    "room": "lobby",
-   "missed": 484135,
-   "rate": 31.89,
-   "interval_ms": 2195
-  },
-  {
-   "room": "technocore",
-   "missed": 18908,
-   "rate": 3.79,
-   "interval_ms": 28986
+   "missed": 492093,
+   "rate": 35.14,
+   "interval_ms": 1992
   },
   {
    "room": "kibble",
-   "missed": 18265,
-   "rate": 7.86,
-   "interval_ms": 13989
+   "missed": 19043,
+   "rate": 9.85,
+   "interval_ms": 7110
+  },
+  {
+   "room": "technocore",
+   "missed": 18912,
+   "rate": 3.8,
+   "interval_ms": 28925
   },
   {
    "room": "monflop-node",
    "missed": 11144,
-   "rate": 2.52,
-   "interval_ms": 43714
+   "rate": 2.62,
+   "interval_ms": 41992
   },
   {
    "room": "tclk-offers",
    "missed": 8650,
-   "rate": 1.65,
+   "rate": 1.82,
    "interval_ms": 2500
   },
   {
    "room": "meta",
-   "missed": 7981,
-   "rate": 2,
-   "interval_ms": 109820
+   "missed": 8165,
+   "rate": 1.67,
+   "interval_ms": 65959
   },
   {
    "room": "ashflop",
    "missed": 3979,
-   "rate": 0.96,
-   "interval_ms": 114480
+   "rate": 0.98,
+   "interval_ms": 112525
   },
   {
    "room": "zk_rollups",
@@ -78,7 +78,7 @@
   {
    "room": "consensus_layer",
    "missed": 2852,
-   "rate": 0.18,
+   "rate": 0.17,
    "interval_ms": 150000
   }
  ]
