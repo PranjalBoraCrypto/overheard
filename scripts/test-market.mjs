@@ -525,10 +525,35 @@ console.log("\n=== V. the walk from arriving to sharing");
   /* Making a call is the moment somebody is proudest of it. Asking them to go
      find a Share button afterwards is asking at the wrong time. */
   ok("the card opens itself once a call has landed",
-    /const landed = seat\?\.mine\?\.find\(\(e\) => e\.nonce === ref\)/.test(page) &&
+    /const landed = seatOf\(fold, ID\.did\)\.mine\?\.find\(\(e\) => e\.nonce === ref\)/.test(page) &&
     /openSheet\("call", landed\)/.test(page));
   ok("found by nonce rather than by taking the top row",
     !/openSheet\("call", *(seat|mine)\.mine?\[0\]/.test(page));
+
+  /* ── AND THE READ AFTER A WRITE HAS TO BE A REAL READ ────────────────────
+     The room read is answered out of an edge cache a few seconds deep. The
+     read fired the instant after a signature is posted was getting that
+     cache — an answer from a moment BEFORE the person signed — so the frame
+     was not there, and the card that looks for it by nonce correctly opened
+     nothing. The room API already carries `t=` for exactly this. */
+  ok("the read straight after a write bypasses every cache in the path",
+    /async function readLive\(fresh\)/.test(page) &&
+    /fresh \? `&t=\$\{Date\.now\(\)\}`/.test(page) &&
+    /async function load\(fresh\)/.test(page));
+  ok("both writes use it — the call and the tap",
+    (page.match(/await load\(true\)/g) ?? []).length >= 2);
+  /* But ONLY after a write. Spending a bypass on every poll is a thousand
+     tabs each opening their own connection upstream. */
+  ok("and an ordinary poll still shares one read between every tab",
+    /await load\(fresh\)|readLive\(fresh\), readArchive\(fresh\)/.test(page) &&
+    !/readLive\(true\)/.test(page));
+  /* A signature still has to travel and be written before it can be read, so
+     one look was a coin toss whatever the cache did. */
+  ok("and it asks more than once before giving up",
+    /const waits = \[620, 1300, 2000, 2600\]/.test(page) &&
+    /if \(i > 0\) await load\(true\)/.test(page));
+  ok("it does not interrupt somebody who opened a card themselves",
+    /if \(!\$\("shshare"\)\.hidden \|\| !ID\) return/.test(page));
 
   /* HALF A READ IS NOT A READ. The archive and the room can fail separately,
      and a page with one of them still has numbers. That is fine for a total
@@ -546,8 +571,74 @@ console.log("\n=== V. the walk from arriving to sharing");
   ok("the ring has no tooltip sitting on top of itself",
     !/<title id="coretitle">/.test(page) && /class="core"[^>]*aria-hidden="true"/.test(page));
   ok("and its numbers are still real text underneath", /class="coreface"/.test(page));
+  /* The ring scaled with the screen and the words over it did not, so under
+     390px the ring caught up and the losing line ran out over the arc. The
+     answer was to let the ring take the width the phone already had, not to
+     shrink the words past reading. */
+  ok("the ring takes the room a small phone actually has",
+    /\.corewrap\{order:4;max-width:min\(78vw,290px\)/.test(page));
+  ok("and nothing over it is shrunk under 11.5px to fit",
+    [...page.matchAll(/\.coreface \.p[ckn]\{[^}]*font-size:(\d+(?:\.\d+)?)px/g)]
+      .every((m) => Number(m[1]) >= 11.5));
 
   ok("no tab on the bar is lit any more", !/hot: true/.test(nav));
+
+  /* ── THE DOCK GETS OUT OF THE WAY ────────────────────────────────────
+     It covers a fifth to a third of a phone screen, and somebody who has
+     made their call wants the page back. */
+  ok("the phone dock can be shut", /id="dockpull"/.test(page) &&
+    /\.aside\[data-shut="1"\]\{transform:translateY\(var\(--shut/.test(page));
+  ok("and it slides rather than snapping shut",
+    /\.aside\{\s*\n?\s*transition:transform/.test(page) ||
+    /\] \.aside,\[data-fx="full"\] \.aside\{\s*\n?\s*transition:transform/.test(page));
+  /* A transform does not change a measured height, so the reserved space has
+     to be computed for each state — otherwise the page keeps a third of the
+     screen clear for a strip that is 46px tall. */
+  ok("the page reserves only what is left on screen",
+    /dockShut \? pull : whole/.test(page));
+  /* The pull bar grows once it is the only thing left, so measuring before
+     the state lands reserves the wrong height. */
+  ok("and measures after the state lands, not before",
+    page.indexOf('aside.setAttribute("data-shut"') <
+    page.indexOf('const pull = $("dockpull").getBoundingClientRect()'));
+  /* toggleAttribute writes an EMPTY value; the rule asks for "1". The
+     attribute was present, hasAttribute agreed, and no CSS matched. */
+  ok("the attribute carries the value the stylesheet asks for",
+    !/toggleAttribute\("data-shut"/.test(page));
+  ok("shutting it is remembered in this browser and nowhere else",
+    /localStorage\.setItem\(SHUT_KEY/.test(page) && !/SHUT_KEY[^\n]*fetch/.test(page));
+  ok("a wide screen never hides the panel this way",
+    /if \(!fixed\) \{[\s\S]{0,220}?removeAttribute\("data-shut"\)/.test(page) &&
+    /\.dockpull\{display:none\}/.test(page));
+  /* A cue pointing at a control behind a shut dock is a cue nobody can take. */
+  ok("and anything that needs the panel opens it first",
+    /function pointAtSides\(\) \{[\s\S]{0,80}?openDock\(\)/.test(page));
+  ok("what you hold is on the strip that is left",
+    /\.aside\[data-shut="1"\] \.dpk\{display:inline\}/.test(page));
+  /* THE STRIP ASKS, IT DOES NOT REPORT. There is one line of room, and a bare
+     balance spends it on a fact nobody can act on. It has to cover every rung
+     of the same ladder the panel itself walks, including the end of it. */
+  {
+    const lab = /function dockLabel\(\) \{([\s\S]*?)\n\}/.exec(page)?.[1] ?? "";
+    ok("the strip names the next move rather than the balance",
+      /return "Enter now"/.test(lab));
+    ok("it asks for a key when there is none",
+      /!ID\) return "Sign in to call"/.test(lab));
+    ok("it sends you to the tap when no paper has been claimed",
+      /!seat\.tapped\) return `Claim your/.test(lab));
+    ok("it invites a second call once one is down",
+      /seat\.put > 0\) return[^\n]*call again/.test(lab));
+    /* Nothing left to put down means no next step exists, so asking for one
+       would be asking for something impossible. */
+    ok("and when every sheet is called it reports instead of asking",
+      /seat\.left <= 0\) return/.test(lab) &&
+      lab.indexOf("seat.left <= 0") < lab.indexOf("seat.put > 0"));
+    ok("a closed question outranks all of it",
+      lab.indexOf("has closed") >= 0 &&
+      lab.indexOf("has closed") < lab.indexOf("Sign in to call"));
+  }
+  ok("and the control says which way it goes, for a screen reader too",
+    /aria-expanded/.test(page) && /Show the call panel/.test(page));
 }
 
 console.log("\n=== Q. how anybody finds it");

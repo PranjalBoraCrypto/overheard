@@ -161,6 +161,9 @@ body{padding-bottom:var(--dock-h)}
 .col{grid-column:1;display:grid;gap:var(--s4);align-content:start;min-width:0}
 .aside{grid-column:2;position:sticky;top:calc(var(--barh) + var(--s3));
   display:grid;gap:var(--s3);align-content:start}
+/* Nothing to pull on a screen with room for the panel beside the page. */
+.dockpull{display:none}
+.aside{position:relative}
 
 /* ══ THE HERO ══════════════════════════════════════════════════════════════
    One panel, two halves, and the second half is the object. It bleeds its own
@@ -862,7 +865,7 @@ h1{font-size:clamp(23px,2.4vw,31px);line-height:1.12;letter-spacing:-.028em;
   .eyebrow .i{vertical-align:-2px;margin-right:6px}
   h1{order:2;max-width:none;margin-top:9px;font-size:clamp(23px,6.1vw,29px)}
   .verdict{order:3;margin:9px auto 0;max-width:30ch;font-size:14.5px}
-  .corewrap{order:4;max-width:min(70vw,290px);transform:none;margin-top:2px}
+  .corewrap{order:4;max-width:min(78vw,290px);transform:none;margin-top:2px}
   .sides2{order:5;margin-top:var(--s3)}
   /* TWO ACROSS, AND THE LAST ONE TAKES THE ROW. Three columns on a 390px
      screen is 110px a cell, and "31 Mar 2027 UTC" wants 135 — it ran into
@@ -881,6 +884,40 @@ h1{font-size:clamp(23px,2.4vw,31px);line-height:1.12;letter-spacing:-.028em;
      is two rows rather than four. The shell reserves --dock-h at the bottom so
      nothing is ever hidden behind it, and the padding clears the home
      indicator on the phones that have one. */
+  /* ── THE DOCK SLIDES AWAY ────────────────────────────────────────────
+     Shut, the whole thing translates down by exactly the panel's height, so
+     the pull bar — which sits above the panel — lands on the bottom edge and
+     the panel goes off-screen. A real slide of a real object, not a height
+     animation of a box, and the page's reserved space shrinks with it so
+     nothing is left floating over the last card.
+
+     It is remembered in this browser, because somebody who shut it has said
+     what they want and being asked again on every visit is the page not
+     listening. */
+  .dockpull{display:flex;align-items:center;justify-content:center;gap:10px;
+    width:100%;min-height:42px;padding:0 var(--s3);
+    border:0;background:none;color:var(--faint);cursor:pointer;font:inherit;
+    font-size:var(--t-small)}
+  .dockpull .i{width:18px;height:18px;
+    transition:transform .3s cubic-bezier(.2,.9,.3,1.05)}
+  .dockpull::before{content:"";position:absolute;top:7px;left:50%;
+    transform:translateX(-50%);width:40px;height:4px;border-radius:999px;
+    background:rgba(147,182,192,.3)}
+  .dockpull:focus-visible{outline:none;box-shadow:var(--focus);border-radius:10px}
+  /* Words in the page's own voice; only the numbers inside them go mono. */
+  .dpk{display:none;color:var(--white)}
+  .dpk b{font-family:var(--mono);font-weight:600}
+  .aside[data-shut="1"] .dockpull .i{transform:rotate(180deg)}
+  .aside[data-shut="1"] .dockpull{color:var(--dim);min-height:46px}
+  .aside[data-shut="1"] .dockpull::before{opacity:.55}
+  .aside[data-shut="1"] .dpk{display:inline}
+  .aside[data-shut="1"]{transform:translateY(var(--shut,0px))}
+  [data-fx="standard"] .aside,[data-fx="full"] .aside{
+    transition:transform .34s cubic-bezier(.2,.9,.3,1.02)}
+  /* A shut dock must not keep its controls in the tab order — they are off
+     the bottom of the screen and focusing one scrolls to nothing. */
+  .aside[data-shut="1"] .panel{visibility:hidden}
+
   .aside{position:fixed;left:0;right:0;bottom:0;top:auto;z-index:40;
     grid-column:auto;gap:0;
     background:rgba(2,11,15,.96);
@@ -1015,6 +1052,23 @@ h1{font-size:clamp(23px,2.4vw,31px);line-height:1.12;letter-spacing:-.028em;
 }
 @media (max-width:560px){
   .sides2{grid-template-columns:1fr}
+}
+
+/* ── THE RING HAD TO GROW, NOT THE WORDS SHRINK ────────────────────────────
+   The ring scaled with the screen and the words over it did not, so under
+   390px the ring caught up with them: "41% say it does not" is 149px wide,
+   and on a 320px phone the clear space inside the arc at that height was
+   115px — the line ran out over the yellow. Shrinking the type to fit meant
+   going under 11.5px, which is past reading. The screen had the room; the
+   ring was just not taking it. At 78vw it does, and everything inside is
+   left at the size it was drawn for. */
+@media (max-width:360px){
+  /* The narrowest phones still need a nudge: the number gives back a few
+     points and the stack lifts, which buys the losing line the width it
+     wants without taking it under 11.5px. */
+  .coreface .pc{font-size:36px}
+  .coreface .pk{margin-top:7px}
+  .coreface .pn{margin-top:10px;font-size:11.5px;letter-spacing:-.02em}
 }
 
 /* ── A SMALL PHONE, OR A SHORT ONE ─────────────────────────────────────────
@@ -1375,7 +1429,19 @@ h1{font-size:clamp(23px,2.4vw,31px);line-height:1.12;letter-spacing:-.028em;
          One panel, three steps. On a phone this element becomes the docked
          surface at the bottom of the screen — same markup, same handlers, a
          different composition. -->
-    <aside class="aside">
+    <aside class="aside" id="aside">
+      <!-- THE PULL. Only ever a control on a phone, where the dock covers a
+           third of the screen and somebody who has already made their call
+           wants the page back. It shows what they hold once it is shut, so
+           the strip left behind is worth its own height. -->
+      <button class="dockpull" type="button" id="dockpull"
+              aria-controls="panel" aria-expanded="true">
+        <span class="dpk" id="dpk"></span>
+        <svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+             stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"
+             aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+        <span class="vh" id="dpsay">Hide the call panel</span>
+      </button>
       <section class="card panel" id="panel">
         <div class="ch"><h2>Make your call</h2><em id="panelk">three steps</em></div>
 
@@ -1538,18 +1604,37 @@ const nonceOf = (m) => {
   catch { return null; }
 };
 
-async function readLive() {
+/* ── "DID THE THING I JUST DID HAPPEN" IS A DIFFERENT QUESTION ─────────────
+   The ordinary read is answered out of an edge cache a few seconds deep, and
+   that is right: a thousand tabs polling the same room should cost one read
+   upstream, not a thousand. But the read fired the instant after a signature
+   has been posted is not a poll. It is asking whether the frame this person
+   just signed is in the room, and a cache from a moment before they signed
+   answers "no" with total confidence.
+
+   That is what was actually wrong with the card that would not open by
+   itself: the call was accepted, the page reloaded, the reload came back out
+   of the cache without it, and the code looked for the frame by its nonce,
+   did not find it, and — correctly, by its own rule — opened nothing rather
+   than the wrong one. The same stale answer is the likeliest explanation for
+   a claimed faucet that offers itself again. `t=` is the bypass the room API
+   already carries for exactly this, and it is spent ONLY here: after a write,
+   never on a poll. */
+async function readLive(fresh) {
   try {
-    const r = await fetch(`/api/room?room=${encodeURIComponent(ROOM)}&limit=200`, { cache: "no-store" });
+    const bust = fresh ? `&t=${Date.now()}` : "";
+    const r = await fetch(`/api/room?room=${encodeURIComponent(ROOM)}&limit=200${bust}`,
+      { cache: "no-store" });
     if (!r.ok) return null;
     const j = await r.json();
     if (j.error || j.source === "none") return null;
     return j.messages ?? [];
   } catch { return null; }
 }
-async function readArchive() {
+async function readArchive(fresh) {
   try {
-    const r = await fetch("/api/calls", { cache: "no-store" });
+    const r = await fetch(fresh ? `/api/calls?t=${Date.now()}` : "/api/calls",
+      { cache: "no-store" });
     if (!r.ok) return null;
     const j = await r.json();
     return Array.isArray(j.frames) ? j.frames : [];
@@ -1569,8 +1654,8 @@ async function readArchive() {
    know. */
 let partial = false;
 
-async function load() {
-  const [l, a] = await Promise.all([readLive(), readArchive()]);
+async function load(fresh) {
+  const [l, a] = await Promise.all([readLive(fresh), readArchive(fresh)]);
   /* NULL IS "COULD NOT LOOK" AND [] IS "NOTHING THERE", and the difference is
      the difference between a market with no calls in it and a market this page
      failed to read. Only the second one is worth apologising for. */
@@ -2047,14 +2132,80 @@ let justLanded = null;
    end above it. Its height changes — the amount row appears when a side is
    picked — so the reservation is measured rather than guessed, and written to a
    custom property the shell's padding reads. */
+/* THE HEIGHT THE PAGE HAS TO KEEP CLEAR is the part of the dock still on
+   screen. Shut, that is the pull bar alone — a transform does not change an
+   element's measured height, so the two states are computed rather than
+   read, and --shut carries how far down the whole thing has to travel for
+   the panel to leave. */
+const SHUT_KEY = "overheard.market.dockshut";
+let dockShut = false;
+try { dockShut = localStorage.getItem(SHUT_KEY) === "1"; } catch {}
+
 function measureDock() {
-  const aside = document.querySelector(".aside");
+  const aside = $("aside");
   if (!aside) return;
   const fixed = getComputedStyle(aside).position === "fixed";
-  ROOT.style.setProperty("--dock-h",
-    fixed ? `${Math.ceil(aside.getBoundingClientRect().height)}px` : "0px");
+  if (!fixed) {
+    /* A wide screen has the panel beside the page: nothing is docked, nothing
+       is reserved, and the shut state is not allowed to hide it. */
+    ROOT.style.setProperty("--dock-h", "0px");
+    aside.removeAttribute("data-shut");
+    return;
+  }
+  /* THE STATE GOES ON FIRST, then the measuring. The pull bar is taller once
+     it is the only thing left — it has to be, it is the whole target — so
+     measuring before the class lands reserves the wrong height, and the page
+     ends up eight pixels short of clearing it.
+
+     setAttribute, not toggleAttribute: toggling writes an EMPTY value, and
+     the rule that does the sliding asks for [data-shut="1"]. The attribute
+     was there, hasAttribute agreed it was there, and no CSS matched it. */
+  if (dockShut) aside.setAttribute("data-shut", "1");
+  else aside.removeAttribute("data-shut");
+
+  const pull = $("dockpull").getBoundingClientRect().height;
+  const whole = aside.getBoundingClientRect().height;
+  const panel = Math.max(0, whole - pull);
+  aside.style.setProperty("--shut", `${Math.ceil(panel)}px`);
+  ROOT.style.setProperty("--dock-h", `${Math.ceil(dockShut ? pull : whole)}px`);
+
+  const btn = $("dockpull");
+  btn.setAttribute("aria-expanded", String(!dockShut));
+  $("dpsay").textContent = dockShut ? "Show the call panel" : "Hide the call panel";
+  $("dpk").innerHTML = dockShut ? dockLabel() : "";
+}
+
+/* The strip that is left when the panel is shut says what to DO next, not
+   what is in the purse — a bare number is a fact, and a fact is not worth
+   the only line there is. It walks the same ladder the panel itself walks:
+   closed, no key, no paper, nothing called yet, something called, all of it
+   called. The last one has no next step, so it reports instead of asking. */
+function dockLabel() {
+  if (Boolean(fold?.settled) || Date.now() > CLOSES_MS)
+    return "The question has closed";
+  if (!ID) return "Sign in to call";
+  const seat = seatOf(fold ?? { by: new Map() }, ID.did);
+  if (!seat.tapped) return `Claim your <b>${group(TAP)}</b> paper`;
+  if (seat.left <= 0) return `All <b>${group(TAP)}</b> is called`;
+  if (seat.put > 0) return `<b>${group(seat.left)}</b> left — call again`;
+  return "Enter now";
 }
 addEventListener("resize", measureDock, { passive: true });
+
+$("dockpull").addEventListener("click", () => {
+  dockShut = !dockShut;
+  try { localStorage.setItem(SHUT_KEY, dockShut ? "1" : "0"); } catch {}
+  measureDock();
+});
+
+/* Anything that needs the panel opens it rather than failing silently: a
+   pointed-at side button behind a shut dock is a cue nobody can take. */
+function openDock() {
+  if (!dockShut) return;
+  dockShut = false;
+  try { localStorage.setItem(SHUT_KEY, "0"); } catch {}
+  measureDock();
+}
 
 /* ── DEPTH, ON A MACHINE THAT CAN AFFORD IT ────────────────────────────────
    The core leans a few degrees toward the pointer. One transform on one
@@ -2658,7 +2809,7 @@ $("tap").addEventListener("click", async () => {
     return;
   }
   keep();
-  await load();
+  await load(true);
   const t = $("tapsay"); t.className = "say ok";
   t.textContent = `${group(TAP)} paper, signed by your key.`;
   /* THE HAND-OFF. Two signatures, and between them the page used to go quiet:
@@ -2671,6 +2822,7 @@ $("tap").addEventListener("click", async () => {
    somebody reads the FAQ is not still flashing at them. */
 function pointAtSides() {
   if (side) return;
+  openDock();
   const sides = $("sides");
   sides.classList.add("next");
   $("step2").querySelector(".stepk")?.classList.add("point");
@@ -2712,7 +2864,7 @@ $("go").addEventListener("click", async () => {
      arrived, and animating the wrong one is worse than animating none. */
   justLanded = ref;
   const first = $("hist").hidden;
-  await load();
+  await load(true);
   tell(`Called. ${group(n)} paper on ${word}, signed by your key.`, "ok");
   const box = $("hist");
   if (!box.hidden) {
@@ -2739,11 +2891,31 @@ $("go").addEventListener("click", async () => {
      opens, because a share sheet showing the wrong call is worse than none.
 
      A short beat first, so the row's own arrival is seen rather than covered
-     by the sheet that follows it. */
-  const seat = ID ? seatOf(fold, ID.did) : null;
-  const landed = seat?.mine?.find((e) => e.nonce === ref);
-  if (landed) setTimeout(() => openSheet("call", landed), 620);
+     by the sheet that follows it.
+
+     AND IT ASKS MORE THAN ONCE. Even with the cache bypassed, the room does
+     not always have the frame back on the very next read — a signature has to
+     travel and be written before it can be read. One look was a coin toss.
+     Four, over about six seconds, is patience without becoming a page that
+     hijacks somebody who has already moved on. */
+  openWhenItLands(ref);
 });
+
+async function openWhenItLands(ref) {
+  const waits = [620, 1300, 2000, 2600];
+  for (let i = 0; i < waits.length; i++) {
+    await sleep(waits[i]);
+    /* The first pass uses the read the click already did; every pass after it
+       looks again, because that is the whole point of coming back. */
+    if (i > 0) await load(true);
+    /* Somebody who opened a card themselves in the meantime, or signed out,
+       is not to be interrupted by this. */
+    if (!$("shshare").hidden || !ID) return;
+    const landed = seatOf(fold, ID.did).mine?.find((e) => e.nonce === ref);
+    if (landed) return void openSheet("call", landed);
+  }
+}
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 for (const b of [$("sideY"), $("sideN")]) {
   b.addEventListener("click", () => {
