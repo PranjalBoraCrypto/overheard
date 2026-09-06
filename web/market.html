@@ -1021,6 +1021,22 @@ function whyNot(r) {
   return said ? `Technocore refused it: ${said}` : "It did not reach the network. Nothing was signed away.";
 }
 
+/* ── AND ASK THE SITE TO KEEP ITS OWN COPY ───────────────────────────────
+   The call is on the network the moment /api/post returns, and the collector
+   copies the room into the archive — while it is running. It has ended early
+   twice this week, and "the archiver was down that afternoon" is not an answer
+   anybody should have to give about their own position in March.
+   So the site keeps a second copy immediately. /api/keep reads the ROOM and
+   stores what it finds there, so this call carries nothing and proves nothing;
+   it is a nudge, not a payload. Its failure is not the caller's problem — the
+   call is signed and posted either way — so nothing waits on it and nothing is
+   shown about it. It is also idempotent, which makes anybody's call a repair
+   of anything the collector missed. */
+function keep() {
+  try { fetch("/api/keep", { method: "POST", cache: "no-store" }).catch(() => {}); }
+  catch { /* the copy is best-effort by design */ }
+}
+
 async function post(text) {
   const s = getSession();
   if (!s) return { ok: false, why: "not signed in" };
@@ -1052,6 +1068,7 @@ $("tap").addEventListener("click", async () => {
     t.textContent = whyNot(r);
     return;
   }
+  keep();
   await load();
   const t = $("tapsay"); t.className = "say ok";
   t.textContent = `${group(TAP)} paper, signed by your key. Pick a side.`;
@@ -1073,6 +1090,7 @@ $("go").addEventListener("click", async () => {
   }
   const word = side === "yes" ? "Yes" : "No";
   side = null;
+  keep();
   await load();
   tell(`Called. ${group(n)} paper on ${word}, signed by your key.`, "ok");
 });

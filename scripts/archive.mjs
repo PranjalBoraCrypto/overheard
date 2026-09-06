@@ -626,13 +626,45 @@ async function loadTail() {
 /** The call ledger, written whole on every flush. Whole rather than appended
  *  because writeAtomic is a rename and a rename is the only way this file can
  *  never be caught half-written by `git add` — the race that killed four
- *  collection windows. It is kilobytes; rewriting it costs nothing. */
+ *  collection windows. It is kilobytes; rewriting it costs nothing.
+ *
+ *  ── AND IT MERGES WITH WHAT IS ALREADY THERE ────────────────────────────
+ *  There are TWO writers now. /api/keep appends a frame to this file the
+ *  moment somebody calls it, straight through the GitHub API, because a
+ *  market cannot wait on a collector that has ended early twice this week.
+ *  This process seeds its ledger once, at the start of a five-hour window —
+ *  so writing its own copy over the top would delete every frame the endpoint
+ *  added in the meantime, and the two keepers would spend the market taking
+ *  turns to lose each other's work.
+ *  Reading first makes them converge instead. Union by the server's own
+ *  sequence number, ordered by it, and neither can erase the other. */
 async function writeCalls(state) {
   const L = state.ledger;
   if (!L?.rows.length) return;
   const dir = path.join(OUT, CALLS_ROOM);
   await mkdir(dir, { recursive: true });
-  await writeAtomic(path.join(dir, "all.ndjson"), L.rows.join("\n") + "\n");
+  const file = path.join(dir, "all.ndjson");
+
+  const rows = new Map();
+  const eat = (text) => {
+    for (const line of String(text).split("\n")) {
+      if (!line) continue;
+      try {
+        const r = JSON.parse(line);
+        const k = String(r?.seq ?? "");
+        if (k && !rows.has(k)) rows.set(k, line);
+      } catch { /* torn line: it is not a record until it parses */ }
+    }
+  };
+  try { eat(await fs.readFile(file, "utf8")); } catch { /* none yet */ }
+  eat(L.rows.join("\n"));
+
+  const out = [...rows.entries()].sort((a, b) => Number(a[0]) - Number(b[0])).map(([, l]) => l);
+  /* Back into the in-memory ledger too, so this process stops re-merging the
+     same lines from disk on every flush for the rest of the window. */
+  L.rows = out;
+  L.seqs = new Set(rows.keys());
+  await writeAtomic(file, out.join("\n") + "\n");
 }
 
 async function writeTail(state) {

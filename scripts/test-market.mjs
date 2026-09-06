@@ -321,6 +321,64 @@ console.log("\n=== Q. how anybody finds it");
     /nothing of value moves/i.test(play));
 }
 
+console.log("\n=== S. the second keeper");
+{
+  /* One keeper is a market that loses positions the afternoon a GitHub Action
+     falls over — which this one has done twice this week. So the site writes
+     its own copy at the moment of the call, into the SAME file the collector
+     maintains, and the two converge rather than compete. */
+  const keep = read("api/keep.js");
+  const arc = read("scripts/archive.mjs");
+  const page = read("web/market.html");
+
+  ok("there is a second keeper at all", keep.length > 2000);
+  ok("it writes the file the collector writes and the endpoint reads",
+    keep.includes(`web/data/${ROOM}/all.ndjson`) || /PATH = `web\/data\/\$\{ROOM\}\/all\.ndjson`/.test(keep));
+  ok("and the page nudges it after a call lands",
+    /function keep\(\)/.test(page) && (page.match(/^\s*keep\(\);$/gm) ?? []).length === 2,
+    "after the tap and after the call, and nowhere else");
+  ok("without waiting on it or reporting it",
+    /\.catch\(\(\) => \{\}\)/.test(page) && !/await keep\(\)/.test(page),
+    "the call is signed and posted either way; this copy is best-effort");
+
+  /* ── THE THING THAT MAKES IT SAFE TO EXPOSE ────────────────────────────
+     It reads the ROOM and stores what it finds there. It never reads the
+     request body, so a public endpoint that writes to a repository cannot be
+     asked to write anything a stranger made up: whatever is in that room got
+     there by being signed, because that is the only way in. */
+  ok("it never reads the request body", !/request\.json\(\)|await request\.text\(\)/.test(keep),
+    "a public write endpoint that trusts its caller is a public write endpoint");
+  ok("it takes its records from the room instead",
+    /technocore\.chat|TECHNOCORE/.test(keep) && /\/r\/\$\{ROOM\}/.test(keep));
+  ok("and keeps only frames that are ours",
+    /text\.startsWith\(PREFIX\)/.test(keep));
+  ok("with the server's own sequence number, not one the caller chose",
+    /\^\[0-9\]\{1,19\}\$/.test(keep));
+
+  /* ── AND THE ONE THAT KEEPS THE BILL DOWN ──────────────────────────────
+     A personal token DOES trigger workflows, unlike GITHUB_TOKEN. Without
+     [skip ci] every call would fire deploy.yml and buy a deployment. */
+  ok("its commits carry [skip ci], so a call cannot buy a deployment",
+    /\[skip ci\]/.test(keep),
+    "a personal token triggers workflows where GITHUB_TOKEN does not");
+  ok("it is guarded against writing over somebody else's line",
+    /sha/.test(keep) && /409/.test(keep));
+  ok("and it is inert, not broken, with no token configured",
+    /if \(!TOKEN\)/.test(keep) && /kept: 0/.test(keep),
+    "the call is still on the network; the site is one keeper down");
+
+  /* ── AND THE COLLECTOR MUST NOT ERASE IT ───────────────────────────────
+     This process seeds its ledger once, at the start of a five-hour window.
+     Writing its own copy over the top would delete every frame the endpoint
+     added since, and the two keepers would spend the market taking turns to
+     lose each other's work. */
+  const w = arc.slice(arc.indexOf("async function writeCalls"), arc.indexOf("async function writeTail"));
+  ok("the collector reads the file before it writes it",
+    /readFile\(file/.test(w), "otherwise it overwrites the other keeper");
+  ok("and unions by the sequence number rather than replacing",
+    /rows\.has\(k\)/.test(w) && /L\.rows = out/.test(w));
+}
+
 console.log("\n=== R. the state almost everybody arrives in");
 {
   /* SIGNED OUT is the default, not an edge case: most people reaching this
