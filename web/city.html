@@ -879,7 +879,8 @@ body:not(.inroom) .tr{top:22px;max-height:calc(100% - 168px)}
   #q{padding:11px 13px 11px 36px;font-size:12.5px}
   .stage{height:clamp(520px,calc(100vh - 64px),820px)}
 }
-@media (prefers-reduced-motion:reduce){*{animation-duration:.01ms!important;animation-iteration-count:1!important;
+/* ::before and ::after are not matched by `*`, and are named here for it. */
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;
   transition-duration:.01ms!important}}
 </style>
 <script src="/sky.js" type="module"></script>

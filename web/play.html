@@ -938,7 +938,9 @@ canvas.confetti{position:fixed;inset:0;width:100%;height:100%;pointer-events:non
   border-top:1px dashed rgba(0,180,215,.16);font-size:12.8px;line-height:1.6;color:var(--faint)}
 .srcnote .i{width:15px;height:15px;margin-top:2px;color:var(--good);flex:none}
 .srcnote b{color:var(--dim)}
-@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}
+/* `*` does not match ::before or ::after. Naming them is the difference
+   between a reduced-motion rule and a reduced-motion rule that works. */
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}
   .blk{opacity:1;transform:none}}
 </style>
 <script src="/sky.js" type="module"></script>

@@ -474,8 +474,12 @@ footer a:hover{color:var(--blue)}
   .shead{grid-template-columns:1fr;gap:8px}
   .shead .go,.shead .lockpill{justify-self:start}
 }
+/* `*` does not match ::before or ::after, so the halo pulsing on
+   `.step.live .node::after` went on pulsing through this rule. Naming the
+   pseudo-elements is the difference between a reduced-motion rule and a
+   reduced-motion rule that works; the ring stays, it just stops breathing. */
 @media (prefers-reduced-motion:reduce){
-  *{transition:none!important;animation:none!important}
+  *,*::before,*::after{transition:none!important;animation:none!important}
   svg.line *{stroke-dashoffset:0!important}
 }
 </style>

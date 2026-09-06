@@ -325,7 +325,11 @@ footer a:hover{color:var(--cy-hi)}
   word-break:break-all;letter-spacing:.2px}
 .bydid:hover{color:var(--cy)}
 @media (max-width:620px){.frow{flex-direction:column;gap:7px}}
-@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+/* `*` does not match ::before or ::after, and the light that crosses the
+   invitation bar lives on one. A blanket rule that quietly exempts every
+   pseudo-element is how this promise gets broken without anybody editing
+   it — so the pseudo-elements are named. */
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
 
 
 /* ── icons ────────────────────────────────────────────────────────────────

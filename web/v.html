@@ -115,7 +115,8 @@ blockquote .meta{display:block;margin-top:12px;font-family:var(--mono);font-size
 .go.ghost:hover{border-color:var(--edge-lit);color:var(--white)}
 footer{color:var(--faint);font-size:13.5px;margin-top:36px;border-top:1px solid var(--edge);padding-top:20px}
 footer a{color:var(--blue)}
-@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+/* ::before and ::after are not matched by `*`, and are named here for it. */
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{transition:none!important;animation:none!important}}
 
 /* ── the depth layer ──────────────────────────────────────────────────────
    Same treatment as the front page: drifting blooms, a grid masked to the
