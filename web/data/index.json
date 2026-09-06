@@ -1,84 +1,84 @@
 {
- "updated": "2026-09-06T05:45:54.430Z",
+ "updated": "2026-09-06T05:52:44.875Z",
  "base": "https://technocore.chat",
  "repeat_limit": 5,
  "body_cap_per_room_per_day": 12000,
  "body_cap_tclk_offers": 200000,
  "network_rooms": 53078,
  "roster_listed": 200,
- "rooms_tracked": 90712,
+ "rooms_tracked": 90889,
  "last_run": {
-  "seconds": 369,
-  "rooms_read": 341,
-  "reads": 2165,
+  "seconds": 779,
+  "rooms_read": 340,
+  "reads": 4612,
   "rate_limited": 2,
-  "produced": 1031646,
-  "missed": 974335,
-  "coverage": 0.0556,
-  "seen": 57311,
-  "stored": 50444,
-  "collapsed": 6867,
-  "bodies_dropped": 26866
+  "produced": 1082119,
+  "missed": 980482,
+  "coverage": 0.0939,
+  "seen": 101637,
+  "stored": 88782,
+  "collapsed": 12855,
+  "bodies_dropped": 60189
  },
  "behind": [
   {
    "room": "faucet",
-   "missed": 453183,
-   "rate": 56.74,
-   "interval_ms": 1500
+   "missed": 454969,
+   "rate": 32.88,
+   "interval_ms": 2129
   },
   {
    "room": "lobby",
-   "missed": 372312,
-   "rate": 76.48,
+   "missed": 376373,
+   "rate": 48.21,
    "interval_ms": 1500
   },
   {
    "room": "technocore",
    "missed": 17503,
-   "rate": 4.05,
-   "interval_ms": 27160
+   "rate": 4.54,
+   "interval_ms": 24218
   },
   {
    "room": "kibble",
-   "missed": 13868,
-   "rate": 3.18,
-   "interval_ms": 34609
+   "missed": 14164,
+   "rate": 4.49,
+   "interval_ms": 24482
   },
   {
    "room": "monflop-node",
    "missed": 11095,
-   "rate": 2.55,
-   "interval_ms": 43122
+   "rate": 2.58,
+   "interval_ms": 42684
   },
   {
    "room": "tclk-offers",
    "missed": 8650,
-   "rate": 1.89,
+   "rate": 1.63,
    "interval_ms": 2500
   },
   {
    "room": "meta",
    "missed": 7652,
-   "rate": 1.86,
-   "interval_ms": 59058
+   "rate": 1.93,
+   "interval_ms": 57066
   },
   {
    "room": "ashflop",
    "missed": 3823,
-   "rate": 0.98,
-   "interval_ms": 112217
+   "rate": 1,
+   "interval_ms": 110414
   },
   {
    "room": "zk_rollups",
    "missed": 2892,
-   "rate": 0.13,
+   "rate": 0.15,
    "interval_ms": 150000
   },
   {
    "room": "consensus_layer",
    "missed": 2852,
-   "rate": 0.19,
+   "rate": 0.21,
    "interval_ms": 150000
   }
  ]
