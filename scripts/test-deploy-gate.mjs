@@ -33,7 +33,7 @@
  * this checks.
  * ═══════════════════════════════════════════════════════════════════════════
  */
-import { execFileSync, spawnSync } from "node:child_process";
+import { execFileSync, spawn, spawnSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -79,25 +79,30 @@ console.log("\n=== B. two places ask, and neither of them is a cron");
   ok("deploy.yml exists and runs on a push to main",
     /push:\s*\n\s*branches:\s*\[main\]/.test(dep));
   ok("and it POSTs the deploy hook", /VERCEL_DEPLOY_HOOK/.test(dep) && /curl[^\n]*-X POST/.test(dep));
-  /* SIX HOURS, and the number is pinned because it is a budget decision, not
-     a taste. A deployment of this repository takes about nine minutes —
-     Vercel clones ten commits of a 223,618-file tree first, which no amount
-     of trimming the upload touches. Hourly measured out at roughly $51 a
-     month of build time; this is about $13. Anyone moving it should have to
-     move this line and read that. */
-  ok("the archive loop publishes the data every six hours",
-    /DEPLOY_EVERY=21600/.test(arc) && /VERCEL_DEPLOY_HOOK/.test(arc),
-    (arc.match(/DEPLOY_EVERY=\d+/) || ["(not set)"])[0]);
-  /* Both guards matter. Without the first, an hour of nothing happening still
-     costs a deployment; without the second, every pass does. */
+  /* ONCE A DAY, and the number is pinned because it is a budget decision
+     rather than a taste: a deployment costs about seven minutes, five of them
+     cloning, so every publish is real money. */
+  ok("the archive publishes the data about once a day",
+    /MIN_HOURS_BETWEEN_PUBLISHES=22/.test(arc) && /VERCEL_DEPLOY_HOOK/.test(arc),
+    (arc.match(/MIN_HOURS_BETWEEN_PUBLISHES=\d+/) || ["(not set)"])[0]);
   ok("only when something new was actually published",
-    /published.*-gt.*published_when_deployed/.test(arc));
-  ok("and no more than once an hour", /now - last_deploy \)\) -ge "\$DEPLOY_EVERY"/.test(arc));
+    /published.*-le.*published_when_deployed/.test(arc));
+  /* THE DEAD TIMER. It used to be DEPLOY_EVERY=21600 — six hours — inside a
+     window RUN_SECONDS=19800 long. Five and a half. The condition could not
+     once be true, and nothing said so; the end-of-window publish was doing
+     all the deploying at whatever rate windows happened to end. A number that
+     looks like the answer and is not is worse than no number. */
+  const code = arc.split("\n").filter((l) => !/^\s*#/.test(l)).join("\n");   // comments describe it, code does it
+  const win = Number((code.match(/RUN_SECONDS: "(\d+)"/) || [])[1] || 0);
+  const every = Number((code.match(/DEPLOY_EVERY=(\d+)/) || [])[1] || 0);
+  ok("and its timer is not one that can never fire inside a window",
+    every === 0 || every < win,
+    every ? `DEPLOY_EVERY=${every} against a ${win}s window` : `no in-loop timer, and the window is ${win}s`);
   /* CRON ON THIS REPOSITORY IS A SUGGESTION: eleven firings delivered out of
      roughly eight hundred and sixty requested, measured over three days. A
      data publish hung on that would go dark for whole days at a time. */
-  ok("the hourly publish does not depend on a schedule",
-    !/^\s*schedule:/m.test(dep), "it rides the collection loop, alive 97.9% of the time");
+  ok("the daily publish does not depend on a schedule",
+    !/^\s*schedule:/m.test(dep), "it rides the collection loop, alive 98.5% of the time");
 }
 
 /* ── C. THE DECISION deploy.yml MAKES, RUN RATHER THAN READ ───────────────*/
@@ -300,6 +305,87 @@ console.log("\n=== G. vercel.json carries configuration and nothing else");
      Saying so here is cheaper than the next person rediscovering it. */
   ok("nothing is trying to be a comment", !JSON.stringify(cfg).includes("_why"),
     "the reasoning lives in .vercelignore and in this file");
+}
+
+/* ── H. THE ONE DECISION THAT SPENDS MONEY, RUN RATHER THAN READ ──────────
+ * At the end of every window the archiver decides whether to ask the site to
+ * pick the archive up. A window is five and a half hours, so it faces that
+ * decision four or five times a day and exactly one of them should cost a
+ * deployment.
+ *
+ * It cannot decide with a variable, because a variable does not outlive the
+ * job — that is precisely how the previous version came to have a six-hour
+ * timer inside a five-and-a-half-hour window and never fire once. It reads a
+ * stamp the last successful ask left in web/data instead. So the stamp
+ * handling is what is tested, and it is tested by RUNNING it.
+ *
+ * THE HOOK IS SERVED BY A SEPARATE PROCESS, which is not fussiness. The first
+ * version of this test answered the hook from an http server in this file and
+ * hung for ever: spawnSync blocks the event loop, so the server could not
+ * reply to the curl that this very call was waiting on. A deadlock, in a test
+ * for a deployment, which is a funny place to learn it.
+ */
+console.log("\n=== H. asking the site to update: once a day, and only when it worked");
+{
+  const arc = read(".github/workflows/archive.yml");
+  const from = arc.indexOf("          STAMP=web/data/.last-published");
+  const body = arc.slice(from, arc.indexOf("\n          fi\n", from) + "\n          fi\n".length)
+    .replace(/^ {10}/gm, "");
+  ok("the block is where this test thinks it is",
+    from > 0 && body.includes("VERCEL_DEPLOY_HOOK"), from > 0 ? "" : "not found in archive.yml");
+
+  const srv = spawn(process.execPath, ["-e",
+    'const h=require("http");const s=h.createServer((q,r)=>{r.writeHead(200);r.end("ok")});' +
+    's.listen(0,()=>console.log(s.address().port));'], { stdio: ["ignore", "pipe", "ignore"] });
+  const port = await new Promise((res) => srv.stdout.once("data", (d) => res(String(d).trim())));
+  const HOOK = `http://127.0.0.1:${port}/hook`;
+  /* Port 1 refuses instantly, which is what a broken hook should look like —
+     not a hang, which would tell us nothing and take for ever to say it. */
+  const DEAD = "http://127.0.0.1:1/hook";
+
+  const run = ({ hook = HOOK, stampAgeH = null, published = 1, before = 0 }) => {
+    const W = fs.mkdtempSync(path.join(os.tmpdir(), "stamp-"));
+    fs.mkdirSync(path.join(W, "web/data"), { recursive: true });
+    const stamp = path.join(W, "web/data/.last-published");
+    if (stampAgeH !== null)
+      fs.writeFileSync(stamp, String(Math.floor(Date.now() / 1000) - stampAgeH * 3600));
+    const r = spawnSync("bash", ["-c", body], {
+      cwd: W, encoding: "utf8", timeout: 20000,
+      env: { ...process.env, VERCEL_DEPLOY_HOOK: hook, published: String(published),
+             published_when_deployed: String(before), MIN_HOURS_BETWEEN_PUBLISHES: "22" },
+    });
+    const out = (String(r.stdout ?? "") + String(r.stderr ?? "")).trim();
+    const res = { out, asked: /asked the site to pick up/.test(out), stamped: fs.existsSync(stamp) };
+    fs.rmSync(W, { recursive: true, force: true });
+    return res;
+  };
+
+  let r = run({ stampAgeH: null });
+  ok("with no stamp at all it asks", r.asked, r.out.split("\n").pop());
+  ok("and records that it did, where the next window can read it", r.stamped);
+
+  r = run({ stampAgeH: 30 });
+  ok("thirty hours later it asks again", r.asked, r.out.split("\n").pop());
+
+  r = run({ stampAgeH: 5 });
+  ok("five hours later it does not — this is the whole saving", !r.asked, r.out.split("\n").pop());
+  ok("and says when the next one is due", /next one after 22h/.test(r.out));
+
+  r = run({ stampAgeH: 30, published: 0 });
+  ok("a window that published nothing asks for nothing", !r.asked, r.out.split("\n").pop());
+
+  r = run({ stampAgeH: null, hook: "" });
+  ok("with no hook configured it says so instead of failing",
+    !r.asked && /keeps its old copy/.test(r.out), r.out.split("\n").pop());
+
+  /* THE EXPENSIVE MISTAKE IN THE OTHER DIRECTION: a deployment that was never
+     queued must not be recorded as one, or the site goes a whole day without
+     the archive and nothing anywhere says why. */
+  r = run({ stampAgeH: null, hook: DEAD });
+  ok("a hook that failed is not recorded as a success", !r.stamped, r.out.split("\n").pop());
+  ok("and it says so out loud", /::warning/.test(r.out));
+
+  srv.kill();
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);

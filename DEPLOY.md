@@ -202,7 +202,7 @@ the deployments that are actually wanted:
 | when | who asks |
 |---|---|
 | a real change is pushed | `.github/workflows/deploy.yml` |
-| fresh archive data, hourly | the collection loop in `.github/workflows/archive.yml` |
+| fresh archive data, about once a day | the collection loop in `.github/workflows/archive.yml` |
 
 Both POST the same **deploy hook**. Set it up once:
 
@@ -215,10 +215,20 @@ Until that secret exists nothing deploys automatically. Both workflows say so
 in their logs rather than failing quietly, and you can always deploy by hand
 from the **Actions** tab → **deploy** → **Run workflow**.
 
-`.vercelignore` leaves the archive's 92,181 dated day-shards out of the upload.
-Nothing serves them: no page fetches them, and the functions that read them go
-to `raw.githubusercontent.com`, not to the deployment. Leaving a file out of a
-deployment does not remove it from the repository.
+`.vercelignore` leaves 223,526 of the archive's 223,618 files out of the
+upload — a deployment carries **92**. The dated day-shards are served to
+nobody at all; the 65,536 profile shards and 65,809 room `_meta.json` are read
+straight from GitHub instead, through the rewrites in `vercel.json`, which
+also makes them always current rather than frozen at the last publish. What
+stays is the offline fallback, because a fallback that needs a third party to
+be up is not one. Leaving a file out of a deployment does not remove it from
+the repository.
+
+**Why deploys are rare.** One takes about seven minutes, five of them cloning
+the repository, so each one costs real money. The archiver asks for at most
+one a day; what ages in between is only the fallback, which states its own age
+on the page. Live rooms, the deals board and the shop come from the API and
+are never affected.
 
 `scripts/test-deploy-gate.mjs` checks all four of those files agree — including
 that no page or function has started fetching something `.vercelignore` would

@@ -336,23 +336,36 @@ jobs:
           # requested, measured over three days. This loop is alive 97.9% of
           # the time and it already knows whether there is anything new to
           # publish, which a schedule would have to go and find out.
-          # SIX HOURS, MEASURED RATHER THAN CHOSEN. A deployment of this
-          # repository takes about nine minutes — Vercel shallow-clones ten
-          # commits of a 223,618-file tree before it does anything, and no
-          # amount of trimming the upload touches that. Hourly would be ~27
-          # deployments a day and about $51 a month of build time; six-hourly
-          # is about $13.
+          # ── HOW OFTEN THE SITE IS ASKED TO PICK THE ARCHIVE UP ───────────
           #
-          # And it costs nothing anybody can see. What goes stale is the
-          # FALLBACK — the archived copy served when Technocore refuses, the
-          # profile counts, the room history ranges. Live rooms, the deals
-          # board and the shop all come from the API in real time and are not
-          # affected by this number at all.
+          # ONCE A DAY, and the number is a budget decision rather than a
+          # taste. A deployment of this repository takes about seven minutes —
+          # five of them cloning a 223,618-file tree, which nothing in this
+          # repository can shorten — so every publish costs real money and the
+          # only question is how many are worth it.
           #
-          # The real fix is a small repository, so the clone stops being the
-          # expense. Until then this is the dial.
-          DEPLOY_EVERY=21600
-          last_deploy=$(date +%s)
+          # WHAT GOES STALE IS THE FALLBACK: the archived copy /api/city and
+          # /api/room serve when Technocore refuses, and the city snapshot.
+          # Both state their own age on the page, so an old one is honest
+          # rather than wrong. Live rooms, the deals board and the shop come
+          # from the API in real time and never touch this. The profile counts
+          # and room history ranges are read straight from GitHub now (see the
+          # rewrites in vercel.json) and are always current whatever this says.
+          #
+          # ── AND WHY THE TIMER MOVED OUT OF THIS LOOP ─────────────────────
+          #
+          # It used to live in the pass loop with DEPLOY_EVERY=21600 — six
+          # hours — inside a window that is RUN_SECONDS=19800 long. Five and a
+          # half hours. The condition could never once be true, and nobody
+          # would ever have found out, because the end-of-window publish below
+          # was quietly doing all the deploying at whatever rate the windows
+          # happened to end.
+          #
+          # A timer that cannot fire is worse than no timer: it is a number in
+          # a file that looks like the answer to "how often does this happen"
+          # and is not. So the deciding happens in exactly one place now, at
+          # the end of the window, and it reads how long it has actually been.
+          MIN_HOURS_BETWEEN_PUBLISHES=22
           published_when_deployed=0
           while true; do
             sleep 300
@@ -383,27 +396,6 @@ jobs:
                 if(r) console.log(`  coverage ${(r.coverage*100).toFixed(2)}% — produced ${r.produced}, missed ${r.missed}, ${r.reads} reads`);
               }catch{}' || true
 
-            # ── THE HOURLY PUBLISH ────────────────────────────────────────
-            # Only when there is something new to publish. An hourly
-            # deployment of a tree nobody has changed is a build paid for and
-            # a CDN rewritten with the bytes already on it.
-            now=$(date +%s)
-            if [ -n "${VERCEL_DEPLOY_HOOK:-}" ] \
-               && [ "$published" -gt "$published_when_deployed" ] \
-               && [ $(( now - last_deploy )) -ge "$DEPLOY_EVERY" ]; then
-              code=$(curl -sS -o /dev/null -w '%{http_code}' -X POST "$VERCEL_DEPLOY_HOOK" 2>/dev/null) || code=000
-              if [ "$code" = "200" ] || [ "$code" = "201" ]; then
-                echo "  asked the site to pick up the last $(( published - published_when_deployed )) publish(es)"
-                last_deploy=$now
-                published_when_deployed=$published
-              else
-                # Not fatal, and deliberately not retried here: the next pass
-                # is five minutes away and will try again. A collection window
-                # must never end because a deployment could not be requested.
-                echo "::warning title=archive::the deploy hook answered HTTP $code — the site is still on its previous copy"
-                last_deploy=$now
-              fi
-            fi
 
             # Keep the run's own clone from bloating over five and a half
             # hours. Cheap, and it stops the push slowing down as the day
@@ -451,13 +443,38 @@ jobs:
             *) echo "::warning title=archive::the final publish did not land (exit $rc) — the snapshots stay as they were" ;;
           esac
 
-          # And if that final publish carried something the site has not seen,
-          # ask for it now rather than leaving it for the next window.
-          if [ -n "${VERCEL_DEPLOY_HOOK:-}" ] && [ "$published" -gt "$published_when_deployed" ]; then
+          # ── AND, AT MOST ONCE A DAY, ASK THE SITE TO PICK IT UP ──────────
+          #
+          # A window is five and a half hours, so this runs four or five times
+          # a day and only one of those should cost a deployment. Which one is
+          # decided by a stamp the last successful ask left behind, because a
+          # variable in this script cannot outlive the job — that is precisely
+          # how the old six-hour timer came to be unable to fire.
+          #
+          # The stamp lives in web/data so the publish above carries it, and
+          # it is written only AFTER the hook has been accepted: a deployment
+          # that was never queued must not stop the next one from being. If
+          # the runner dies between the two, the stamp is missing and the next
+          # window asks again — one deployment too many, which is the right
+          # direction to be wrong in.
+          STAMP=web/data/.last-published
+          last=$(cat "$STAMP" 2>/dev/null || echo 0)
+          case "$last" in ''|*[!0-9]*) last=0 ;; esac
+          since=$(( $(date +%s) - last ))
+          if [ -z "${VERCEL_DEPLOY_HOOK:-}" ]; then
+            echo "no VERCEL_DEPLOY_HOOK — the archive is safely pushed, but the site keeps its old copy"
+          elif [ "$published" -le "$published_when_deployed" ]; then
+            echo "nothing new to put on the site"
+          elif [ "$last" -gt 0 ] && [ "$since" -lt $(( MIN_HOURS_BETWEEN_PUBLISHES * 3600 )) ]; then
+            echo "the site was refreshed $(( since / 3600 ))h ago; next one after ${MIN_HOURS_BETWEEN_PUBLISHES}h"
+          else
             code=$(curl -sS -o /dev/null -w '%{http_code}' -X POST "$VERCEL_DEPLOY_HOOK" 2>/dev/null) || code=000
             case "$code" in
-              200|201) echo "asked the site to pick up the end of this window" ;;
-              *) echo "::warning title=archive::the deploy hook answered HTTP $code at the end of the window" ;;
+              200|201)
+                echo "asked the site to pick up the archive$([ "$last" -gt 0 ] && echo " — $(( since / 3600 ))h since the last time")"
+                date +%s > "$STAMP" ;;
+              *)
+                echo "::warning title=archive::the deploy hook answered HTTP $code — the site keeps its old copy, and the next window will try again" ;;
             esac
           fi
           # ONE LINE SAYING HOW THE WINDOW WENT, in the only channel that can be

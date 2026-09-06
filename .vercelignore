@@ -60,6 +60,10 @@ web/data/*/20??-??-??.json
 web/data/profiles/
 web/data/*/_meta.json
 
+# The archiver's note to its next self: when it last asked the site to pick
+# the archive up. Bookkeeping, not content.
+web/data/.last-published
+
 # WHAT IS LEFT, and why each one stays:
 #   web/data/index.json, roster.json, recent.json, city-snapshot.json,
 #   tclk-deals.json, and web/data/room-snapshots/*.json
