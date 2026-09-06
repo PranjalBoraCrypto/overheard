@@ -1698,6 +1698,7 @@ footer a{color:var(--blue)}
      needed adjusting to sit here. -->
 <script src="/sky.js" type="module"></script>
 <script src="/bar.js" type="module"></script>
+<script src="/foot.js" type="module"></script>
 </head>
 <body>
 <div class="spot" aria-hidden="true"></div>
@@ -2410,6 +2411,12 @@ footer a{color:var(--blue)}
     Frames are read from the public network and checked in this tab. Ids are recomputed only for frames whose bytes this page can reproduce exactly. Spec: <a href="https://github.com/flop-labs/tclk" rel="noopener noreferrer">flop-labs/tclk</a>.
   </footer>
 </div>
+
+<!-- The <footer> above is this page's own technical note, not the site's
+     footer — it says where these frames came from and which spec they follow,
+     which is true of nowhere else. The site footer is the shared one, as on
+     every other page. -->
+<overheard-foot></overheard-foot>
 
 <script type="module">
 import {
