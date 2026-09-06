@@ -281,9 +281,12 @@ console.log("\n=== L. the page, as text");
     /@media \(max-width:900px\)\{[\s\S]*?env\(safe-area-inset-bottom/.test(page));
   /* A surface fixed over the page hides what is under it unless the page is
      told how tall it is, so the height is measured and reserved. */
+  /* On the BODY, not on the page column: the footer breaks out of that column
+     to span the window, so a reserve inside it would have left the dock
+     sitting on top of the footer. */
   ok("the page reserves the dock's height so nothing ends up behind it",
     /--dock-h:\s*0px/.test(page) &&
-    /\.shell\{[\s\S]{0,200}?padding:[^;}]*var\(--dock-h\)/.test(page) &&
+    /body\{padding-bottom:var\(--dock-h\)\}/.test(page) &&
     /setProperty\("--dock-h"/.test(page));
   /* A different running order, not the desktop one narrowed: question, then
      the ring, then the two figures. .ask dissolves into the hero's own grid

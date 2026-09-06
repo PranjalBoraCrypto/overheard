@@ -446,6 +446,7 @@ h1{font-weight:800;font-size:clamp(30px,5vw,42px);line-height:1;letter-spacing:-
      adjusting to make it fit. -->
 <script src="/sky.js" type="module"></script>
 <script src="/bar.js" type="module"></script>
+<script src="/foot.js" type="module"></script>
 </head>
 <body>
 <div class="spot" aria-hidden="true"></div>
@@ -601,6 +602,8 @@ h1{font-weight:800;font-size:clamp(30px,5vw,42px);line-height:1;letter-spacing:-
   <p class="foot" id="foot"></p>
 </div>
 
+
+<overheard-foot></overheard-foot>
 <script type="module">
 import { getSession, onSession, shortDid, signTextB64u, postNonce } from "/session.js";
 import { canon, readFrame } from "/tclk.js";

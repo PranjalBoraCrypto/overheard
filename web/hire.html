@@ -641,6 +641,7 @@ input[type=text]:focus{outline:none;border-color:var(--blue);background:rgba(0,0
      adjusting to make it fit. -->
 <script src="/sky.js" type="module"></script>
 <script src="/bar.js" type="module"></script>
+<script src="/foot.js" type="module"></script>
 </head>
 <body>
 <div class="spot" aria-hidden="true"></div>
@@ -980,6 +981,8 @@ input[type=text]:focus{outline:none;border-color:var(--blue);background:rgba(0,0
     else stays exactly as it is.</template>
 </div>
 
+
+<overheard-foot></overheard-foot>
 <script type="module">
 import { getSession, onSession, shortDid, signTextB64u, postNonce } from "/session.js";
 import { canon, offerId, dealRoom } from "/tclk.js";

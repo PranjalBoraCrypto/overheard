@@ -131,7 +131,13 @@ body{background:var(--void);color:var(--dim);font-family:var(--display);
 }
 
 .shell{max-width:1280px;margin:0 auto;position:relative;z-index:1;
-  padding:calc(var(--barh) + var(--s4)) var(--s4) calc(96px + var(--dock-h))}
+  padding:calc(var(--barh) + var(--s4)) var(--s4) var(--s5)}
+/* THE DOCK RESERVE BELONGS TO THE DOCUMENT, not to the column. It used to sit
+   on .shell's bottom padding, which was right until the footer arrived — the
+   footer breaks out of the column to span the window, so it is not in .shell,
+   and on a phone the docked call surface would have sat straight on top of
+   it. On the body it clears everything on the page, footer included. */
+body{padding-bottom:var(--dock-h)}
 
 /* ── the way back, and the room ────────────────────────────────────────────*/
 .topbar{display:flex;align-items:center;justify-content:space-between;gap:var(--s3);
@@ -159,7 +165,7 @@ body{background:var(--void);color:var(--dim);font-family:var(--display);
 .hero{position:relative;overflow:hidden;border:1px solid var(--line);border-radius:22px;
   background:var(--rise-1);
   display:grid;grid-template-columns:minmax(0,1fr) minmax(0,.92fr);
-  gap:var(--s4);align-items:center;padding:var(--s5) var(--s4)}
+  gap:var(--s3) var(--s4);align-items:center;padding:var(--s4) var(--s4) var(--s3)}
 .hero::before{content:"";position:absolute;inset:0;pointer-events:none;
   background:radial-gradient(56% 78% at 78% 46%, rgba(0,180,215,.13), transparent 68%)}
 .ask{position:relative;z-index:1;min-width:0}
@@ -181,8 +187,9 @@ h1{font-size:clamp(27px,3.1vw,40px);line-height:1.1;letter-spacing:-.028em;
    4+1 at one width and 3+2 at another, and a single orphan under four
    siblings reads as something that fell off. Three columns always: two tidy
    rows, and the labels line up down the page. */
-.facts{display:grid;grid-template-columns:repeat(3,minmax(0,auto));
-  justify-content:start;gap:var(--s3) var(--s5);margin-top:var(--s4);
+.facts{grid-column:1/-1;display:grid;
+  grid-template-columns:repeat(5,minmax(0,auto));justify-content:space-between;
+  gap:var(--s2) var(--s3);margin-top:var(--s2);
   padding-top:var(--s3);border-top:1px solid var(--line)}
 .fact{display:flex;flex-direction:column;gap:2px}
 .fact span{font-family:var(--mono);font-size:var(--t-micro);letter-spacing:.11em;
@@ -206,12 +213,9 @@ h1{font-size:clamp(27px,3.1vw,40px);line-height:1.1;letter-spacing:-.028em;
 
    An empty market draws an empty ring. */
 .corewrap{position:relative;z-index:1;justify-self:center;width:100%;max-width:430px;
-  aspect-ratio:1;display:grid;place-items:center;
-  transform:perspective(900px) rotateX(var(--rx,0deg)) rotateY(var(--ry,0deg));
-  transition:transform .5s cubic-bezier(.22,.61,.36,1)}
-[data-fx="full"] .corewrap{transition:none}
+  aspect-ratio:1;display:grid;place-items:center}
 .core{width:100%;height:100%;display:block;overflow:visible}
-.core .field{fill:none;stroke:rgba(88,233,255,.11);stroke-width:1}
+.core .field,.core .fieldstill{fill:none;stroke:rgba(88,233,255,.11);stroke-width:1}
 .core .track{fill:none;stroke:rgba(147,182,192,.13);stroke-width:13;stroke-linecap:round}
 .core .arc{fill:none;stroke-width:13;stroke-linecap:round;
   transition:stroke-dasharray .8s cubic-bezier(.22,.61,.36,1),
@@ -577,7 +581,7 @@ h1{font-size:clamp(27px,3.1vw,40px);line-height:1.1;letter-spacing:-.028em;
   .corewrap{order:4;max-width:min(70vw,290px);transform:none;margin-top:2px}
   .sides2{order:5;margin-top:var(--s3)}
   .facts{order:6;grid-template-columns:repeat(3,minmax(0,1fr));
-    justify-content:stretch;gap:var(--s3) var(--s2);margin-top:var(--s2)}
+    justify-content:stretch;gap:var(--s2);margin-top:var(--s2)}
   .fact{align-items:center}
 
   /* THE PANEL LEAVES THE PAGE. It becomes a surface docked to the bottom of
@@ -669,15 +673,14 @@ h1{font-size:clamp(27px,3.1vw,40px);line-height:1.1;letter-spacing:-.028em;
    the numbers move is information — and drops everything ambient. */
 [data-fx="lean"] .beltrun{animation:none!important}
 [data-fx="lean"] .core .sig{display:none}
-[data-fx="lean"] .corewrap{transform:none}
 @media (prefers-reduced-motion:reduce){
   *{transition:none!important;animation:none!important}
   .core .sig{display:none}
-  .corewrap{transform:none}
 }
 </style>
 <script src="/sky.js" type="module"></script>
 <script src="/bar.js" type="module"></script>
+<script src="/foot.js" type="module"></script>
 </head>
 <body>
 <svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
@@ -733,23 +736,19 @@ h1{font-size:clamp(27px,3.1vw,40px);line-height:1.1;letter-spacing:-.028em;
               <span class="u" id="uN">—</span>
             </div>
           </div>
-
-          <div class="facts">
-            <div class="fact"><span>closes</span><b id="fClose">—</b></div>
-            <div class="fact"><span>from now</span><b id="fLeft">—</b></div>
-            <div class="fact"><span>volume</span><b id="fPaper">—</b></div>
-            <div class="fact"><span>calls</span><b id="fCalls">—</b></div>
-            <div class="fact"><span>people</span><b id="fPeople">—</b></div>
-          </div>
         </div>
 
         <div class="corewrap" id="corewrap">
           <svg class="core" viewBox="0 0 400 400" role="img" aria-labelledby="coretitle">
             <title id="coretitle">The split, drawn as a ring</title>
+            <!-- Three bodies on one axle. At rest they draw exactly the
+                 field they always did; each is its own group so it can be
+                 turned on its own, and the two dashed ones make the turning
+                 visible. -->
             <g class="field" aria-hidden="true">
-              <circle cx="200" cy="200" r="186" stroke-dasharray="1 9"/>
-              <circle cx="200" cy="200" r="169"/>
-              <circle cx="200" cy="200" r="96" stroke-dasharray="2 7"/>
+              <g id="ring1"><circle cx="200" cy="200" r="186" stroke-dasharray="1 9"/></g>
+              <circle class="fieldstill" cx="200" cy="200" r="169"/>
+              <g id="ring3"><circle cx="200" cy="200" r="96" stroke-dasharray="2 7"/></g>
             </g>
             <circle class="track" cx="200" cy="200" r="150"/>
             <circle class="arc arcY" id="arcY" cx="200" cy="200" r="150"
@@ -767,6 +766,24 @@ h1{font-size:clamp(27px,3.1vw,40px);line-height:1.1;letter-spacing:-.028em;
             <span class="pk" id="pcK">on yes</span>
             <span class="pn" id="pcN"></span>
           </div>
+        </div>
+
+        <!-- OUT OF THE COLUMN. Five facts in a column half the hero wide set
+             three-and-two and made the section a row taller than it had any
+             reason to be. Across the whole width they are one line, under
+             both the question and the ring, and the empty band beneath the
+             ring is doing something.
+
+             AFTER the ring in source, not before: a full-width item is placed
+             at the next free row, and anything that follows it lands on the
+             row after that. Written above the ring it put the ring on a third
+             row of its own and made the section taller than it started. -->
+        <div class="facts">
+          <div class="fact"><span>closes</span><b id="fClose">—</b></div>
+          <div class="fact"><span>from now</span><b id="fLeft">—</b></div>
+          <div class="fact"><span>volume</span><b id="fPaper">—</b></div>
+          <div class="fact"><span>calls</span><b id="fCalls">—</b></div>
+          <div class="fact"><span>people</span><b id="fPeople">—</b></div>
         </div>
       </header>
 
@@ -962,6 +979,8 @@ h1{font-size:clamp(27px,3.1vw,40px);line-height:1.1;letter-spacing:-.028em;
     </aside>
   </div>
 </div>
+
+<overheard-foot></overheard-foot>
 
 <script type="module">
 import { getSession, onSession, shortDid, signTextB64u, postNonce } from "/session.js";
@@ -1508,28 +1527,119 @@ addEventListener("resize", measureDock, { passive: true });
    has caught up — the same shape as the site's spotlight, for the same reason:
    a rAF that never ends is a cost the page keeps paying while nothing moves.
    Never on a touch screen, where there is no pointer to lean toward. */
+/* ── THE CORE HAS MASS ─────────────────────────────────────────────────────
+   The old version tilted the whole object toward the cursor. It moved, and it
+   said nothing: a flat plate on a hinge, the same gesture every mouse-over
+   ornament on the web makes.
+
+   This is a different idea. The three faint circles behind the ring are three
+   bodies on one axle, and the pointer is coupled to them through something
+   viscous. Sweep around the ring and you are dragging them; they take up your
+   angular velocity, the light outer one almost at once, the heavy inner one
+   grudgingly and BACKWARDS, the way a gear train reverses. Stop, and nothing
+   stops with you — they coast, shedding speed to drag, and come to rest
+   wherever the momentum ran out. Flick fast and they spin hard. Cross the
+   middle slowly and they barely stir.
+
+   Three constants do all of it, and each is a physical fact rather than a
+   number that looked nice:
+
+     inertia   how much of your motion it takes up. Bigger is heavier.
+     damp      how fast it gives that motion back to the medium, per second.
+     couple    the sign and strength of the linkage. Negative means it runs
+               against the others.
+
+   The data never moves. The two arcs are the market's answer and the time ring
+   is the deadline; those are facts, and a fact that drifts because somebody
+   waved a mouse at it is a lie. Only the field turns.
+
+   THE ONLY REAL TORQUE IS THE POINTER'S OWN ANGULAR VELOCITY about the centre
+   of the ring — the z-component of r × v over r². Move straight at the middle
+   and it is zero, and rightly: pushing a wheel through its own axle does not
+   turn it. That is why this reads as a machine and the tilt read as a hinge. */
 function lean() {
   if (!FINE) return;
   const wrap = $("corewrap");
   if (!wrap) return;
-  let tx = 0, ty = 0, cx = 0, cy = 0, running = false;
-  const paintLean = () => {
-    cx += (tx - cx) * 0.12;
-    cy += (ty - cy) * 0.12;
-    wrap.style.setProperty("--ry", `${cx.toFixed(2)}deg`);
-    wrap.style.setProperty("--rx", `${cy.toFixed(2)}deg`);
-    if (Math.abs(tx - cx) > 0.02 || Math.abs(ty - cy) > 0.02) requestAnimationFrame(paintLean);
-    else running = false;
-  };
-  addEventListener("pointermove", (e) => {
-    if (TIER() !== "full") { tx = 0; ty = 0; }
-    else {
-      const r = wrap.getBoundingClientRect();
-      if (!r.width) return;
-      tx = ((e.clientX - (r.left + r.width / 2)) / r.width) * 7;
-      ty = -((e.clientY - (r.top + r.height / 2)) / r.height) * 7;
+
+  const bodies = [
+    { el: $("ring1"),   inertia: 1.00, damp: 1.90, couple: 1.00 },
+    { el: $("ring3"),   inertia: 2.40, damp: 2.30, couple: -0.62 },
+    { el: $("signals"), inertia: 3.60, damp: 2.80, couple: 0.34 },
+  ].filter((b) => b.el);
+  if (!bodies.length) return;
+  for (const b of bodies) { b.a = 0; b.w = 0; }
+
+  /* Below this the thing has stopped. Left open-ended it would re-queue a
+     frame forever to move a ring by a millionth of a degree, which is a phone
+     battery running down behind a page nobody is looking at. */
+  const STILL = 0.4;          // degrees per second
+  const MAXW = 420;           // and it will not become a food processor
+
+  let last = 0, running = false;
+
+  const step = (now) => {
+    const dt = last ? Math.min(0.05, (now - last) / 1000) : 0.016;
+    last = now;
+    let alive = false;
+    for (const b of bodies) {
+      /* Viscous drag: speed decays by a fixed FRACTION per unit time, so the
+         curve is the same whether the frame took 8ms or 40. Linear subtraction
+         would make a slow machine stop faster than a quick one. */
+      b.w *= Math.exp(-b.damp * dt);
+      b.a += b.w * dt;
+      if (Math.abs(b.w) > STILL) alive = true;
+      b.el.setAttribute("transform", `rotate(${b.a.toFixed(2)} 200 200)`);
     }
-    if (!running) { running = true; requestAnimationFrame(paintLean); }
+    if (alive) requestAnimationFrame(step);
+    else { running = false; last = 0; }
+  };
+
+  let px = null, py = null, pt = 0;
+  addEventListener("pointermove", (e) => {
+    const tier = TIER();
+    if (tier === "lean") return;
+    const r = wrap.getBoundingClientRect();
+    if (!r.width) return;
+
+    const now = performance.now();
+    const x = e.clientX - (r.left + r.width / 2);
+    const y = e.clientY - (r.top + r.height / 2);
+    /* A gap in the events is a tab coming back or a pointer jumping across the
+       screen, not a hand moving that fast. Re-anchor rather than read a
+       thousand degrees a second off it. */
+    const gap = now - pt;
+    if (px === null || gap > 180) { px = x; py = y; pt = now; return; }
+
+    const dt = Math.max(0.008, gap / 1000);
+    const vx = (x - px) / dt, vy = (y - py) / dt;
+    px = x; py = y; pt = now;
+
+    /* r × v over r², in degrees per second: how fast the pointer is going
+       round the middle, which is the only part of its motion a wheel can feel.
+       The floor on r² keeps the maths finite at the exact centre. */
+    const d2 = Math.max(2500, x * x + y * y);
+    const drive = ((x * vy - y * vx) / d2) * (180 / Math.PI);
+
+    /* And it has to let go. Past the edge of the ring the grip falls away over
+       about half a radius, so a pointer on its way to the sign-in button does
+       not set the thing spinning from across the page. */
+    const out = Math.sqrt(d2) - r.width / 2;
+    const grip = out <= 0 ? 1 : Math.exp(-out / (r.width * 0.42));
+    if (grip < 0.02) return;
+
+    const want = Math.max(-MAXW, Math.min(MAXW, drive));
+    const active = tier === "full" ? bodies : bodies.slice(0, 1);
+    for (const b of active) {
+      /* Coupled, not kicked. It is pulled TOWARDS the speed you are moving at,
+         by an amount its own mass allows — so holding a steady sweep settles
+         it at that speed instead of winding it up without limit. */
+      const k = Math.min(1, (6.5 * dt * grip) / b.inertia);
+      b.w += (want * b.couple - b.w) * k;
+    }
+    if (!running && bodies.some((b) => Math.abs(b.w) > STILL)) {
+      running = true; last = 0; requestAnimationFrame(step);
+    }
   }, { passive: true });
 }
 
