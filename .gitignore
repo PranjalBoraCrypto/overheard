@@ -1,0 +1,13 @@
+# Atomic writes leave a .tmp beside their target for a few milliseconds.
+#
+# That is long enough. `git add web/data` walks tens of thousands of paths and
+# takes seconds over it; if it decides to index one of these and the rename
+# takes it away first, git exits 128 — and under `bash -e` that ends a
+# five-and-a-half-hour collection window. It happened four times in three days
+# and showed up in the Actions tab as three grey rows and the string
+# "exit code 128".
+#
+# The rule covers directories as well as files, which is why the room-snapshot
+# builder stages its new set as `room-snapshots.tmp` before swapping it in:
+# one rule, rather than a second one somebody has to remember.
+*.tmp

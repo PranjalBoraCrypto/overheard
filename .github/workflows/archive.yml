@@ -124,153 +124,218 @@ jobs:
           node scripts/archive.mjs &
           ARCH=$!
           echo "collector started (pid $ARCH)"
+          echo "::notice title=archive::window open — collecting for ${RUN_SECONDS}s, publishing every 300s"
+
+          # ── ONE PASS, IN A PROCESS OF ITS OWN ─────────────────────────────
+          # This step runs under `bash -e`, so any unguarded command that fails
+          # ends it — and ending it ends the COLLECTION WINDOW, which is the
+          # expensive half. That is what all four failures in the three days to
+          # 6 September were: a five-and-a-half-hour window killed seven minutes
+          # in by one `git add` losing a race, and nothing to show for it but
+          # "exit code 128".
+          #
+          # Collecting and publishing do not have to share a fate. The collector
+          # is already its own process and never noticed; what was missing is
+          # that this loop has to survive too. So a pass is now a script run as
+          # a CHILD BASH PROCESS, and the loop reads its exit code.
+          #
+          # IT HAS TO BE A CHILD PROCESS, and that is not obvious. The natural
+          # way to write this — `if ! ( set -e; ... ); then` — does not work:
+          # bash suppresses `errexit` inside any compound command used as a
+          # condition or on the left of `||`, and the suppression propagates
+          # into subshells EVEN IF THEY SET IT AGAIN. Tested, both forms: the
+          # body ran straight past a failing command and the ERR trap never
+          # fired, which would have been worse than the bug being fixed — a
+          # pass stumbling on through half-done git state. A separate `bash`
+          # process starts with its own flags and behaves.
+          #
+          # Exit codes, so the summary at the end can tell four things apart:
+          #   0  published      2  nothing new to say
+          #   3  collected, could not push      anything else, a real fault
+          # and in that last case the ERR trap has already named the line and
+          # the command that did it.
+          cat > "${RUNNER_TEMP:-/tmp}/publish-pass.sh" <<'PASS_SCRIPT'
+          # -E, NOT JUST -e, AND THAT IS THE WHOLE POINT OF THE TRAP.
+          # An ERR trap is not inherited by shell functions unless errtrace is
+          # on. Every git command that has ever failed in here fails inside
+          # stage_this_pass(), so with a plain `set -e` the script exits 1 and
+          # prints NOTHING — which is exactly the "exit code 128 and no other
+          # information" that four failures reported. Tested both ways: with
+          # -e, silence; with -eE, "trap fired: nice -n 15 git add web/data".
+          set -eE
+          trap 'echo "::error title=archive pass ${PASS_N}::line $LINENO: $BASH_COMMAND"' ERR
+
+          # `nice`, because git and the collector share two vCPUs on a runner
+          # and hashing several megabytes of shards can hold the CPU long
+          # enough for the lobby to fill its eight-second window.
+          # ── THREE TIERS, THREE CLOCKS ──────────────────────────────
+          # MEASURED: .git reached 2.0 GB in about a day and a half, and
+          # fetches began timing out. 143 commits a day, each rewriting
+          # 27 MB of profile shards, a 3.4 MB template table and every
+          # active room's day shard, is roughly 600 MB of new objects a
+          # day. Nothing about the site needs that.
+          #
+          # What actually has to be current, and what does not:
+          #
+          #   every pass    cursors, recent, standings, index, owners,
+          #                 roster -- ~250 KB total, and `recent` is the
+          #                 homepage strip people watch
+          #   every 12th    room day shards, per-room meta, templates,
+          #                 spam, AND PROFILES -- the bulk, and the least
+          #                 time-critical data in the project. It is an
+          #                 ARCHIVE.
+          #
+          # Profiles used to have a tier of their own, every 3rd pass. They
+          # were the single largest thing this repository was spending
+          # itself on: 32 stagings a day, each one writing new objects for
+          # nearly every shard that had seen a message. Nobody needs their
+          # rank fifteen minutes fresher rather than ninety, and the card's
+          # immediacy comes from the live room scan and the "Look again"
+          # button rather than from here.
+          #
+          # Collection is unaffected: the archiver still reads every room
+          # on its own schedule and writes to disk continuously. This only
+          # changes how often git is asked to remember it.
+          #
+          # tclk-offers/tail.* joins this tier, and it is the only ROOM-level
+          # file that does. PROBED 4 September from a runner, because nothing
+          # else can reach the venue: the live room is capped at 200 messages
+          # BY TECHNOCORE (limit=5000 returns 200), cannot be paged backwards
+          # (`since` returns the same newest 200), and runs at ~2,600 frames
+          # an hour. So a live read reaches back FIVE MINUTES. The day shard
+          # covers the rest but is published every twelfth pass, and on that
+          # day had not been written since 08:46.
+          #
+          # In the gap between them, a real order — offer, accept and payment
+          # lock, all on the board — was invisible to the shop's own runner,
+          # which reported "0 owed" and went back to sleep while the buyer's
+          # money sat locked.
+          #
+          # The tail is BOUNDED — a window, not a log — so it stays a few
+          # hundred KB while the day shard grows past seven megabytes. That
+          # size difference is the entire argument for why this file may be
+          # committed every pass and the shard may not.
+          SMALL="web/data/cursors.json web/data/recent.json web/data/standings.json web/data/index.json web/data/owners.json web/data/roster.json web/data/tclk-offers/tail.ndjson web/data/tclk-offers/tail.json"
+          # A function, because the retry below has to stage EXACTLY these
+          # same tiers again after it moves onto the remote tip. Two copies
+          # of this list would drift, and the copy that drifted would be the
+          # one that only runs after something has already gone wrong.
+          stage_this_pass() {
+            for f in $SMALL; do [ -f "$f" ] && nice -n 15 git add "$f"; done
+            # PROFILES ARE NOT STAGED ON THEIR OWN ANY MORE. They used to
+            # go in on every third pass, which is 32 times a day, and each
+            # of those wrote new git objects for nearly every shard that had
+            # seen a message — measured at about 384 MB a pass before the
+            # shards were widened, and the largest single reason this
+            # repository reached 76 GB in ten days and answered a push with
+            # "approaching its size quota".
+            #
+            # They still go in with the publish tier below, which is the
+            # `git add web/data` on every 12th pass. Nothing a visitor can
+            # do needs a profile that is fifteen minutes fresher rather than
+            # ninety, and /api/profile reads whatever the last commit holds
+            # either way.
+            if [ $(( (PASS_N - 1) % 12 )) -eq 0 ]; then nice -n 15 git add web/data; fi
+          }
+          stage_this_pass
+          if git diff --staged --quiet; then
+            echo "pass ${PASS_N}: no new messages"
+            exit 2                       # nothing to say, and that is not a failure
+          fi
+
+          STAMP="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+          # Collecting is free; PUBLISHING costs a Vercel deploy. Every
+          # 12th commit is roughly twice an hour — and the pages that
+          # matter do not wait for a deploy anyway, because /api/profile
+          # and /api/recent read the archive straight from the repository.
+          if [ $(( (PASS_N - 1) % 12 )) -eq 0 ]; then
+            MSG="archive: publish $STAMP"
+          else
+            MSG="archive: $STAMP [skip ci]"
+          fi
+          nice -n 15 git commit -m "$MSG"
+
+          # ── WHY THIS IS NOT A REBASE ANY MORE ─────────────────────
+          # MEASURED, run #86 on 2 September: 157 push rejections and not
+          # one successful push across 5h30m. 52 commits and 909,466
+          # insertions were built and then destroyed with the runner. The
+          # collector was healthy the whole time — coverage climbed 6.26%
+          # to 58.53% and it exited on its own clock — so this was never
+          # a scheduling problem or a dead collector. Nothing could leave
+          # the machine.
+          #
+          # The cause is one sentence: `git rebase` refuses to start when
+          # the working tree is dirty, and the collector writes to that
+          # tree continuously. Between `git add` and `git rebase` there is
+          # always a new shard, so every single rebase died on "cannot
+          # rebase: You have unstaged changes", the fallback printed "no
+          # rebase in progress" twice because no rebase had begun, and the
+          # branch stayed behind. Once behind, permanently behind: every
+          # later pass committed onto a branch that could never be pushed.
+          #
+          # `git reset --mixed` does not look at the working tree at all.
+          # It moves HEAD and the index to the remote tip and leaves every
+          # file exactly where it is, so this pass's freshly collected
+          # data survives and is simply staged and committed again on top
+          # of whatever landed. That IS the "keep this run's version" rule
+          # the rebase was trying and failing to express — this run read
+          # the rooms later, so its data is strictly newer.
+          #
+          # And it cannot revert your work. Only the paths staged above
+          # are ever committed; a file the remote changed outside them
+          # stays behind in the working tree as an unstaged difference and
+          # is never staged, never committed, and thrown away with the
+          # runner.
+          PUSHED=""
+          for attempt in 1 2 3 4 5; do
+            if git push; then PUSHED=1; break; fi
+            echo "push rejected, catching up (attempt $attempt)"
+            git fetch origin "${GITHUB_REF_NAME}" || true
+            # Drop our commit, keep our files, land on the remote tip.
+            git reset --mixed "origin/${GITHUB_REF_NAME}" || true
+            stage_this_pass
+            if git diff --staged --quiet; then
+              echo "  caught up, and somebody else already said it"
+              PUSHED=1
+              break
+            fi
+            nice -n 15 git commit -m "$MSG"
+            sleep 3
+          done
+          # Loud, because this is the failure that looks like success. The
+          # run above stayed green for five and a half hours while putting
+          # nothing in the repository, and the only reason we know is that
+          # somebody read the log.
+          if [ -z "$PUSHED" ]; then
+            # LOUD. An annotation, not an echo: the run log redirects to a blob store
+            # this project cannot read, which is the whole reason four failures in
+            # three days said nothing but "exit code 128".
+            echo "::warning title=archive::pass ${PASS_N} collected but could not publish after five attempts — its data is still only on this runner"
+            exit 3
+          fi
+          PASS_SCRIPT
 
           pass=0
+          published=0; quiet=0; unpublished=0; failed=0
           while true; do
             sleep 300
             pass=$((pass + 1))
 
-            # `nice`, because git and the collector share two vCPUs on a runner
-            # and hashing several megabytes of shards can hold the CPU long
-            # enough for the lobby to fill its eight-second window.
-            # ── THREE TIERS, THREE CLOCKS ──────────────────────────────
-            # MEASURED: .git reached 2.0 GB in about a day and a half, and
-            # fetches began timing out. 143 commits a day, each rewriting
-            # 27 MB of profile shards, a 3.4 MB template table and every
-            # active room's day shard, is roughly 600 MB of new objects a
-            # day. Nothing about the site needs that.
-            #
-            # What actually has to be current, and what does not:
-            #
-            #   every pass    cursors, recent, standings, index, owners,
-            #                 roster -- ~250 KB total, and `recent` is the
-            #                 homepage strip people watch
-            #   every 12th    room day shards, per-room meta, templates,
-            #                 spam, AND PROFILES -- the bulk, and the least
-            #                 time-critical data in the project. It is an
-            #                 ARCHIVE.
-            #
-            # Profiles used to have a tier of their own, every 3rd pass. They
-            # were the single largest thing this repository was spending
-            # itself on: 32 stagings a day, each one writing new objects for
-            # nearly every shard that had seen a message. Nobody needs their
-            # rank fifteen minutes fresher rather than ninety, and the card's
-            # immediacy comes from the live room scan and the "Look again"
-            # button rather than from here.
-            #
-            # Collection is unaffected: the archiver still reads every room
-            # on its own schedule and writes to disk continuously. This only
-            # changes how often git is asked to remember it.
-            #
-            # tclk-offers/tail.* joins this tier, and it is the only ROOM-level
-            # file that does. PROBED 4 September from a runner, because nothing
-            # else can reach the venue: the live room is capped at 200 messages
-            # BY TECHNOCORE (limit=5000 returns 200), cannot be paged backwards
-            # (`since` returns the same newest 200), and runs at ~2,600 frames
-            # an hour. So a live read reaches back FIVE MINUTES. The day shard
-            # covers the rest but is published every twelfth pass, and on that
-            # day had not been written since 08:46.
-            #
-            # In the gap between them, a real order — offer, accept and payment
-            # lock, all on the board — was invisible to the shop's own runner,
-            # which reported "0 owed" and went back to sleep while the buyer's
-            # money sat locked.
-            #
-            # The tail is BOUNDED — a window, not a log — so it stays a few
-            # hundred KB while the day shard grows past seven megabytes. That
-            # size difference is the entire argument for why this file may be
-            # committed every pass and the shard may not.
-            SMALL="web/data/cursors.json web/data/recent.json web/data/standings.json web/data/index.json web/data/owners.json web/data/roster.json web/data/tclk-offers/tail.ndjson web/data/tclk-offers/tail.json"
-            # A function, because the retry below has to stage EXACTLY these
-            # same tiers again after it moves onto the remote tip. Two copies
-            # of this list would drift, and the copy that drifted would be the
-            # one that only runs after something has already gone wrong.
-            stage_this_pass() {
-              for f in $SMALL; do [ -f "$f" ] && nice -n 15 git add "$f"; done
-              # PROFILES ARE NOT STAGED ON THEIR OWN ANY MORE. They used to
-              # go in on every third pass, which is 32 times a day, and each
-              # of those wrote new git objects for nearly every shard that had
-              # seen a message — measured at about 384 MB a pass before the
-              # shards were widened, and the largest single reason this
-              # repository reached 76 GB in ten days and answered a push with
-              # "approaching its size quota".
-              #
-              # They still go in with the publish tier below, which is the
-              # `git add web/data` on every 12th pass. Nothing a visitor can
-              # do needs a profile that is fifteen minutes fresher rather than
-              # ninety, and /api/profile reads whatever the last commit holds
-              # either way.
-              if [ $(( (pass - 1) % 12 )) -eq 0 ]; then nice -n 15 git add web/data; fi
-            }
-            stage_this_pass
-            if git diff --staged --quiet; then
-              echo "pass $pass: no new messages"
-            else
-              STAMP="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
-              # Collecting is free; PUBLISHING costs a Vercel deploy. Every
-              # 12th commit is roughly twice an hour — and the pages that
-              # matter do not wait for a deploy anyway, because /api/profile
-              # and /api/recent read the archive straight from the repository.
-              if [ $(( (pass - 1) % 12 )) -eq 0 ]; then
-                MSG="archive: publish $STAMP"
-              else
-                MSG="archive: $STAMP [skip ci]"
-              fi
-              nice -n 15 git commit -m "$MSG"
-
-              # ── WHY THIS IS NOT A REBASE ANY MORE ─────────────────────
-              # MEASURED, run #86 on 2 September: 157 push rejections and not
-              # one successful push across 5h30m. 52 commits and 909,466
-              # insertions were built and then destroyed with the runner. The
-              # collector was healthy the whole time — coverage climbed 6.26%
-              # to 58.53% and it exited on its own clock — so this was never
-              # a scheduling problem or a dead collector. Nothing could leave
-              # the machine.
-              #
-              # The cause is one sentence: `git rebase` refuses to start when
-              # the working tree is dirty, and the collector writes to that
-              # tree continuously. Between `git add` and `git rebase` there is
-              # always a new shard, so every single rebase died on "cannot
-              # rebase: You have unstaged changes", the fallback printed "no
-              # rebase in progress" twice because no rebase had begun, and the
-              # branch stayed behind. Once behind, permanently behind: every
-              # later pass committed onto a branch that could never be pushed.
-              #
-              # `git reset --mixed` does not look at the working tree at all.
-              # It moves HEAD and the index to the remote tip and leaves every
-              # file exactly where it is, so this pass's freshly collected
-              # data survives and is simply staged and committed again on top
-              # of whatever landed. That IS the "keep this run's version" rule
-              # the rebase was trying and failing to express — this run read
-              # the rooms later, so its data is strictly newer.
-              #
-              # And it cannot revert your work. Only the paths staged above
-              # are ever committed; a file the remote changed outside them
-              # stays behind in the working tree as an unstaged difference and
-              # is never staged, never committed, and thrown away with the
-              # runner.
-              PUSHED=""
-              for attempt in 1 2 3 4 5; do
-                if git push; then PUSHED=1; break; fi
-                echo "push rejected, catching up (attempt $attempt)"
-                git fetch origin "${GITHUB_REF_NAME}" || true
-                # Drop our commit, keep our files, land on the remote tip.
-                git reset --mixed "origin/${GITHUB_REF_NAME}" || true
-                stage_this_pass
-                if git diff --staged --quiet; then
-                  echo "  caught up, and somebody else already said it"
-                  PUSHED=1
-                  break
-                fi
-                nice -n 15 git commit -m "$MSG"
-                sleep 3
-              done
-              # Loud, because this is the failure that looks like success. The
-              # run above stayed green for five and a half hours while putting
-              # nothing in the repository, and the only reason we know is that
-              # somebody read the log.
-              [ -n "$PUSHED" ] || echo "  NOT PUBLISHED — pass $pass is still only on this runner"
-            fi
+            rc=0
+            PASS_N=$pass bash "${RUNNER_TEMP:-/tmp}/publish-pass.sh" || rc=$?
+            case "$rc" in
+              0) published=$((published + 1)) ;;
+              2) quiet=$((quiet + 1)) ;;
+              3) unpublished=$((unpublished + 1)) ;;
+              *) failed=$((failed + 1))
+                 # Three, then only the count. GitHub keeps ten annotations of each
+                 # level per step and drops the rest in silence, so a window that
+                 # failed sixty times would otherwise say nothing about the last
+                 # fifty. The trap inside the pass has already named the command.
+                 if [ "$failed" -le 3 ]; then
+                   echo "::warning title=archive::pass $pass failed to publish (exit $rc) — the collector is untouched and the window continues"
+                 fi ;;
+            esac
 
             # Coverage is the number worth watching, so it goes in the log
             # every pass rather than only at the end.
@@ -299,6 +364,10 @@ jobs:
           done
 
           wait $ARCH || echo "collector exited non-zero"
+          # ONE LINE SAYING HOW THE WINDOW WENT, in the only channel that can be
+          # read back afterwards. Everything above is invisible to anybody who was
+          # not watching the log live, and nobody is ever watching the log live.
+          echo "::notice title=archive::window closed after $pass pass(es) — $published published, $quiet with nothing new, $unpublished collected-but-unpublished, $failed failed"
           echo "collection window complete"
 
       # ── THE CHAIN, WHICH IS THE WHOLE COVERAGE PROBLEM ────────────────────
