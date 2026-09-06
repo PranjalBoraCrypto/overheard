@@ -2018,6 +2018,29 @@ async function main() {
    exactly the parts where being wrong is silent — and a bare `main()` would
    have every one of those imports start a five-hour archive run against the
    live network. `process.argv[1]` is the script node was asked to run. */
+/* ── SAYING WHY, WHERE IT CAN BE READ AFTERWARDS ──────────────────────────
+   This process is started with `&` and nothing waits on its output; the
+   workflow watches only whether it is still alive. So when it dies early the
+   stack trace goes into a run log that needs admin rights on the repository
+   to download, and from outside all anybody can see is a window that ended
+   sooner than it should have. That has happened twice this week and been
+   guessed at both times.
+
+   A `::error` line on stdout becomes a GitHub annotation, and annotations are
+   on the public API. One line, because a multi-line annotation is truncated
+   at the first newline — so the stack goes to stderr as before, for whoever
+   can read it, and the first line goes somewhere everyone can. */
+const shout = (what, err) => {
+  const msg = String(err?.stack ?? err ?? "").split("\n")[0].slice(0, 300);
+  console.log(`::error title=archive::the collector stopped early — ${what}: ${msg}`);
+  console.error(err);
+};
+
 if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1])) {
-  main().catch((err) => { console.error(err); process.exit(1); });
+  /* Node's default for both of these is to print to stderr and exit, which is
+     precisely the invisible death described above. These do the same thing
+     and say so first. */
+  process.on("unhandledRejection", (err) => { shout("an unhandled rejection", err); process.exit(1); });
+  process.on("uncaughtException", (err) => { shout("an uncaught exception", err); process.exit(1); });
+  main().catch((err) => { shout("it threw", err); process.exit(1); });
 }

@@ -81,9 +81,9 @@ jobs:
     timeout-minutes: 350 # the loop stops itself at ~330; this is the backstop
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: "22"
 
@@ -125,8 +125,20 @@ jobs:
           # the whole window and this loop commits underneath it. Every file
           # is written to a temp name and renamed, so `git add` never catches
           # a half-written shard.
-          node scripts/archive.mjs &
+          # ── AND WHY IT IS GIVEN MORE HEAP THAN THE DEFAULT ────────────────
+          # A guess, labelled as one, and a cheap one. Node sizes its old-space
+          # from the machine and settles near 4GB here; writeStandings parses
+          # 815MB of JSON across 65,536 shards in one pass, every ten minutes,
+          # and the archive only grows. A heap exhaustion would kill this
+          # process silently from the loop's point of view — which is exactly
+          # what an early-ending window looks like from outside.
+          #
+          # The runner has 16GB, so 8 is safe and leaves room for git. If the
+          # windows still end early, the annotation after `wait` below will
+          # name the exit code and the guess was wrong; nothing else changes.
+          node --max-old-space-size=8192 scripts/archive.mjs &
           ARCH=$!
+          COLLECT_STARTED=$(date +%s)
           echo "collector started (pid $ARCH)"
           echo "::notice title=archive::window open — collecting for ${RUN_SECONDS}s, publishing every 300s"
 
@@ -220,6 +232,32 @@ jobs:
           # size difference is the entire argument for why this file may be
           # committed every pass and the shard may not.
           SMALL="web/data/cursors.json web/data/recent.json web/data/standings.json web/data/index.json web/data/owners.json web/data/roster.json web/data/tclk-offers/tail.ndjson web/data/tclk-offers/tail.json"
+
+          # ── WHICH PASSES CARRY THE WHOLE ARCHIVE ───────────────────────
+          # Every twelfth one, AND the last one of the window — and the last
+          # one is not a twelfth of anything. It is the only pass that runs
+          # AFTER the collector has exited, and the collector writes the final
+          # report and both cold-start snapshots on its way out. Those files
+          # exist for exactly one moment, between the collector stopping and
+          # the runner being deleted, so a last pass that does not stage
+          # web/data never commits them at all.
+          #
+          # THE ARITHMETIC ATE IT. The last pass is called with PASS_N=final,
+          # and inside a bash $(( )) an unset name is zero: (final - 1) % 12
+          # came out -1, the test was false, and the pass that exists
+          # specifically to publish the snapshots staged eight small files and
+          # nothing else. Measured on 6 September, one whole window after the
+          # last pass was added: web/data/room-snapshots/lobby.json on main
+          # was still stamped 30 August.
+          #
+          # So the question is asked once, by name, and the answer is kept in
+          # a variable rather than recomputed twice from a string that is not
+          # a number.
+          case "$PASS_N" in
+            final) FULL=1 ;;
+            *) if [ $(( (PASS_N - 1) % 12 )) -eq 0 ]; then FULL=1; else FULL=0; fi ;;
+          esac
+
           # A function, because the retry below has to stage EXACTLY these
           # same tiers again after it moves onto the remote tip. Two copies
           # of this list would drift, and the copy that drifted would be the
@@ -239,7 +277,7 @@ jobs:
             # do needs a profile that is fifteen minutes fresher rather than
             # ninety, and /api/profile reads whatever the last commit holds
             # either way.
-            if [ $(( (PASS_N - 1) % 12 )) -eq 0 ]; then nice -n 15 git add web/data; fi
+            if [ "$FULL" -eq 1 ]; then nice -n 15 git add web/data; fi
           }
           stage_this_pass
           if git diff --staged --quiet; then
@@ -252,7 +290,7 @@ jobs:
           # 12th commit is roughly twice an hour — and the pages that
           # matter do not wait for a deploy anyway, because /api/profile
           # and /api/recent read the archive straight from the repository.
-          if [ $(( (PASS_N - 1) % 12 )) -eq 0 ]; then
+          if [ "$FULL" -eq 1 ]; then
             MSG="archive: publish $STAMP"
           else
             MSG="archive: $STAMP [skip ci]"
@@ -414,7 +452,36 @@ jobs:
             fi
           done
 
-          wait $ARCH || echo "collector exited non-zero"
+          # ── WHY THE WINDOW ENDED, IN A CHANNEL THAT CAN BE READ BACK ──────
+          #
+          # The run log is not one. Downloading it needs admin rights on the
+          # repository, so every question about a window that behaved oddly has
+          # so far been answered by guessing. Annotations, by contrast, are on
+          # the public API, which is how the "window closed after N pass(es)"
+          # line below came to be the only fact anybody has about a window.
+          #
+          # And there is a question outstanding. RUN_SECONDS is 19800, five and
+          # a half hours; the window that opened 12:43 on 6 September collected
+          # for 8,012 seconds — two hours thirteen — and the one before it for
+          # about ninety-three minutes. The loop below ends when the collector
+          # is gone, so the collector is stopping early, and NOTHING SAYS WHY:
+          # a crash, an out-of-memory kill and a clean early return all look
+          # identical from out here.
+          #
+          # So the exit code and the elapsed time are named. A collector that
+          # exits non-zero is a fault; one that exits cleanly a long way short
+          # of its own deadline is a different fault, and the two want telling
+          # apart before either is chased.
+          ARCH_RC=0
+          wait $ARCH || ARCH_RC=$?
+          RAN=$(( $(date +%s) - COLLECT_STARTED ))
+          if [ "$ARCH_RC" -ne 0 ]; then
+            echo "::warning title=archive::the collector exited $ARCH_RC after ${RAN}s of a ${RUN_SECONDS}s window$([ "$ARCH_RC" -ge 128 ] && echo " (signal $(( ARCH_RC - 128 )) — 137 is the kernel running it out of memory)")"
+          elif [ "$RAN" -lt $(( RUN_SECONDS - 600 )) ]; then
+            echo "::warning title=archive::the collector finished cleanly after ${RAN}s of a ${RUN_SECONDS}s window — $(( (RUN_SECONDS - RAN) / 60 )) minutes early"
+          else
+            echo "::notice title=archive::the collector ran its full ${RAN}s"
+          fi
 
           # ── THE PUBLISH AFTER THE LAST PASS, WHICH WAS NEVER HAPPENING ────
           #
@@ -451,13 +518,45 @@ jobs:
           # variable in this script cannot outlive the job — that is precisely
           # how the old six-hour timer came to be unable to fire.
           #
-          # The stamp lives in web/data so the publish above carries it, and
-          # it is written only AFTER the hook has been accepted: a deployment
-          # that was never queued must not stop the next one from being. If
-          # the runner dies between the two, the stamp is missing and the next
-          # window asks again — one deployment too many, which is the right
-          # direction to be wrong in.
+          # The stamp is written only AFTER the hook has been accepted: a
+          # deployment that was never queued must not stop the next one from
+          # being. If the runner dies between the two, the stamp is missing and
+          # the next window asks again — one deployment too many, which is the
+          # right direction to be wrong in.
+          #
+          # AND IT HAS TO BE COMMITTED HERE, IN A COMMIT OF ITS OWN. The first
+          # version said "the publish above carries it", and that was simply
+          # false: every publish in this window has already happened by the
+          # time we get here, so the stamp was written to a runner that was
+          # about to be deleted and every window read `last=0` and asked for a
+          # deployment. Four or five a day, which is the number this whole
+          # block exists to stop being.
+          #
+          # It is one number in a 12-byte file and it is excluded from the
+          # deployment upload by .vercelignore, so the commit costs nothing and
+          # reaches the site as nothing. It carries [skip ci] like every other
+          # archiver commit.
           STAMP=web/data/.last-published
+          remember_the_ask() {
+            date +%s > "$STAMP"
+            git add "$STAMP" || return 0
+            git diff --staged --quiet && return 0
+            M="archive: asked the site to update $(date -u +'%Y-%m-%dT%H:%M:%SZ') [skip ci]"
+            git commit -m "$M" || return 0
+            for a in 1 2 3; do
+              git push && return 0
+              git fetch origin "${GITHUB_REF_NAME}" || true
+              git reset --mixed "origin/${GITHUB_REF_NAME}" || true
+              git add "$STAMP" || return 0
+              git diff --staged --quiet && return 0
+              git commit -m "$M" || return 0
+              sleep 3
+            done
+            # Not loud. The deployment WAS queued, which is the thing that
+            # mattered; the cost of losing this is one extra deployment in the
+            # next window, and the window is already over.
+            echo "the deployment was queued but the stamp did not push — the next window may ask again"
+          }
           last=$(cat "$STAMP" 2>/dev/null || echo 0)
           case "$last" in ''|*[!0-9]*) last=0 ;; esac
           since=$(( $(date +%s) - last ))
@@ -472,7 +571,7 @@ jobs:
             case "$code" in
               200|201)
                 echo "asked the site to pick up the archive$([ "$last" -gt 0 ] && echo " — $(( since / 3600 ))h since the last time")"
-                date +%s > "$STAMP" ;;
+                remember_the_ask ;;
               *)
                 echo "::warning title=archive::the deploy hook answered HTTP $code — the site keeps its old copy, and the next window will try again" ;;
             esac

@@ -343,26 +343,63 @@ console.log("\n=== H. asking the site to update: once a day, and only when it wo
      not a hang, which would tell us nothing and take for ever to say it. */
   const DEAD = "http://127.0.0.1:1/hook";
 
+  /* A REAL REPOSITORY WITH A REAL REMOTE, and that is not gold-plating.
+     The first version of this block ran in a bare temporary directory and
+     asserted that the stamp FILE existed afterwards. It did — on a runner that
+     was about to be deleted. Nothing committed it, so every window read no
+     stamp, decided it had never asked, and asked again: four or five
+     deployments a day out of a block whose entire purpose is to allow one.
+     Checking the file is checking the wrong side of the transfer, so the
+     question this asks now is what arrived on the remote. */
+  const git = (cwd, ...a) => spawnSync("git", a, { cwd, encoding: "utf8" });
   const run = ({ hook = HOOK, stampAgeH = null, published = 1, before = 0 }) => {
     const W = fs.mkdtempSync(path.join(os.tmpdir(), "stamp-"));
+    const R = fs.mkdtempSync(path.join(os.tmpdir(), "stampremote-"));
+    git(R, "init", "-q", "--bare", "-b", "main");
+    git(W, "init", "-q", "-b", "main");
+    git(W, "config", "user.name", "t"); git(W, "config", "user.email", "t@t");
     fs.mkdirSync(path.join(W, "web/data"), { recursive: true });
     const stamp = path.join(W, "web/data/.last-published");
     if (stampAgeH !== null)
-      fs.writeFileSync(stamp, String(Math.floor(Date.now() / 1000) - stampAgeH * 3600));
+      fs.writeFileSync(stamp, String(Math.floor(Date.now() / 1000) - stampAgeH * 3600) + "\n");
+    fs.writeFileSync(path.join(W, "web/data/index.json"), "{}");
+    git(W, "add", "-A"); git(W, "commit", "-qm", "seed");
+    git(W, "remote", "add", "origin", R);
+    git(W, "push", "-q", "-u", "origin", "main");
+
     const r = spawnSync("bash", ["-c", body], {
       cwd: W, encoding: "utf8", timeout: 20000,
       env: { ...process.env, VERCEL_DEPLOY_HOOK: hook, published: String(published),
-             published_when_deployed: String(before), MIN_HOURS_BETWEEN_PUBLISHES: "22" },
+             published_when_deployed: String(before), MIN_HOURS_BETWEEN_PUBLISHES: "22",
+             GITHUB_REF_NAME: "main" },
     });
     const out = (String(r.stdout ?? "") + String(r.stderr ?? "")).trim();
-    const res = { out, asked: /asked the site to pick up/.test(out), stamped: fs.existsSync(stamp) };
+    /* What the NEXT window would see: the remote, read the way a fresh
+       checkout reads it, not the working tree this one is about to lose. */
+    const onRemote = git(R, "show", "main:web/data/.last-published");
+    const msg = git(R, "log", "-1", "--format=%s", "main").stdout.trim();
+    const res = {
+      out, asked: /asked the site to pick up/.test(out),
+      stamped: fs.existsSync(stamp),
+      committed: onRemote.status === 0 ? onRemote.stdout.trim() : null,
+      msg,
+    };
     fs.rmSync(W, { recursive: true, force: true });
+    fs.rmSync(R, { recursive: true, force: true });
     return res;
   };
 
   let r = run({ stampAgeH: null });
   ok("with no stamp at all it asks", r.asked, r.out.split("\n").pop());
   ok("and records that it did, where the next window can read it", r.stamped);
+  ok("and the record REACHES THE REMOTE, not just the runner's disk",
+    r.committed !== null, r.committed === null ? "nothing on main" : r.committed);
+  ok("as a number the next window can compare against",
+    Math.abs(Number(r.committed) - Date.now() / 1000) < 300, String(r.committed));
+  /* The archiver's own commits must never be a reason to deploy — that is
+     section C's rule — and this one is written moments after a deployment was
+     already queued, so it is the last commit that should start another. */
+  ok("in a commit that carries [skip ci]", /\[skip ci\]/.test(r.msg), r.msg);
 
   r = run({ stampAgeH: 30 });
   ok("thirty hours later it asks again", r.asked, r.out.split("\n").pop());
@@ -386,6 +423,87 @@ console.log("\n=== H. asking the site to update: once a day, and only when it wo
   ok("and it says so out loud", /::warning/.test(r.out));
 
   srv.kill();
+}
+
+/* ── I. THE LAST PASS OF A WINDOW CARRIES THE WHOLE ARCHIVE ───────────────
+ * The collector writes the final report and both cold-start snapshots as it
+ * exits, so they exist only in the moments between the collector stopping and
+ * the runner being deleted. One pass runs in that gap — the one called with
+ * PASS_N=final — and it is the only chance those files ever get.
+ *
+ * It was not taking it. `(PASS_N - 1) % 12` inside a bash $(( )) reads the
+ * unset name `final` as zero, so the test came out -1, the full staging was
+ * skipped, and the pass that exists to publish the snapshots published eight
+ * small files. The symptom is not an error: it is
+ * web/data/room-snapshots/lobby.json on main still saying 30 August while the
+ * archive beneath it is minutes old.
+ *
+ * So this runs the real pass script, out of the real workflow, against a real
+ * repository, and asks what landed on the remote.
+ */
+console.log("\n=== I. the last pass of a window publishes the snapshots");
+{
+  const arc = read(".github/workflows/archive.yml");
+  const open = "cat > \"${RUNNER_TEMP:-/tmp}/publish-pass.sh\" <<'PASS_SCRIPT'\n";
+  const a = arc.indexOf(open), b = arc.indexOf("\n          PASS_SCRIPT\n", a);
+  const script = a < 0 || b < 0 ? "" : arc.slice(a + open.length, b).replace(/^ {10}/gm, "");
+  ok("the pass script is where this test thinks it is",
+    script.includes("stage_this_pass") && script.includes("SMALL="),
+    script ? "" : "not found in archive.yml");
+
+  const git = (cwd, ...x) => spawnSync("git", x, { cwd, encoding: "utf8" });
+  /* One window's worth of state: a repository with a remote, a collector's
+     small files, and — written after the seed, the way the collector writes
+     them on its way out — a snapshot and a report. */
+  const onePass = (PASS_N) => {
+    const W = fs.mkdtempSync(path.join(os.tmpdir(), "pass-"));
+    const R = fs.mkdtempSync(path.join(os.tmpdir(), "passremote-"));
+    git(R, "init", "-q", "--bare", "-b", "main");
+    git(W, "init", "-q", "-b", "main");
+    git(W, "config", "user.name", "t"); git(W, "config", "user.email", "t@t");
+    fs.mkdirSync(path.join(W, "web/data/room-snapshots"), { recursive: true });
+    fs.writeFileSync(path.join(W, "web/data/index.json"), "{}");
+    git(W, "add", "-A"); git(W, "commit", "-qm", "seed");
+    git(W, "remote", "add", "origin", R);
+    git(W, "push", "-q", "-u", "origin", "main");
+
+    /* Both kinds of new file, so the two tiers can be told apart. */
+    fs.writeFileSync(path.join(W, "web/data/index.json"), '{"last_run":{"coverage":1}}');
+    fs.writeFileSync(path.join(W, "web/data/recent.json"), "[]");
+    fs.writeFileSync(path.join(W, "web/data/room-snapshots/lobby.json"),
+      '{"retrieved_at":"2026-09-06T15:00:00Z"}');
+
+    const r = spawnSync("bash", ["-c", script], {
+      cwd: W, encoding: "utf8", timeout: 30000,
+      env: { ...process.env, PASS_N: String(PASS_N), GITHUB_REF_NAME: "main" },
+    });
+    const files = git(R, "show", "--name-only", "--format=%s", "main").stdout;
+    fs.rmSync(W, { recursive: true, force: true });
+    fs.rmSync(R, { recursive: true, force: true });
+    return {
+      code: r.status,
+      out: (String(r.stdout ?? "") + String(r.stderr ?? "")).trim(),
+      subject: files.split("\n")[0].trim(),
+      snapshot: /room-snapshots\/lobby\.json/.test(files),
+      small: /web\/data\/recent\.json/.test(files),
+    };
+  };
+
+  let p = onePass("final");
+  ok("the final pass pushes", p.code === 0, `exit ${p.code} — ${p.out.split("\n").pop()}`);
+  ok("AND IT CARRIES THE SNAPSHOTS — the whole reason it exists", p.snapshot, p.subject);
+  ok("and calls itself a publish", /^archive: publish /.test(p.subject), p.subject);
+
+  p = onePass(1);
+  ok("the first pass of a window carries them too", p.snapshot, p.subject);
+
+  /* The other half of the rule, and the one that keeps the repository from
+     growing 600MB a day: an ordinary pass commits the small files only. */
+  p = onePass(2);
+  ok("an ordinary pass does not", !p.snapshot, p.subject);
+  ok("but does carry the small ones", p.small, p.subject);
+  ok("and says [skip ci], so it cannot cost a deployment",
+    /\[skip ci\]$/.test(p.subject), p.subject);
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);
