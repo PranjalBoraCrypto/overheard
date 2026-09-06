@@ -443,10 +443,26 @@ console.log("\n=== U. the card somebody puts their name to");
     /\$\("showkey"\)\.checked \? shortDid/.test(page));
 
   ok("the post it writes tags the project", /@flop_labs/.test(page));
-  ok("and never claims money changed hands",
-    /Paper market, nothing of value moves/.test(page) &&
-    !/\b(USD|dollars?|profit|earn(ed|ings)?|payout|cash)\b/i
-      .test(page.slice(page.indexOf("intent/tweet") - 800, page.indexOf("intent/tweet"))));
+  /* The post says "paper" and nothing else. It is the one piece of this page
+     that travels to an audience who never saw the disclaimer. */
+  {
+    const from = page.indexOf("function postText");
+    /* Prose stripped: this function EXPLAINS what it refuses to do, and twice
+       now a test has failed for reading the explanation as the thing. */
+    const draft = page.slice(from, page.indexOf("$(\"shx2\")", from))
+      .replace(/\/\*[\s\S]*?\*\//g, "");
+    ok("the post calls the stake paper, and calls it that every time",
+      (draft.match(/paper on/g) ?? []).length >= 2 && /paper/.test(draft));
+    ok("and never says money changed hands",
+      !/\b(USD|dollars?|\$\d|profit|earn(ed|ings)?|payout|cash|invest)\b/i.test(draft));
+    ok("nor uses the word this page has never used",
+      !/\b(bet|bets|betting|wager|odds|gamble|gambling)\b/i.test(draft));
+    ok("somebody on both sides is not given a claim they never made",
+      /both sides/.test(draft) && !/netting|net position/i.test(draft));
+    /* X shows the link twice if it is in the text AND the url parameter. */
+    ok("the link is written once", /intent\/tweet\?text=/.test(page) &&
+      !/intent\/tweet\?text=[^`]*&url=/.test(page));
+  }
   /* X takes text, not files. A button that pretends otherwise posts a bare
      link, so the image goes to the clipboard at the same moment and the
      sheet says so. */

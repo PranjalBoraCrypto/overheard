@@ -2235,29 +2235,58 @@ $("shdown").addEventListener("click", async () => {
    posting a bare link. So the text goes to X and the image goes to the
    clipboard at the same moment, and the sheet says so in as many words —
    the person pastes it into the composer that just opened. */
-$("shx2").addEventListener("click", async () => {
+/* ── THE POST ──────────────────────────────────────────────────────────────
+   TEXT ONLY. X cannot be handed a file by a web page — no API for it exists —
+   so an earlier version copied the picture to the clipboard as the composer
+   opened and asked the reader to paste. Two things happening at once, one of
+   them invisible, and it quietly took over a clipboard somebody may have been
+   using for something else. The picture is the Copy button's job and nothing
+   else's; this writes the words and gets out of the way.
+
+   Three lines with a blank line between them: X collapses a single newline
+   into a cramped run and the claim, the stake and the invitation are three
+   separate beats. The date is spelled the way a person says it rather than
+   the way the frame stores it, and it is the market's own deadline rather than a string typed
+   twice — a card that disagrees with the page about the date is worse than no
+   card. */
+const SHARE_URL = "https://overheard-five.vercel.app/market";
+const SHARE_DATE = new Date(CLOSES_MS).toLocaleDateString("en-US",
+  { month: "long", day: "numeric", year: "numeric", timeZone: "UTC" });
+
+function postText(m) {
+  const yes = `I'm backing @flop_labs to ship mainnet by ${SHARE_DATE}.`;
+  const no  = `I'm calling it: @flop_labs does not ship mainnet by ${SHARE_DATE}.`;
+
+  /* ONE CALL. The line somebody is most likely to send, so it is the one
+     written out plainly rather than assembled from parts. */
+  if (m.kind === "call" || m.calls === 1) {
+    return `${m.side === "yes" ? yes : no}\n\n`
+      + `Put ${group(m.put)} paper on ${m.side === "yes" ? "YES" : "NO"} and signed my position publicly in a room.\n\n`
+      + `Enter yours: ${SHARE_URL}`;
+  }
+
+  /* PAPER ON BOTH SIDES has no claim to make, and inventing one — netting
+     them off, calling the bigger side "my position" — would put words in
+     somebody's mouth that they never said with their key. */
+  if (m.side === null) {
+    return `I have paper on both sides of @flop_labs shipping mainnet by ${SHARE_DATE}.\n\n`
+      + `${group(m.yes)} on YES, ${group(m.no)} on NO, every call signed publicly in a room.\n\n`
+      + `Enter yours: ${SHARE_URL}`;
+  }
+
+  return `${m.side === "yes" ? yes : no}\n\n`
+    + `Put ${group(m.put)} paper on ${m.side === "yes" ? "YES" : "NO"} across ${m.calls} calls and signed my position publicly in a room.\n\n`
+    + `Enter yours: ${SHARE_URL}`;
+}
+
+$("shx2").addEventListener("click", () => {
   const m = cardModel();
   if (!m) return;
-  let copied = false;
-  try {
-    if (navigator.clipboard && typeof ClipboardItem !== "undefined") {
-      const b = await blob();
-      if (b) { await navigator.clipboard.write([new ClipboardItem({ "image/png": b })]); copied = true; }
-    }
-  } catch { copied = false; }
-
-  const claim = m.side === null
-    ? `I have paper on both sides of it`
-    : `I put ${group(m.put)} paper on ${m.side === "yes" ? "YES" : "NO"}`;
-  const text =
-    `${claim} — Flop Labs ships mainnet by 31 Mar 2027.\n\n`
-    + `Paper market, nothing of value moves. Signed in a public room.\n@flop_labs`;
-  const url = "https://overheard-five.vercel.app/market";
-  open(`https://x.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(url)}`,
+  /* No `url` parameter: the link is in the text where it was written, and
+     passing both makes X show it twice. */
+  open(`https://x.com/intent/tweet?text=${encodeURIComponent(postText(m))}`,
     "_blank", "noopener,noreferrer");
-  say(copied
-    ? "X is open and the card is on your clipboard — paste it into the post."
-    : "X is open. Copy the image here and paste it into the post.");
+  say("X is open with the words. Use Copy image if you want the card in the post too.");
 });
 
 function flash(btn, word) {
