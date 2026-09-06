@@ -202,9 +202,15 @@ h1{font-size:clamp(23px,2.4vw,31px);line-height:1.12;letter-spacing:-.028em;
 /* ONE LINE, NOT TWO. Stacked label over value the strip was 70px tall for
    five short facts; on a baseline together it is a rail you read across, and
    the section it belongs to is not competing with the question above it. */
-.facts{display:flex;flex-wrap:wrap;justify-content:space-between;
-  gap:9px var(--s4);padding:11px var(--s4);
+/* ONE LINE WHERE THERE IS ROOM FOR ONE LINE. Five label-and-value pairs on a
+   baseline need about 900px; above that they sit on one row and nothing
+   wraps — `nowrap` rather than hoping, because a wrapped row here put the
+   fifth fact alone beside an empty half-row, which is the same orphan the
+   headline had. Narrower than that it becomes a proper grid instead, below. */
+.facts{display:flex;flex-wrap:nowrap;justify-content:space-between;
+  gap:var(--s3);padding:11px var(--s4);
   border:1px solid var(--line);border-radius:14px;background:var(--sunk)}
+.fact{white-space:nowrap}
 .fact{display:flex;align-items:baseline;gap:9px;min-width:0}
 .fact span{font-family:var(--mono);font-size:var(--t-micro);letter-spacing:.11em;
   text-transform:uppercase;color:var(--faint)}
@@ -527,8 +533,22 @@ h1{font-size:clamp(23px,2.4vw,31px);line-height:1.12;letter-spacing:-.028em;
 .s2 .v em{font-style:normal;font-size:var(--t-micro);color:var(--faint);margin-left:6px;
   letter-spacing:.1em}
 .s2 .u{font-size:var(--t-small);color:var(--dim)}
-.s2.y{box-shadow:inset 2px 0 0 var(--yes)}
-.s2.n{box-shadow:inset 2px 0 0 var(--no)}
+/* ── THE TWO RAILS, THE SAME SHAPE ────────────────────────────────────────
+   These were one inset shadow each, identical rules — and they did not look
+   identical. The block has a 14px radius and clips its children, so the left
+   cell's rail ran into the rounded corner and came out short and curved
+   while the right cell's, sitting mid-block, ran straight top to bottom. The
+   same CSS, two shapes, because of where each one happened to sit.
+
+   A rail of its own with its own inset ends is the same object wherever it
+   lands: held clear of every corner the container might round, and rounded
+   itself on purpose rather than by accident. It also survives the phone,
+   where the two cells stack and it is the OTHER one that meets a corner. */
+.s2{position:relative}
+.s2::before{content:"";position:absolute;left:0;top:15px;bottom:15px;width:2px;
+  border-radius:999px}
+.s2.y::before{background:var(--yes)}
+.s2.n::before{background:var(--no)}
 
 /* ══ THE CALL PANEL ════════════════════════════════════════════════════════
    ONE PANEL, THREE STEPS, and that is the whole answer to "the tap and the
@@ -810,13 +830,16 @@ h1{font-size:clamp(23px,2.4vw,31px);line-height:1.12;letter-spacing:-.028em;
   .verdict{order:3;margin:9px auto 0;max-width:30ch;font-size:14.5px}
   .corewrap{order:4;max-width:min(70vw,290px);transform:none;margin-top:2px}
   .sides2{order:5;margin-top:var(--s3)}
-  /* Five baselines do not fit across a phone. Back to a grid there, three
-     across, stacked label over value — which is legible at that width and
-     was never the problem. */
-  .facts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));
-    justify-content:stretch;gap:var(--s3) var(--s2);padding:13px var(--s3)}
-  .fact{flex-direction:column;align-items:flex-start;gap:2px}
-  .fact{align-items:center}
+  /* TWO ACROSS, AND THE LAST ONE TAKES THE ROW. Three columns on a 390px
+     screen is 110px a cell, and "31 Mar 2027 UTC" wants 135 — it ran into
+     the fact beside it. Two columns give it the room, the fifth spans the
+     full width so nothing is orphaned in a half-empty row, and values may
+     break across two lines on the narrowest phones rather than collide. */
+  .facts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));
+    justify-content:stretch;gap:var(--s3) var(--s3);padding:13px var(--s3)}
+  .fact{flex-direction:column;align-items:flex-start;gap:2px;white-space:normal}
+  .fact b{white-space:normal}
+  .facts .fact:last-child{grid-column:1/-1}
 
   /* THE PANEL LEAVES THE PAGE. It becomes a surface docked to the bottom of
      the screen: always in reach of a thumb, never scrolled past, and the
@@ -992,7 +1015,11 @@ h1{font-size:clamp(23px,2.4vw,31px);line-height:1.12;letter-spacing:-.028em;
   h1{font-size:clamp(20px,2.15vw,29px);max-width:30ch}
   .verdict{font-size:15px}
   .s2{padding:13px var(--s2)}
-  .facts{gap:var(--s3) var(--s2)}
+  /* Three across, stacked, so the wrap is an even three-and-two instead of
+     four and a straggler — and so no label has to break in half to fit. */
+  .facts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));
+    gap:var(--s3) var(--s2)}
+  .fact{flex-direction:column;align-items:flex-start;gap:2px}
 }
 
 /* ══ MOTION, AND WHO GETS IT ═══════════════════════════════════════════════
@@ -1654,12 +1681,40 @@ function paintVerdict(unread) {
   v.replaceChildren();
 }
 
+/* ── BIG NUMBERS, IN A RAIL THAT HAS TO STAY ONE LINE ──────────────────────
+   A tap gives a thousand paper and Technocore holds 20,480 rooms, so this
+   market can honestly reach eight-figure volume — and "10,240,000" is ten
+   characters that push the fifth fact onto a second row on its own.
+
+   Past a million the rail says 10.2M, and the exact figure goes on the
+   element's title so it is one hover away and reachable by a screen reader.
+   That is a summary abbreviating itself, not the page rounding a number: the
+   two side figures above and every row on the board below are still exact to
+   the last unit, and those are the ones somebody would check.
+
+   Under a million nothing changes, which is every number this market will
+   have for a long time. */
+function compact(n) {
+  if (n >= 1e9) return `${(n / 1e9).toFixed(n >= 1e10 ? 0 : 1)}B`;
+  if (n >= 1e6) return `${(n / 1e6).toFixed(n >= 1e7 ? 0 : 1)}M`;
+  return group(n);
+}
+function setFact(id, n) {
+  const el = $(id);
+  const short = compact(n);
+  el.textContent = short;
+  /* Only when it actually shortened. A title repeating what is already on
+     screen is a tooltip that teaches people to ignore tooltips. */
+  if (short === group(n)) el.removeAttribute("title");
+  else el.title = `${group(n)} exactly`;
+}
+
 function paintFacts() {
   $("fClose").textContent = closesWhen;
   $("fLeft").textContent = leftUntil(CLOSES_MS);
-  $("fPaper").textContent = group(fold.total);
-  $("fCalls").textContent = group(fold.calls);
-  $("fPeople").textContent = group(fold.people);
+  setFact("fPaper", fold.total);
+  setFact("fCalls", fold.calls);
+  setFact("fPeople", fold.people);
   $("onY").textContent = group(fold.yes);
   $("onN").textContent = group(fold.no);
   const ppl = (n) => `${group(n)} ${n === 1 ? "person" : "people"}`;
