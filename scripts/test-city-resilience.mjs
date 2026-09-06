@@ -180,7 +180,8 @@ const srv = http.createServer(async (req, res) => {
 
   const f = path.join(ROOT, p);
   if (fs.existsSync(f) && fs.statSync(f).isFile()) {
-    const type = p.endsWith(".js") ? "text/javascript" : p.endsWith(".json") ? "application/json" : "text/html";
+    const type = p.endsWith(".js") ? "text/javascript" : p.endsWith(".css") ? "text/css"
+      : p.endsWith(".json") ? "application/json" : "text/html";
     res.writeHead(200, { "content-type": type });
     return res.end(fs.readFileSync(f));
   }

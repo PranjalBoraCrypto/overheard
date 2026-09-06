@@ -58,7 +58,8 @@ const srv = http.createServer((req, res) => {
   if (p.startsWith("/api/")) return J({});
   const f = path.join(ROOT, p);
   if (fs.existsSync(f) && fs.statSync(f).isFile()) {
-    const t = p.endsWith(".js") ? "text/javascript" : p.endsWith(".json") ? "application/json" : "text/html";
+    const t = p.endsWith(".js") ? "text/javascript" : p.endsWith(".css") ? "text/css"
+      : p.endsWith(".json") ? "application/json" : "text/html";
     res.writeHead(200, { "content-type": t });
     return res.end(fs.readFileSync(f));
   }

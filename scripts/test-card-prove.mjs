@@ -18,7 +18,7 @@ const srv = http.createServer((req, res) => {
     profile: { count: 12, unique: 12, templates: 0, rooms: ['lobby'], first: '2026-08-25T10:00:00Z', last: '2026-08-27T09:00:00Z', last_text: 'hello there' }, standing: null });
   if (p.startsWith('/api/') || p.startsWith('/data/')) return J({});
   const f = path.join(ROOT, p);
-  if (fs.existsSync(f) && fs.statSync(f).isFile()) { res.writeHead(200, { 'content-type': p.endsWith('.js') ? 'text/javascript' : 'text/html' }); res.end(fs.readFileSync(f)); }
+  if (fs.existsSync(f) && fs.statSync(f).isFile()) { res.writeHead(200, { 'content-type': p.endsWith('.js') ? 'text/javascript' : p.endsWith('.css') ? 'text/css' : 'text/html' }); res.end(fs.readFileSync(f)); }
   else { res.writeHead(404); res.end('{}'); }
 }).listen(8990);
 

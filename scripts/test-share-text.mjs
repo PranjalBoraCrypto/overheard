@@ -33,7 +33,7 @@ const srv = http.createServer((req, res) => {
     standing: null });
   if (p.startsWith('/api/') || p.startsWith('/data/')) return J({});
   const f = path.join(ROOT, p);
-  if (fs.existsSync(f) && fs.statSync(f).isFile()) { res.writeHead(200, { 'content-type': p.endsWith('.js') ? 'text/javascript' : 'text/html' }); res.end(fs.readFileSync(f)); }
+  if (fs.existsSync(f) && fs.statSync(f).isFile()) { res.writeHead(200, { 'content-type': p.endsWith('.js') ? 'text/javascript' : p.endsWith('.css') ? 'text/css' : 'text/html' }); res.end(fs.readFileSync(f)); }
   else { res.writeHead(404); res.end('{}'); }
 }).listen(8889);
 

@@ -87,7 +87,7 @@ const srv = http.createServer((req, res) => {
 
   const f = path.join(ROOT, p);
   if (fs.existsSync(f) && fs.statSync(f).isFile()) {
-    res.writeHead(200, { 'content-type': p.endsWith('.js') ? 'text/javascript' : 'text/html' });
+    res.writeHead(200, { 'content-type': p.endsWith('.js') ? 'text/javascript' : p.endsWith('.css') ? 'text/css' : 'text/html' });
     return res.end(fs.readFileSync(f));
   }
   res.writeHead(404); res.end('{}');

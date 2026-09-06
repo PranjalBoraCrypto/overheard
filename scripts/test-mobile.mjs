@@ -66,7 +66,7 @@ const srv = http.createServer((req, res) => {
   if (p.startsWith("/api/") || p.startsWith("/data/")) return J({});
   const f = path.join(ROOT, p);
   if (fs.existsSync(f) && fs.statSync(f).isFile()) {
-    const type = p.endsWith(".js") ? "text/javascript" : p.endsWith(".png") ? "image/png"
+    const type = p.endsWith(".js") ? "text/javascript" : p.endsWith(".css") ? "text/css" : p.endsWith(".png") ? "image/png"
       : p.endsWith(".webp") ? "image/webp" : p.endsWith(".svg") ? "image/svg+xml" : "text/html";
     res.writeHead(200, { "content-type": type });
     return res.end(fs.readFileSync(f));
@@ -519,8 +519,21 @@ console.log("\n=== and one tap shows the whole site");
      A rule to stop them already existed for prefers-reduced-motion, and it
      had never worked: `.sky i` is (0,1,1) and the animations arrive through
      `.sky i:nth-child(1)` at (0,2,1), so the more specific selector won and
-     the accessibility promise was quietly broken. Both rules now come
-     through the same door.
+     the accessibility promise was quietly broken.
+
+     The blooms are now GONE — every page stands on one painted field, and
+     nothing behind it moves (see sky.css). That changed what this section
+     can honestly ask. It used to count animations on `.sky` and require two
+     of them on a desktop; there is no `.sky` any more, so that check failed
+     while the site was working, and the other three passed by counting a
+     class that no longer exists, which is worse. A test that asserts a
+     removed design is not a weaker test, it is a test pointing at nothing.
+
+     So the question is asked by COST rather than by class name: is anything
+     animating a blurred layer, anywhere. A blur that moves or resizes cannot
+     be rasterised once and reused, so it is recomputed every frame — that
+     was the actual expense, and it stays the thing that is forbidden however
+     the markup is rearranged or renamed later.
 
      SIXTY FRAMES OF 3-D. The city asked for sixty frames a second of a
      WebGL scene, indefinitely, on a device with no fan. It draws thirty on
@@ -533,43 +546,85 @@ console.log("\n=== and one tap shows the whole site");
    ════════════════════════════════════════════════════════════════════ */
 console.log("\n=== the site does not cook the phone");
 {
-  const running = (pg) => pg.evaluate(() =>
+  /* Anything still running that sits on, or inside, a blurred layer. Named,
+     not counted: a failure that says which element is a failure somebody can
+     fix, and a bare number is a bug report with the useful half missing. */
+  const blurred = (pg) => pg.evaluate(() => {
+    const out = [];
+    for (const a of (document.getAnimations ? document.getAnimations() : [])) {
+      if (a.playState !== "running") continue;
+      const t = a.effect?.target;
+      if (!t || t.nodeType !== 1) continue;
+      for (let n = t, i = 0; n && n.nodeType === 1 && i < 5; n = n.parentElement, i++) {
+        if (/blur\(/.test(getComputedStyle(n).filter || "")) {
+          out.push(`${a.animationName || "?"} on ${t.tagName.toLowerCase()}` +
+                   `${String(t.className || "").trim() ? "." + String(t.className).trim().split(/\s+/)[0] : ""}`);
+          break;
+        }
+      }
+    }
+    return out;
+  });
+  /* Anything that loops forever, pseudo-elements included. `document
+     .getAnimations()` reports a `::after` animation with the ORIGINATING
+     element as its target, which is exactly the blind spot being tested:
+     `*{animation:none}` does not match a pseudo-element, so a rule that looks
+     total leaves every ::before and ::after running. Five pages were doing
+     that, and one of them — the light crossing the invitation bar on /rooms —
+     was the last thing still moving under reduced motion. */
+  const forever = (pg) => pg.evaluate(() =>
     (document.getAnimations ? document.getAnimations() : [])
       .filter((a) => a.playState === "running")
-      .filter((a) => a.effect?.target?.parentElement?.classList?.contains("sky")).length);
+      .filter((a) => a.effect?.getTiming?.().iterations === Infinity)
+      .map((a) => `${a.animationName || "?"} on ${a.effect?.target?.tagName?.toLowerCase() || "?"}` +
+                  `${a.effect?.pseudoElement || ""}`));
 
-  for (const [route, name] of [["/", "home"], ["/rooms", "rooms"], ["/city", "city"]]) {
-    const ctx2 = await b.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+  const PHONE = { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true };
+  const DESK = { viewport: { width: 1280, height: 900 } };
+  const visit = async (opts, route, ms = 1800) => {
+    const ctx2 = await b.newContext(opts);
     const pg = await ctx2.newPage();
     await pg.goto("http://localhost:8995" + route);
-    await pg.waitForTimeout(1800);
-    check(`${name}: the blooms are still on a phone`, (await running(pg)) === 0,
-      `${await running(pg)} animating`);
-    await ctx2.close();
+    await pg.waitForTimeout(ms);
+    return { pg, done: () => ctx2.close() };
+  };
+
+  /* NOTHING ANIMATES A BLUR, on either kind of machine. The desktop half
+     matters as much as the phone half: the blooms were removed for everyone,
+     and a check that only looks at 390px would let them come back at 1280. */
+  for (const [route, name] of [["/", "home"], ["/rooms", "rooms"], ["/city", "city"], ["/play", "play"]]) {
+    for (const [opts, where] of [[PHONE, "a phone"], [DESK, "a desktop"]]) {
+      const v = await visit(opts, route);
+      const hot = await blurred(v.pg);
+      check(`${name}: nothing animates a blurred layer on ${where}`, hot.length === 0,
+        hot.length ? hot.join(", ") : "clean");
+      await v.done();
+    }
   }
 
-  /* THE OTHER HALF OF THE RULE. It is phone-only, and a rule nobody checks
-     the far side of is a rule that quietly becomes site-wide. */
-  {
-    const ctx2 = await b.newContext({ viewport: { width: 1280, height: 900 } });
-    const pg = await ctx2.newPage();
-    await pg.goto("http://localhost:8995/");
-    await pg.waitForTimeout(1800);
-    check("and they still drift on a desktop, which was never the complaint",
-      (await running(pg)) >= 2, `${await running(pg)} animating`);
-    await ctx2.close();
+  /* THE REDUCED-MOTION PROMISE, on every page rather than on the one page
+     that happened to be checked. This is the promise the site has broken
+     twice now — once by specificity, once by pseudo-element — and both times
+     it was broken because nobody looked anywhere except the home page. */
+  for (const route of ["/", "/what", "/rooms", "/city", "/play", "/create", "/v"]) {
+    const v = await visit({ ...DESK, reducedMotion: "reduce" }, route, 1500);
+    const loops = await forever(v.pg);
+    check(`reduced motion: nothing loops forever on ${route}`, loops.length === 0,
+      loops.length ? loops.join(", ") : "still");
+    await v.done();
   }
 
-  /* AND THE REDUCED-MOTION PROMISE, which the site had been making and not
-     keeping since the blooms were written. */
+  /* AND THE GROUND ITSELF is painted once. It is the one layer on every
+     page, so if it ever starts animating it costs on every page at once. */
   {
-    const ctx2 = await b.newContext({ viewport: { width: 1280, height: 900 }, reducedMotion: "reduce" });
-    const pg = await ctx2.newPage();
-    await pg.goto("http://localhost:8995/");
-    await pg.waitForTimeout(1500);
-    check("reduced motion stops them too, which it never actually did",
-      (await running(pg)) === 0, `${await running(pg)} animating`);
-    await ctx2.close();
+    const v = await visit(DESK, "/");
+    const g = await v.pg.evaluate(() => {
+      const s = getComputedStyle(document.body, "::before");
+      return { img: (s.backgroundImage || "none") !== "none", anim: s.animationName || "none" };
+    });
+    check("the field behind every page is painted, not animated", g.img && g.anim === "none",
+      `background ${g.img ? "present" : "MISSING"}, animation ${g.anim}`);
+    await v.done();
   }
 
   /* THE FRAME CAP. It cannot be proved by counting frames on a machine that

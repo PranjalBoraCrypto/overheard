@@ -841,12 +841,43 @@ if (!chromium) {
     const pg = await ctx.newPage();
     pg.on("pageerror", (e) => errs.push(String(e).slice(0, 140)));
     await pg.goto(`http://localhost:${PORT}/hire.html`, { waitUntil: "domcontentloaded" });
-    await pg.waitForTimeout(700);
+    /* ── WAIT FOR THE THING, NOT FOR A NUMBER OF MILLISECONDS ──────────────
+       These were three fixed sleeps — 700, 200, 1500 — and on a machine with
+       anything else running they are not long enough. The suite then failed
+       at random, and not honestly: `#msg` had not been written yet, so an
+       assertion about THIS sub-case read whatever was on the page, and the
+       reported failure was a sentence from a different scenario entirely.
+       Three different sets of failures came out of three identical runs.
+
+       A suite that fails at random is a suite everybody learns to re-run, and
+       that is a worse state to be in than having no suite, because the day it
+       is right nobody believes it. Each of these now waits for the condition
+       it actually needs, which is both correct and faster. */
+    await pg.waitForSelector('.pick[data-job="overheard-room-summary"]', { timeout: 15000 });
     await pg.click('.pick[data-job="overheard-room-summary"]');
     await pg.fill("#brief", "technocore");
-    await pg.waitForTimeout(200);
+    await pg.waitForFunction(() => {
+      const b = document.querySelector("#send");
+      return b && !b.disabled;
+    }, { timeout: 15000 });
     await pg.click("#send");
-    await pg.waitForTimeout(1500);
+    /* ── AND WAIT FOR IT TO STOP TALKING ───────────────────────────────────
+       One press is three steps, and each writes into #msg as it goes: "posted
+       to the board", "the shop accepted", "locking your payment". Waiting for
+       the first non-empty message therefore reads a sentence from the MIDDLE
+       of the flow — which is what the fixed 1500ms sleep was accidentally
+       getting right most of the time and wrong the rest.
+
+       So: wait until the message has not changed for half a second. That is
+       the end of the flow whatever the flow turns out to be, and it does not
+       have to be updated when a step is added. */
+    await pg.waitForFunction(() => {
+      const t = (document.querySelector("#msg")?.textContent ?? "").trim();
+      if (!t) return false;
+      const w = window;
+      if (w.__last !== t) { w.__last = t; w.__since = Date.now(); return false; }
+      return Date.now() - (w.__since ?? 0) > 500;
+    }, { timeout: 25000, polling: 100 });
     const msg = await pg.$eval("#msg", (e) => ({ text: e.textContent, cls: e.className }));
     /* The checklist is read out alongside the message, because the two
        disagreeing is exactly what the first real order surfaced. */
@@ -865,9 +896,23 @@ if (!chromium) {
     const pg = await ctx.newPage();
     pg.on("pageerror", (e) => errs.push(String(e).slice(0, 140)));
     await pg.goto(`http://localhost:${PORT}/hire.html`, { waitUntil: "domcontentloaded" });
+    /* Same fixed-sleep problem as order(), and the same fix: wait for the
+       thing. The capacity line and the button's enabled state both arrive
+       from an endpoint, so 900ms was a bet on how fast the machine is — and
+       three of this suite's assertions were losing it whenever anything else
+       was running. */
+    await pg.waitForSelector('.pick[data-job="overheard-room-summary"]', { timeout: 15000 });
     await pg.click('.pick[data-job="overheard-room-summary"]');
     await pg.fill("#brief", "technocore");
-    await pg.waitForTimeout(900);
+    /* The capacity answer has landed and the page has finished reacting to
+       it: #cap says something, and the button has settled. */
+    await pg.waitForFunction(() => {
+      const c = (document.querySelector("#cap")?.textContent ?? "").trim();
+      const w = window;
+      const state = c + "|" + String(document.querySelector("#send")?.disabled);
+      if (w.__lastCap !== state) { w.__lastCap = state; w.__capSince = Date.now(); return false; }
+      return Date.now() - (w.__capSince ?? 0) > 400;
+    }, { timeout: 20000, polling: 100 });
     const out = {
       cap: await pg.$eval("#cap", (e) => ({ text: e.textContent, hidden: e.hidden, cls: e.className })),
       disabled: await pg.$eval("#send", (e) => e.disabled),
@@ -1018,7 +1063,7 @@ if (!chromium) {
       /4 being worked on/.test(v.cap.text) && /2 awaiting payment/.test(v.cap.text),
       "one combined figure makes a queue of unpaid orders look like a busy shop");
     ok("room is not a warning", !/full/.test(v.cap.cls), v.cap.cls);
-    ok("and the button is left alone", v.disabled === false);
+    ok("and the button is left alone", v.disabled === false, `disabled=${v.disabled} · cap="${v.cap.text.trim().slice(0,60)}" · whynot="${v.whynot.trim().slice(0,50)}"`);
   }
   {
     capacityReply = { ok: true, capacity: 50, open: 50, free: 0, full: true, working: 40, awaiting_payment: 10 };

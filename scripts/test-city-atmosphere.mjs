@@ -161,16 +161,30 @@ console.log("=== A. the city sits on the same background as every other page");
 {
   const { pg, ctx, errs } = await open();
 
+  /* ── WHAT "THE SITE'S BACKGROUND" IS NOW ────────────────────────────────
+     It used to be `.sky`: a div with two blurred blobs drifting inside it,
+     one copy per page. That is gone. Every page now stands on ONE painted
+     field defined once in sky.css — a wash and a wafer grid on `body::before`
+     — which is cheaper, identical everywhere by construction, and does not
+     have to be apologised for on a phone.
+
+     These two checks used to look for `.sky` and for its blobs, and after the
+     rewrite they were asking after furniture that had been thrown out: one
+     failed while the site was correct, and the other would have passed on an
+     empty string if it had been read less carefully. The claim being made
+     here has not changed — the city stands on the same ground as every other
+     page — so it is now asked of the layer that actually paints it. */
   const bg = await pg.evaluate(() => {
     const st = document.querySelector(".stage");
-    const sky = document.querySelector(".sky");
     const cv = document.querySelector("canvas");
     const r = window.__city.world.renderer;
     const gl = r.getContext();
+    const field = getComputedStyle(document.body, "::before");
     return {
       stage: getComputedStyle(st).backgroundColor,
       stageImage: getComputedStyle(st).backgroundImage,
-      sky: !!sky,
+      field: field.backgroundImage,
+      strays: document.querySelectorAll(".sky").length,
       canvas: getComputedStyle(cv).backgroundColor,
       alpha: !!gl.getContextAttributes().alpha,
       clearAlpha: r.getClearAlpha(),
@@ -180,22 +194,27 @@ console.log("=== A. the city sits on the same background as every other page");
   const transparent = (v) => v === "rgba(0, 0, 0, 0)" || v === "transparent";
   check("the stage paints nothing of its own", transparent(bg.stage), bg.stage);
   check("and has no gradient hiding under it", bg.stageImage === "none", bg.stageImage.slice(0, 48));
-  check("the site's sky layer is present on the page", bg.sky);
+  check("the site's field is painted behind the page", bg.field !== "none" && bg.field.includes("gradient"),
+    bg.field.slice(0, 48));
+  /* And no leftover of the old one, which would be a second ground under the
+     first and a bloom nobody meant to keep paying for. */
+  check("and nothing of the old sky layer is left behind", bg.strays === 0, `${bg.strays} .sky element(s)`);
   check("the canvas itself is transparent", transparent(bg.canvas), bg.canvas);
   check("the drawing buffer has an alpha channel at all", bg.alpha);
-  check("and the renderer clears to nothing, so the sky shows through",
+  check("and the renderer clears to nothing, so the field shows through",
     bg.clearAlpha === 0, String(bg.clearAlpha));
 
-  /* "The same background as every other page" is a claim about two pages,
-     so it takes two pages to check. Pixels would be the ideal comparison and
-     are the wrong one here — the sky's two blobs are on 26 and 31 second
-     animations, so two screenshots taken seconds apart legitimately differ.
-     The ground itself does not move: the body colour and the sky's own
-     gradients are what must match. */
+  /* "The same background as every other page" is a claim about two pages, so
+     it takes two pages to check. Pixels would be the ideal comparison and are
+     the wrong one: the spotlight follows the pointer, so two screenshots
+     legitimately differ. The ground itself does not move — the body colour
+     and the field's own gradients are what must match, character for
+     character, because they come from one file and any difference means a
+     page has started carrying a copy again. */
   const ground = (p) => p.evaluate(() => {
-    const sky = [...document.querySelectorAll(".sky i")]
-      .map((i) => getComputedStyle(i).backgroundImage).join(" | ");
-    return { body: getComputedStyle(document.body).backgroundColor, sky };
+    const f = getComputedStyle(document.body, "::before");
+    return { body: getComputedStyle(document.body).backgroundColor,
+             field: `${f.backgroundImage} @ ${f.backgroundSize}` };
   });
   const here = await ground(pg);
   const other = await ctx.newPage();
@@ -206,7 +225,9 @@ console.log("=== A. the city sits on the same background as every other page");
 
   check("the city's ground is the site's ground", here.body === there.body,
     `${here.body} vs ${there.body}`);
-  check("and it is the very same sky, blob for blob", here.sky === there.sky && here.sky.length > 0);
+  check("and it is the very same field, gradient for gradient",
+    here.field === there.field && here.field.includes("gradient"),
+    here.field === there.field ? here.field.slice(0, 56) : `${here.field.slice(0, 40)} vs ${there.field.slice(0, 40)}`);
   check("no page errors", errs.length === 0, errs[0] || "");
   await ctx.close();
 }

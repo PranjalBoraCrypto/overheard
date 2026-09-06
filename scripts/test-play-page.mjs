@@ -36,7 +36,7 @@ const srv = http.createServer((req, res) => {
   }
   const f = path.join(ROOT, p);
   if (fs.existsSync(f) && fs.statSync(f).isFile()) {
-    res.writeHead(200, { 'content-type': p.endsWith('.js') ? 'text/javascript' : 'text/html' });
+    res.writeHead(200, { 'content-type': p.endsWith('.js') ? 'text/javascript' : p.endsWith('.css') ? 'text/css' : 'text/html' });
     return res.end(fs.readFileSync(f));
   }
   res.writeHead(404); res.end('{}');
@@ -137,37 +137,153 @@ check('they settle into a heap that holds', t0.stacked >= 5, `${t0.stacked} rest
 check('and the heap goes to sleep rather than being held still',
   t0.asleep === t0.n, `${t0.asleep} of ${t0.n} asleep`);
 
-/* THROWING. Velocity comes from the last few pointer samples, so a flick has
-   to actually throw — a drop is the bug this replaces. */
+/* ══════════════════════════════════════════════════════════════════════════
+   THROWING
+   ══════════════════════════════════════════════════════════════════════════
+
+   THE CLAIM. Let go of a coin while your hand is moving and it leaves at the
+   speed your hand was going. That is what makes a flick throw and a slow drag
+   put the coin down, and a drop-on-every-release is the bug this replaces.
+
+   HOW THE PAGE DOES IT. Release speed is measured across the pointer samples
+   inside a 110ms window, not off the last one: a single frame of pointer
+   delta is noise. So the page needs SEVERAL samples inside that window to
+   have anything to measure.
+
+   WHY THIS IS NOT DRIVEN BY playwright's MOUSE, WHICH IS HOW IT USED TO BE.
+   Every `mouse.move` is a round trip, and in this container one costs 40 to
+   85ms. Twelve of them is not a flick — it is a hand moving at eight frames a
+   second, and the page's window ends up holding one or two samples. Measured,
+   over six runs of the old shape: 546, 68, 174, 81, 368 and 0 px/s off the
+   identical gesture. Whether it "passed" came down to whether one sample fell
+   just inside the boundary or just outside it, and the numbers say so plainly:
+   at 0 px/s the oldest sample inside the window WAS the newest sample, and the
+   page correctly measured a hand that had not moved since. Nothing was wrong
+   with the page in any of those six runs. A check that reports a working page
+   as broken half the time gets muted, and a muted check is worse than none.
+
+   So the gesture is dispatched INSIDE the page, at sixteen milliseconds a
+   step, which is what a real hand on a real pointer looks like and what the
+   window was designed around. It runs through the page's own listeners —
+   toWorld, the sample history, the release — so what is tested is the code
+   that ships. What it does not exercise is Chrome's hit-testing, and that is
+   covered separately below with a real mouse, where nothing depends on
+   timing.
+
+   AND THE NUMBERS ARE RELATIVE, not absolute. "Faster than 300" is a claim
+   about how quickly this machine can run a loop; "it leaves at about the speed
+   of the hand, and a slow drag leaves far slower than a flick" is a claim
+   about the page. The second one is true on any machine.
+   ═══════════════════════════════════════════════════════════════════════ */
 const tbox = await pg.locator('#toy').boundingBox();
 const dims = await pg.evaluate(() => ({ w: window.__toy.WORLD, h: window.__toy.WH }));
 const w2s = (wx, wy) => ({ x: tbox.x + wx / dims.w * tbox.width, y: tbox.y + wy / dims.h * tbox.height });
-/* Tagged, not indexed: eating splices the array, and an index into a list
-   that shifts under you measures the wrong token. */
-await pg.evaluate(() => {
-  const c = window.__toy.coins.find(k => k.sleeping) || window.__toy.coins[0];
-  /* Parked and asleep, so it is still where the test last saw it when the
-     grab lands — a falling token has moved on by the time a round trip
-     through the browser gets back. */
-  c.__tag = 1; c.x = 80; c.y = 210; c.vx = 0; c.vy = 0; c.still = 9;
-});
-const tagged = () => pg.evaluate(() => window.__toy.coins.find(k => k.__tag) || null);
-await pg.waitForTimeout(40);
-let g = await tagged();
-let sp = w2s(g.x, g.y);
-await pg.mouse.move(sp.x, sp.y); await pg.mouse.down();
-for (let i = 1; i <= 12; i++) { const q = w2s(g.x + 26 * i, g.y - 8 * i); await pg.mouse.move(q.x, q.y); }
-const at = await tagged();
-await pg.mouse.up();
-const flung = await pg.evaluate(() => { const c = window.__toy.coins.find(k => k.__tag);
-  return c ? Math.round(Math.hypot(c.vx, c.vy)) : -1; });
-check('a flick throws it', flung > 300, `${flung} px/s off the hand`);
+
+/** One complete grab-drag-release inside the page, `gapMs` between samples.
+ *  Returns the coin's speed on release and the speed the hand was actually
+ *  going, both in the page's own units, so the two can be compared. */
+const gesture = (gapMs) => pg.evaluate(async ({ gapMs, steps, dx, dy }) => {
+  const t = window.__toy;
+  const cv = document.querySelector('#toy canvas') || document.querySelector('canvas');
+  const r = cv.getBoundingClientRect();
+  /* Tagged after the grab, not before: the hit test takes the nearest coin,
+     which is not necessarily the one we parked there, and an index into a
+     list that gets spliced when a coin is eaten measures the wrong token. */
+  for (const k of t.coins) delete k.__tag;
+  const seed = t.coins.find((k) => k.sleeping) || t.coins[0];
+  seed.x = 80; seed.y = 210; seed.vx = 0; seed.vy = 0; seed.still = 9; seed.held = false;
+  const send = (type, wx, wy) => {
+    cv.dispatchEvent(new PointerEvent(type, {
+      pointerId: 1, isPrimary: true, bubbles: true, cancelable: true, pointerType: 'mouse',
+      clientX: r.left + wx / t.WORLD * r.width, clientY: r.top + wy / t.WH * r.height,
+      buttons: type === 'pointerup' ? 0 : 1 }));
+  };
+  /* A synthetic pointer has no id the browser knows about, and
+     setPointerCapture throws NotFoundError for one — which would abort the
+     page's pointerdown handler halfway through and be reported as a page
+     error. Capture is not what is under test here, so it is stubbed for the
+     length of the gesture and put back afterwards. */
+  const own = Object.prototype.hasOwnProperty.call(cv, 'setPointerCapture');
+  const was = cv.setPointerCapture;
+  cv.setPointerCapture = () => {};
+  try {
+    send('pointerdown', 80, 210);
+    const held = t.coins.find((k) => k.held);
+    if (!held) return { grabbed: false };
+    held.__tag = 1;
+    const t0 = performance.now();
+    for (let i = 1; i <= steps; i++) {
+      await new Promise((z) => setTimeout(z, gapMs));
+      send('pointermove', 80 + dx * i, 210 + dy * i);
+    }
+    const span = performance.now() - t0;
+    send('pointerup', 80 + dx * steps, 210 + dy * steps);
+    return { grabbed: true, v: Math.round(Math.hypot(held.vx, held.vy)),
+             x: held.x, y: held.y, span: Math.round(span),
+             hand: Math.round(Math.hypot(dx, dy) * steps / (span / 1000)) };
+  } finally { if (own) cv.setPointerCapture = was; else delete cv.setPointerCapture; }
+}, { gapMs, steps: 12, dx: 26, dy: -8 });
+
+const fast = await gesture(16);
+check('a hand moving at pointer speed picks a coin up', fast.grabbed === true);
+/* THE CLAIM ITSELF: it leaves at about the speed of the hand. A factor of
+   two either way is generous and still excludes both failures that matter —
+   a coin that drops (v far below the hand) and one that is flung by a number
+   nobody asked for (v far above it). */
+check('a flick throws it at about the speed of the hand',
+  fast.grabbed && fast.v > fast.hand * 0.6 && fast.v < fast.hand * 2.5,
+  `${fast.v} px/s off a hand doing ${fast.hand}`);
 /* Speed on release is only half the claim — the other half is that it keeps
-   going. A number in a variable that the next frame eats is not a throw. */
-await pg.waitForTimeout(260);
-const went = await pg.evaluate((from) => { const c = window.__toy.coins.find(k => k.__tag);
-  return c ? Math.round(Math.hypot(c.x - from.x, c.y - from.y)) : -1; }, { x: at.x, y: at.y });
+   going. A number in a variable that the next frame eats is not a throw.
+   FURTHEST reached, not where it ended up: a coin that flies across the well
+   and rebounds off the far wall has carried, and sampling only the endpoint
+   would score that rebound as a drop. */
+const went = await pg.evaluate(async (from) => {
+  let far = 0; const t0 = performance.now();
+  while (performance.now() - t0 < 320) {
+    const c = window.__toy.coins.find((k) => k.__tag);
+    if (!c) return -1;
+    far = Math.max(far, Math.hypot(c.x - from.x, c.y - from.y));
+    await new Promise((r) => requestAnimationFrame(r));
+  }
+  return Math.round(far);
+}, { x: fast.x ?? 0, y: fast.y ?? 0 });
 check('and it carries', went > 60, `${went}px travelled after release`);
+
+/* AND THE OTHER HALF OF THE SAME RULE, which is the whole reason the page
+   measures a window at all: the same distance, covered slowly, is PUT DOWN
+   rather than thrown. Without this, "a flick throws it" is satisfied by a
+   page that throws everything — the same bug in the other direction, and the
+   one an absolute threshold can never catch. */
+const slow = await gesture(90);
+check('and a slow drag puts it down instead of throwing it',
+  slow.grabbed && slow.v < fast.v * 0.6,
+  `${slow.v} px/s off a hand doing ${slow.hand}, against ${fast.v} for the flick`);
+
+/* THE REAL POINTER, once, for the thing the synthetic one cannot ask: that
+   Chrome's own hit-testing puts the grab on the coin under the cursor and the
+   coin follows the hand. Nothing here depends on how fast the events arrive. */
+{
+  const start = await pg.evaluate(() => {
+    const c = window.__toy.coins.find((k) => k.sleeping) || window.__toy.coins[0];
+    for (const k of window.__toy.coins) delete k.__real;
+    c.__real = 1; c.x = 90; c.y = 230; c.vx = 0; c.vy = 0; c.still = 9; c.held = false;
+    return { x: c.x, y: c.y };
+  });
+  await pg.waitForTimeout(60);
+  const from = w2s(start.x, start.y), to = w2s(start.x + 120, start.y - 40);
+  await pg.mouse.move(from.x, from.y); await pg.mouse.down();
+  await pg.mouse.move(to.x, to.y); await pg.waitForTimeout(60);
+  const under = await pg.evaluate(() => {
+    const c = window.__toy.coins.find((k) => k.held);
+    return c ? { real: !!c.__real, x: Math.round(c.x), y: Math.round(c.y) } : null;
+  });
+  await pg.mouse.up();
+  check('a real mouse grabs the coin under the cursor', under?.real === true,
+    under ? `held one at ${under.x},${under.y}` : 'nothing was held');
+  check('and it follows the hand while held',
+    under && Math.abs(under.x - (start.x + 120)) < 12, `x ${under?.x} against ${start.x + 120}`);
+}
 
 /* THE HEAD. It resists — pull it a long way and it barely moves, because the
    restoring force grows with the cube of the displacement. */
