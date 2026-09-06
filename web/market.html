@@ -938,6 +938,25 @@ const tell = (t, cls) => {
   s.dataset.keep = "1";
 };
 
+/* ── WHEN IT DOES NOT LAND, SAY WHAT THE NETWORK SAID ────────────────────
+   /api/post hands back Technocore's own status and body, and the first time
+   anybody uses this page is exactly when that matters: this room does not
+   exist until the first message creates one, and Technocore is near its
+   20,480-room cap and refuses new names with a bare `400 room limit reached`.
+   "Try again" would be the wrong advice and no help in finding out why.
+   A timeout is NOT a failure. The request reached the network and outlived
+   our patience, so the write may well have landed — telling somebody nothing
+   was written and then showing them their own call is worse than saying we
+   do not know. */
+function whyNot(r) {
+  if (r?.unknown) {
+    return "Technocore did not answer in time. It may still have gone through — "
+         + "give it a moment and reload before trying again.";
+  }
+  const said = String(r?.body ?? "").replace(/\s+/g, " ").trim().slice(0, 140);
+  return said ? `Technocore refused it: ${said}` : "It did not reach the network. Nothing was signed away.";
+}
+
 async function post(text) {
   const s = getSession();
   if (!s) return { ok: false, why: "not signed in" };
@@ -965,7 +984,7 @@ $("tap").addEventListener("click", async () => {
   if (!r.ok) {
     b.disabled = false; b.textContent = was;
     const t = $("tapsay"); t.className = "say bad";
-    t.textContent = "The tap did not reach the network. Nothing was signed away — try again.";
+    t.textContent = whyNot(r);
     return;
   }
   await load();
@@ -984,7 +1003,7 @@ $("go").addEventListener("click", async () => {
   const r = await post(callFrame(s.did, side, n, hex16()));
   if (!r.ok) {
     go.disabled = false; go.textContent = was;
-    return tell("The call did not reach the network. Nothing was counted — try again.", "bad");
+    return tell(whyNot(r), "bad");
   }
   const word = side === "yes" ? "Yes" : "No";
   side = null;
