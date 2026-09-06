@@ -79,8 +79,15 @@ console.log("\n=== B. two places ask, and neither of them is a cron");
   ok("deploy.yml exists and runs on a push to main",
     /push:\s*\n\s*branches:\s*\[main\]/.test(dep));
   ok("and it POSTs the deploy hook", /VERCEL_DEPLOY_HOOK/.test(dep) && /curl[^\n]*-X POST/.test(dep));
-  ok("the archive loop publishes the data hourly",
-    /DEPLOY_EVERY=3600/.test(arc) && /VERCEL_DEPLOY_HOOK/.test(arc));
+  /* SIX HOURS, and the number is pinned because it is a budget decision, not
+     a taste. A deployment of this repository takes about nine minutes —
+     Vercel clones ten commits of a 223,618-file tree first, which no amount
+     of trimming the upload touches. Hourly measured out at roughly $51 a
+     month of build time; this is about $13. Anyone moving it should have to
+     move this line and read that. */
+  ok("the archive loop publishes the data every six hours",
+    /DEPLOY_EVERY=21600/.test(arc) && /VERCEL_DEPLOY_HOOK/.test(arc),
+    (arc.match(/DEPLOY_EVERY=\d+/) || ["(not set)"])[0]);
   /* Both guards matter. Without the first, an hour of nothing happening still
      costs a deployment; without the second, every pass does. */
   ok("only when something new was actually published",

@@ -336,7 +336,22 @@ jobs:
           # requested, measured over three days. This loop is alive 97.9% of
           # the time and it already knows whether there is anything new to
           # publish, which a schedule would have to go and find out.
-          DEPLOY_EVERY=3600
+          # SIX HOURS, MEASURED RATHER THAN CHOSEN. A deployment of this
+          # repository takes about nine minutes — Vercel shallow-clones ten
+          # commits of a 223,618-file tree before it does anything, and no
+          # amount of trimming the upload touches that. Hourly would be ~27
+          # deployments a day and about $51 a month of build time; six-hourly
+          # is about $13.
+          #
+          # And it costs nothing anybody can see. What goes stale is the
+          # FALLBACK — the archived copy served when Technocore refuses, the
+          # profile counts, the room history ranges. Live rooms, the deals
+          # board and the shop all come from the API in real time and are not
+          # affected by this number at all.
+          #
+          # The real fix is a small repository, so the clone stops being the
+          # expense. Until then this is the dial.
+          DEPLOY_EVERY=21600
           last_deploy=$(date +%s)
           published_when_deployed=0
           while true; do
@@ -408,6 +423,43 @@ jobs:
           done
 
           wait $ARCH || echo "collector exited non-zero"
+
+          # ── THE PUBLISH AFTER THE LAST PASS, WHICH WAS NEVER HAPPENING ────
+          #
+          # The collector writes several things only when it FINISHES: the
+          # final report, and the cold-start snapshots that /api/city and
+          # /api/room fall back on when Technocore refuses. The loop above
+          # exits the moment the collector is gone, so every one of those was
+          # written to disk on a runner that was about to be deleted.
+          #
+          # It had been happening for a week without anybody noticing, because
+          # the symptom is not an error — it is a file that quietly stops
+          # being new. Measured on 6 September: the site's offline fallback
+          # for every room was stamped 30 August, while the archive underneath
+          # it was minutes old.
+          #
+          # So the window ends with one more publish. Its failure is reported
+          # and does not fail the job: the collection is already safely
+          # pushed, and losing the job over the last file would be trading a
+          # small loss for a large one.
+          rc=0
+          PASS_N=final bash "${RUNNER_TEMP:-/tmp}/publish-pass.sh" || rc=$?
+          case "$rc" in
+            0) published=$((published + 1))
+               echo "the last pass published the snapshots and the final report" ;;
+            2) echo "nothing left to publish at the end of the window" ;;
+            *) echo "::warning title=archive::the final publish did not land (exit $rc) — the snapshots stay as they were" ;;
+          esac
+
+          # And if that final publish carried something the site has not seen,
+          # ask for it now rather than leaving it for the next window.
+          if [ -n "${VERCEL_DEPLOY_HOOK:-}" ] && [ "$published" -gt "$published_when_deployed" ]; then
+            code=$(curl -sS -o /dev/null -w '%{http_code}' -X POST "$VERCEL_DEPLOY_HOOK" 2>/dev/null) || code=000
+            case "$code" in
+              200|201) echo "asked the site to pick up the end of this window" ;;
+              *) echo "::warning title=archive::the deploy hook answered HTTP $code at the end of the window" ;;
+            esac
+          fi
           # ONE LINE SAYING HOW THE WINDOW WENT, in the only channel that can be
           # read back afterwards. Everything above is invisible to anybody who was
           # not watching the log live, and nobody is ever watching the log live.

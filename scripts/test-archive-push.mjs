@@ -424,5 +424,36 @@ console.log("\n=== F. and it has to be able to say what went wrong");
     /\$failed failed/.test(REAL));
 }
 
+/* ── G. THE PUBLISH AFTER THE LAST PASS ───────────────────────────────────
+ * The collector writes several things only when it FINISHES — the final
+ * report, and the cold-start snapshots /api/city and /api/room fall back on
+ * when Technocore refuses. The commit loop exits the moment the collector is
+ * gone, so all of it was being written to a runner about to be deleted.
+ *
+ * The symptom is not an error. It is a file that quietly stops being new:
+ * measured on 6 September, the site's offline fallback for every room was
+ * stamped 30 August while the archive underneath it was minutes old. Nobody
+ * noticed for a week, which is exactly why it is pinned here.
+ */
+console.log("\n=== G. the window does not end without publishing its last pass");
+{
+  const after = REAL.slice(REAL.indexOf("wait $ARCH"));
+  ok("there is a publish after the collector has finished",
+    /PASS_N=final bash "\$\{RUNNER_TEMP:-\/tmp\}\/publish-pass\.sh"/.test(after),
+    after.includes("PASS_N=final") ? "" : "nothing runs after wait $ARCH");
+  /* It must not be able to end the job. The collection itself is already
+     safely pushed by then; losing the run over the last file would trade a
+     small loss for a large one. */
+  ok("and it cannot fail the job", /PASS_N=final[^\n]*\|\| rc=\$\?/.test(after));
+  ok("a failure there is still said out loud",
+    /::warning title=archive::the final publish did not land/.test(after));
+  /* THE THING IT EXISTS TO CARRY. If archive.mjs stops writing the snapshots
+     at the end of its run, this final publish is carrying nothing and the
+     fallback silently freezes again — from the other side. */
+  const arc = fs.readFileSync(path.join(ROOT, "scripts", "archive.mjs"), "utf8");
+  ok("and the collector still writes the snapshots at the end of its run",
+    /make-room-snapshots\.mjs/.test(arc) && /make-city-snapshot\.mjs/.test(arc));
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
