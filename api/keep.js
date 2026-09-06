@@ -77,7 +77,7 @@ const MAX_TEXT = 4096;
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
+  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
   "Access-Control-Allow-Headers": "Content-Type",
 };
 const json = (body, status = 200) =>
@@ -125,7 +125,22 @@ const dec = (b64) => {
 
 export default async function handler(request) {
   if (request.method === "OPTIONS") return new Response(null, { headers: CORS });
-  if (request.method !== "POST") return json({ ok: false, error: "POST only" }, 405);
+
+  /* ── A GET IS A HEALTH CHECK, AND IT REVEALS NOTHING ────────────────────
+     Whether an environment variable is SET is not a secret; its value is, and
+     that is never read here or anywhere near a response. Without this the only
+     way to find out whether the keeper is wired up is to make a real call and
+     see if a commit appears, which is a poor way to learn that a token was
+     pasted into the wrong project. */
+  if (request.method === "GET") {
+    return json({
+      ok: true,
+      keeper: TOKEN ? "ready" : "no token configured",
+      room: ROOM,
+      writes: `${OWNER}/${REPO}:${PATH}`,
+    });
+  }
+  if (request.method !== "POST") return json({ ok: false, error: "POST or GET only" }, 405);
 
   /* NOT AN ERROR, AND THE PAGE MUST NOT TREAT IT AS ONE. With no token this
      endpoint is inert and the call is still on the network, still signed, and

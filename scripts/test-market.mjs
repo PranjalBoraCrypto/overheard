@@ -366,6 +366,15 @@ console.log("\n=== S. the second keeper");
   ok("and it is inert, not broken, with no token configured",
     /if \(!TOKEN\)/.test(keep) && /kept: 0/.test(keep),
     "the call is still on the network; the site is one keeper down");
+  /* A GET says whether it is wired up, which is not a secret — the value of
+     the variable is, and nothing reads it into a response. Without this the
+     only way to find out is to make a real call and look for a commit. */
+  ok("a GET answers whether the keeper is wired up",
+    /request\.method === "GET"/.test(keep) && /keeper: TOKEN \?/.test(keep));
+  ok("without ever putting the token in a response",
+    !/TOKEN\b(?![\s\S]{0,40}\?)/.test(keep.slice(keep.indexOf('keeper: TOKEN'), keep.indexOf('keeper: TOKEN') + 200)) ||
+    !new RegExp("(token|TOKEN)\\s*[,}]").test(keep.slice(keep.indexOf("return json({\n      ok: true,"), keep.indexOf("writes:"))),
+    "whether it is set is public; what it is never leaves the process");
 
   /* ── AND THE COLLECTOR MUST NOT ERASE IT ───────────────────────────────
      This process seeds its ledger once, at the start of a five-hour window.
