@@ -70,7 +70,11 @@
    ═══════════════════════════════════════════════════════════════════════════ */
 *{box-sizing:border-box;margin:0;padding:0}
 html{-webkit-text-size-adjust:100%}
-body{background:var(--bg);color:var(--dim);font-family:var(--sans);
+/* --void, not --bg. `--bg` exists in deal.css only INSIDE .btn, so this
+   resolved to nothing, the body painted transparent, and the page came up
+   white — the one bug on this page that every other page here already knew
+   about, because every other page says --void. */
+body{background:var(--void);color:var(--dim);font-family:var(--display);
   font-size:15px;line-height:1.6;min-height:100svh;overflow-x:hidden}
 
 .shell{max-width:1120px;margin:0 auto;padding:calc(var(--barh) + var(--s5)) var(--s4) 90px}
@@ -513,6 +517,16 @@ h1{font-size:clamp(26px,4.4vw,42px);line-height:1.12;letter-spacing:-.025em;
       </div>
     </section>
 
+
+    <section class="card board">
+      <div class="ch"><h2>Who has called it</h2><em id="boardk">biggest first</em></div>
+      <div class="rowhead" id="rowhead">
+        <span></span><span>who</span><span>side</span><span>paper</span><span id="hpay">if right</span>
+      </div>
+      <div class="rows" id="rows"><div class="blank"><b>Reading the room…</b></div></div>
+    </section>
+    </div>
+
     <aside class="aside">
       <!-- ── THE TAP ────────────────────────────────────────────────────────
            Its own card, above the one that spends it, because it is the first
@@ -550,15 +564,6 @@ h1{font-size:clamp(26px,4.4vw,42px);line-height:1.12;letter-spacing:-.025em;
         <div class="mine" id="mine" hidden></div>
       </section>
     </aside>
-
-    <section class="card board">
-      <div class="ch"><h2>Who has called it</h2><em id="boardk">biggest first</em></div>
-      <div class="rowhead" id="rowhead">
-        <span></span><span>who</span><span>side</span><span>paper</span><span id="hpay">if right</span>
-      </div>
-      <div class="rows" id="rows"><div class="blank"><b>Reading the room…</b></div></div>
-    </section>
-    </div>
 
     <section class="card faq">
       <div class="ch"><h2>Before you call it</h2><em>the honest small print</em></div>
@@ -722,8 +727,12 @@ async function load() {
 }
 
 /* ── painting ──────────────────────────────────────────────────────────────*/
-const closesWhen = new Date(CLOSES_MS).toLocaleDateString(undefined,
-  { day: "numeric", month: "short", year: "numeric" });
+/* IN UTC, and said so. The deadline is the end of 31 March UTC, and drawn in
+   the reader's own zone that is "Apr 1, 2027" for anybody east of Greenwich —
+   a date directly under a headline that says 31 March. The rule is one instant
+   for everybody, so the label is the instant's own date. */
+const closesWhen = new Date(CLOSES_MS).toLocaleDateString("en-GB",
+  { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" }) + " UTC";
 
 function paintSplit() {
   const { yes, no, share, total } = fold;

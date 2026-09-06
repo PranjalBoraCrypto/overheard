@@ -55,6 +55,61 @@
 body{background:var(--void);color:var(--txt);font-family:var(--display);font-size:16px;line-height:1.6;
   -webkit-font-smoothing:antialiased;overflow-x:clip}
 
+
+/* ══════════════════════════════════════════════════════════════════════════
+   ALSO TO PLAY — the shelf this page is becoming
+   ──────────────────────────────────────────────────────────────────────────
+   Proof of Learning was the only thing here, so the page and the game were
+   the same object. They are not any more, and rather than move the run to a
+   URL nobody has bookmarked, the shelf starts underneath it: the run stays
+   where it is and where every existing link points, and the things beside it
+   appear here as they arrive.
+
+   TWO TILES FOR ONE GAME, and the second is honest rather than filler. A
+   single card under a heading reads as an afterthought somebody bolted on; a
+   row with a gap in it reads as a shelf. The empty one says what it is and
+   promises no date.
+   ═════════════════════════════════════════════════════════════════════════*/
+.shelf{margin-top:clamp(30px,4vw,52px)}
+.shelfhead{display:flex;align-items:baseline;gap:14px;margin-bottom:16px;flex-wrap:wrap}
+.shelfhead h2{font-size:20px;font-weight:700;letter-spacing:-.02em;color:var(--txt)}
+.shelfhead span{font-family:var(--mono);font-size:11px;letter-spacing:.14em;
+  text-transform:uppercase;color:var(--faint)}
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px}
+.tile{display:flex;flex-direction:column;gap:9px;text-decoration:none;color:inherit;
+  border:1px solid var(--edge);border-radius:18px;padding:20px;background:rgba(7,34,48,.55);
+  position:relative;overflow:hidden;
+  transition:transform .2s var(--ease),border-color .18s,background .18s,box-shadow .2s var(--ease)}
+.tile .tk{display:inline-flex;align-items:center;gap:8px;font-family:var(--mono);font-size:11px;
+  letter-spacing:.14em;text-transform:uppercase;color:var(--warn)}
+.tile .tk i{width:6px;height:6px;border-radius:50%;background:var(--good);flex:none}
+.tile h3{font-size:19px;font-weight:700;letter-spacing:-.02em;color:var(--txt);line-height:1.25}
+.tile p{font-size:14px;line-height:1.6;color:var(--dim)}
+.tile .tgo{margin-top:auto;padding-top:8px;font-family:var(--mono);font-size:11px;
+  letter-spacing:.12em;text-transform:uppercase;color:var(--cy-hi);transition:color .16s}
+.tile .tgo::after{content:" \2192";display:inline-block;transition:transform .2s var(--ease)}
+/* The light that crosses it, once, when the pointer arrives — the same idea
+   as the market's own bar, so the two pages feel like one hand. */
+.tile::after{content:"";position:absolute;inset:0;pointer-events:none;opacity:0;
+  background:linear-gradient(100deg,transparent 38%,rgba(255,255,255,.10) 50%,transparent 62%);
+  transform:translateX(-60%)}
+@media (hover:hover){
+  .tile:hover{transform:translateY(-4px);border-color:var(--edge-lit);
+    background:rgba(7,34,48,.85);box-shadow:0 22px 44px -26px rgba(0,0,0,1)}
+  .tile:hover::after{opacity:1;transform:translateX(60%);
+    transition:transform .62s var(--ease),opacity .12s}
+  .tile:hover .tgo::after{transform:translateX(5px)}
+}
+.tile:focus-visible{outline:none;box-shadow:0 0 0 2px var(--void),0 0 0 4px var(--cy-hi)}
+.tile.soon{border-style:dashed;background:transparent;cursor:default}
+.tile.soon h3,.tile.soon .tk{color:var(--faint)}
+.tile.soon .tk i{background:var(--faint)}
+@media (max-width:720px){
+  .tiles{grid-template-columns:1fr}
+  .tile{padding:17px;border-radius:16px}
+}
+
+
 /* ── THE BLOOMS STOP DRIFTING ON A TOUCH DEVICE ──────────────────────────
    Reported as "my phone went very hot". These are three fixed layers up to
    700px across under filter:blur(90px), and the animation scales them — so
@@ -1009,6 +1064,29 @@ canvas.confetti{position:fixed;inset:0;width:100%;height:100%;pointer-events:non
         <p class="toycap" id="toyCap">Throw them &middot; <b>they fall, bounce and stack</b></p>
       </div>
     </div>
+
+    <!-- ══ ALSO TO PLAY ═══════════════════════════════════════════════════ -->
+    <section class="shelf">
+      <div class="shelfhead">
+        <h2>Also to play</h2><span>one question, and room for more</span>
+      </div>
+      <div class="tiles">
+        <a class="tile" href="/market">
+          <span class="tk"><i></i>paper market · open now</span>
+          <h3>Will Flop Labs ship mainnet by 31 March 2027?</h3>
+          <p>Arthur Hayes asked for a market on it. Take a thousand paper from the tap,
+             put it on Yes or No, and find out in March who called it. Nothing of value
+             moves &mdash; the signature is the real part.</p>
+          <span class="tgo">Make your call</span>
+        </a>
+        <div class="tile soon">
+          <span class="tk"><i></i>more soon</span>
+          <h3>Whatever is worth arguing about next.</h3>
+          <p>Anything built here that can be played, signed, and read back off the
+             network lands on this shelf beside the run above.</p>
+        </div>
+      </div>
+    </section>
 
     <section class="hist" id="histIntro" hidden></section>
 

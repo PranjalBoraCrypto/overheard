@@ -296,6 +296,29 @@ console.log("\n=== L. the page, as text");
     !/requestAnimationFrame|setInterval/.test(page));
 }
 
+console.log("\n=== Q. how anybody finds it");
+{
+  /* NOT ON THE NAV BAR, deliberately: six tabs is the width of the bar and
+     this is one game rather than a seventh section of the site. Which makes
+     the shelf on /play the only way in, so the shelf has to exist. */
+  const nav = read("web/nav.js");
+  ok("the market is in the site's own page list", /href: "\/market"/.test(nav));
+  ok("but not as a tab on the bar",
+    /\{ href: "\/market",[^}]*bar: false/.test(nav),
+    "it goes on the bar the day it has earned one");
+  const play = read("web/play.html");
+  ok("Play links it, which is where things you can play live",
+    /<a class="tile" href="\/market">/.test(play));
+  ok("and Play reads as a shelf rather than one game with a link bolted on",
+    /class="shelf"/.test(play) && /Also to play/.test(play) &&
+    (play.match(/class="tile/g) ?? []).length >= 2);
+  /* The tile has to say what the page says. A card promising a market and
+     landing on a disclaimer is the wrong order to learn that in. */
+  ok("the tile says up front that nothing of value moves",
+    /Nothing of value\s+moves/.test(play.replace(/\s+/g, " ").replace(/ /g, " ")) ||
+    /nothing of value moves/i.test(play));
+}
+
 console.log("\n=== M. words for the reader, not the protocol");
 {
   ok("months, while it is months away", /months left/.test(leftUntil(CLOSES_MS, CLOSES_MS - 200 * 86400000)));

@@ -70,7 +70,12 @@ export const PAGES = [
      is the action the page asks for — a tab row already holding "Card"
      cannot also hold "Call" and expect anybody to tell them apart at a
      glance. */
-  { href: "/market", label: "Market", icon: "coin", bar: true,
+  /* NOT ON THE BAR YET. Six tabs is already the width of the bar, and the
+     market is one game rather than a seventh section of the site — it is
+     reached from Play, which is where the things you can play live. It stays
+     in this list so the footer links it and so the page is findable, and it
+     goes on the bar the day it has earned a tab. */
+  { href: "/market", label: "Market", icon: "coin", bar: false,
     match: (p) => p.startsWith("/market"),
     blurb: "One question, in paper" },
   /* LAST, AND ON PURPOSE. City is the loudest tab on the bar — it carries the

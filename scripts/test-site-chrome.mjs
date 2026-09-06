@@ -569,6 +569,19 @@ console.log("\n=== 9. a pasted link arrives with a picture");
     check(`${f} declares none of its own`, !own,
       own ? "a local .sky, .spot, field or spotlight" : "");
     check(`${f} has the light on it`, lit);
+    /* ── AND THAT IT PAINTS A GROUND AT ALL ─────────────────────────────
+       market.html said `background:var(--bg)`, and --bg exists in deal.css
+       only inside .btn — so it resolved to nothing, the body stayed
+       transparent, and the page shipped WHITE on a site that is black. Every
+       other page here says --void; the one that did not was the one nobody
+       had a rule for. */
+    /* The whole body rule, not one line of it: two pages layer gradients over
+       their ground across five lines, and what matters is that a colour token
+       is named in there somewhere rather than which line it is on. */
+    const rule = (src.match(/^body\{[\s\S]*?\}/m) ?? [""])[0];
+    const ground = /var\(--void\)|var\(--navy-0\)/.test(rule);
+    check(`${f} paints the dark ground`, ground,
+      ground ? "" : rule.replace(/\s+/g, " ").slice(0, 70) || "no body rule");
   }
   /* And the shared files have to actually contain the thing. A link to an
      empty stylesheet passes every check above. */
