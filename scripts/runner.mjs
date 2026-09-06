@@ -767,6 +767,24 @@ export function annotate(kind, title, message, out = console.log) {
    restated on a clock. */
 const DECLINED_SAID = new Set();
 
+/* ── OFFERS MEANT FOR THIS SHOP THAT IT DID NOT TAKE ───────────────────────
+   Same shape and the same reason again: an offer sitting on the board with a
+   price we will not meet is a fact that stays true for its whole twelve-hour
+   expiry, and a wake must not restate it every sixty seconds. Keyed by offer
+   id AND reason, so an offer that later fails for a different reason is
+   still worth one line. */
+const TURNED_AWAY_SAID = new Set();
+const TURNED_AWAY_MAX = 2000;
+
+/* The reason plan() files against every offer on the board that was never
+   addressed here. It is the overwhelming majority of them — tclk-offers is
+   everybody's room — and it is the one refusal that means nothing at all. */
+const NOT_OURS = "not addressed to this shop's job protocol";
+
+/* Capacity is the refusal that costs money: an offer we could have taken and
+   did not, because the book was full. Everything else is a decision. */
+const WAS_FULL = "able and willing, but full";
+
 export async function wake(opts = {}) {
   const log = opts.log ?? console.log;
   const now = opts.now ?? Date.now();
@@ -924,6 +942,47 @@ export async function wake(opts = {}) {
       `${p.reap.length} stale to cancel`,
       no.length ? `holding: ${no.join("; ")}` : "nothing holding it",
     ].join(" · "), log);
+
+  /* ── WHAT IT TURNED AWAY THAT WAS ACTUALLY FOR IT ───────────────────────
+     The line above reports "63 passed over", and on its own that number says
+     nothing: the offers room belongs to the whole network and almost all of
+     it was never addressed here. Reported as a bare count it looks exactly
+     the same as a shop quietly refusing work it should be taking — and the
+     per-offer reasons only ever went to the run log, which redirects to a
+     blob store this project cannot fetch. So on the evidence available, "0
+     frames written, 63 passed over" and "we are losing every customer" were
+     indistinguishable.
+
+     This says the part that carries information: of the offers that WERE
+     addressed to this shop, which ones were refused and why. Silent when the
+     answer is none, which is the ordinary wake — a wake that says nothing is
+     the correct output for a shop that turned nobody away. */
+  const forUs = p.passed.filter((x) => !x.why.includes(NOT_OURS));
+  const unsaid = forUs.filter((x) => !TURNED_AWAY_SAID.has(`${x.id}|${x.why.join("|")}`));
+  if (unsaid.length) {
+    for (const x of unsaid) TURNED_AWAY_SAID.add(`${x.id}|${x.why.join("|")}`);
+    if (TURNED_AWAY_SAID.size > TURNED_AWAY_MAX) TURNED_AWAY_SAID.clear();
+    /* Grouped, because five offers refused for one reason is one fact. The
+       numbers inside a reason are flattened so "offers 100 for work priced
+       at 250" and "offers 90 for work priced at 250" count together. */
+    const tally = new Map();
+    for (const x of unsaid) {
+      for (const w of x.why) {
+        const k = String(w).replace(/\b\d[\d.]*\b/g, "N");
+        tally.set(k, (tally.get(k) ?? 0) + 1);
+      }
+    }
+    const top = [...tally.entries()].sort((a, b) => b[1] - a[1]).slice(0, 4)
+      .map(([k, n]) => (n > 1 ? `${n}× ${k}` : k)).join("; ");
+    /* A WARNING only when the reason was capacity, because that is the one
+       that means work was lost rather than declined. Everything else — a
+       price below the shelf, an expiry already passed, a rail we do not
+       speak — is this shop deciding correctly, and a decision is a notice. */
+    const lostWork = unsaid.some((x) => x.why.includes(WAS_FULL));
+    ann(lostWork ? "warning" : "notice",
+      lostWork ? "turned away work it could have done" : "offers for this shop it did not take",
+      `${unsaid.length} of ${p.passed.length} on the board — ${top}`, log);
+  }
 
   /* ── CLOSING OUT WHAT WAS AGREED AND NEVER FUNDED ──────────────────────
      Posted BEFORE the accepts below, for a reason worth stating: the slot

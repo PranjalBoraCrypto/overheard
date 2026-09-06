@@ -722,6 +722,95 @@ console.log("\n=== M. the annotation");
  * places and missed in the fourth — posting on a live rail while locking on a
  * dead one. Nothing would fail loudly; the deals would just never settle.
  * ─────────────────────────────────────────────────────────────────────── */
+/* ══════════════════════════════════════════════════════════════════════════
+ * T. THE NUMBER THAT MEANT NOTHING
+ *
+ * Every wake reports "63 passed over", and on its own that is not information.
+ * The offers room belongs to the whole network, so almost everything on it was
+ * never addressed to this shop — and a wake that says "0 to take · 63 passed
+ * over" looks exactly the same whether the shop is idle because nobody is
+ * ordering or idle because it is refusing everyone. The per-offer reasons went
+ * to the run log, and the run log redirects to a blob store this project
+ * cannot fetch, so from outside the two were indistinguishable.
+ *
+ * What is asserted here is that the shop now says the part that carries
+ * information — of the offers that WERE for it, which it refused and why —
+ * and, just as importantly, that it stays quiet when the answer is none.
+ * ═════════════════════════════════════════════════════════════════════════*/
+console.log("\n=== T. what it turned away, and what it kept quiet about");
+{
+  const had = process.env.GITHUB_ACTIONS;
+  process.env.GITHUB_ACTIONS = "true";
+  const H = 3600000;
+  const SHELF = JOBS.find((j) => j.id === "overheard-agent-profile");
+  const forUs = (over = {}) => ({
+    type: "offer", from: OTHER, role: "payer",
+    job: { id: SHELF.id, proto: "overheard", brief: OTHER },
+    amount: SHELF.amount, asset: "FLOP", lock: "hash", rails: ["paper"],
+    expiresMs: NOW + 6 * H, claimByMs: NOW + 12 * H, refundAfterMs: NOW + 36 * H,
+    nonce: "0000000000000001", ...over,
+  });
+  const frame = async (o) => "tclk1 " + canon({ ...o, id: await offerId(o) });
+  const board = async (offers) => {
+    const rows = [];
+    let i = 1;
+    for (const o of offers) rows.push(msg(i++, OTHER, await frame(o)));
+    const stub = async (u) => String(u).includes("say-signed")
+      ? { ok: true, status: 200, text: async () => "{}" }
+      : { ok: true, status: 200, json: async () => ({ messages: rows }) };
+    const seen = [];
+    await wake({ fetch: stub, base: "http://stub", log: (l) => seen.push(l), now: NOW, seed: SEED });
+    return seen.filter((l) => l.startsWith("::"));
+  };
+
+  /* ── a board of other people's business ─────────────────────────────────
+     Two offers on somebody else's protocol. Both are refused, both are
+     counted in "passed over", and neither is any of this shop's business. */
+  const others = await board([
+    forUs({ job: { id: "someone-elses-job", proto: "not-overheard" }, nonce: "a".repeat(16) }),
+    forUs({ job: { id: "another", proto: "not-overheard" }, nonce: "b".repeat(16) }),
+  ]);
+  ok("a board of other people's traffic says nothing about it",
+    !others.some((l) => /did not take|turned away/.test(l)),
+    others.filter((l) => /did not take|turned away/.test(l))[0] ?? "quiet, which is correct");
+
+  /* ── and one that was for us ────────────────────────────────────────────
+     Priced below the shelf. Refusing it is right; refusing it in silence is
+     what made a shop with no customers and a shop turning them away look the
+     same from outside. */
+  const cheap = await board([forUs({ amount: "1", nonce: "c".repeat(16) })]);
+  const line = cheap.find((l) => /did not take/.test(l));
+  ok("an offer meant for this shop, refused, is reported", Boolean(line),
+    (line ?? cheap.join(" | ") ?? "nothing said").slice(0, 100));
+  ok("and the reason is in it, not just a count",
+    Boolean(line) && /priced at/.test(line), (line ?? "").slice(0, 110));
+  ok("it is a notice — a price we will not meet is a decision, not a fault",
+    Boolean(line) && line.startsWith("::notice"), (line ?? "").split("::")[1]);
+
+  /* ── SAID ONCE PER OFFER, NOT ONCE PER WAKE ─────────────────────────────
+     The same trap the declined-deal line walked into within an hour of being
+     written: an offer sits on the board for its whole twelve-hour expiry, and
+     a wake every sixty seconds would spend the entire ten-notice budget
+     restating it — crowding out the one wake that actually delivered work. */
+  const again = await board([forUs({ amount: "1", nonce: "c".repeat(16) })]);
+  ok("the same offer is not reported a second time",
+    !again.some((l) => /did not take/.test(l)),
+    again.find((l) => /did not take/.test(l)) ?? "said once, which is the rule");
+
+  /* ── the one refusal that costs money ───────────────────────────────────
+     Everything else is the shop deciding. "Full" is the shop losing work it
+     could have done, and it is the only one that deserves a warning. */
+  const WAS_FULL = "able and willing, but full";
+  ok("capacity is the reason singled out as a warning, and the only one",
+    /const WAS_FULL = "able and willing, but full"/.test(
+      fs.readFileSync(path.join(ROOT, "scripts/runner.mjs"), "utf8")) &&
+    /lostWork \? "warning" : "notice"/.test(
+      fs.readFileSync(path.join(ROOT, "scripts/runner.mjs"), "utf8")),
+    WAS_FULL);
+
+  if (had === undefined) delete process.env.GITHUB_ACTIONS; else process.env.GITHUB_ACTIONS = had;
+}
+
 console.log("\n=== N. the rail");
 {
   const src = (f) => fs.readFileSync(path.join(ROOT, f), "utf8");
