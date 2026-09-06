@@ -24,7 +24,7 @@ import { CAN_DO, doJob } from "./work.mjs";
 import { minterFor, recoverSecret } from "./secret.mjs";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
-import { RAILS, RAILS_WE_TAKE, RAIL, verifyLock, canFund } from "./rail.mjs";
+import { RAILS, RAILS_WE_TAKE, RAIL, verifyLock, canFund, placeLock, claimLock } from "./rail.mjs";
 import { WANTS, planBuys, wantFrame, lockFrame, refundFrame, cancelFrame, wire, safeRoom } from "./buy.mjs";
 
 /* The shop's public identity. The seed for it is in one secret store and is
@@ -1157,10 +1157,41 @@ export async function wake(opts = {}) {
       `${buys.lock.length + buys.refund.length} deal(s) not funded — ${funding.why}`, log);
   }
   for (const b of buys.lock) {
-    const text = wire(lockFrame(US, b.accept.contract));
     log(`would fund ${b.offer.body?.job?.id} in ${b.room}`);
     if (!funding.ok) { log("  held: this rail cannot hold value, so saying it does would be a lie"); continue; }
-    if (!no.length) log(`  locked: ${await settled(b.room, text, "lock")}`);
+    if (no.length) continue;
+    /* ── THE RECORD GOES ON THE RAIL BEFORE ANYBODY IS TOLD IT IS THERE ──
+       A lock frame is a claim; the record is the evidence. Posting the claim
+       first and writing the evidence afterwards means that if the write
+       fails, the claim is simply false and already public. So: write, read
+       it back, and only then say so on the board.
+       This shop posted lock frames for months without writing anything at
+       all — see the note in rail.mjs — and every one of them pointed at an
+       empty key. */
+    const placed = await placeLock({
+      rail: RAIL,
+      contract: b.accept.contract,
+      statement: b.accept.statement,
+      refundAfterMs: b.offer.body?.refundAfterMs,
+    /* THE WAKE'S OWN fetch AND base, NOT THE MODULE DEFAULTS. Every other
+       call out of this file is given them so a test never reaches the real
+       network, and a rail call that quietly used the global fetch would be
+       the one exception — a suite that posts nothing anywhere suddenly
+       writing to a live key-value store. */
+    }, { fetch: opts.fetch, base: opts.base });
+    if (!placed.ok) {
+      log(`  NOT locked: ${placed.why}`);
+      /* Loud, because the failure is invisible from outside: no frame is
+         posted, so the deal simply sits until it refunds, and a silent
+         nothing looks exactly like a quiet day. */
+      ann("warning", "a payment did not reach the rail",
+        `${b.offer.body?.job?.id}: ${placed.why} — no lock frame was posted, so nobody has been told`
+        + " their payment is held", log);
+      continue;
+    }
+    log(`  rail: ${placed.why}${placed.path ? ` (${placed.path})` : ""}`);
+    const text = wire(lockFrame(US, b.accept.contract));
+    log(`  locked: ${await settled(b.room, text, "lock")}`);
   }
   for (const b of buys.refund) {
     const text = wire(refundFrame(US, b.accept.contract));
@@ -1383,8 +1414,24 @@ export async function wake(opts = {}) {
       continue;
     }
     const reveal = wire({ type: "reveal", from: US, contract, secret });
-    if (!no.length) log(`  revealed: ${await settled(room, reveal, "reveal")}`);
-    else log("  would reveal once the work is on the wire");
+    if (!no.length) {
+      log(`  revealed: ${await settled(room, reveal, "reveal")}`);
+      /* ── AND TAKE IT OFF THE RAIL ──────────────────────────────────────
+         The reveal is what entitles us to the payment; moving the record
+         from `locked` to `claimed` is what makes that visible to anybody
+         folding the board afterwards, without having to trust either side.
+         It is deliberately AFTER the reveal and deliberately not fatal: the
+         work is delivered and the preimage is public either way, so a rail
+         that will not answer costs us a tidy receipt, not the payment. */
+      const took = await claimLock({
+        rail: d.lock?.body?.rail ?? RAIL,
+        contract,
+        statement: d.accept.body.statement,
+        refundAfterMs: d.offer.body?.refundAfterMs,
+        preimage: secret,
+      }, { fetch: opts.fetch, base: opts.base });
+      log(`  rail: ${took.ok ? took.why : `claim not recorded — ${took.why}`}`);
+    } else log("  would reveal once the work is on the wire");
   }
 
   /* The line that says what happened ON THE WIRE, as opposed to what was

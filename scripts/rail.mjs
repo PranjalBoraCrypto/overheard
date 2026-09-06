@@ -192,3 +192,170 @@ export async function canFund({ rail } = {}) {
   }
   return fund({ rail: named });
 }
+
+/* ══════════════════════════════════════════════════════════════════════════
+ * THE PAPER RAIL KEEPS A RECORD, AND THIS SHOP WAS NOT WRITING IT
+ *
+ * Everything above this line was written believing that `paper` holds nothing
+ * at all — that a lock frame is the whole of the rail, so there is nothing to
+ * write and nothing to check. That is wrong, and it was wrong for months.
+ *
+ * MEASURED, 6 September, off our own archive of tclk-offers: of 7,742 lock
+ * frames on the board that day, 7,614 — 98.3% — set `ref` to the full
+ * contract id. This shop set it to a fresh random number every time. And
+ * fetching the record one of those locks points at returns a real line:
+ *
+ *   tclkpaper1 claimed hash 0xf19599a7… 1788700221120 0xae26c2dd…
+ *
+ * while the same lookup for one of ours returns 404, nothing has been written
+ * there. Every lock this shop has ever posted pointed at empty space.
+ *
+ * Nobody has lost anything, because the rail is a rehearsal and holds no
+ * value. What was lost is the receipt: a stranger folding the board sees our
+ * deals reach `done` with nothing behind the claim, and cannot tell us apart
+ * from an implementation that never intended to pay. On a permanent public
+ * record, with our DID on every frame. And on the day the rail holds value,
+ * the same gap is the difference between a payment and a message saying there
+ * was one.
+ *
+ * THE FORMAT, read off the live rail rather than from a specification, because
+ * the specification does not describe it:
+ *
+ *   path    /kv/tclk-paper-<first 2 hex of the contract>/<next 14 hex>
+ *   locked  tclkpaper1 locked  hash <statement> <refundAfterMs>
+ *   claimed tclkpaper1 claimed hash <statement> <refundAfterMs> <preimage>
+ *
+ * `statement` is the hash commitment out of the signed accept; refundAfterMs
+ * comes from the offer. Both are already in frames this shop holds, which is
+ * the reason this is a small fix rather than a protocol change.
+ *
+ * AND THE ORDER MATTERS: the record is written BEFORE the lock frame is
+ * posted. A lock frame pointing at a record that does not exist yet is a
+ * claim ahead of its evidence, and if the write then fails, the claim is
+ * simply false. Write first, post second, and post nothing if the write did
+ * not land.
+ *
+ * WHAT A RECORD DOES NOT PROVE. The write is an unauthenticated GET — anybody
+ * can put anything at any key. What makes one meaningful is that the statement
+ * inside it matches the statement in a SIGNED accept, which only the payee
+ * could have produced. So a record on its own is worth nothing, and a record
+ * that matches the signed frame is worth everything; any verifier built on
+ * this must check the second thing, not the first.
+ * ═════════════════════════════════════════════════════════════════════════*/
+
+/** The rail's own base. Overridable so tests never touch the network. */
+export const RAIL_BASE = process.env.TCLK_RAIL_BASE ?? "https://technocore.chat";
+
+/** Where the paper rail keeps the record for a contract, or null if that is
+ *  not a contract id — which is itself worth catching, since the whole bug
+ *  this replaces was a `ref` that was not one. */
+export function paperPath(contract) {
+  const h = String(contract ?? "").replace(/^0x/i, "").toLowerCase();
+  return /^[0-9a-f]{64}$/.test(h) ? `tclk-paper-${h.slice(0, 2)}/${h.slice(2, 16)}` : null;
+}
+
+export const lockedRecord = ({ statement, refundAfterMs }) =>
+  `tclkpaper1 locked hash ${statement} ${refundAfterMs}`;
+
+export const claimedRecord = ({ statement, refundAfterMs, preimage }) =>
+  `tclkpaper1 claimed hash ${statement} ${refundAfterMs} ${preimage}`;
+
+/* The banner the network wraps every note in. Stripped the same way the
+   archiver strips it, and for the same reason: it is a warning to the reader,
+   not part of the value. */
+const unwrapKv = (t) => typeof t === "string"
+  ? t.replace(/^\s*!!\s*UNTRUSTED CONTENT[\s\S]*?\n\s*\n/i, "").trim()
+  : "";
+
+/** Read a rail record. `null` means "could not tell", which is deliberately
+ *  not the same as "" — absent. A rail we cannot read is not a rail we may
+ *  assume is empty. */
+export async function readRecord(path, opts = {}) {
+  const fetchImpl = opts.fetch ?? fetch;
+  const base = opts.base ?? RAIL_BASE;
+  try {
+    const res = await fetchImpl(`${base}/kv/${path}`, { method: "GET" });
+    if (res.status === 404) return "";
+    if (res.status !== 200) return null;
+    return unwrapKv(await res.text().catch(() => ""));
+  } catch { return null; }
+}
+
+/** Write one, only if nothing is there. 409 means somebody got in first,
+ *  which for a key derived from our own contract id should never happen and
+ *  is reported rather than papered over. */
+async function writeRecord(path, value, opts = {}) {
+  const fetchImpl = opts.fetch ?? fetch;
+  const base = opts.base ?? RAIL_BASE;
+  const url = `${base}/kv/${path}/set/${encodeURIComponent(value)}?if_absent=1`;
+  try {
+    const res = await fetchImpl(url, { method: "GET" });
+    return { ok: res.status === 200, status: res.status };
+  } catch { return { ok: false, status: 0 }; }
+}
+
+/**
+ * Put the lock on the rail, before anybody is told it is there.
+ *
+ * Idempotent on purpose: a wake that already wrote this record and then died
+ * before posting the frame must be able to finish the job, so an existing
+ * record that says exactly what we would have said is a success. One that
+ * says something ELSE is a refusal — that key belongs to a deal, and a deal
+ * whose rail record disagrees with its frames is not one to act on.
+ */
+export async function placeLock({ rail, contract, statement, refundAfterMs }, opts = {}) {
+  const named = rail ?? RAIL;
+  const gate = await canFund({ rail: named });
+  if (!gate.ok) return gate;
+  if (named !== "paper") {
+    return { ok: false, why: `nothing here knows how to place a lock on ${JSON.stringify(named)}` };
+  }
+  const path = paperPath(contract);
+  if (!path) return { ok: false, why: `${JSON.stringify(contract)} is not a contract id, so it names no record` };
+
+  const want = lockedRecord({ statement, refundAfterMs });
+  const have = await readRecord(path, opts);
+  if (have === null) return { ok: false, why: `could not read ${path} — refusing to claim a lock we cannot see` };
+  if (have === want) return { ok: true, why: "the record was already there and says what it should", path, already: true };
+  if (have) return { ok: false, why: `${path} already holds something else: ${have.slice(0, 80)}` };
+
+  const w = await writeRecord(path, want, opts);
+  if (!w.ok) return { ok: false, why: `could not write ${path} (HTTP ${w.status})` };
+  /* Read back. The write is a GET to somebody else's key-value store and a
+     200 is their word for it; the record existing is the thing that matters,
+     and it costs one more request to know rather than hope. */
+  const back = await readRecord(path, opts);
+  if (back !== want) return { ok: false, why: `wrote ${path} but it does not read back as expected` };
+  return { ok: true, why: "the lock is on the rail", path };
+}
+
+/**
+ * And the other end: the payee takes it. The record moves from `locked` to
+ * `claimed` and gains the preimage, which is what makes a settled deal
+ * checkable by anybody afterwards without trusting either side.
+ *
+ * A claim overwrites, so it does not use if_absent — the whole point is that
+ * something is already there.
+ */
+export async function claimLock({ rail, contract, statement, refundAfterMs, preimage }, opts = {}) {
+  const named = rail ?? RAIL;
+  if (named !== "paper") return { ok: false, why: `nothing here knows how to claim on ${JSON.stringify(named)}` };
+  const path = paperPath(contract);
+  if (!path) return { ok: false, why: `${JSON.stringify(contract)} is not a contract id` };
+
+  const want = claimedRecord({ statement, refundAfterMs, preimage });
+  const have = await readRecord(path, opts);
+  if (have === null) return { ok: false, why: `could not read ${path}` };
+  if (have === want) return { ok: true, why: "already claimed", path, already: true };
+  /* Claiming a record that was never locked would be writing a receipt for a
+     payment nobody made. Say so; do not invent one. */
+  if (!have) return { ok: false, why: `${path} holds nothing — there is no lock here to claim` };
+
+  const fetchImpl = opts.fetch ?? fetch;
+  const base = opts.base ?? RAIL_BASE;
+  try {
+    const res = await fetchImpl(`${base}/kv/${path}/set/${encodeURIComponent(want)}`, { method: "GET" });
+    if (res.status !== 200) return { ok: false, why: `could not write the claim to ${path} (HTTP ${res.status})` };
+  } catch { return { ok: false, why: `no answer from the rail while claiming ${path}` }; }
+  return { ok: true, why: "the claim is on the rail", path };
+}

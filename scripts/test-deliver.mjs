@@ -497,3 +497,96 @@ say("on the paper rail the shop still delivers",
     (r1.declined ?? []).length === 1 && (r2.declined ?? []).length === 1 && (r3.declined ?? []).length === 1,
     `${(r1.declined||[]).length}/${(r2.declined||[]).length}/${(r3.declined||[]).length}`);
 }
+
+/* ══════════════════════════════════════════════════════════════════════════
+ * THE BUY SIDE PUTS THE PAYMENT ON THE RAIL BEFORE IT SAYS IT HAS
+ *
+ * This shop posted lock frames for months with `ref` set to a fresh random
+ * number and nothing written anywhere. Measured 6 September off our own
+ * archive: 7,614 of the 7,742 locks on the board that day pointed `ref` at the
+ * full contract id, and fetching the record one of those names returns a real
+ * line, while the same lookup for one of ours returned 404.
+ *
+ * A lock frame is a claim and the rail record is its evidence, so the order is
+ * the whole guarantee: write the record, read it back, and only then tell a
+ * stranger their payment is held. If the write does not land, nothing is said
+ * at all — because the alternative is a public, permanent, signed claim that
+ * is simply false.
+ *
+ * Both directions are exercised here against a rail that remembers.
+ * ═════════════════════════════════════════════════════════════════════════*/
+{
+  const { paperPath } = await import("./rail.mjs");
+  const CONTRACT = "0x" + "3f".repeat(32);
+  const STATEMENT = "0x" + "9c".repeat(32);
+  const buyOffer = {
+    type: "offer", from: US, role: "payer",
+    job: { id: "overheard-wants-daily-digest", proto: "job/v1", context: "a digest" },
+    amount: "1000", asset: "FLOP", lock: "hash", rails: ["paper"],
+    expiresMs: NOW + 24 * H, claimByMs: NOW + 24 * H, refundAfterMs: NOW + 48 * H,
+    nonce: "0000000000000901",
+  };
+  const buyId = await offerId(buyOffer);
+  const buyFrames = [
+    msg(1, US, "tclk1 " + canon({ ...buyOffer, id: buyId })),
+    msg(2, OTHER, "tclk1 " + canon({
+      type: "accept", from: OTHER, ref: buyId, statement: STATEMENT,
+      nonce: "0000000000000902", contract: CONTRACT })),
+  ];
+
+  /** A wake with a rail that either remembers or refuses, recording the exact
+   *  order in which the rail and the board were written. */
+  const runBuy = async ({ railWorks }) => {
+    const order = [], kv = new Map();
+    const stub = async (url) => {
+      const u = String(url);
+      if (u.includes("say-signed")) {
+        const text = decodeURIComponent(u.split("/").pop().split("?")[0]);
+        let kind = "other";
+        try { kind = JSON.parse(text.replace(/^tclk1 /, "")).type ?? "other"; } catch {}
+        order.push("board:" + kind);
+        return { ok: true, status: 200, text: async () => "{}" };
+      }
+      const m = u.match(/\/kv\/(.+?)(?:\/set\/(.*?))?(?:\?|$)/);
+      if (m) {
+        const key = m[1];
+        if (m[2] !== undefined) {
+          if (!railWorks) return { ok: false, status: 503, text: async () => "no" };
+          order.push("rail:write");
+          kv.set(key, decodeURIComponent(m[2]));
+          return { ok: true, status: 200, text: async () => "ok" };
+        }
+        if (!railWorks) return { ok: false, status: 503, text: async () => "no" };
+        return kv.has(key)
+          ? { ok: true, status: 200, text: async () => "!! UNTRUSTED CONTENT\n\n" + kv.get(key) }
+          : { ok: true, status: 404, text: async () => "no note" };
+      }
+      if (u.includes("/api/profile"))
+        return { ok: true, status: 200, json: async () => ({ profile: { did: OTHER, count: 5, unique: 5 } }) };
+      return { ok: true, status: 200, json: async () => ({ messages: buyFrames }) };
+    };
+    const lines = [], anns = [];
+    await wake({ fetch: stub, base: "http://stub", log: (l) => lines.push(l), now: NOW,
+                 seed: SEED, live: true, annotate: (k, t, m) => { anns.push(`${k}|${t}`); return null; } });
+    return { order, kv, out: lines.join("\n"), anns };
+  };
+
+  const good = await runBuy({ railWorks: true });
+  const locked = good.order.filter((x) => x === "board:lock").length;
+  say("a funded deal posts a lock frame", locked === 1, good.order.join(" → ") || "(nothing posted)");
+  say("and the record really is on the rail",
+    good.kv.get(paperPath(CONTRACT)) === `tclkpaper1 locked hash ${STATEMENT} ${NOW + 48 * H}`,
+    good.kv.get(paperPath(CONTRACT)) ?? "(nothing written)");
+  /* THE ORDER, WHICH IS THE WHOLE POINT. Evidence first, claim second. */
+  say("the rail is written BEFORE the board is told",
+    good.order.indexOf("rail:write") >= 0 &&
+    good.order.indexOf("rail:write") < good.order.indexOf("board:lock"),
+    good.order.join(" → "));
+
+  const dead = await runBuy({ railWorks: false });
+  say("a rail that will not answer means NO lock frame at all",
+    !dead.order.includes("board:lock"), dead.order.join(" → ") || "(nothing posted)");
+  say("and it says so where somebody will see it",
+    dead.anns.some((a) => /payment did not reach the rail/.test(a)), dead.anns.join(", ") || "(silent)");
+  say("nothing was written to the rail either", dead.kv.size === 0, `${dead.kv.size} record(s)`);
+}
