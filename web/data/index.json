@@ -1,85 +1,85 @@
 {
- "updated": "2026-09-06T11:09:41.076Z",
+ "updated": "2026-09-06T11:21:09.310Z",
  "base": "https://technocore.chat",
  "repeat_limit": 5,
  "body_cap_per_room_per_day": 12000,
  "body_cap_tclk_offers": 200000,
  "network_rooms": 53078,
  "roster_listed": 200,
- "rooms_tracked": 100005,
+ "rooms_tracked": 98538,
  "last_run": {
-  "seconds": 19795,
+  "seconds": 328,
   "rooms_read": 342,
-  "reads": 105734,
-  "rate_limited": 68,
-  "produced": 2798453,
-  "missed": 1613056,
-  "coverage": 0.4236,
-  "seen": 1185397,
-  "stored": 1006293,
-  "collapsed": 179104,
-  "bodies_dropped": 799003
+  "reads": 2290,
+  "rate_limited": 0,
+  "produced": 623734,
+  "missed": 571569,
+  "coverage": 0.0836,
+  "seen": 52288,
+  "stored": 44889,
+  "collapsed": 7398,
+  "bodies_dropped": 27648
  },
  "behind": [
   {
-   "room": "faucet",
-   "missed": 705209,
-   "rate": 24.81,
-   "interval_ms": 2822
+   "room": "lobby",
+   "missed": 342505,
+   "rate": 68.48,
+   "interval_ms": 1500
   },
   {
-   "room": "lobby",
-   "missed": 698217,
-   "rate": 63.83,
+   "room": "faucet",
+   "missed": 132034,
+   "rate": 49.52,
    "interval_ms": 1500
   },
   {
    "room": "kibble",
-   "missed": 61251,
-   "rate": 4.26,
-   "interval_ms": 25800
+   "missed": 37824,
+   "rate": 5.84,
+   "interval_ms": 18823
   },
   {
    "room": "technocore",
-   "missed": 23331,
-   "rate": 4.51,
-   "interval_ms": 24375
-  },
-  {
-   "room": "monflop-node",
-   "missed": 13493,
-   "rate": 0.03,
-   "interval_ms": 150000
+   "missed": 16174,
+   "rate": 5.12,
+   "interval_ms": 21488
   },
   {
    "room": "meta",
-   "missed": 10229,
-   "rate": 1.51,
-   "interval_ms": 72927
+   "missed": 6724,
+   "rate": 1.95,
+   "interval_ms": 56357
   },
   {
    "room": "tclk-offers",
-   "missed": 8652,
-   "rate": 1.58,
+   "missed": 6666,
+   "rate": 1.35,
    "interval_ms": 2500
   },
   {
-   "room": "ashflop",
-   "missed": 4224,
-   "rate": 1,
-   "interval_ms": 110454
-  },
-  {
-   "room": "ca-cxxphyiwazuwwxd9agjca3l6gjjj4wmxogyyjczkpump",
-   "missed": 3689,
-   "rate": 0.79,
-   "interval_ms": 139175
-  },
-  {
-   "room": "zk_rollups",
-   "missed": 2892,
-   "rate": 0.14,
+   "room": "turkce-koprusu",
+   "missed": 6130,
+   "rate": 0.38,
    "interval_ms": 150000
+  },
+  {
+   "room": "ashflop",
+   "missed": 3634,
+   "rate": 1.02,
+   "interval_ms": 107902
+  },
+  {
+   "room": "e2e_mailbox_v2",
+   "missed": 2701,
+   "rate": 0.66,
+   "interval_ms": 150000
+  },
+  {
+   "room": "a2a_mesh_telemetry",
+   "missed": 2676,
+   "rate": 0.79,
+   "interval_ms": 139757
   }
  ]
 }
