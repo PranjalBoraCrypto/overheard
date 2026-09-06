@@ -582,6 +582,15 @@ console.log("\n=== 9. a pasted link arrives with a picture");
     const ground = /var\(--void\)|var\(--navy-0\)/.test(rule);
     check(`${f} paints the dark ground`, ground,
       ground ? "" : rule.replace(/\s+/g, " ").slice(0, 70) || "no body rule");
+    /* ── AND NO PAGE MAY REACH FOR --bg ────────────────────────────────
+       deal.css declares --bg INSIDE .btn and nowhere else, so anywhere else
+       it silently resolves to nothing. It cost this site a white page and,
+       an hour later, grey text on a bright button — twice, from one
+       plausible-looking token that does not exist where it was used. */
+    const bg = src.split("\n").map((l, i) => [i + 1, l])
+      .filter(([, l]) => /var\(--bg\)/.test(l));
+    check(`${f} does not use the token that is not there`, bg.length === 0,
+      bg.slice(0, 2).map(([i, l]) => `${i}: ${l.trim().slice(0, 50)}`).join(" | "));
   }
   /* And the shared files have to actually contain the thing. A link to an
      empty stylesheet passes every check above. */

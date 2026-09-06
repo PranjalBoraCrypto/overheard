@@ -321,6 +321,36 @@ console.log("\n=== Q. how anybody finds it");
     /nothing of value moves/i.test(play));
 }
 
+console.log("\n=== R. the state almost everybody arrives in");
+{
+  /* SIGNED OUT is the default, not an edge case: most people reaching this
+     page have never had a key. The first version met them with two disabled
+     buttons and a grey line pointing at the top bar — a page saying "you
+     cannot do this" and leaving them to work out why and what to do. */
+  const page = read("web/market.html");
+  ok("the signed-out buttons are live, not disabled",
+    /tapBtn\.disabled = shut;/.test(page) && /dataset\.signin = "1"/.test(page),
+    "a way in that cannot be pressed is a locked door with the key on the far side");
+  ok("and they open the sign-in themselves",
+    /function openSignIn\(\)/.test(page) &&
+    /dataset\.signin\) return void openSignIn\(\)/.test(page));
+  ok("with a fallback when the bar is not there to reach into",
+    /location\.href = "\/create"/.test(page),
+    "/create is the honest next step for somebody with no key at all");
+  ok("a side can be picked before signing in, and survives it",
+    /Sign in to put paper on \$\{side === "yes"/.test(page));
+  ok("the panel says the one thing a stranger needs to hear about a key",
+    /made in this browser and never leaves it/.test(page));
+  ok("and offers a way to get one", /id="nokey"/.test(page) && /href="\/create"/.test(page));
+  /* A disabled button still has to be READ — its label is the instruction. */
+  const dim = (page.match(/\.go\[disabled\]\{opacity:([\d.]+)/) ?? [])[1];
+  ok("a disabled button is dimmed but still legible", Number(dim) >= 0.55, `opacity ${dim}`);
+  /* And the token that does not exist, which cost this page a white background
+     and then grey text on a bright button. */
+  ok("nothing on the page reaches for var(--bg)", !/var\(--bg\)/.test(page),
+    "deal.css declares it inside .btn and nowhere else");
+}
+
 console.log("\n=== M. words for the reader, not the protocol");
 {
   ok("months, while it is months away", /months left/.test(leftUntil(CLOSES_MS, CLOSES_MS - 200 * 86400000)));

@@ -155,7 +155,7 @@ h1{font-size:clamp(26px,4.4vw,42px);line-height:1.12;letter-spacing:-.025em;
 .qtop{display:flex;align-items:center;gap:11px}
 .qav{width:34px;height:34px;flex:none;border-radius:50%;display:grid;place-items:center;
   font-family:var(--mono);font-size:12px;font-weight:600;
-  color:var(--bg);background:linear-gradient(160deg,#FFD489,var(--gold))}
+  color:var(--void);background:linear-gradient(160deg,#FFD489,var(--gold))}
 .qwho{display:flex;flex-direction:column;line-height:1.25;min-width:0}
 .qwho b{color:var(--white);font-size:14px;font-weight:600}
 .qwho em{font-style:normal;font-family:var(--mono);font-size:var(--t-micro);color:var(--faint)}
@@ -241,6 +241,22 @@ h1{font-size:clamp(26px,4.4vw,42px);line-height:1.12;letter-spacing:-.025em;
 .tapcard[data-full="1"] .purse .v{color:#FFD489}
 #tap[hidden]{display:none}
 
+
+/* ── THE STATE ALMOST EVERYBODY ARRIVES IN ─────────────────────────────────
+   Signed out. The first version showed two disabled buttons and a grey line
+   pointing at the top bar, which is a page saying "you cannot do this" and
+   leaving the reader to work out why and what to do about it.
+   So the signed-out panel is not a dimmed version of the signed-in one. The
+   buttons are LIVE and they open the sign-in themselves, the sentence under
+   them says the one thing a stranger needs to hear about a key on a website —
+   that it is made here and stays here — and there is a way out for somebody
+   who has not got one yet. */
+.nokey{margin-top:10px;font-size:var(--t-small);line-height:1.55;color:var(--faint)}
+.nokey a{color:var(--blue);text-decoration:none;border-bottom:1px solid rgba(88,233,255,.3)}
+@media (hover:hover){ .nokey a:hover{color:#fff;border-bottom-color:currentColor} }
+.locked .purse{border-color:rgba(88,233,255,.22)}
+.tapcard.locked{border-color:rgba(88,233,255,.24)}
+
 .sides{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:var(--s3)}
 /* 56px, not 40. This is the one control on the page that matters and on a
    phone it is hit with a thumb. */
@@ -287,9 +303,17 @@ h1{font-size:clamp(26px,4.4vw,42px);line-height:1.12;letter-spacing:-.025em;
 
 .go{width:100%;min-height:54px;margin-top:12px;border:0;border-radius:13px;
   font:inherit;font-weight:700;font-size:15px;letter-spacing:-.01em;cursor:pointer;
-  color:var(--bg);background:linear-gradient(180deg,#7ff0ff,var(--blue));
+  /* --void, for the third time on this page. `--bg` is scoped to .btn inside
+     deal.css, so it resolved to nothing and the label inherited the body's
+     grey — grey text on a bright cyan button, which is the one control here
+     nobody can afford to misread. */
+  color:var(--void);background:linear-gradient(180deg,#7ff0ff,var(--blue));
   transition:transform .18s cubic-bezier(.34,1.4,.64,1),filter .14s,box-shadow .18s,opacity .14s}
-.go[disabled]{opacity:.42;cursor:not-allowed}
+/* A disabled button still has to be READ: before anybody signs in, both
+   buttons on this panel are disabled and their labels are the instructions —
+   "sign in to claim it", "claim your paper first". At .42 the whole gradient
+   and the dark label on it faded together and the sentence went with them. */
+.go[disabled]{opacity:.62;cursor:not-allowed}
 @media (hover:hover){
   .go:not([disabled]):hover{filter:brightness(1.08);transform:translateY(-2px);
     box-shadow:0 14px 30px -16px rgba(88,233,255,.75)}
@@ -542,6 +566,8 @@ h1{font-size:clamp(26px,4.4vw,42px);line-height:1.12;letter-spacing:-.025em;
         </div>
         <button class="go tap" type="button" id="tap" disabled>Claim your 1,000 paper</button>
         <p class="say" id="tapsay"></p>
+        <p class="nokey" id="nokey" hidden>No key yet?
+          <a href="/create">Make one in this browser</a> — two minutes, and it never leaves the tab.</p>
       </section>
 
       <section class="card">
@@ -668,6 +694,22 @@ import { ROOM, MARKET, QUESTION, CLOSES_MS, TAP, SIDES, PREFIX,
          tapFrame, callFrame, foldMarket, seatOf, leftUntil } from "/call.js";
 
 const $ = (id) => document.getElementById(id);
+
+/* ── OPENING THE SIGN-IN FROM HERE ────────────────────────────────────────
+   The bar owns it, and the bar is a custom element with an OPEN shadow root,
+   so its button is reachable. Reaching into another component is not
+   something to do lightly; it is right here because the alternative is a page
+   that says "use the bar at the top" and leaves a stranger hunting for it,
+   and because both halves are ours.
+   Everything about it is guarded: if the bar has not upgraded yet, or its
+   internals ever change, the fallback is /create — which is the honest next
+   step for the reader most likely to be reading this, the one with no key. */
+function openSignIn() {
+  const btn = document.querySelector("overheard-bar")?.shadowRoot?.querySelector("button.in");
+  if (btn) { btn.click(); btn.scrollIntoView({ block: "nearest" }); return true; }
+  location.href = "/create";
+  return false;
+}
 
 let ID = null;            // the signed-in identity, or null
 let fold = null;          // the folded market
@@ -837,14 +879,20 @@ function paintPanel() {
   const tapSay = $("tapsay");
   $("purse").textContent = seat ? group(left) : "—";
   $("tapcard").dataset.full = seat && seat.tapped && left > 0 ? "1" : "0";
+  $("tapcard").classList.toggle("locked", !ID);
+  $("nokey").hidden = Boolean(ID);
   if (!ID) {
     $("pursek").textContent = "the tap gives";
     $("purse").textContent = group(TAP);
-    tapBtn.hidden = false; tapBtn.disabled = true;
-    tapBtn.textContent = "Sign in to claim it";
+    /* LIVE, not disabled. It is the way in, and a way in that cannot be
+       pressed is a locked door with the key taped to the other side. */
+    tapBtn.hidden = false; tapBtn.disabled = shut;
+    tapBtn.dataset.signin = "1";
+    tapBtn.textContent = shut ? "The question has closed" : `Sign in to claim your ${group(TAP)} paper`;
     tapSay.className = "say";
-    tapSay.textContent = "Use the bar at the top. Your key never leaves this browser — it only signs.";
+    tapSay.textContent = "Your key is made in this browser and never leaves it. It only signs.";
   } else if (!seat.tapped) {
+    delete tapBtn.dataset.signin;
     $("pursek").textContent = "the tap gives";
     $("purse").textContent = group(TAP);
     tapBtn.hidden = false; tapBtn.disabled = shut;
@@ -863,7 +911,11 @@ function paintPanel() {
   /* ── THE CALL ─────────────────────────────────────────────────────────*/
   for (const c of $("amts").children) {
     const v = c.dataset.v;
-    c.disabled = !seat || left <= 0 || (v !== "all" && Number(v) > left);
+    /* Usable signed out: the purse is unknown rather than empty, and a
+       stranger deciding how much before they have a key is the sequence this
+       page wants. Once there is a seat, a chip bigger than the purse is a
+       control that cannot do anything, so it says so. */
+    c.disabled = seat ? (left <= 0 || (v !== "all" && Number(v) > left)) : false;
     c.setAttribute("aria-pressed", String(String(want) === v));
   }
   $("sideY").setAttribute("aria-pressed", String(side === "yes"));
@@ -877,16 +929,28 @@ function paintPanel() {
   } else if (Date.now() > CLOSES_MS) {
     go.disabled = true;
     go.textContent = "The question has closed";
-  } else if (!ID || !seat.tapped) {
+  } else if (!ID) {
+    /* A side can be picked signed out — it costs nothing and it is the whole
+       reason somebody is looking at this panel. The button then carries the
+       choice into the sign-in rather than throwing it away. */
+    go.disabled = !side;
+    go.dataset.signin = "1";
+    go.textContent = side
+      ? `Sign in to put paper on ${side === "yes" ? "Yes" : "No"}`
+      : "Pick a side";
+  } else if (!seat.tapped) {
+    delete go.dataset.signin;
     go.disabled = true;
     go.textContent = "Claim your paper first";
   } else if (left <= 0) {
     go.disabled = true;
     go.textContent = "All your paper is on the board";
   } else if (!side) {
+    delete go.dataset.signin;
     go.disabled = true;
     go.textContent = "Pick a side";
   } else {
+    delete go.dataset.signin;
     const n = amount();
     go.disabled = n <= 0;
     go.textContent = `Put ${group(n)} paper on ${side === "yes" ? "Yes" : "No"}`;
@@ -975,6 +1039,7 @@ const hex16 = () => [...crypto.getRandomValues(new Uint8Array(8))]
   .map((x) => x.toString(16).padStart(2, "0")).join("");
 
 $("tap").addEventListener("click", async () => {
+  if ($("tap").dataset.signin) return void openSignIn();
   const s = getSession();
   if (!s) return;
   const b = $("tap");
@@ -993,6 +1058,7 @@ $("tap").addEventListener("click", async () => {
 });
 
 $("go").addEventListener("click", async () => {
+  if ($("go").dataset.signin) return void openSignIn();
   const s = getSession();
   if (!s) return;
   const n = amount();
