@@ -425,6 +425,9 @@ let dealFrames = [];
 /* A deal room that cannot be read at all — a 500, not an empty room. The
    difference decides whether a buyer is offered a second payment. */
 let roomBroken = false;
+/* The BOARD failing while the deal room is fine — a different failure from
+   roomBroken, and the one that used to throw away a decline note. */
+let boardBroken = false;
 let boardExtra = [];   // frames appended to the offers room
 let posts = [];
 let roomReads = [];
@@ -465,6 +468,7 @@ const srv = http.createServer((q, r) => {
     /* A deal room is not the offers room and must not be answered with it —
        returning the board here would have let a broken page look fine. */
     if (room !== "tclk-offers") return r.end(JSON.stringify({ source: "live", messages: dealFrames }));
+    if (boardBroken) return r.end(JSON.stringify({ source: "none", messages: [] }));
     /* The overlap is the point: these are the SAME orders the archive
        returned, arriving by the other road. */
     return r.end(JSON.stringify({ source: "live",
@@ -846,6 +850,63 @@ console.log("\n=== K. the buyer can actually pay — and is never asked to pay t
     await c2.pg.$eval(".hactwords b", (e) => e.textContent));
   await c2.ctx.close();
   await ctx.close();
+}
+{
+  /* ═══════════════════════════════════════════════════════════════════
+   * AND THE PILL HAS TO AGREE WITH THE PARAGRAPH
+   *
+   * The strip above has said "cannot be filled" for a while. The PILL on
+   * the same row said EXPIRED, and the sentence under it said "nobody took
+   * it on before the deadline" — about an order somebody had read, refused,
+   * and written to explain. Reported by the person whose order it was:
+   * "Expired feels the work is not done, incomplete."
+   *
+   * The hard half is that a declined order carries NO FRAMES at all. The
+   * shop's note is prose, so the deal room folds to no state, and the page
+   * used to record the note only alongside a state — throwing away the one
+   * thing it needed in exactly the case it was written for.
+   * ═══════════════════════════════════════════════════════════════════*/
+  roomReads = []; posts = [];
+  const SHOPDID = "did:key:z6MkiuhfekPgiihLWarPAzhuvoMjg86F8dqmLiCTmtQgMrR3";
+  const NOTE = "Overheard cannot deliver this order: the archive has no record of a room called "
+    + "lobbygsgfguututu455. No payment has been taken and none can be — the lock is not opened, "
+    + "so the escrow returns it to you at the refund deadline on this offer. "
+    + "Nothing further is needed from this shop.";
+  /* NOTHING BUT THE NOTE. This is the real shape of a declined order. */
+  dealFrames = [{ seq: 1, ts: new Date().toISOString(), from: SHOPDID, text: NOTE }];
+  const { ctx, pg } = await open();
+  await pg.goto("http://localhost:9441/orders.html", { waitUntil: "domcontentloaded" });
+  await pg.waitForTimeout(1800);
+  const pills = await pg.$$eval(".pill", (n) => n.map((e) => e.textContent.trim()));
+  /* One order in the fixture carries the note; the rest are ordinary and are
+     not what this is about. What matters is that the declined one stopped
+     saying Expired. */
+  ok("a declined order reads Declined", pills.includes("Declined"), pills.join(" · "));
+  await pg.$$eval(".hrow", (n) => n[0]?.click?.());
+  await pg.waitForTimeout(500);
+  /* THE FIRST PANEL, not every panel on the page. Each row carries its own
+     .hdet, so scraping all of them reads nine other orders' sentences and
+     any assertion about wording is then about somebody else's order. */
+  const stands = await pg.$$eval(".hdet", (n) => n[0]?.textContent ?? "");
+  ok("and where it stands is the shop's own reason",
+    /no record of a room called/i.test(stands), stands.slice(0, 180));
+  /* THE SENTENCE THAT WAS FALSE. Somebody did take it on. */
+  ok("it no longer says nobody took it on",
+    !/nobody took it on/i.test(stands), (stands.match(/nobody took it on[^|]*/i) ?? [""])[0]);
+  await ctx.close();
+
+  /* AND IT SURVIVES A BAD SECOND ON THE BOARD. A declined order has no
+     frames, so the page always falls through to a board read to be sure —
+     and that read failing used to discard the note it already had. */
+  roomBroken = false; boardBroken = true;
+  const c3 = await open();
+  await c3.pg.goto("http://localhost:9441/orders.html", { waitUntil: "domcontentloaded" });
+  await c3.pg.waitForTimeout(1800);
+  const p3 = await c3.pg.$$eval(".pill", (n) => n.map((e) => e.textContent.trim()));
+  ok("the decline is not lost when the board cannot be read",
+    p3.includes("Declined"), p3.join(" · "));
+  await c3.ctx.close();
+  boardBroken = false;
 }
 {
   /* Delivered and revealed: the end of the deal. */

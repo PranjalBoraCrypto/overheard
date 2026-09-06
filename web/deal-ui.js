@@ -82,7 +82,36 @@ export const STATES = {
 export const EXPIRED = { word: "Expired", tone: "off", step: 1, ends: true,
                          says: "nobody took it on before the deadline, so no payment was ever locked" };
 
+/* ── AND THE THIRD THING THAT IS NOT A STATE ───────────────────────────────
+ * Neither a deal state nor a clock reading: a thing the SHOP SAID.
+ *
+ * When Overheard cannot fill an order — a room nobody ever archived, a day
+ * with nothing in it — it posts one plain sentence into the deal's room and
+ * leaves the money to return on its own. The protocol has no frame for "I
+ * looked at this and I cannot do it", so the deal stays `proposed` and its
+ * offer eventually expires.
+ *
+ * Which meant the buyer's own page called it EXPIRED and said "nobody took it
+ * on before the deadline". Somebody did take it on. They read it, worked out
+ * they could not do it, and wrote to say so — and the one page that exists to
+ * tell the buyer what happened was showing them the one thing that did not.
+ *
+ * `says` is filled in from the shop's own sentence, so the reason a reader
+ * sees is the reason the shop gave, not a second version of it written here.
+ */
+export const DECLINED = { word: "Declined", tone: "off", step: 1, ends: true,
+                          says: "Overheard could not do this one, said so, and no payment was taken" };
+
 export const RAIL_STEPS = ["Offer", "Accept", "Fund", "Deliver"];
+
+/** The reason out of the shop's own sentence, or null if that is not one.
+ *  Kept beside the constant because the two are a pair: the note's wording
+ *  and the code that reads it drift apart the moment they live apart. */
+export const DECLINE_NOTE = /^Overheard cannot deliver this order:\s*([^.]+?)\.\s/;
+export function declineReason(text) {
+  const m = DECLINE_NOTE.exec(String(text ?? ""));
+  return m ? m[1].trim() : null;
+}
 
 /**
  * What to call a deal, from its folded state and the clock.

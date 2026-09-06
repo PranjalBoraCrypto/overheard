@@ -583,7 +583,7 @@ h1{font-weight:800;font-size:clamp(30px,5vw,42px);line-height:1;letter-spacing:-
 <script type="module">
 import { getSession, onSession, shortDid, signTextB64u } from "/session.js";
 import { canon, readFrame } from "/tclk.js";
-import { statusOf as sharedStatus, railEl, JOBS as SHELF, ago as sharedAgo,
+import { statusOf as sharedStatus, DECLINED, declineReason, railEl, JOBS as SHELF, ago as sharedAgo,
          skeletonsInto, skeletonsDone, copyBtn, copyRow, announce } from "/deal-ui.js";
 
 /* Filled here rather than in the markup: the shape is data in deal-ui.js
@@ -748,6 +748,20 @@ const isOpen = (o) => isFinite(o.expiresMs) && o.expiresMs > Date.now();
 function statusOf(o) {
   const now = Date.now();
   const refund = Number(o.refundAfterMs);
+  /* ── THE SHOP SAID NO, AND THAT OUTRANKS THE CLOCK ──────────────────────
+     There is no tclk frame for "I read this and I cannot do it", so a
+     declined order stays `proposed` and its offer quietly expires. This page
+     then called it EXPIRED and told the buyer "nobody took it on before the
+     deadline" — about an order somebody had read, refused, and written to
+     explain. The one page whose job is to say what happened was showing the
+     one thing that did not.
+     The note is the better answer wherever it exists, so it is checked first
+     and the shop's own words become the sentence underneath. */
+  if (o.cannot) {
+    const why = declineReason(o.cannot);
+    return { ...DECLINED, key: "declined", open: false,
+             says: why ? `Overheard could not do this one — ${why}. No payment was taken.` : DECLINED.says };
+  }
   /* ── AN ACCEPTED ORDER NOBODY EVER PAID INTO IS NOT STILL GOING ─────────
      `accepted` is not terminal to the protocol — there is no frame that ends
      it, which is exactly why the shop grew a reaper to cancel them. So the
@@ -1143,11 +1157,33 @@ function actionFor(o, pill = null, det = null) {
      phrased as reassurance rather than as a step. */
   const show = (r) => {
     const state = r?.state ?? null;
+    /* ── A DECLINE ARRIVES WITHOUT A STATE, WHICH IS WHY IT WAS MISSED ────
+       The shop's note is prose, not a frame, so a room holding nothing but
+       that sentence folds to no state at all — and this used to record
+       `cannot` only alongside a state, so the one case the note exists for
+       threw it away. It is recorded on its own, and the pill repainted,
+       before anything else is decided. */
+    if (r?.cannot && o.cannot !== r.cannot) {
+      o.cannot = r.cannot;
+      /* THE PILL AND THE PANEL TOGETHER, or they contradict each other in
+         front of the reader: the first version of this repainted the pill to
+         "Declined" and left the panel underneath still saying "nobody took it
+         on before the deadline". Two answers on one row is worse than one
+         wrong answer, because now neither can be believed. */
+      if (pill) {
+        const st = statusOf(o);
+        pill.className = "pill";
+        pill.dataset.tone = st.tone;
+        pill.textContent = st.word;
+      }
+      if (det) det.replaceChildren(fieldsFor(o));
+      restat();
+    }
     /* Recorded on the order, so the pill, the filter tabs and the four
        figures at the top all read one answer rather than three. */
     if (state) {
       o.dealState = state;
-      o.cannot = r.cannot ?? null;
+      o.cannot = r.cannot ?? o.cannot ?? null;
       if (pill) {
         const st = statusOf(o);
         pill.className = "pill";
@@ -1373,7 +1409,13 @@ async function dealState(room, contract) {
      reading somebody else's business as our own. */
   if (!frames.length && contract) {
     const board = await grab("tclk-offers");
-    if (board === null) return { state: null, cannot: null };   // unknown; the caller must not guess
+    /* The STATE is unknown and the caller must not guess — but `cannot` was
+       read out of the deal room a moment ago and is not in doubt. Returning
+       null for it threw away the shop's explanation whenever the board had a
+       bad second, and a declined order is exactly the shape that gets here:
+       its room holds the note and no frames at all, so it always falls
+       through to this read. */
+    if (board === null) return { state: null, cannot };
     eat(board);
   }
   /* The accept lives in the offers room, not in here, so a deal room holding
