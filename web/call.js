@@ -141,9 +141,15 @@ export function foldMarket(messages, opts = {}) {
   let calls = 0;
 
   const seat = (did) => {
-    if (!by.has(did)) by.set(did, { did, tapped: 0, yes: 0, no: 0, put: 0, calls: 0, last: 0 });
+    if (!by.has(did)) by.set(did, { did, tapped: 0, yes: 0, no: 0, put: 0, calls: 0, last: 0, mine: [] });
     return by.get(did);
   };
+  /* EVERY ACCEPTED CALL, IN THE ORDER IT LANDED. The totals above are what the
+     market needs; this is what a person needs — "what did I actually do, and
+     when". A running total is not a history, and the two cannot be recovered
+     from each other: 750 on Yes is one call or three, and only the fold knows
+     which. Refused frames are NOT in here. This list is what counted. */
+  const ledger = [];
   const no = (m, why) => refused.push({ from: m.from, ts: m.ts, why });
 
   for (const m of rows) {
@@ -198,6 +204,13 @@ export function foldMarket(messages, opts = {}) {
       who.put += put;
       who.calls++;
       who.last = Math.max(who.last, m.at);
+      /* `after` is the purse AFTER this call, not now: a card made from an old
+         call has to say what was true when it was made, and re-deriving it
+         later from today's total would silently rewrite history. */
+      const entry = { did: m.from, side: b.side, put, at: m.at, ts: m.ts,
+                      seq: m.seq, nonce: b.nonce ?? null, after: who.tapped - who.put };
+      ledger.push(entry);
+      who.mine.push(entry);
       calls++;
       continue;
     }
@@ -240,7 +253,7 @@ export function foldMarket(messages, opts = {}) {
   }
 
   return {
-    market, settled, refused, calls,
+    market, settled, refused, calls, ledger,
     yes, no: no_, total: pool,
     /* The same number as `total`, under the name a market page uses for it.
        Two names for one number is usually a smell; here the page says "paper
@@ -268,8 +281,13 @@ export function foldMarket(messages, opts = {}) {
 /** What one identity holds and has done, ready for the panel. */
 export function seatOf(fold, did) {
   const r = did ? fold.by.get(did) : null;
-  if (!r) return { tapped: 0, left: 0, yes: 0, no: 0, put: 0, calls: 0 };
-  return { ...r, left: r.tapped - r.put };
+  if (!r) return { tapped: 0, left: 0, yes: 0, no: 0, put: 0, calls: 0, mine: [] };
+  /* Newest first, because a history is read from the top and the thing
+     somebody just did is the thing they came back to look at. Copied rather
+     than sorted in place: the fold's own list is in the order the room
+     accepted them, and something else may be relying on that. */
+  return { ...r, left: r.tapped - r.put,
+           mine: [...(r.mine ?? [])].sort((a, b) => b.seq - a.seq || b.at - a.at) };
 }
 
 /** How long is left, in words a person uses. Deliberately coarse: this is a

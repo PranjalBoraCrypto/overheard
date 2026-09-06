@@ -288,6 +288,189 @@ h1{font-size:clamp(27px,3.1vw,40px);line-height:1.1;letter-spacing:-.028em;
 .sigchip.y .s{color:var(--yes-lit)} .sigchip.n .s{color:var(--no-lit)}
 .sigchip .t{font-family:var(--mono);font-size:var(--t-micro);color:var(--faint)}
 
+/* ══ YOUR OWN CALLS ════════════════════════════════════════════════════════
+   The board says what the room did. This says what YOU did, and it is a
+   different question — a list of moves in the order you made them, each one
+   its own thing rather than a running total. It exists only once there is
+   something in it: an empty "your calls" panel on a page most people arrive
+   at signed out is a promise the page has not kept. */
+.hist[hidden]{display:none}
+.histhead{display:flex;align-items:center;justify-content:space-between;gap:var(--s3);
+  margin-bottom:var(--s3)}
+.histhead h2{font-size:15px;color:var(--white);font-weight:600;letter-spacing:-.01em}
+.histk{font-family:var(--mono);font-size:var(--t-micro);letter-spacing:.11em;
+  text-transform:uppercase;color:var(--faint);margin-left:9px}
+.hrows{display:grid;gap:9px}
+/* FIVE THINGS, FIVE COLUMNS. It was four, and the share control fell onto a
+   second row and doubled the height of every entry. The stake takes the
+   flexible column so the slack falls after the number rather than between
+   the two figures that belong together. */
+.hrow{display:grid;grid-template-columns:auto minmax(0,1fr) auto auto auto;
+  align-items:center;gap:var(--s3);padding:11px var(--s3) 11px calc(var(--s3) + 4px);
+  border-radius:13px;background:var(--surf-b);
+  border:1px solid var(--line);position:relative;overflow:hidden}
+.hrow::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px}
+.hrow.y::before{background:var(--yes)} .hrow.n::before{background:var(--no)}
+.hside{font-family:var(--mono);font-size:var(--t-micro);letter-spacing:.11em;
+  text-transform:uppercase;padding:5px 10px;border-radius:999px;white-space:nowrap}
+.hrow.y .hside{color:var(--yes-lit);background:var(--yes-dim)}
+.hrow.n .hside{color:var(--no-lit);background:var(--no-dim)}
+.hput{font-family:var(--mono);font-size:16px;color:var(--white);font-weight:600}
+.hput em{font-style:normal;font-size:var(--t-micro);color:var(--faint);margin-left:6px;
+  letter-spacing:.09em}
+.hwhen{font-family:var(--mono);font-size:var(--t-micro);color:var(--faint);white-space:nowrap}
+.hpays{font-family:var(--mono);font-size:var(--t-small);color:var(--dim);white-space:nowrap}
+
+/* THE SHARE CONTROL, twice: a full button on the section header for the whole
+   position, and a quiet one per row. Same job, different weight, because
+   sharing one call is the common act and sharing the lot is the occasional
+   one. */
+.shbtn{display:inline-flex;align-items:center;gap:8px;border:1px solid var(--line);
+  background:var(--sunk);color:var(--dim);border-radius:999px;cursor:pointer;
+  font:inherit;font-size:var(--t-small);padding:8px 14px;
+  transition:border-color .18s,color .18s,background .18s,transform .18s}
+.shbtn .i{width:14px;height:14px}
+.shbtn:focus-visible{outline:none;box-shadow:var(--focus)}
+@media (hover:hover){
+  .shbtn:hover{color:var(--white);border-color:rgba(88,233,255,.34);background:var(--surf-b)}
+}
+.shbtn:active{transform:scale(.97)}
+.shbtn.mini{padding:7px 11px;font-size:var(--t-micro);font-family:var(--mono);
+  letter-spacing:.09em;text-transform:uppercase}
+
+.hpage{display:flex;align-items:center;justify-content:space-between;gap:var(--s3);
+  margin-top:var(--s3);padding-top:var(--s3);border-top:1px solid var(--line)}
+.hpage[hidden]{display:none}
+.hpage span{font-family:var(--mono);font-size:var(--t-micro);color:var(--faint);
+  letter-spacing:.09em;text-transform:uppercase}
+.hnav{display:flex;gap:8px}
+.hnav button{width:34px;height:34px;display:grid;place-items:center;border-radius:10px;
+  border:1px solid var(--line);background:var(--sunk);color:var(--dim);cursor:pointer;
+  transition:.16s}
+.hnav button .i{width:14px;height:14px}
+.hnav button:disabled{opacity:.35;cursor:default}
+.hnav button:focus-visible{outline:none;box-shadow:var(--focus)}
+@media (hover:hover){
+  .hnav button:not(:disabled):hover{color:var(--white);border-color:rgba(88,233,255,.34)}
+}
+
+/* ── THE ARRIVAL ───────────────────────────────────────────────────────────
+   A call landing is the one moment on this page worth an animation, so it
+   gets one: the section rises into place, and the new row lights up and
+   settles. Both are one-shot and both are off where motion is not wanted. */
+@keyframes riseIn{from{opacity:0;transform:translateY(18px) scale(.985)}
+                  to{opacity:1;transform:none}}
+@keyframes landRow{
+  0%   {opacity:0;transform:translateY(-10px) scale(.97)}
+  55%  {opacity:1;transform:translateY(0) scale(1.015)}
+  100% {opacity:1;transform:none}
+}
+@keyframes landGlow{
+  0%,100%{box-shadow:0 0 0 0 rgba(88,233,255,0)}
+  30%    {box-shadow:0 0 0 4px rgba(88,233,255,.16)}
+}
+[data-fx="standard"] .hist.arrive,[data-fx="full"] .hist.arrive{
+  animation:riseIn .62s cubic-bezier(.2,.9,.3,1.05) both}
+[data-fx="standard"] .hrow.fresh,[data-fx="full"] .hrow.fresh{
+  animation:landRow .68s cubic-bezier(.2,.9,.3,1.1) both,landGlow 1.5s ease-out both}
+
+/* ══ THE SHARE SHEET ═══════════════════════════════════════════════════════
+   A canvas, three buttons and a switch. The canvas is the file — what is on
+   screen is the bytes that leave — so there is nothing here that could look
+   right and export wrong. */
+.shshare{position:fixed;inset:0;z-index:80;display:grid;place-items:center;
+  padding:var(--s6) var(--s4) var(--s4)}
+.shshare[hidden]{display:none}
+.veil{position:absolute;inset:0;background:rgba(0,5,8,.93);
+  -webkit-backdrop-filter:blur(12px) saturate(.7);backdrop-filter:blur(12px) saturate(.7)}
+/* THE TEXTURE BEHIND THE CARD. Not a blur and not a gradient blob: the site's
+   own dot grid, one step larger than the page's, with a cyan bloom behind
+   where the card floats. It gives the card something to cast itself against,
+   which is most of why a thing reads as an object rather than a picture. */
+.veil::before{content:"";position:absolute;inset:0;
+  background-image:radial-gradient(rgba(88,233,255,.2) 1.4px, transparent 1.4px);
+  background-size:30px 30px;
+  -webkit-mask-image:radial-gradient(58% 58% at 50% 46%,#000,transparent 78%);
+          mask-image:radial-gradient(58% 58% at 50% 46%,#000,transparent 78%)}
+.veil::after{content:"";position:absolute;left:50%;top:44%;width:min(1000px,92vw);
+  height:min(620px,68vh);transform:translate(-50%,-50%);
+  background:radial-gradient(50% 50% at 50% 50%,rgba(0,180,215,.2),transparent 70%)}
+[data-fx="standard"] .shshare,[data-fx="full"] .shshare{animation:veilIn .3s ease both}
+@keyframes veilIn{from{opacity:0}to{opacity:1}}
+
+.sheetin{position:relative;z-index:1;width:100%;max-width:940px;
+  display:grid;gap:var(--s4);justify-items:center}
+[data-fx="standard"] .sheetin,[data-fx="full"] .sheetin{
+  animation:sheetIn .5s cubic-bezier(.2,.9,.3,1.06) both}
+@keyframes sheetIn{from{opacity:0;transform:translateY(26px) scale(.96)}to{opacity:1;transform:none}}
+
+/* ── THE SLAB ──────────────────────────────────────────────────────────────
+   The card is a physical object with a hinge at its middle. `perspective` on
+   the stage rather than on the card, so the vanishing point is the viewer's
+   and not the card's own — the difference between a card turning in a room
+   and a picture being skewed. */
+/* THE CARD FITS THE WINDOW IT IS IN. Sized off the viewport's height as well
+   as its width, because the controls under it are the point of the sheet and
+   a laptop at 720 tall would otherwise push them off the bottom edge — a
+   dialog whose buttons cannot be reached. 1.7778 is the card's own 16:9. */
+.stage{perspective:1400px;width:100%;
+  max-width:min(880px, calc((100vh - 330px) * 1.7778));
+  max-width:min(880px, calc((100dvh - 330px) * 1.7778))}
+.slab{position:relative;width:100%;border-radius:18px;overflow:hidden;
+  transform-style:preserve-3d;will-change:transform;
+  transform:rotateX(var(--rx,0deg)) rotateY(var(--ry,0deg)) translateZ(var(--tz,0px));
+  box-shadow:0 42px 90px -40px rgba(0,0,0,.95),0 0 0 1px rgba(88,233,255,.12)}
+.slab canvas{display:block;width:100%;height:auto}
+/* The sheen is what sells the tilt. It is a hard-edged band of light that
+   sweeps as the card turns, because that is what a raking light does on a
+   flat surface — a soft glow that merely brightens reads as a filter. */
+.glint{position:absolute;inset:0;pointer-events:none;opacity:var(--gl,0);
+  background:linear-gradient(var(--ga,105deg),
+    transparent 34%, rgba(255,255,255,.14) 46%,
+    rgba(255,255,255,.05) 54%, transparent 66%)}
+[data-fx="lean"] .slab{transform:none!important}
+[data-fx="lean"] .glint{display:none}
+
+.sheetbar{display:flex;align-items:center;justify-content:center;gap:11px;flex-wrap:wrap}
+.sbtn{display:inline-flex;align-items:center;gap:9px;border-radius:12px;cursor:pointer;
+  font:inherit;font-size:var(--t-small);font-weight:600;padding:12px 18px;min-height:46px;
+  border:1px solid var(--line);background:var(--surf-b);color:var(--white);
+  transition:border-color .18s,background .18s,transform .16s,color .18s}
+.sbtn .i{width:16px;height:16px}
+.sbtn:focus-visible{outline:none;box-shadow:var(--focus)}
+.sbtn:active{transform:scale(.975)}
+@media (hover:hover){ .sbtn:hover{border-color:rgba(88,233,255,.4);background:#0B2028} }
+.sbtn.x{background:#EAF7FB;color:#00070A;border-color:transparent}
+@media (hover:hover){ .sbtn.x:hover{background:#fff;color:#00070A} }
+.sbtn.ghost{background:none;color:var(--dim)}
+.sbtn.done{border-color:rgba(59,227,176,.5);color:var(--yes-lit)}
+
+.keytog{display:inline-flex;align-items:center;gap:10px;cursor:pointer;
+  font-size:var(--t-small);color:var(--dim);user-select:none}
+.keytog input{position:absolute;opacity:0;width:0;height:0}
+.keytog i{width:38px;height:22px;border-radius:999px;background:var(--sunk);
+  border:1px solid var(--line);position:relative;flex:none;transition:.2s}
+.keytog i::after{content:"";position:absolute;top:2px;left:2px;width:16px;height:16px;
+  border-radius:50%;background:var(--faint);transition:transform .22s cubic-bezier(.2,.9,.3,1.2),background .2s}
+.keytog input:checked + i{background:rgba(0,180,215,.22);border-color:rgba(88,233,255,.4)}
+.keytog input:checked + i::after{transform:translateX(16px);background:var(--blue)}
+.keytog input:focus-visible + i{box-shadow:var(--focus)}
+.vh{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;
+  clip:rect(0 0 0 0);clip-path:inset(50%);white-space:nowrap;border:0}
+.sheetsay{font-size:var(--t-small);color:var(--faint);text-align:center;min-height:20px}
+.sheetsay.bad{color:var(--no-lit)}
+/* ABSOLUTE, NOT FIXED. The panel runs a transform animation, and in Chromium
+   an element with a transform animation in effect is a containing block for
+   fixed descendants — so `fixed` here quietly anchored to the panel instead
+   of the window and put the close control on top of the card. Absolute says
+   what was meant anyway: just above the card's top-right corner. */
+.shclose{position:absolute;top:-52px;right:0;
+  z-index:2;width:40px;height:40px;border-radius:12px;display:grid;place-items:center;
+  border:1px solid var(--line);background:rgba(2,11,15,.7);color:var(--dim);cursor:pointer}
+.shclose .i{width:16px;height:16px}
+.shclose:focus-visible{outline:none;box-shadow:var(--focus)}
+@media (hover:hover){ .shclose:hover{color:var(--white);border-color:rgba(88,233,255,.34)} }
+
 /* ══ CARDS ═════════════════════════════════════════════════════════════════*/
 .card{background:var(--rise-1);border:1px solid var(--line);border-radius:18px;padding:var(--s4)}
 .ch{display:flex;align-items:baseline;justify-content:space-between;gap:var(--s3);
@@ -637,6 +820,58 @@ h1{font-size:clamp(27px,3.1vw,40px);line-height:1.1;letter-spacing:-.028em;
   /* One column on a phone: the sentence, then the quote under it at the full
      width of the card, which on a narrow screen is already a quote's measure. */
   .ctxrow{grid-template-columns:1fr;gap:13px}
+
+  /* ── YOUR CALLS, ON A PHONE ─────────────────────────────────────────────
+     Four columns of a table do not fit and should not be made to. Each call
+     becomes a small block: the side and the stake on the first line where the
+     eye lands, the rest underneath, and the share control a full-width target
+     rather than a word to aim at with a thumb. */
+  .histhead{flex-wrap:wrap;gap:11px}
+  .histhead .shbtn{width:100%;justify-content:center}
+  .hrow{grid-template-columns:auto minmax(0,1fr);gap:7px 11px;padding:13px 15px}
+  .hside{grid-column:1;grid-row:1}
+  .hput{grid-column:2;grid-row:1;text-align:right}
+  .hpays{grid-column:1/-1;grid-row:2}
+  .hwhen{grid-column:1/-1;grid-row:3}
+  .hrow .shbtn{grid-column:1/-1;grid-row:4;justify-content:center;margin-top:5px;
+    min-height:42px}
+
+  /* ── THE SHEET, ON A PHONE ──────────────────────────────────────────────
+     Not a dialog floating in the middle of the screen. It comes up from the
+     bottom edge, the card sits where it can be looked at, and the three
+     controls are a stack in the thumb's half of the screen — with the home
+     indicator cleared, because a Download button under a swipe bar is a
+     button nobody presses twice. */
+  .shshare{place-items:end stretch;padding:0}
+  .sheetin{max-width:none;gap:var(--s3);
+    background:linear-gradient(rgba(6,20,28,.98),rgba(2,11,15,.99));
+    border-top:1px solid rgba(88,233,255,.16);border-radius:22px 22px 0 0;
+    padding:var(--s4) var(--s3) calc(var(--s4) + env(safe-area-inset-bottom,0px));
+    max-height:94vh;overflow-y:auto}
+  [data-fx="standard"] .sheetin,[data-fx="full"] .sheetin{
+    animation:sheetUp .42s cubic-bezier(.2,.9,.3,1.06) both}
+  @keyframes sheetUp{from{transform:translateY(100%)}to{transform:none}}
+  .veil::after{top:34%}
+  /* No hinge on a touchscreen: there is no pointer to tilt it with, and a
+     card that lurches when a finger brushes it reads as a fault. */
+  .slab{transform:none!important;box-shadow:0 24px 60px -34px rgba(0,0,0,.95),
+    0 0 0 1px rgba(88,233,255,.12)}
+  .glint{display:none}
+  /* nowrap matters: a wrapping COLUMN flex lays items into several columns
+     and then stretches each one to its own column's width, not the
+     container's — which is why these came out three different widths. */
+  .sheetbar{flex-direction:column;align-items:stretch;flex-wrap:nowrap;gap:9px}
+  .sbtn{justify-content:center;min-height:50px;font-size:15px}
+  .keytog{justify-content:center;padding:4px 0}
+  /* ON A PHONE IT HAS TO BE CLOSEABLE. The panel covers most of the screen,
+     so the veil behind it is a sliver nobody can reliably hit — a sheet you
+     can only dismiss by tapping a 20px strip is a sheet people get stuck in.
+     The control pins to the panel's own corner instead, and the grab handle
+     above it says which direction the thing came from. */
+  .shclose{position:absolute;top:6px;right:2px;bottom:auto;left:auto;
+    width:38px;height:38px;transform:none;display:grid}
+  .sheetin::before{content:"";display:block;width:40px;height:4px;border-radius:999px;
+    background:rgba(147,182,192,.32);margin:0 auto 4px}
 }
 
 /* ── BETWEEN THE TWO ───────────────────────────────────────────────────────
@@ -692,6 +927,21 @@ h1{font-size:clamp(27px,3.1vw,40px);line-height:1.1;letter-spacing:-.028em;
   <symbol id="i-rooms" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
     stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h9M4 10h6M4 14h8M4 18h5"/>
     <path d="M16 8h4v8h-4z"/></symbol>
+  <symbol id="i-share" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"
+    stroke-linecap="round" stroke-linejoin="round"><path d="M12 15.5V3.5"/><path d="M8 7l4-3.5L16 7"/>
+    <path d="M5 13v6.5h14V13"/></symbol>
+  <symbol id="i-copy" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"
+    stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2.5"/>
+    <path d="M15 5.5A2.5 2.5 0 0 0 12.5 4H6.5A2.5 2.5 0 0 0 4 6.5v6A2.5 2.5 0 0 0 5.5 15"/></symbol>
+  <symbol id="i-down" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"
+    stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5v12"/><path d="M8 12l4 3.5 4-3.5"/>
+    <path d="M5 15v4.5h14V15"/></symbol>
+  <symbol id="i-tick" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
+    stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7"/></symbol>
+  <symbol id="i-close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+    stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6L6 18"/></symbol>
+  <symbol id="i-xlogo" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path
+    d="M18.24 2.25h3.31l-7.23 8.26 8.5 11.24h-6.65l-5.21-6.82-5.96 6.82H1.68l7.73-8.84L1.25 2.25h6.82l4.71 6.23zm-1.16 17.52h1.83L7.08 4.13H5.11z"/></symbol>
 </defs></svg>
 
 <div class="spot" aria-hidden="true"></div>
@@ -793,6 +1043,29 @@ h1{font-size:clamp(27px,3.1vw,40px);line-height:1.1;letter-spacing:-.028em;
         <span class="belttag"><i></i>as they land</span>
         <div class="beltlane"><div class="beltrun" id="beltrun"></div></div>
       </div>
+
+      <!-- ══ WHAT YOU DID ═════════════════════════════════════════════════
+           Before the room's board, because this is the reader's own page
+           first and the leaderboard second. Hidden until there is something
+           in it: an empty "your calls" panel, on a page most people reach
+           signed out, is a promise the page has not kept. -->
+      <section class="card hist" id="hist" hidden aria-labelledby="histh">
+        <div class="histhead">
+          <h2 id="histh">Your calls<span class="histk" id="histn"></span></h2>
+          <button class="shbtn" type="button" id="shareAll">
+            <svg class="i"><use href="#i-share"/></svg>Share my position</button>
+        </div>
+        <div class="hrows" id="hrows"></div>
+        <div class="hpage" id="hpage" hidden>
+          <span id="hpagek"></span>
+          <div class="hnav">
+            <button type="button" id="hprev" aria-label="Newer calls">
+              <svg class="i" style="transform:rotate(180deg)"><use href="#i-caret"/></svg></button>
+            <button type="button" id="hnext" aria-label="Older calls">
+              <svg class="i"><use href="#i-caret"/></svg></button>
+          </div>
+        </div>
+      </section>
 
       <!-- ══ THE FEED ═════════════════════════════════════════════════════ -->
       <section class="card board">
@@ -980,6 +1253,37 @@ h1{font-size:clamp(27px,3.1vw,40px);line-height:1.1;letter-spacing:-.028em;
   </div>
 </div>
 
+<!-- ══ THE SHARE SHEET ═══════════════════════════════════════════════════
+     The canvas in here IS the file. Nothing is re-rendered at export time, so
+     there is no second drawing that could quietly disagree with this one. -->
+<div class="shshare" id="shshare" hidden role="dialog" aria-modal="true" aria-labelledby="sheeth">
+  <div class="veil" id="veil"></div>
+  <div class="sheetin">
+    <button class="shclose" type="button" id="shx" aria-label="Close">
+      <svg class="i"><use href="#i-close"/></svg></button>
+    <h2 id="sheeth" class="vh">Share your call</h2>
+    <div class="stage" id="stage">
+      <div class="slab" id="slab">
+        <canvas id="cardc" role="img" aria-label="A card showing your call"></canvas>
+        <div class="glint" id="glint" aria-hidden="true"></div>
+      </div>
+    </div>
+    <label class="keytog">
+      <input type="checkbox" id="showkey"><i></i>
+      <span>Put my key on the card</span>
+    </label>
+    <div class="sheetbar">
+      <button class="sbtn x" type="button" id="shx2">
+        <svg class="i"><use href="#i-xlogo"/></svg>Share on X</button>
+      <button class="sbtn" type="button" id="shcopy">
+        <svg class="i"><use href="#i-copy"/></svg>Copy image</button>
+      <button class="sbtn ghost" type="button" id="shdown">
+        <svg class="i"><use href="#i-down"/></svg>Download</button>
+    </div>
+    <p class="sheetsay" id="shsay"></p>
+  </div>
+</div>
+
 <overheard-foot></overheard-foot>
 
 <script type="module">
@@ -987,6 +1291,7 @@ import { getSession, onSession, shortDid, signTextB64u, postNonce } from "/sessi
 import { group } from "/deal-ui.js";
 import { ROOM, MARKET, QUESTION, CLOSES_MS, TAP, SIDES, PREFIX,
          tapFrame, callFrame, foldMarket, seatOf, leftUntil } from "/call.js";
+import { drawCard, loadFonts, CARD_W, CARD_H } from "/card.js";
 
 const $ = (id) => document.getElementById(id);
 const ROOT = document.documentElement;
@@ -1505,7 +1810,16 @@ function paint(unread = unreadNow) {
   paintFeed(unread);
   paintRules(unread);
   paintPanel();
+  paintHistory(justLanded);
+  /* The mark is consumed by the paint that uses it. Left set, every later
+     repaint would re-run the arrival animation on a call made minutes ago. */
+  justLanded = null;
+  /* The sheet is open on a call whose payout moves as other people call it,
+     so it is redrawn with the rest of the page rather than frozen at the
+     moment it was opened. */
+  if (!$("shshare").hidden) redraw();
 }
+let justLanded = null;
 
 /* ── THE DOCK MUST NOT COVER ANYTHING ──────────────────────────────────────
    On a phone the panel is fixed to the bottom of the screen, so the page has to
@@ -1643,6 +1957,316 @@ function lean() {
   }, { passive: true });
 }
 
+/* ══ YOUR OWN CALLS ════════════════════════════════════════════════════════
+   Five to a page, because five is what fits without the section becoming the
+   page — and because somebody with forty calls wants the last few, not a
+   wall. The page number is held rather than reset on every repaint: the room
+   refreshes underneath this list every few seconds, and a list that jumped
+   back to page one each time would be unusable for the one person it is for. */
+const PER = 5;
+let histPage = 0;
+
+/* `ago` is the belt's, above. One page saying "2m ago" in one place and
+   "2 minutes ago" in another is two people's work showing through. */
+
+/* What one call is worth if it is right, at the board as it stands NOW.
+   Deliberately not the multiple that held when the call was made: a
+   parimutuel payout is decided by the final pool, so the only honest figure
+   is the current one, and it moves as other people call it. */
+function paysFor(entry) {
+  const pool = fold.total;
+  const on = entry.side === "yes" ? fold.yes : fold.no;
+  return on > 0 ? pool / on : null;
+}
+
+function paintHistory(freshNonce) {
+  const box = $("hist");
+  const seat = ID ? seatOf(fold, ID.did) : null;
+  const mine = seat?.mine ?? [];
+  if (!mine.length) { box.hidden = true; return; }
+  box.hidden = false;
+
+  const pages = Math.max(1, Math.ceil(mine.length / PER));
+  if (histPage > pages - 1) histPage = pages - 1;
+  const from = histPage * PER;
+  const page = mine.slice(from, from + PER);
+
+  $("histn").textContent = `${mine.length} ${mine.length === 1 ? "call" : "calls"}`;
+
+  $("hrows").replaceChildren(...page.map((e) => {
+    const row = el("div", `hrow ${e.side === "yes" ? "y" : "n"}`);
+    /* The one that just landed is marked so it can be animated, and marked by
+       its nonce rather than by its position: the list is re-sorted on every
+       repaint and "the top row" is not the same row for long. */
+    if (freshNonce && e.nonce === freshNonce) row.classList.add("fresh");
+    row.append(
+      el("span", "hside", e.side === "yes" ? "it ships" : "it does not"),
+      el("span", "hput", [document.createTextNode(group(e.put)), el("em", "", "PAPER")]),
+    );
+    const m = paysFor(e);
+    row.append(el("span", "hpays", m === null ? "—" : `×${m.toFixed(2)} if right`));
+    row.append(el("span", "hwhen", ago(e.at)));
+
+    const b = el("button", "shbtn mini");
+    b.type = "button";
+    b.innerHTML = '<svg class="i"><use href="#i-share"/></svg>Share';
+    b.addEventListener("click", () => openSheet("call", e));
+    row.append(b);
+    return row;
+  }));
+
+  const pg = $("hpage");
+  pg.hidden = pages < 2;
+  if (pages > 1) {
+    $("hpagek").textContent = `${from + 1}–${from + page.length} of ${mine.length}`;
+    $("hprev").disabled = histPage === 0;
+    $("hnext").disabled = histPage >= pages - 1;
+  }
+}
+
+$("hprev").addEventListener("click", () => { if (histPage > 0) { histPage--; paintHistory(); } });
+$("hnext").addEventListener("click", () => { histPage++; paintHistory(); });
+
+/* ══ THE SHARE SHEET ═══════════════════════════════════════════════════════
+   One canvas, drawn from the fold and nothing else. `showkey` is remembered
+   for the session but defaults OFF: putting a key on a card somebody posts
+   ties it to their account forever, and that has to be a thing they turn on
+   rather than a thing they forget to turn off. */
+let sheetSrc = null;             // { kind, entry }
+let sheetBusy = false;
+
+function cardModel() {
+  if (!sheetSrc || !ID) return null;
+  const seat = seatOf(fold, ID.did);
+  const who = $("showkey").checked ? shortDid(ID.did) : null;
+  if (sheetSrc.kind === "call") {
+    const e = sheetSrc.entry;
+    return { kind: "call", side: e.side, put: e.put, pays: paysFor(e),
+             left: e.after, when: new Date(e.at), share: fold.share, who, calls: 1 };
+  }
+  const both = seat.yes > 0 && seat.no > 0;
+  return {
+    kind: "position",
+    side: both ? null : seat.yes > 0 ? "yes" : "no",
+    put: seat.put,
+    pays: both ? null : (seat.yes > 0 ? fold.yes && fold.total / fold.yes
+                                      : fold.no && fold.total / fold.no) || null,
+    left: seat.left, when: new Date(seat.last), share: fold.share, who,
+    calls: seat.calls, yes: seat.yes, no: seat.no,
+  };
+}
+
+async function redraw() {
+  const m = cardModel();
+  if (!m) return;
+  await loadFonts();
+  drawCard($("cardc"), m, 2);
+}
+
+async function openSheet(kind, entry) {
+  if (!ID) return;
+  sheetSrc = { kind, entry };
+  say("");
+  const sh = $("shshare");
+  sh.hidden = false;
+  document.body.style.overflow = "hidden";
+  lastFocus = document.activeElement;
+  await redraw();
+  $("shx2").focus();
+  addEventListener("keydown", esc, true);
+}
+
+function closeSheet() {
+  $("shshare").hidden = true;
+  document.body.style.overflow = "";
+  removeEventListener("keydown", esc, true);
+  restT = restY = restX = 0;
+  setSlab(0, 0, 0);
+  if (lastFocus && lastFocus.isConnected) lastFocus.focus();
+}
+let lastFocus = null;
+const esc = (e) => { if (e.key === "Escape") { e.stopPropagation(); closeSheet(); } };
+
+$("shx").addEventListener("click", closeSheet);
+$("veil").addEventListener("click", closeSheet);
+$("shareAll").addEventListener("click", () => openSheet("position"));
+$("showkey").addEventListener("change", () => { redraw(); say(""); });
+
+/* Focus stays in the sheet while it is open. Without this a tab press walks
+   out of a modal into a page nobody can see, which is the single most common
+   way a dialog fails for anyone not using a mouse. */
+$("shshare").addEventListener("keydown", (e) => {
+  if (e.key !== "Tab") return;
+  /* `[href]` also matches the <use> inside every icon, and an SVGElement has
+     no offsetParent at all — so `offsetParent !== null` was true for them and
+     the last focusable came out as a graphic nobody can focus. The trap then
+     never fired and Tab walked straight out of the dialog. */
+  const f = [...$("shshare").querySelectorAll('button, input, a[href], [tabindex]:not([tabindex="-1"])')]
+    .filter((n) => n instanceof HTMLElement && !n.disabled && n.offsetParent !== null);
+  if (!f.length) return;
+  const first = f[0], last = f[f.length - 1];
+  if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+  else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+});
+
+const say = (t, bad) => {
+  const n = $("shsay");
+  n.textContent = t;
+  n.className = "sheetsay" + (bad ? " bad" : "");
+};
+
+/* ── THE SLAB HAS WEIGHT ───────────────────────────────────────────────────
+   A spring, not an ease. The card is a mass on two torsion springs — one per
+   axis — pulled toward wherever the pointer is and damped by the air. Which
+   means it OVERSHOOTS and comes back, and it keeps moving for a moment after
+   the pointer has stopped, because a thing with mass does not halt when the
+   hand that pushed it does.
+
+     k  stiffness of the spring, per second squared
+     c  damping. Under 2·√k it oscillates; this sits a little under, so it
+        settles in about one visible swing rather than wobbling like jelly.
+
+   The same spring drives a raking highlight across the face, because a flat
+   surface catching a light is the thing that tells an eye it is flat and
+   tilted rather than merely skewed. */
+let restX = 0, restY = 0, restT = 0;
+let curX = 0, curY = 0, curT = 0, velX = 0, velY = 0, velT = 0;
+let slabRun = false, slabLast = 0;
+
+function setSlab(rx, ry, tz) {
+  const sl = $("slab");
+  sl.style.setProperty("--rx", `${rx.toFixed(2)}deg`);
+  sl.style.setProperty("--ry", `${ry.toFixed(2)}deg`);
+  sl.style.setProperty("--tz", `${tz.toFixed(1)}px`);
+  const gl = $("glint");
+  gl.style.setProperty("--gl", String(Math.min(1, Math.hypot(rx, ry) / 9).toFixed(3)));
+  gl.style.setProperty("--ga", `${(105 + ry * 3.2 - rx * 2.4).toFixed(1)}deg`);
+}
+
+function slabStep(now) {
+  const dt = slabLast ? Math.min(0.04, (now - slabLast) / 1000) : 0.016;
+  slabLast = now;
+  const k = 190, c = 21;
+  let alive = false;
+  const axis = (cur, vel, rest) => {
+    const a = (rest - cur) * k - vel * c;
+    vel += a * dt;
+    cur += vel * dt;
+    if (Math.abs(vel) > 0.02 || Math.abs(rest - cur) > 0.008) alive = true;
+    return [cur, vel];
+  };
+  [curX, velX] = axis(curX, velX, restX);
+  [curY, velY] = axis(curY, velY, restY);
+  [curT, velT] = axis(curT, velT, restT);
+  setSlab(curX, curY, curT);
+  if (alive) requestAnimationFrame(slabStep);
+  else { slabRun = false; slabLast = 0; }
+}
+
+function nudge() {
+  if (!slabRun) { slabRun = true; slabLast = 0; requestAnimationFrame(slabStep); }
+}
+
+if (FINE) {
+  const stage = $("stage");
+  stage.addEventListener("pointermove", (e) => {
+    if (TIER() === "lean" || $("shshare").hidden) return;
+    const r = $("slab").getBoundingClientRect();
+    if (!r.width) return;
+    /* Bounded to eight degrees. Past about ten a card stops reading as a card
+       being turned and starts reading as a page with a bug in it. */
+    restY = ((e.clientX - (r.left + r.width / 2)) / r.width) * 16;
+    restX = -((e.clientY - (r.top + r.height / 2)) / r.height) * 11;
+    restT = 26;
+    nudge();
+  }, { passive: true });
+  stage.addEventListener("pointerleave", () => {
+    restX = 0; restY = 0; restT = 0;
+    nudge();
+  }, { passive: true });
+}
+
+/* ── GETTING IT OUT ────────────────────────────────────────────────────────
+   Three ways off the page, and each one fails differently, so each one says
+   what happened rather than doing nothing. */
+const blob = () => new Promise((res) => $("cardc").toBlob(res, "image/png"));
+const fileName = () => `overheard-${sheetSrc?.kind === "position" ? "position" : "call"}-${
+  new Date().toISOString().slice(0, 10)}.png`;
+
+$("shcopy").addEventListener("click", async () => {
+  if (sheetBusy) return;
+  sheetBusy = true;
+  try {
+    /* ClipboardItem is not everywhere, and where it exists it can still be
+       refused without a user gesture or over http. Saying "copied" and
+       leaving an empty clipboard is worse than saying it did not work, so
+       the write is awaited and the failure is reported. */
+    if (!navigator.clipboard || typeof ClipboardItem === "undefined") throw new Error("no clipboard");
+    const b = await blob();
+    if (!b) throw new Error("no image");
+    await navigator.clipboard.write([new ClipboardItem({ "image/png": b })]);
+    flash($("shcopy"), "Copied");
+    say("On your clipboard. Paste it wherever you like.");
+  } catch {
+    say("This browser will not let a page copy an image. Use Download instead.", true);
+  } finally { sheetBusy = false; }
+});
+
+$("shdown").addEventListener("click", async () => {
+  if (sheetBusy) return;
+  sheetBusy = true;
+  try {
+    const b = await blob();
+    if (!b) throw new Error("no image");
+    const u = URL.createObjectURL(b);
+    const a = document.createElement("a");
+    a.href = u; a.download = fileName();
+    document.body.append(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(u), 10000);
+    flash($("shdown"), "Saved");
+    say("Saved to your downloads.");
+  } catch {
+    say("Could not make the file. Try Copy image instead.", true);
+  } finally { sheetBusy = false; }
+});
+
+/* X CANNOT BE HANDED THE PICTURE. There is no way for a web page to attach a
+   file to an intent URL, and pretending otherwise is how these buttons end up
+   posting a bare link. So the text goes to X and the image goes to the
+   clipboard at the same moment, and the sheet says so in as many words —
+   the person pastes it into the composer that just opened. */
+$("shx2").addEventListener("click", async () => {
+  const m = cardModel();
+  if (!m) return;
+  let copied = false;
+  try {
+    if (navigator.clipboard && typeof ClipboardItem !== "undefined") {
+      const b = await blob();
+      if (b) { await navigator.clipboard.write([new ClipboardItem({ "image/png": b })]); copied = true; }
+    }
+  } catch { copied = false; }
+
+  const claim = m.side === null
+    ? `I have paper on both sides of it`
+    : `I put ${group(m.put)} paper on ${m.side === "yes" ? "YES" : "NO"}`;
+  const text =
+    `${claim} — Flop Labs ships mainnet by 31 Mar 2027.\n\n`
+    + `Paper market, nothing of value moves. Signed in a public room.\n@flop_labs`;
+  const url = "https://overheard-five.vercel.app/market";
+  open(`https://x.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(url)}`,
+    "_blank", "noopener,noreferrer");
+  say(copied
+    ? "X is open and the card is on your clipboard — paste it into the post."
+    : "X is open. Copy the image here and paste it into the post.");
+});
+
+function flash(btn, word) {
+  const had = btn.innerHTML;
+  btn.classList.add("done");
+  btn.innerHTML = `<svg class="i"><use href="#i-tick"/></svg>${word}`;
+  setTimeout(() => { btn.classList.remove("done"); btn.innerHTML = had; }, 1800);
+}
+
 /* ── posting ───────────────────────────────────────────────────────────────*/
 /* `keep` so the next paintPanel does not wipe the sentence off the screen half
    a second after somebody read it. Cleared when they touch anything. */
@@ -1734,7 +2358,10 @@ $("go").addEventListener("click", async () => {
   const go = $("go");
   const was = go.textContent;
   go.disabled = true; go.textContent = "Signing…";
-  const r = await post(callFrame(s.did, side, n, hex16()));
+  /* Held rather than inlined: this is the only handle on the frame once it is
+     in the room, and the arrival animation needs to find it again. */
+  const ref = hex16();
+  const r = await post(callFrame(s.did, side, n, ref));
   if (!r.ok) {
     go.disabled = false; go.textContent = was;
     return tell(whyNot(r), "bad");
@@ -1742,8 +2369,28 @@ $("go").addEventListener("click", async () => {
   const word = side === "yes" ? "Yes" : "No";
   side = null;
   keep();
+  /* THE ONE MOMENT ON THIS PAGE WORTH AN ANIMATION. The frame is signed and
+     accepted; what follows is the person seeing their own name on the board
+     for the first time. The nonce is what marks it — the list re-sorts on
+     every repaint, so "the top row" is not reliably the row that just
+     arrived, and animating the wrong one is worse than animating none. */
+  justLanded = ref;
+  const first = $("hist").hidden;
   await load();
   tell(`Called. ${group(n)} paper on ${word}, signed by your key.`, "ok");
+  const box = $("hist");
+  if (!box.hidden) {
+    if (first) {
+      box.classList.add("arrive");
+      box.addEventListener("animationend", () => box.classList.remove("arrive"), { once: true });
+    }
+    /* Only on the first one, and only if they are not already looking at it.
+       Scrolling the page under somebody who is mid-read is a page taking the
+       wheel off them. */
+    if (first && box.getBoundingClientRect().top > innerHeight * 0.9) {
+      box.scrollIntoView({ behavior: TIER() === "lean" ? "auto" : "smooth", block: "center" });
+    }
+  }
 });
 
 for (const b of [$("sideY"), $("sideN")]) {

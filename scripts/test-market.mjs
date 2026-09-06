@@ -22,7 +22,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
-  ROOM, MARKET, PREFIX, TAP, CLOSES_MS, SHOP,
+  ROOM, MARKET, PREFIX, TAP, CLOSES_MS, SHOP, SIDES,
   tapFrame, callFrame, settleFrame, readCall, foldMarket, seatOf, leftUntil,
 } from "../web/call.js";
 
@@ -351,6 +351,132 @@ console.log("\n=== L. the page, as text");
     return /\bif\s*\(/.test(src) && /requestAnimationFrame/.test(src);
   }), rafs.join(", "));
   ok("nothing on the page polls on a timer", !/setInterval/.test(page));
+}
+
+console.log("\n=== Q2. what one person actually did, and when");
+{
+  /* A RUNNING TOTAL IS NOT A HISTORY, and the two cannot be recovered from
+     each other: 750 on Yes is one call or three, and only the fold knows
+     which. The share card is made from one call, so one call has to survive
+     the fold intact. */
+  const f = foldMarket([tap(A), call(A, "yes", 600), call(A, "no", 100),
+                        tap(B), call(B, "no", 250), call(A, "yes", 150)]);
+  ok("every accepted call is kept, not just the totals", f.ledger.length === 4,
+    `${f.ledger.length} of 4`);
+  ok("in the order the room took them",
+    f.ledger.map((e) => e.put).join(",") === "600,100,250,150",
+    f.ledger.map((e) => e.put).join(","));
+  const mine = seatOf(f, A).mine;
+  ok("one person's own calls are theirs alone", mine.length === 3 &&
+    mine.every((e) => e.did === A), String(mine.length));
+  ok("newest first, because that is the one they came back to look at",
+    mine[0].put === 150 && mine[2].put === 600,
+    mine.map((e) => e.put).join(","));
+  ok("each one carries its side, its stake and its moment",
+    mine.every((e) => SIDES.includes(e.side) && e.put > 0 && e.at > 0 && e.ts));
+  /* The purse AFTER the call, recorded at the time. A card made from an old
+     call has to say what was true when it was made; deriving it later from
+     today's total would quietly rewrite history. */
+  ok("and what was left once it landed, as it was then",
+    mine[2].after === TAP - 600 && mine[1].after === TAP - 700 && mine[0].after === TAP - 850,
+    mine.map((e) => e.after).join(","));
+  /* A refused frame is not history. It never counted, and a card made from
+     one would be a person sharing something that did not happen. */
+  const g = foldMarket([tap(A), call(A, "yes", 5000), call(A, "yes", 200)]);
+  ok("a refused call is not in anybody's history",
+    g.ledger.length === 1 && g.ledger[0].put === 200, String(g.ledger.length));
+  ok("and somebody who never called has an empty one, not a missing one",
+    Array.isArray(seatOf(foldMarket([tap(B)]), B).mine) &&
+    seatOf(foldMarket([tap(B)]), B).mine.length === 0);
+  ok("as does a stranger the market has never seen",
+    Array.isArray(seatOf(f, "did:key:zNobody").mine));
+  /* Forged and late frames are refused above; neither may reach a card. */
+  ok("nor is a frame signed by somebody else in the history of the person it names",
+    seatOf(foldMarket([tap(A), tap(B), msg(B, callFrame(A, "yes", 500, "f9"))]), A).mine.length === 0);
+}
+
+console.log("\n=== U. the card somebody puts their name to");
+{
+  const card = read("web/card.js");
+  ok("there is a card renderer at all", card.length > 500);
+  /* ONE DRAWING, ONE FILE. The usual way to build these is to lay the card
+     out in HTML and rasterise it at export time with a second renderer, and
+     that second renderer is where the feature rots: the export drifts from
+     the preview a property at a time and the thing people post is the wrong
+     one. Here the canvas on screen is the canvas that leaves. */
+  /* Prose stripped first: this file EXPLAINS why it does not use html2canvas,
+     and a test that reads the explanation as the thing it warns against is a
+     test that fails for being told the truth. */
+  const code = card.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+  ok("the card is drawn once, not laid out and then re-rendered",
+    /getContext\("2d"\)/.test(code) && !/html2canvas|dom-to-image|foreignObject/i.test(code));
+  ok("and nothing is fetched from off this origin to draw it",
+    !/https?:\/\//.test(code),
+    "a cross-origin image would taint the canvas and break every export");
+  /* The card travels furthest from the page that could be used to check it,
+     so it must not be the only place a number exists. */
+  ok("the renderer does no arithmetic of its own on the money",
+    !/\*\s*pool|pool\s*\/|ifYes|ifNo/.test(card));
+  ok("it says in UTC when the call was made", /getUTCDate|getUTCFullYear/.test(card));
+  ok("and it carries the subject's mark as well as ours",
+    /flop\.png/.test(card) && /Overheard/.test(card));
+
+  const page = read("web/market.html");
+  /* A CLASS NAME IS A GLOBAL. deal.css already owns `.sheet` — a bottom sheet
+     with max-height:82vh and translateY(101%) — and reusing the name gave the
+     share dialog those properties silently: it sized to 82% of the viewport
+     and sat off the bottom of the screen. Nothing errored. */
+  const shared = read("web/deal.css");
+  const mine = [...page.matchAll(/^\.([a-z][a-z0-9-]{2,})\s*[{,]/gm)].map((m) => m[1]);
+  const theirs = new Set([...shared.matchAll(/^\.([a-z][a-z0-9-]{2,})\s*[{,]/gm)].map((m) => m[1]));
+  const clash = [...new Set(mine.filter((c) => theirs.has(c)))]
+    .filter((c) => !["card", "go", "side", "amt", "say", "foot", "blank", "feed", "row"].includes(c));
+  ok("no class on this page silently inherits a shared component's rules",
+    clash.length === 0, clash.join(", ") || `${mine.length} checked against deal.css`);
+
+  /* The key is a decision, not a default. Printing it on a card somebody
+     posts ties that key to their account for good. */
+  ok("the key is off the card unless it is asked for",
+    /<input type="checkbox" id="showkey">/.test(page) &&
+    !/id="showkey"[^>]*checked/.test(page));
+  ok("and the card only gets it when the box is ticked",
+    /\$\("showkey"\)\.checked \? shortDid/.test(page));
+
+  ok("the post it writes tags the project", /@flop_labs/.test(page));
+  ok("and never claims money changed hands",
+    /Paper market, nothing of value moves/.test(page) &&
+    !/\b(USD|dollars?|profit|earn(ed|ings)?|payout|cash)\b/i
+      .test(page.slice(page.indexOf("intent/tweet") - 800, page.indexOf("intent/tweet"))));
+  /* X takes text, not files. A button that pretends otherwise posts a bare
+     link, so the image goes to the clipboard at the same moment and the
+     sheet says so. */
+  ok("sharing to X also puts the picture somewhere it can be pasted",
+    /intent\/tweet/.test(page) && /ClipboardItem/.test(page));
+  ok("a browser that refuses the clipboard is told about, not lied to",
+    /will not let a page copy an image/.test(page));
+
+  ok("your own calls are their own section, before the room's board",
+    page.indexOf('id="hist"') > 0 && page.indexOf('id="hist"') < page.indexOf('class="card board"'));
+  ok("and it is not there at all until you have made one",
+    /<section class="card hist" id="hist" hidden/.test(page));
+  ok("five to a page, and a pager only when there are more",
+    /const PER = 5/.test(page) && /pg\.hidden = pages < 2/.test(page));
+  /* The room refreshes underneath this list every few seconds. A page number
+     reset on every repaint would make it unusable for the one person it is
+     for. */
+  ok("the page you are on survives the room refreshing under you",
+    /let histPage = 0/.test(page) && !/histPage = 0;\s*\n\s*paintHistory/.test(page));
+  ok("the arrival is marked by nonce, not by position",
+    /e\.nonce === freshNonce/.test(page));
+  ok("and the mark is consumed so it does not replay on every repaint",
+    /justLanded = null/.test(page));
+
+  /* The slab is a mass on a spring. Not an ease: an ease cannot overshoot,
+     and a card that stops dead the instant the pointer does has no weight. */
+  ok("the card is sprung rather than eased",
+    /const k = 190, c = 21/.test(page) && /vel \+= a \* dt/.test(page));
+  ok("and there is no hinge on a touchscreen",
+    /@media \(max-width:900px\)\{[\s\S]*?\.slab\{transform:none!important/.test(page));
 }
 
 console.log("\n=== Q. how anybody finds it");
