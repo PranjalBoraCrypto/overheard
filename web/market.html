@@ -164,16 +164,21 @@ body{padding-bottom:var(--dock-h)}
    painted once, never animated. */
 .hero{position:relative;overflow:hidden;border:1px solid var(--line);border-radius:22px;
   background:var(--rise-1);
-  display:grid;grid-template-columns:minmax(0,1fr) minmax(0,.92fr);
-  gap:var(--s3) var(--s4);align-items:center;padding:var(--s4) var(--s4) var(--s3)}
+  display:grid;grid-template-columns:minmax(0,1fr) minmax(0,.58fr);
+  gap:var(--s4);align-items:center;padding:var(--s4)}
 .hero::before{content:"";position:absolute;inset:0;pointer-events:none;
   background:radial-gradient(56% 78% at 78% 46%, rgba(0,180,215,.13), transparent 68%)}
 .ask{position:relative;z-index:1;min-width:0}
 .eyebrow{display:inline-flex;align-items:center;gap:8px;font-family:var(--mono);
   font-size:var(--t-micro);letter-spacing:.14em;text-transform:uppercase;color:var(--gold)}
 .eyebrow .i{width:13px;height:13px}
-h1{font-size:clamp(27px,3.1vw,40px);line-height:1.1;letter-spacing:-.028em;
-  color:var(--white);font-weight:700;margin:13px 0 0;max-width:16ch}
+/* TWO LINES, NOT THREE. 16ch was a measure chosen for a narrower column than
+   this one ended up being, and it broke a fourteen-word question across three
+   lines with two words on the last — which reads as a headline that ran out
+   of room rather than one that was set. The column is wider now and the type
+   a shade smaller, and it falls in two. */
+h1{font-size:clamp(23px,2.4vw,31px);line-height:1.12;letter-spacing:-.028em;
+  color:var(--white);font-weight:700;margin:13px 0 0;max-width:30ch}
 
 /* THE READING, IN A SENTENCE. The core says it as a shape; this says it in
    English, because a shape cannot be read aloud and a screen reader gets this
@@ -187,11 +192,16 @@ h1{font-size:clamp(27px,3.1vw,40px);line-height:1.1;letter-spacing:-.028em;
    4+1 at one width and 3+2 at another, and a single orphan under four
    siblings reads as something that fell off. Three columns always: two tidy
    rows, and the labels line up down the page. */
-.facts{grid-column:1/-1;display:grid;
-  grid-template-columns:repeat(5,minmax(0,auto));justify-content:space-between;
-  gap:var(--s2) var(--s3);margin-top:var(--s2);
-  padding-top:var(--s3);border-top:1px solid var(--line)}
-.fact{display:flex;flex-direction:column;gap:2px}
+/* Low and wide, like the belt under it: a rail of figures rather than a
+   block of them. No top border, because it is no longer the foot of
+   something — it is its own object with its own edge. */
+/* ONE LINE, NOT TWO. Stacked label over value the strip was 70px tall for
+   five short facts; on a baseline together it is a rail you read across, and
+   the section it belongs to is not competing with the question above it. */
+.facts{display:flex;flex-wrap:wrap;justify-content:space-between;
+  gap:9px var(--s4);padding:11px var(--s4);
+  border:1px solid var(--line);border-radius:14px;background:var(--sunk)}
+.fact{display:flex;align-items:baseline;gap:9px;min-width:0}
 .fact span{font-family:var(--mono);font-size:var(--t-micro);letter-spacing:.11em;
   text-transform:uppercase;color:var(--faint)}
 .fact b{white-space:nowrap;font-family:var(--mono);font-size:15px;color:var(--white);font-weight:600;
@@ -212,7 +222,10 @@ h1{font-size:clamp(27px,3.1vw,40px);line-height:1.1;letter-spacing:-.028em;
                       side it took and sized by the paper on it
 
    An empty market draws an empty ring. */
-.corewrap{position:relative;z-index:1;justify-self:center;width:100%;max-width:430px;
+/* CAPPED SHORTER THAN IT WANTS TO BE. The ring is square, so its width sets
+   the height of the whole row — and at 430 it was making the section taller
+   than anything in it needed. It is still the largest object here. */
+.corewrap{position:relative;z-index:1;justify-self:center;width:100%;max-width:348px;
   aspect-ratio:1;display:grid;place-items:center}
 .core{width:100%;height:100%;display:block;overflow:visible}
 .core .field,.core .fieldstill{fill:none;stroke:rgba(88,233,255,.11);stroke-width:1}
@@ -776,8 +789,12 @@ h1{font-size:clamp(27px,3.1vw,40px);line-height:1.1;letter-spacing:-.028em;
   .verdict{order:3;margin:9px auto 0;max-width:30ch;font-size:14.5px}
   .corewrap{order:4;max-width:min(70vw,290px);transform:none;margin-top:2px}
   .sides2{order:5;margin-top:var(--s3)}
-  .facts{order:6;grid-template-columns:repeat(3,minmax(0,1fr));
-    justify-content:stretch;gap:var(--s2);margin-top:var(--s2)}
+  /* Five baselines do not fit across a phone. Back to a grid there, three
+     across, stacked label over value — which is legible at that width and
+     was never the problem. */
+  .facts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));
+    justify-content:stretch;gap:var(--s3) var(--s2);padding:13px var(--s3)}
+  .fact{flex-direction:column;align-items:flex-start;gap:2px}
   .fact{align-items:center}
 
   /* THE PANEL LEAVES THE PAGE. It becomes a surface docked to the bottom of
@@ -909,7 +926,7 @@ h1{font-size:clamp(27px,3.1vw,40px);line-height:1.1;letter-spacing:-.028em;
 @media (min-width:901px) and (max-width:1240px){
   .page{grid-template-columns:minmax(0,1fr) 308px;gap:var(--s3)}
   .hero{padding:var(--s4);gap:var(--s3)}
-  h1{font-size:clamp(25px,2.7vw,33px);max-width:14ch}
+  h1{font-size:clamp(20px,2.15vw,29px);max-width:30ch}
   .verdict{font-size:15px}
   .s2{padding:13px var(--s2)}
   .facts{gap:var(--s3) var(--s2)}
@@ -1030,25 +1047,20 @@ h1{font-size:clamp(27px,3.1vw,40px);line-height:1.1;letter-spacing:-.028em;
             <span class="pn" id="pcN"></span>
           </div>
         </div>
-
-        <!-- OUT OF THE COLUMN. Five facts in a column half the hero wide set
-             three-and-two and made the section a row taller than it had any
-             reason to be. Across the whole width they are one line, under
-             both the question and the ring, and the empty band beneath the
-             ring is doing something.
-
-             AFTER the ring in source, not before: a full-width item is placed
-             at the next free row, and anything that follows it lands on the
-             row after that. Written above the ring it put the ring on a third
-             row of its own and made the section taller than it started. -->
-        <div class="facts">
-          <div class="fact"><span>closes</span><b id="fClose">—</b></div>
-          <div class="fact"><span>from now</span><b id="fLeft">—</b></div>
-          <div class="fact"><span>volume</span><b id="fPaper">—</b></div>
-          <div class="fact"><span>calls</span><b id="fCalls">—</b></div>
-          <div class="fact"><span>people</span><b id="fPeople">—</b></div>
-        </div>
       </header>
+
+      <!-- ══ THE MARKET'S OWN FACTS ═══════════════════════════════════════
+           A strip of its own, below the question rather than inside it. The
+           hero answers "what is being asked and what does the room think";
+           this answers "how big is it and how long is left", which is a
+           different question and was making the first one twice as tall. -->
+      <div class="facts">
+        <div class="fact"><span>closes</span><b id="fClose">—</b></div>
+        <div class="fact"><span>from now</span><b id="fLeft">—</b></div>
+        <div class="fact"><span>volume</span><b id="fPaper">—</b></div>
+        <div class="fact"><span>calls</span><b id="fCalls">—</b></div>
+        <div class="fact"><span>people</span><b id="fPeople">—</b></div>
+      </div>
 
       <!-- ══ THE TRANSMISSION BELT ════════════════════════════════════════
            Real calls, moving. Hidden entirely when there is nothing to say. -->
@@ -1537,6 +1549,7 @@ function paintVerdict(unread) {
      no frames — and saying "nobody has called it" when the truth is "this
      page could not reach the room" is the page stating a fact about the
      market that it does not know. */
+  v.hidden = false;
   if (unread) {
     v.replaceChildren(document.createTextNode(
       "Could not reach the room just now, so the numbers below are not the "
@@ -1549,14 +1562,16 @@ function paintVerdict(unread) {
       "Nobody has put paper on it yet. Take a thousand from the tap and be the first."));
     return;
   }
-  const y = Math.round(share * 100);
-  v.replaceChildren(
-    document.createTextNode("The room says "),
-    el("b", "vy", `${y}% yes`),
-    document.createTextNode(" against "),
-    el("b", "vn", `${100 - y}% no`),
-    document.createTextNode(`, on ${group(total)} paper from ${group(people)} ${people === 1 ? "person" : "people"}.`),
-  );
+  /* AND OTHERWISE IT SAYS NOTHING, because there is nothing left for it to
+     say. It used to read "The room says 96% yes against 4% no, on 2,350
+     paper from 4 people" — and the ring beside it already says 96% twice,
+     the two figures under it already say which side holds what, and the
+     strip below already says the volume and the head count. Three tellings
+     of one fact is not emphasis, it is a section twice as tall as it needs
+     to be. The sentence stays for the two states the numbers cannot cover:
+     a room that could not be read, and a market nobody has called yet. */
+  v.hidden = true;
+  v.replaceChildren();
 }
 
 function paintFacts() {
