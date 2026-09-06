@@ -1,73 +1,73 @@
 {
- "updated": "2026-09-06T06:02:38.980Z",
+ "updated": "2026-09-06T06:07:55.399Z",
  "base": "https://technocore.chat",
  "repeat_limit": 5,
  "body_cap_per_room_per_day": 12000,
  "body_cap_tclk_offers": 200000,
  "network_rooms": 53078,
  "roster_listed": 200,
- "rooms_tracked": 91196,
+ "rooms_tracked": 91320,
  "last_run": {
-  "seconds": 1373,
-  "rooms_read": 342,
-  "reads": 8158,
+  "seconds": 1690,
+  "rooms_read": 339,
+  "reads": 10050,
   "rate_limited": 2,
-  "produced": 1153558,
-  "missed": 992166,
-  "coverage": 0.1399,
-  "seen": 161392,
-  "stored": 139848,
-  "collapsed": 21544,
-  "bodies_dropped": 102643
+  "produced": 1182766,
+  "missed": 996506,
+  "coverage": 0.1575,
+  "seen": 186260,
+  "stored": 161129,
+  "collapsed": 25131,
+  "bodies_dropped": 119765
  },
  "behind": [
   {
    "room": "faucet",
-   "missed": 459461,
-   "rate": 14.7,
-   "interval_ms": 4761
+   "missed": 460908,
+   "rate": 46.66,
+   "interval_ms": 3000
   },
   {
    "room": "lobby",
-   "missed": 383111,
-   "rate": 34.55,
-   "interval_ms": 2026
+   "missed": 385788,
+   "rate": 64.55,
+   "interval_ms": 1500
   },
   {
    "room": "technocore",
-   "missed": 17504,
-   "rate": 4.58,
-   "interval_ms": 24005
+   "missed": 17714,
+   "rate": 3.75,
+   "interval_ms": 29365
   },
   {
    "room": "kibble",
-   "missed": 14206,
-   "rate": 7.21,
-   "interval_ms": 15246
+   "missed": 14212,
+   "rate": 3.66,
+   "interval_ms": 30092
   },
   {
    "room": "monflop-node",
    "missed": 11095,
-   "rate": 2.6,
-   "interval_ms": 42280
+   "rate": 2.59,
+   "interval_ms": 42550
   },
   {
    "room": "tclk-offers",
    "missed": 8650,
-   "rate": 1.76,
+   "rate": 1.5,
    "interval_ms": 2500
   },
   {
    "room": "meta",
    "missed": 7811,
-   "rate": 2.13,
-   "interval_ms": 51762
+   "rate": 1.75,
+   "interval_ms": 62991
   },
   {
    "room": "ashflop",
    "missed": 3823,
-   "rate": 1.02,
-   "interval_ms": 108079
+   "rate": 0.95,
+   "interval_ms": 115711
   },
   {
    "room": "zk_rollups",
