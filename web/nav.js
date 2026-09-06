@@ -78,7 +78,11 @@ export const PAGES = [
      It is also on the shelf at the bottom of /play. Two ways in is right for
      this one: the bar is how somebody who came for something else finds it,
      and the shelf is how somebody looking for something to play does. */
-  { href: "/market", label: "Market", icon: "coin", bar: true,
+  /* OFF THE BAR WHILE THE PAGE IS BEING REDESIGNED. It stays in this list, so
+     the footer links it and the URL is findable, and the shelf on /play still
+     carries it — but it is not a tab on every page of the site until the new
+     one is finished. Flip `bar` back to true then. */
+  { href: "/market", label: "Market", icon: "coin", bar: false,
     match: (p) => p.startsWith("/market"),
     blurb: "One question, in paper" },
   /* LAST, AND ON PURPOSE. City is the loudest tab on the bar — it carries the

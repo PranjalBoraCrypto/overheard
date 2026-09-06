@@ -304,10 +304,14 @@ console.log("\n=== Q. how anybody finds it");
      page nothing else links. */
   const nav = read("web/nav.js");
   ok("the market is in the site's own page list", /href: "\/market"/.test(nav));
-  ok("and on the bar, before City",
-    /\{ href: "\/market",[^}]*bar: true/.test(nav) &&
+  /* OFF THE BAR while the page is being redesigned — deliberately, and the
+     shelf on /play is carrying it in the meantime. When it goes back it goes
+     back before City, which carries the live dot and would make a tab after
+     it read as an afterthought. */
+  ok("and off the bar for now, with the shelf carrying it",
+    /\{ href: "\/market",[^}]*bar: false/.test(nav) &&
     nav.indexOf('href: "/market"') < nav.indexOf('href: "/city"'),
-    "City carries the live dot; a tab after it reads as an afterthought");
+    "one way in until the redesign lands");
   const play = read("web/play.html");
   ok("Play links it, which is where things you can play live",
     /<a class="tile" href="\/market">/.test(play));
