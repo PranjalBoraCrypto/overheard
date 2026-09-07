@@ -1126,9 +1126,17 @@ const srcs = await pg.evaluate(() => [...document.querySelectorAll('.srccard')].
   href: a.getAttribute('href'), text: a.textContent.replace(/\s+/g, ' ').trim(),
 })));
 console.log('   ', JSON.stringify(srcs.map(x => x.href)));
-check('both documents are linked, not buried in a sentence', srcs.length === 2);
+/* NOT A COUNT. This asked for exactly two, which was true when there were
+   two documents to link and stopped being true the moment Flop published a
+   Yellow Paper worth reading. The property that matters is that every source
+   is a card somebody can click, rather than a name mentioned in a paragraph —
+   pinning the number tests the page's history instead. */
+check('the sources are links, not names dropped in a sentence', srcs.length >= 2,
+  `${srcs.length} cards`);
+check('every one of them actually goes somewhere',
+  srcs.every(x => /^https:\/\//.test(x.href || '')), srcs.map(x => x.href).join(' '));
 check('the teaser is one of them', srcs.some(x => /flop\.finance\/teaser/.test(x.href)));
-check('and technocore the other', srcs.some(x => /technocore\.chat/.test(x.href)));
+check('and technocore is too', srcs.some(x => /technocore\.chat/.test(x.href)));
 check('each says what it is', srcs.every(x => x.text.length > 60));
 check('the draft status travels with the link', /0\.1|draft/i.test(srcs.map(x => x.text).join(' ')));
 check('and the page still says the score goes nowhere',
