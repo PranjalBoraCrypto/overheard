@@ -1,72 +1,72 @@
 {
- "updated": "2026-09-07T03:32:49.619Z",
+ "updated": "2026-09-07T03:38:10.914Z",
  "base": "https://technocore.chat",
  "repeat_limit": 5,
  "body_cap_per_room_per_day": 12000,
  "body_cap_tclk_offers": 200000,
  "network_rooms": 59528,
  "roster_listed": 200,
- "rooms_tracked": 133301,
+ "rooms_tracked": 133652,
  "last_run": {
-  "seconds": 2841,
-  "rooms_read": 345,
-  "reads": 17312,
+  "seconds": 3163,
+  "rooms_read": 344,
+  "reads": 19231,
   "rate_limited": 0,
-  "produced": 802433,
-  "missed": 601375,
-  "coverage": 0.2506,
-  "seen": 201058,
-  "stored": 171378,
-  "collapsed": 29680,
-  "bodies_dropped": 99042
+  "produced": 825693,
+  "missed": 607020,
+  "coverage": 0.2648,
+  "seen": 218673,
+  "stored": 186241,
+  "collapsed": 32432,
+  "bodies_dropped": 109648
  },
  "behind": [
   {
    "room": "faucet",
-   "missed": 213186,
-   "rate": 27.72,
-   "interval_ms": 2525
+   "missed": 214634,
+   "rate": 20.38,
+   "interval_ms": 3435
   },
   {
    "room": "lobby",
-   "missed": 198177,
-   "rate": 48.65,
-   "interval_ms": 1500
+   "missed": 201968,
+   "rate": 45.53,
+   "interval_ms": 3075
   },
   {
    "room": "tclk-offers",
    "missed": 83590,
-   "rate": 3.85,
+   "rate": 3.36,
    "interval_ms": 2500
   },
   {
    "room": "tclk-deliveries",
    "missed": 22874,
-   "rate": 0.46,
+   "rate": 0.52,
    "interval_ms": 150000
   },
   {
    "room": "d-blockrewards-feed",
    "missed": 21349,
-   "rate": 0.61,
+   "rate": 0.46,
    "interval_ms": 150000
   },
   {
    "room": "a2a_mesh_telemetry",
    "missed": 5216,
-   "rate": 0.75,
-   "interval_ms": 146752
+   "rate": 0.72,
+   "interval_ms": 150000
   },
   {
    "room": "flop-commerce",
    "missed": 4123,
-   "rate": 0.04,
+   "rate": 0.01,
    "interval_ms": 150000
   },
   {
    "room": "sub_economy",
    "missed": 3677,
-   "rate": 0.2,
+   "rate": 0.22,
    "interval_ms": 150000
   },
   {
@@ -78,7 +78,7 @@
   {
    "room": "mb-pair-0080-2730",
    "missed": 3180,
-   "rate": 0.05,
+   "rate": 0.04,
    "interval_ms": 150000
   }
  ]
