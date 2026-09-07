@@ -56,12 +56,34 @@ on:
     # below keeps at most one run pending, a dropped firing costs nothing, and
     # a successor already queued when this one ends is the handover we want. It
     # is no longer offered as a fix for anything, because it never was one.
+    # AND THEN SIX BECAME TWO, BECAUSE SIX WAS BUYING NOISE. Measured over the
+    # last hundred runs on 7 September: 87 cancelled, 9 success, 2 failure, one
+    # running, one pending. Eighty-seven per cent of this workflow's history is
+    # grey.
+    #
+    # That IS the design working — with cancel-in-progress false GitHub holds
+    # exactly one pending run, and a firing that arrives while a run is active
+    # and a successor is already waiting gets cancelled on the spot — but it is
+    # not free. An Actions tab that is seven-eighths cancellations is one
+    # nobody reads, and two real failures (git exit 128, 5 September) and a
+    # week of snapshots that had quietly stopped being new all sat in it
+    # unremarked. A red run has to be visible to be a signal.
+    #
+    # THE ARITHMETIC THAT MAKES THIS SAFE. Coverage does not come from firing
+    # often. It comes from the pending slot being occupied at least ONCE before
+    # the active run ends, because that successor starts the instant this one
+    # finishes. Six an hour across a 5.5-hour window is 33 firings for one
+    # handover: 32 exist only to be cancelled. Two an hour is 11 chances at the
+    # same single handover, and ten spares is a margin nothing here has ever
+    # needed.
+    #
+    # Checked before changing it: across those hundred runs the handover was
+    # instant every time but once — a single 25-minute gap on 5 September,
+    # straight after a failed run, which is a failure to hand OVER rather than
+    # a failure to fire. Firing less would not have caused it, and firing six
+    # times an hour did not prevent it.
     - cron: "0 * * * *"
-    - cron: "10 * * * *"
-    - cron: "20 * * * *"
     - cron: "30 * * * *"
-    - cron: "40 * * * *"
-    - cron: "50 * * * *"
   workflow_dispatch: {} # run it by hand any time from the Actions tab
 
 concurrency:

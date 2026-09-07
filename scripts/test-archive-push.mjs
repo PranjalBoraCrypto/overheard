@@ -461,5 +461,46 @@ console.log("\n=== G. the window does not end without publishing its last pass")
     /make-room-snapshots\.mjs/.test(arc) && /make-city-snapshot\.mjs/.test(arc));
 }
 
+console.log("\n=== the schedule, and the one thing it has to buy");
+{
+  /* WHAT COVERAGE ACTUALLY DEPENDS ON. Not firing often. With
+     cancel-in-progress false GitHub holds exactly one pending run, and that
+     successor starts the instant the active one finishes — so continuous
+     coverage needs the pending slot occupied at least ONCE during a window,
+     and every firing beyond the first is a cancelled run in the Actions tab
+     and nothing else.
+
+     Six an hour made 87 of the last 100 runs grey, which is how two real
+     failures and a week of stale snapshots went unremarked. Two an hour buys
+     the same single handover eleven times over. */
+  const crons = [...YML.matchAll(/-\s*cron:\s*"([^"]+)"/g)].map((m) => m[1]);
+  ok("the archive is still on a schedule at all", crons.length > 0, crons.join(" | "));
+
+  const perHour = crons.reduce((n, c) => {
+    const min = c.split(/\s+/)[0];
+    if (min.startsWith("*/")) return n + Math.floor(60 / Number(min.slice(2)));
+    return n + min.split(",").length;
+  }, 0);
+  const secs = Number(/RUN_SECONDS:\s*"?(\d+)/.exec(YML)?.[1] ?? 0);
+  ok("the window length is declared where this can read it", secs > 0, `${secs}s`);
+
+  /* The floor: several chances at the handover inside one window, so a
+     dropped firing is an inconvenience rather than dead air. */
+  const chances = perHour * (secs / 3600);
+  ok("a window gets several chances to queue its successor", chances >= 4,
+    `${perHour}/hour x ${(secs / 3600).toFixed(1)}h = ${chances.toFixed(0)} chances`);
+
+  /* And the ceiling, which is the one that was missing. Firings past the
+     first are pure noise, and noise is what hid the failures. */
+  ok("and is not paying for dozens of cancelled runs to get it", chances <= 16,
+    `${chances.toFixed(0)} firings per handover`);
+
+  /* The property both of those rest on. If this ever flips to true, a new
+     firing kills the run that is mid-collection and the arithmetic above
+     stops meaning anything. */
+  ok("a firing never interrupts a run that is already collecting",
+    /cancel-in-progress:\s*false/.test(YML));
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
