@@ -683,6 +683,18 @@ console.log("\n=== Q. how anybody finds it");
      page nothing else links. */
   const nav = read("web/nav.js");
   ok("the market is in the site's own page list", /href: "\/market"/.test(nav));
+  /* THE LABEL IS "PREDICTION" AND THE PATH IS STILL /market. Every other tab
+     says what its page IS; "Market" said what kind of thing it is, in a word
+     this site also uses for the shop and the deals board. The path did not
+     move with it, and must not: it is drawn into every share card already in
+     somebody's timeline and written into the post text. A label is a word on
+     a bar. A path is a promise. */
+  ok("the tab is named for what the page is", /label: "Prediction"/.test(nav));
+  ok("and the path did not move with the label",
+    /\{ href: "\/market", label: "Prediction"/.test(nav));
+  ok("so the URL on the card still resolves",
+    /https:\/\/overheard-five\.vercel\.app\/market/.test(read("web/market.html")) &&
+    /overheard-five\.vercel\.app\/market/.test(read("web/card.js")));
   /* ON THE BAR, and before City — which carries the live dot and would make
      any tab after it read as an afterthought. */
   ok("and on the bar, ahead of City",

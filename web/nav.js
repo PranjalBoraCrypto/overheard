@@ -64,21 +64,28 @@ export const PAGES = [
     match: (p) => p === "/v" || p.startsWith("/v.html"),
     blurb: "Check a signature" },
   /* ── THE PAPER MARKET ─────────────────────────────────────────────────
-     Sixth tab, and it goes before City for the same reason City goes last:
-     City carries the live dot and pulls the eye, and a new tab placed after
-     it would be read as an afterthought. "Market" rather than "Call", which
-     is the action the page asks for — a tab row already holding "Card"
-     cannot also hold "Call" and expect anybody to tell them apart at a
-     glance. */
-  /* SIXTH TAB, and before City for the same reason City is last: City carries
+     SIXTH TAB, and before City for the same reason City is last: City carries
      the live dot and pulls the eye, so a new tab after it would read as an
-     afterthought. "Market" and not "Call", which is the action the page asks
-     for — a row already holding "Card" cannot also hold "Call" and expect
-     anybody to tell them apart at a glance.
+     afterthought.
+
+     "Prediction", not "Call" and no longer "Market". Never "Call", because a
+     row already holding "Card" cannot also hold "Call" and expect anybody to
+     tell them apart at a glance. And "Market" turned out to be the wrong word
+     for a different reason: every other tab here says what the page IS —
+     Card, Rooms, Play, Create, Verify, City — while "Market" said what kind
+     of thing it is, in a word this site also uses for the shop, the deals
+     board and anywhere money changes hands. One label for two ideas.
+     "Prediction" is the only one of them that is a prediction.
+
+     THE URL STAYS /market. It is drawn into every share card already in
+     somebody's timeline, written into the post text, and carried by the
+     canonical tag and the sitemap. A label is a word on a bar and costs
+     nothing to change; a path is a promise to everyone who already has it.
+
      It is also on the shelf at the bottom of /play. Two ways in is right for
      this one: the bar is how somebody who came for something else finds it,
      and the shelf is how somebody looking for something to play does. */
-  { href: "/market", label: "Market", icon: "coin", bar: true,
+  { href: "/market", label: "Prediction", icon: "coin", bar: true,
     match: (p) => p.startsWith("/market"),
     blurb: "One question, in paper" },
   /* LAST, AND ON PURPOSE — but no longer lit. It carried the live dot, which
