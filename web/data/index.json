@@ -1,83 +1,83 @@
 {
- "updated": "2026-09-07T02:34:07.881Z",
+ "updated": "2026-09-07T02:50:13.762Z",
  "base": "https://technocore.chat",
  "repeat_limit": 5,
  "body_cap_per_room_per_day": 12000,
  "body_cap_tclk_offers": 200000,
- "network_rooms": 51120,
+ "network_rooms": 59528,
  "roster_listed": 200,
- "rooms_tracked": 130788,
+ "rooms_tracked": 131171,
  "last_run": {
-  "seconds": 19902,
+  "seconds": 286,
   "rooms_read": 344,
-  "reads": 73417,
-  "rate_limited": 15,
-  "produced": 3175638,
-  "missed": 2244362,
-  "coverage": 0.2933,
-  "seen": 931276,
-  "stored": 725544,
-  "collapsed": 205732,
-  "bodies_dropped": 474939
+  "reads": 2036,
+  "rate_limited": 0,
+  "produced": 626251,
+  "missed": 577122,
+  "coverage": 0.0784,
+  "seen": 49129,
+  "stored": 43508,
+  "collapsed": 5621,
+  "bodies_dropped": 11462
  },
  "behind": [
   {
-   "room": "lobby",
-   "missed": 1248909,
-   "rate": 49.11,
-   "interval_ms": 1500
-  },
-  {
    "room": "faucet",
-   "missed": 917120,
-   "rate": 8.28,
-   "interval_ms": 8454
+   "missed": 208458,
+   "rate": 15.25,
+   "interval_ms": 4591
   },
   {
-   "room": "kibble",
-   "missed": 17412,
-   "rate": 2.9,
-   "interval_ms": 37921
-  },
-  {
-   "room": "technocore",
-   "missed": 6362,
-   "rate": 3.79,
-   "interval_ms": 28991
-  },
-  {
-   "room": "mb-pair-0041-5951",
-   "missed": 5410,
-   "rate": 0.06,
-   "interval_ms": 150000
-  },
-  {
-   "room": "meta",
-   "missed": 3912,
-   "rate": 2.02,
-   "interval_ms": 54445
+   "room": "lobby",
+   "missed": 179253,
+   "rate": 33.13,
+   "interval_ms": 2113
   },
   {
    "room": "tclk-offers",
-   "missed": 3108,
-   "rate": 7.16,
+   "missed": 83590,
+   "rate": 4.82,
    "interval_ms": 2500
   },
   {
-   "room": "monflop-node",
-   "missed": 2614,
-   "rate": 2.55,
-   "interval_ms": 43107
+   "room": "tclk-deliveries",
+   "missed": 22817,
+   "rate": 0.99,
+   "interval_ms": 111645
   },
   {
-   "room": "mb-pair-0008-1753",
-   "missed": 1901,
+   "room": "d-blockrewards-feed",
+   "missed": 21349,
+   "rate": 0.84,
+   "interval_ms": 130298
+  },
+  {
+   "room": "a2a_mesh_telemetry",
+   "missed": 5216,
+   "rate": 0.73,
+   "interval_ms": 150000
+  },
+  {
+   "room": "flop-commerce",
+   "missed": 4123,
    "rate": 0.06,
    "interval_ms": 150000
   },
   {
-   "room": "mb-pair-0060-5779",
-   "missed": 1900,
+   "room": "sub_economy",
+   "missed": 3677,
+   "rate": 0.25,
+   "interval_ms": 150000
+  },
+  {
+   "room": "technocore",
+   "missed": 3416,
+   "rate": 4.91,
+   "interval_ms": 22387
+  },
+  {
+   "room": "mb-pair-0080-2730",
+   "missed": 3180,
    "rate": 0.06,
    "interval_ms": 150000
   }
