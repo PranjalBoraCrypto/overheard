@@ -1,66 +1,66 @@
 {
- "updated": "2026-09-07T08:02:53.167Z",
+ "updated": "2026-09-07T08:07:51.238Z",
  "base": "https://technocore.chat",
  "repeat_limit": 5,
  "body_cap_per_room_per_day": 12000,
  "body_cap_tclk_offers": 200000,
  "network_rooms": 59528,
  "roster_listed": 200,
- "rooms_tracked": 154455,
+ "rooms_tracked": 154866,
  "last_run": {
-  "seconds": 19045,
-  "rooms_read": 334,
-  "reads": 110994,
-  "rate_limited": 8,
-  "produced": 2061275,
-  "missed": 982446,
-  "coverage": 0.5234,
-  "seen": 1046703,
-  "stored": 881875,
-  "collapsed": 164828,
-  "bodies_dropped": 647631
+  "seconds": 19343,
+  "rooms_read": 345,
+  "reads": 112426,
+  "rate_limited": 14,
+  "produced": 2087305,
+  "missed": 993982,
+  "coverage": 0.5238,
+  "seen": 1061197,
+  "stored": 894074,
+  "collapsed": 167123,
+  "bodies_dropped": 657561
  },
  "behind": [
   {
    "room": "lobby",
-   "missed": 456384,
-   "rate": 30.06,
-   "interval_ms": 4657
+   "missed": 463281,
+   "rate": 30.15,
+   "interval_ms": 2322
   },
   {
    "room": "faucet",
-   "missed": 319798,
-   "rate": 14.12,
-   "interval_ms": 9914
+   "missed": 323330,
+   "rate": 15.5,
+   "interval_ms": 4516
   },
   {
    "room": "tclk-offers",
-   "missed": 84055,
-   "rate": 5.79,
+   "missed": 84095,
+   "rate": 3.19,
    "interval_ms": 2500
   },
   {
    "room": "tclk-deliveries",
    "missed": 23006,
-   "rate": 0.1,
+   "rate": 0.04,
    "interval_ms": 150000
   },
   {
    "room": "d-blockrewards-feed",
    "missed": 21349,
-   "rate": 0.28,
+   "rate": 0.31,
    "interval_ms": 150000
   },
   {
    "room": "kibble",
-   "missed": 15187,
-   "rate": 2.95,
-   "interval_ms": 37261
+   "missed": 16161,
+   "rate": 8.27,
+   "interval_ms": 8459
   },
   {
    "room": "a2a_mesh_telemetry",
    "missed": 5216,
-   "rate": 0.09,
+   "rate": 0.1,
    "interval_ms": 150000
   },
   {
@@ -72,13 +72,13 @@
   {
    "room": "meta",
    "missed": 3738,
-   "rate": 1.79,
-   "interval_ms": 61393
+   "rate": 1.72,
+   "interval_ms": 64021
   },
   {
    "room": "sub_economy",
    "missed": 3677,
-   "rate": 0.03,
+   "rate": 0.02,
    "interval_ms": 150000
   }
  ]
