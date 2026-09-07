@@ -174,8 +174,14 @@ await pg.waitForTimeout(1200);
       unlock: [...(m?.querySelectorAll("button") || [])].some((b) => /^unlock$/i.test(b.textContent.trim())),
       seed: !!m?.querySelector(".seed textarea"),
       seal: (m?.querySelector(".seal")?.textContent || ""),
-      info: !!m?.querySelector(".iq"),
+      info: !!m?.querySelector(".assure .iq"),
       noteHidden: m?.querySelector(".note")?.hidden !== false,
+      promise: m?.querySelector(".assure")?.innerText || "",
+      /* WHERE the promise sits, not just whether it exists. It used to be an
+         `i` in the top-right corner and a grey line three controls below the
+         button — the claim was made everywhere except next to the decision.
+         This asserts the order the card is actually in. */
+      order: [...(m?.children || [])].map((e) => e.className || e.tagName),
       file: !!m?.querySelector('input[type="file"]'),
       make: m?.querySelector('a.row')?.getAttribute("href") || "",
       text: m?.innerText || "" };
@@ -189,12 +195,27 @@ await pg.waitForTimeout(1200);
   check("the passphrase it wants is one being set", /encrypt/i.test(pop.seal), pop.seal);
   check("a backup file is the other way in", pop.file);
   check("and there is a route for somebody with neither", pop.make === "/create");
-  check("it promises nothing leaves the device", /never sent anywhere/i.test(pop.text));
-  /* The mechanics behind an `i`, not spilled down the popover. */
+  /* READABLE WITHOUT PRESSING ANYTHING. A claim somebody has to open a
+     control to see is a claim they will not read, and this is the last thing
+     read before handing over a master secret. */
+  check("it promises nothing leaves the device, in the open",
+    /never leaves this browser/i.test(pop.promise), pop.promise);
+  /* AND IT IS THE LAST THING BEFORE THE BUTTON. The promise, then the
+     detail it opens, then the button that takes the seed — in that order,
+     with nothing between the promise and the thing it is about. */
+  const iA = pop.order.indexOf("assure");
+  const iN = pop.order.indexOf("note");
+  const iS = pop.order.findIndex((c) => String(c).includes("seal"));
+  check("and it sits directly above the button that takes the secret",
+    iA >= 0 && iN === iA + 1 && iS === iN + 1, pop.order.join(" > "));
+  /* The mechanics behind the `i`, not spilled down the popover. */
   check("the detail is there to open, and closed until it is", pop.info && pop.noteHidden);
   const note = await pg.evaluate(() => {
     const r = document.querySelector("overheard-bar").shadowRoot;
-    r.querySelector(".menu .iq").click();
+    /* The whole row is the control now — a 19px circle is not a tap target.
+       Clicking the glyph still works because the click bubbles to it, which
+       is worth knowing, so that is deliberately what this presses. */
+    r.querySelector(".menu .assure .iq").click();
     const n = r.querySelector(".menu .note");
     return { hidden: n.hidden, text: n.innerText };
   });
@@ -455,6 +476,51 @@ console.log("\n=== 8. a phone");
     const o = await ph.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
     check(`${route} does not scroll sideways on a phone`, o <= 0, String(o));
   }
+  /* THE PROMISE ROW IS ITS OWN PIECE OF WORK ON A PHONE, not the desktop one
+     scaled down. The desktop draws it at 33px tall with a 19px circle, which
+     a cursor hits exactly; a thumb cannot, and this is the last thing read
+     before somebody hands over a master secret — the wrong place to be
+     saving eight pixels. Here the whole row is the target.
+
+     ITS OWN CONTEXT, because sections 3 and 6 sign this browser in and never
+     sign it out. By the time the run reaches here the bar shows an identity
+     chip and there is no "Sign in" button at all — which cost half an hour
+     to work out, so it is written down rather than left as a bare
+     newContext() that looks like an accident. */
+  {
+    const clean = await browser.newContext({ viewport: { width: 390, height: 844 } });
+    const cp = await clean.newPage();
+    await cp.goto("http://localhost:8971/rooms");
+    /* Wait for the control, not for a guess at how long it takes: the bar is
+       a custom element and upgrades whenever its module lands. */
+    await cp.waitForFunction(() =>
+      !!document.querySelector("overheard-bar")?.shadowRoot?.querySelector("button.in"),
+      null, { timeout: 15000 });
+    await cp.evaluate(() =>
+      document.querySelector("overheard-bar").shadowRoot.querySelector("button.in").click());
+    await cp.waitForFunction(() =>
+      !!document.querySelector("overheard-bar")?.shadowRoot?.querySelector(".assure"),
+      null, { timeout: 10000 }).catch(() => {});
+    const tap = await cp.evaluate(() => {
+      const sr = document.querySelector("overheard-bar").shadowRoot;
+      const a = sr.querySelector(".assure"), seal = sr.querySelector(".seal");
+      const iq = sr.querySelector(".assure .iq");
+      if (!a || !seal || !iq) return null;
+      const ra = a.getBoundingClientRect(), rs = seal.getBoundingClientRect();
+      return { h: Math.round(ra.height), w: Math.round(ra.width),
+        iq: Math.round(iq.getBoundingClientRect().width),
+        aligned: Math.abs(ra.left - rs.left) < 6 && Math.abs(ra.right - rs.right) < 6,
+        above: rs.top >= ra.bottom };
+    });
+    check("the promise is a thumb-sized target on a phone",
+      !!tap && tap.h >= 44, tap ? `${tap.h}px tall, ${tap.w}px wide` : "not found");
+    check("and its circle grew with it rather than staying a speck",
+      !!tap && tap.iq >= 24, tap ? `${tap.iq}px` : "-");
+    check("still squared up with the button, and still above it",
+      !!tap && tap.aligned && tap.above, JSON.stringify(tap));
+    await clean.close();
+  }
+
   const foot = await ph.evaluate(() => {
     const r = document.querySelector("overheard-foot").shadowRoot;
     return { w: Math.round(r.querySelector(".band").getBoundingClientRect().width),

@@ -342,9 +342,11 @@ const CSS = `
 }
 .altbtn:hover{background:rgba(0,180,215,.11);border-color:rgba(0,180,215,.34);color:#CDEAF3}
 .altbtn:focus-visible{outline:2px solid #5FEBFF;outline-offset:2px}
-/* The circle matches the one in the header so the two read as the same
-   control; the button around it is bigger, because 19px is a fine target for
-   a cursor and a poor one for a thumb. */
+/* The circle is the same glyph the promise row uses, because both open an
+   explanation and neither goes anywhere; the button around it is bigger,
+   because 19px is a fine target for a cursor and a poor one for a thumb.
+   (It used to say "matches the one in the header". There is no longer one in
+   the header — it moved down to sit against the button it is about.) */
 .tipq{
   flex:none;width:34px;height:34px;padding:0;border:0;background:none;cursor:pointer;
   display:grid;place-items:center;
@@ -422,12 +424,41 @@ const CSS = `
 .hrow{display:flex;align-items:center;gap:8px;margin-top:12px}
 .menu .hrow:first-child{margin-top:0}
 .hrow h3{margin:0}
+/* THE WHOLE ROW IS THE CONTROL. The "i" is a span inside it, not a button of
+   its own — one target, so there is no 19px circle to aim at and no way to
+   press "next to" the thing you meant to press. */
+/* A LINE, NOT A PILL — and that is a correctness point, not a taste one.
+   The first cut of this gave it a tinted background and a 1px border, which
+   made it the visual twin of .altbtn ("Forgotten it? Use your seed") sitting
+   four rows below: same fill, same border, same circle on the right. One of
+   those is a statement about what already happens; the other navigates
+   somewhere. Two different kinds of thing must not wear the same clothes.
+
+   So this is a sentence with a control at the end of it. The background only
+   appears when it is open or being pressed, which is feedback rather than
+   decoration. */
+.assure{
+  display:flex;align-items:center;gap:9px;width:100%;margin-top:10px;
+  padding:7px 2px 7px 3px;border:0;border-radius:9px;cursor:pointer;text-align:left;
+  font-family:inherit;font-size:11px;font-weight:400;line-height:1.45;color:#8FB2BE;
+  background:none;
+  transition:background .2s,color .2s}
+.assure span:first-child{flex:1;min-width:0}
+.assure:focus-visible{outline:2px solid #5FEBFF;outline-offset:2px}
+.assure[aria-expanded="true"]{color:#CDEAF3}
+.assure:active{background:rgba(0,180,215,.08)}
+/* Hover only where hovering exists: on a touch screen a :hover sticks after
+   the tap and leaves the row looking permanently pressed. */
+@media (hover:hover){
+  .assure:hover{color:#CDEAF3}
+  .assure:hover .iq{background:rgba(0,180,215,.26);border-color:#5FEBFF}
+}
 .iq{
-  width:19px;height:19px;flex:none;margin-left:auto;border-radius:50%;cursor:pointer;
+  width:19px;height:19px;flex:none;margin-left:auto;border-radius:50%;
   display:grid;place-items:center;padding:0;
   background:rgba(0,180,215,.12);border:1px solid rgba(0,180,215,.3);color:#5FEBFF;
   transition:background .2s,border-color .2s}
-.iq:hover,.iq[aria-expanded="true"]{background:rgba(0,180,215,.26);border-color:#5FEBFF}
+.assure[aria-expanded="true"] .iq{background:rgba(0,180,215,.26);border-color:#5FEBFF}
 .iq svg{width:11px;height:11px;fill:none;stroke:currentColor;stroke-width:2.6;
   stroke-linecap:round;stroke-linejoin:round}
 .note{
@@ -504,7 +535,6 @@ const CSS = `
 .menu .row:hover{background:rgba(0,180,215,.12);color:#5FEBFF}
 .menu .row.out{color:#9CBFCB;margin-top:9px;border-top:1px solid rgba(0,180,215,.14);border-radius:0 0 11px 11px;padding-top:12px}
 .menu .row.out:hover{background:rgba(255,107,107,.10);color:#FF9B9B}
-.menu .fine{font-size:11px;line-height:1.5;color:#5F8593;margin-top:10px}
 
 /* ── ON A PHONE THIS IS NOT A DROPDOWN, IT IS A SHEET ──────────────────────
  *
@@ -565,6 +595,21 @@ const CSS = `
   .pw button{padding:0 18px}
   .seed textarea{height:88px;font-size:12.5px;padding:13px 14px}
   .seal{padding:15px;font-size:14.5px}
+  /* ── THE PROMISE ROW, SIZED FOR A THUMB ──────────────────────────────
+     The desktop row is 11px type in a 35px-tall strip, which a mouse can
+     hit exactly and a thumb cannot. Here it is a 48px target — the sheet
+     has a whole screen width to spend, and this is the last thing read
+     before handing over a master secret, so it is the wrong place to be
+     saving eight pixels. The circle grows with it, or it reads as a speck
+     of decoration rather than the control that opens the detail. */
+  .assure{margin-top:14px;padding:0 2px;min-height:48px;font-size:12.5px;gap:12px}
+  .assure .iq{width:26px;height:26px}
+  .assure .iq svg{width:14px;height:14px}
+  /* And the detail it opens is READ on a phone, not squinted at. The sheet
+     scrolls, so the extra height costs nothing that matters. */
+  .note{font-size:12.5px;line-height:1.65;padding:13px 14px}
+  .note ul{padding-left:17px}
+  .note li{margin-top:6px}
   .menu button.row,.menu a.row{padding:14px 12px;font-size:14px}
   .alt{margin-top:14px}
   .altbtn{padding:13px 14px;font-size:13px}
@@ -960,8 +1005,10 @@ class OverheardBar extends HTMLElement {
    In both states the work happens here, in this tab. The seed is read here,
    the key is derived here by the browser's own Ed25519, the vault is sealed
    here under 310,000 PBKDF2 rounds, and none of the three ever crosses the
-   network. The `i` beside the heading says exactly that, in those terms,
-   because "secure" is a word a fake of this page would also use. */
+   network. The promise row above the button says exactly that, in those
+   terms, because "secure" is a word a fake of this page would also use —
+   the sentence is always readable and the mechanics are one press behind
+   it, next to the control they are about. */
 function paintSignIn(me) {
   const btn = document.createElement("button");
   btn.className = "in";
@@ -1024,17 +1071,17 @@ function paintSignIn(me) {
     const say = document.createElement("p");
     say.className = "say";
 
-    /* the heading, and the honest answer beside it */
+    /* THE HEADING IS JUST THE HEADING NOW. The `i` used to live up here, in
+       the top-right corner, as far from the button as the card allows — so
+       the question it answers ("where does my seed go?") was asked in one
+       place and answered in another, and the answer was easiest to miss at
+       the exact moment somebody was about to hand over a master secret.
+       It has moved down to sit directly above that button. See `assure`. */
     const hrow = document.createElement("div");
     hrow.className = "hrow";
     const h = document.createElement("h3");
     h.textContent = picked ? "Welcome back" : "No identity here yet";
-    const iq = document.createElement("button");
-    iq.className = "iq"; iq.type = "button";
-    iq.setAttribute("aria-label", "Where does this go?");
-    iq.setAttribute("aria-expanded", String(noteOpen));
-    iq.innerHTML = ICONS.info;                        // our own markup
-    hrow.append(h, iq);
+    hrow.append(h);
     menu.append(hrow);
 
     const note = document.createElement("div");
@@ -1043,8 +1090,9 @@ function paintSignIn(me) {
     /* Built as elements, not markup, and written as mechanics rather than
        reassurance. Every line here is something a reader could check in the
        network tab of their own browser. */
-    const nb = document.createElement("b");
-    nb.textContent = "Your data never leaves this browser.";
+    /* The headline that used to open this note is now the always-visible
+       line on the control above it, so repeating it here would say the same
+       sentence twice in nine pixels. What is left is the mechanics. */
     const ul = document.createElement("ul");
     for (const t of picked ? [
       "The encrypted backup is already in this browser's storage. Nothing is fetched to sign you in.",
@@ -1059,12 +1107,31 @@ function paintSignIn(me) {
     ]) {
       ul.append(Object.assign(document.createElement("li"), { textContent: t }));
     }
-    note.append(nb, ul);
-    menu.append(note);
-    iq.addEventListener("click", () => {
+    note.append(ul);
+
+    /* ── THE PROMISE, WHERE THE DECISION IS ────────────────────────────────
+       One control, both jobs. The sentence is always readable — a claim
+       somebody has to press for is a claim they will not read — and the `i`
+       beside it opens the mechanics behind it.
+
+       THE WHOLE ROW IS THE BUTTON, not just the circle. On a desktop that is
+       a courtesy; on a phone it is the difference between a 19px target and
+       a full-width one, and 19px is below every thumb-target guideline there
+       is. The circle still draws on the right, because it is what makes the
+       row read as something you can open. */
+    const assure = document.createElement("button");
+    assure.className = "assure"; assure.type = "button";
+    assure.setAttribute("aria-expanded", String(noteOpen));
+    const aText = document.createElement("span");
+    aText.textContent = "Your data never leaves this browser";
+    const iq = document.createElement("span");
+    iq.className = "iq"; iq.setAttribute("aria-hidden", "true");
+    iq.innerHTML = ICONS.info;                        // our own markup
+    assure.append(aText, iq);
+    assure.addEventListener("click", () => {
       noteOpen = !noteOpen;
       note.hidden = !noteOpen;
-      iq.setAttribute("aria-expanded", String(noteOpen));
+      assure.setAttribute("aria-expanded", String(noteOpen));
     });
 
     /* ── there is something here to unlock ────────────────────────────── */
@@ -1101,7 +1168,9 @@ function paintSignIn(me) {
       };
       go.addEventListener("click", tryIt);
       pw.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); tryIt(); } });
-      menu.append(row, say);
+      /* Directly above the button that takes the passphrase, in that order:
+         what is about to happen to it, then the field, then the button. */
+      menu.append(assure, note, row, say);
 
       /* ── AND THE SEED, FOR THE PASSPHRASE NOBODY REMEMBERS ─────────────
          This popover used to end here for anybody holding a vault: three
@@ -1202,20 +1271,20 @@ function paintSignIn(me) {
 
       menu.append(fileRow("Use a different backup file", say));
       menu.append(makeRow("Make another identity"));
-      menu.append(fine("Decrypted here, on this device. Your key is never sent anywhere."));
       if (focusOn !== "none") setTimeout(() => pw.focus(), 30);
       return;
     }
 
     /* ── nothing here: the seed ───────────────────────────────────────── */
-    const built = buildSeed(say);
+    /* The promise goes INSIDE the seed block, between the passphrases and
+       the button — see buildSeed. It used to be a grey line underneath the
+       whole section, three controls below the one it was about, saying
+       almost exactly what the row says now. One statement, in the place it
+       is needed, rather than two in places it is not. */
+    const built = buildSeed(say, [assure, note]);
     menu.append(built.frag, say);
     menu.append(fileRow("I have a backup file instead", say));
     menu.append(makeRow("Make an identity"));
-    /* THE PROMISE STAYS VISIBLE. The `i` above carries the mechanics, but the
-       one sentence that matters is not allowed to be behind a control — a
-       claim somebody has to press for is a claim they will not read. */
-    menu.append(fine("Read, derived and encrypted in this tab. Your seed and your key are never sent anywhere."));
     if (focusOn !== "none") setTimeout(() => built.focus(), 30);
   }
 
@@ -1227,7 +1296,7 @@ function paintSignIn(me) {
    * code — a second copy would have drifted, and the copy that drifts is
    * always the one handling somebody's master secret.
    */
-  function buildSeed(say) {
+  function buildSeed(say, aboveSeal) {
     const box = document.createElement("div");
     box.className = "seed";
     const seed = document.createElement("textarea");
@@ -1309,7 +1378,18 @@ function paintSignIn(me) {
     seal.addEventListener("click", bring);
     p2.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); bring(); } });
 
-    return { frag: (() => { const f = document.createDocumentFragment(); f.append(box, two, seal); return f; })(), focus: () => seed.focus() };
+    /* `aboveSeal` is the promise row, and it is optional on purpose: the
+       forgot-my-passphrase route reaches this function from a view that
+       already carries one above its Unlock button, and two of them in one
+       card is clutter rather than reassurance. */
+    return {
+      frag: (() => {
+        const f = document.createDocumentFragment();
+        f.append(box, two, ...(aboveSeal ?? []), seal);
+        return f;
+      })(),
+      focus: () => seed.focus(),
+    };
   }
 
   /** The backup-file route, from either view. Choosing a valid one fills
@@ -1365,13 +1445,6 @@ function paintSignIn(me) {
     document.body.append(a);
     a.click();
     setTimeout(() => { a.remove(); URL.revokeObjectURL(url); }, 4000);
-  }
-
-  function fine(text) {
-    const p = document.createElement("p");
-    p.className = "fine";
-    p.textContent = text;
-    return p;
   }
 
   btn.addEventListener("click", () => (menu ? close() : open()));
