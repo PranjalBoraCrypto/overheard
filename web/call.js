@@ -76,6 +76,11 @@ export const SHOP = "did:key:z6MkiuhfekPgiihLWarPAzhuvoMjg86F8dqmLiCTmtQgMrR3";
 
 export const SIDES = ["yes", "no"];
 
+/** A canonical Ed25519 did:key, spelled the same way session.js, api/post.js,
+ *  api/keep.js and api/calls.js spell it. What a signature is checked against,
+ *  and — see the fold — the thing a nickname is not. */
+export const DID_RE = /^did:key:z6Mk[1-9A-HJ-NP-Za-km-z]{44}$/;
+
 /* ── the three frames ──────────────────────────────────────────────────────
    Canonical JSON, so the same frame always serialises to the same bytes and a
    signature over it can be checked by anybody. `nonce` is the sender's own
@@ -161,6 +166,28 @@ export function foldMarket(messages, opts = {}) {
        are equal in every honest frame, and where they differ the body is
        lying — so the body's is never used for anything. */
     if (typeof m.from !== "string" || !m.from) continue;
+    /* ── AND `from` HAS TO BE A KEY, NOT A NAME ───────────────────────────
+       Technocore accepts UNSIGNED posts under a self-chosen `from`. That is a
+       nickname: it proves nothing, and anybody can pick anybody's. This
+       checked that the body agreed with the transport — which a forger owns
+       both halves of — but never that the transport's answer was a key at
+       all. /api/room happens to null out nicknames, so the live read was safe
+       by another file's behaviour rather than by this rule; the archive read
+       was not, and an unsigned frame folded into the totals as a real call.
+
+       The shape is the check, and it belongs here because this is the file
+       that decides what counts. */
+    if (!DID_RE.test(m.from)) continue;
+    /* And where the reader positively knows a frame was unsigned, it does not
+       count. `null` is what /api/room reports for an unsigned live message;
+       `false` is what the keeper records for an unsigned archived one. An
+       ABSENT flag is neither of those — it is a row written before anybody
+       thought to look, and calling those unsigned now would rewrite the past
+       rather than protect it. */
+    if (m.sig === null || m.signed === false) {
+      no(m, "this frame carries no signature, so there is no key behind it");
+      continue;
+    }
     if (b.from !== m.from) { no(m, "the frame names a different author than the key that signed it"); continue; }
 
     if (b.type === "settle") {

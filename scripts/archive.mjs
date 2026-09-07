@@ -499,6 +499,9 @@ const TAIL_MAX = Number(process.env.TAIL_MAX ?? 4000);
 const CALLS_ROOM = process.env.CALLS_ROOM ?? "overheard-calls";
 const CALLS_PREFIX = "call1 ";
 const CALLS_MAX = Number(process.env.CALLS_MAX ?? 200_000);
+/* The same spelling as web/call.js, web/session.js, api/keep.js and
+   api/calls.js. See pushCall for why the ledger asks for one. */
+const CALLS_DID_RE = /^did:key:z6Mk[1-9A-HJ-NP-Za-km-z]{44}$/;
 
 /** One arriving call, kept for good. Deduplicated on the server's sequence
  *  number, which is the only identifier a reader and this both agree on. */
@@ -506,6 +509,16 @@ function pushCall(state, r) {
   if (!state.ledger) state.ledger = { rows: [], seqs: new Set() };
   const L = state.ledger;
   if (!String(r?.text ?? "").startsWith(CALLS_PREFIX)) return;
+  /* A KEY, NOT A NICKNAME. Technocore accepts unsigned posts under a
+     self-chosen `from`, so "there is a from field" is not the same as
+     "somebody signed this". The market's fold refuses these anyway — that is
+     the file which decides what counts, and the rule belongs there — but
+     there is no reason to copy them into the repository on the way. What this
+     keeps is meant to be the market's history, not everything anybody typed
+     into the room.
+
+     `sig` still travels with the row, so a reader can tell for itself. */
+  if (typeof r?.from !== "string" || !CALLS_DID_RE.test(r.from)) return;
   const k = String(r?.seq ?? "");
   if (!k || L.seqs.has(k)) return;
   /* A ceiling, because "append for ever" with no bound is how a small file

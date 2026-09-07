@@ -62,6 +62,25 @@ const MAX_DAYS = 14;
    a load test. The cap keeps one DID from turning a cached response into a
    megabyte. */
 const MAX_ORDERS = 500;
+
+/* The shop's offer ids, spelled exactly as api/accept.mjs spells them. Kept
+   in both files rather than shared because an edge function cannot import
+   the runner; scripts/test-api.mjs asserts the two agree. */
+const OFFER_ID = /^0x[0-9a-f]{64}$/;
+
+/* How much archive one request may read before it stops. Generous next to any
+   real customer — a fortnight of this shop's orders is kilobytes — and a hard
+   ceiling on what a made-up DID can cost. See the loop for why MAX_ORDERS
+   could not do this job. */
+const MAX_SCAN_BYTES = 12_000_000;
+
+/* A day shard is named by its date and nothing else. It is read out of
+   _meta.json — the project's own file, so this is not a live attack surface —
+   and interpolated straight into a URL that gets fetched. A `day` of
+   "../../../x" or "x?token=" would reshape that request, and the distance
+   between "our repository" and "attacker-controlled" is one bad archiver
+   write or one bad commit. Cheap to close now, impossible to notice later. */
+const DAY_RE = /^\d{4}-\d{2}-\d{2}$/;
 /* How many orders the accept hunt runs for PER SHARD. Each is a substring
    sweep of the few texts in hand, which is fast but not free. */
 const ACCEPT_LOOKUPS = 12;
@@ -83,7 +102,15 @@ const raw = (p) =>
 
 async function grabText(p) {
   try {
-    const res = await fetch(raw(p), { headers: { "User-Agent": "overheard-orders/1.0" } });
+    /* A TIMEOUT, LIKE EVERY OTHER UPSTREAM FETCH IN THIS CODEBASE. Without
+       one, a raw.githubusercontent that accepts the connection and then
+       stops talking holds this function open until the platform kills it,
+       and it does that once per shard. Every other fetch here carries one;
+       these two were the exceptions. */
+    const res = await fetch(raw(p), {
+      headers: { "User-Agent": "overheard-orders/1.0" },
+      signal: AbortSignal.timeout(6000),
+    });
     return res.ok ? await res.text() : null;
   } catch { return null; }
 }
@@ -106,8 +133,23 @@ function orderFrom(line, did) {
     ts: typeof row.ts === "string" ? row.ts : null,
     /* The offer's own declared id. An accept points at it by `ref`, so this
        is the only thing that can pair an order with the shop's answer — and
-       without the pairing there is no way to show a buyer a lock button. */
-    id: String(body.id ?? ""),
+       without the pairing there is no way to show a buyer a lock button.
+
+       SHAPED BEFORE IT IS TRUSTED, because it is fed to a scanning loop. This
+       is the rule api/accept.mjs states and applies (`OFFER_ID`, with a note
+       beside its pass two about what one unshaped value did); this file had
+       the loop and not the rule. `id` comes out of a frame written by a
+       stranger, and `findAccept` hands it to `text.indexOf` across every line
+       of every shard: a one-character id matches most of the archive and
+       makes each request slice and JSON.parse thousands of lines, and an
+       empty one is worse — `indexOf("", end)` returns `end`, so the loop
+       stops advancing. Nothing reaches that today, but only because three
+       separate `.filter((o) => o.id)` calls downstream happen to drop it, and
+       an invariant propped up by an accident in another function is not one.
+
+       An id of the wrong shape cannot be one the shop ever answered, so an
+       order carrying one simply has no accept to find. */
+    id: OFFER_ID.test(String(body.id ?? "")) ? String(body.id) : "",
     /* Named as the frame names them. A second vocabulary between the wire and
        the page is how a field ends up meaning two things. */
     job: String(body.job?.id ?? ""),
@@ -192,7 +234,10 @@ export default async function handler(request) {
   }
   let meta;
   try { meta = JSON.parse(metaText); } catch { meta = null; }
-  const allDays = Array.isArray(meta?.days) ? [...meta.days].sort() : [];
+  /* Shaped, because every one of these is interpolated into a URL this
+     function then fetches. See DAY_RE. */
+  const allDays = (Array.isArray(meta?.days) ? meta.days : [])
+    .filter((d) => typeof d === "string" && DAY_RE.test(d)).sort();
   /* Newest first: a visitor's most recent orders are the ones they came to
      look at, and stopping early is only safe if the newest were read first. */
   const days = allDays.slice(-MAX_DAYS).reverse();
@@ -309,10 +354,27 @@ export default async function handler(request) {
   if (tail !== null) eat(tail);
   let waiting = orders.filter((o) => o.id);
   let newer = null;                 // the shard fetched just before this one
+  let read = tail === null ? 0 : tail.length;
+  let overBudget = false;
   for (const day of days) {
     if (orders.length >= MAX_ORDERS) break;
+    /* ── AND A BUDGET IN BYTES, WHICH IS THE BOUND THAT ACTUALLY HOLDS ────
+       MAX_ORDERS stops a customer with a thousand orders. It does nothing
+       about the opposite and much cheaper case: a DID with NO orders never
+       increments `orders.length`, so the break above never fires and all
+       fourteen shards get fetched and scanned in full. A shard is megabytes.
+
+       That made this endpoint an amplifier. The DID can only ever be
+       shape-checked — anybody can generate a real Ed25519 key, so no amount
+       of stricter validation shrinks the space — which means an attacker
+       mints unlimited distinct DIDs, each one a fresh CDN cache key, each
+       costing tens of megabytes of egress and a full scan at the edge, for a
+       request that costs them a few bytes. Validating the key harder does not
+       help. Bounding the work does. */
+    if (read >= MAX_SCAN_BYTES) { overBudget = true; break; }
     const text = await grabText(`${ROOM}/${day}.ndjson`);
     if (text === null) continue;             // a missing shard is not an error
+    read += text.length;
     scanned++;
     const before = orders.length;
     eat(text);
@@ -341,6 +403,11 @@ export default async function handler(request) {
     days_available: allDays.length,
     window_days: MAX_DAYS,
     truncated: orders.length >= MAX_ORDERS,
+    /* Said out loud rather than left for the caller to infer from a short
+       days_scanned. A list that stopped early because the read budget ran out
+       is not the same answer as a list that saw everything, and the page is
+       entitled to know which one it has. */
+    ...(overBudget ? { budget_reached: true } : {}),
     /* The archive trails the network by roughly one collector pass. An order
        placed in the last few minutes is genuinely not here yet, and the page
        merges a live read to cover exactly that gap. */

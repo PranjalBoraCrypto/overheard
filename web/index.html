@@ -165,6 +165,28 @@ header nav a:hover{color:var(--cy-hi)} header nav a:hover::after{width:100%}
 @keyframes orbit{to{transform:rotate(360deg)}}
 #heroFace{position:relative;z-index:1;width:420px;height:420px;display:block;touch-action:none}
 .hface.classic #heroFace{width:274px;height:274px}
+/* ── THE FACE HAS TO FIT THE ROOM IT IS GIVEN ─────────────────────────────
+   The hero's second column is 320px. The face is 420px. Centred in a flex
+   column it therefore bleeds 50px each side — which is a deliberate,
+   good-looking overlap into the 52px gap on the left, and on the right it
+   walked straight out of the shell and gave the FRONT PAGE a horizontal
+   scrollbar on every laptop from 981px to about 1228px. 1024, 1152, 1200:
+   all of them. Below 981 a media query already shrinks the face to 250 and
+   above ~1228 the shell's own side margin is wide enough to swallow the
+   bleed, which is exactly why this survived — it is invisible at the two
+   sizes a desktop is usually tested at.
+
+   How much bleed is affordable is not a constant, it is a function of the
+   screen: 26px of shell padding, plus half of whatever the viewport has over
+   the shell's 1180px cap. So the face is sized by that rule rather than by a
+   second guessed breakpoint, which keeps it continuous — no width where it
+   jumps — and correct at every size rather than at the ones tried by hand. */
+@media (min-width:981px){
+  .socket,#heroFace{
+    width:clamp(360px, calc(360px + (100vw - 1180px)), 420px);
+    height:clamp(360px, calc(360px + (100vw - 1180px)), 420px);
+  }
+}
 .facecap{text-align:center;min-height:1.6em;max-width:30ch;font-family:var(--mono)}
 /* The hint is a nudge, not a label: it says the thing is alive, and then it
    gets out of the way the moment somebody discovers that for themselves. */
@@ -4029,7 +4051,15 @@ async function issue(raw){
      if the live room scan did not answer, "not on the record" might simply be
      wrong. That belongs on the panel making the claim, not down here. */
   $("status").innerHTML = stats
-    ? `<b>Found on Technocore.</b> ${stats.count} message${stats.count===1?"":"s"} across ${stats.rooms} room${stats.rooms===1?"":"s"}, first seen ${stats.first}.`
+    // `count` and `rooms` are computed on this page and are provably numbers.
+    // `first` is a timestamp that arrives over the network, and it is the one
+    // value on this line the page did not work out for itself — so it gets the
+    // same treatment `note.path` gets below, rather than being trusted for
+    // looking plausible. Ten characters of digits and dashes, or it is not a
+    // date worth printing.
+    ? `<b>Found on Technocore.</b> ${stats.count} message${stats.count===1?"":"s"} across ${stats.rooms} room${stats.rooms===1?"":"s"}, first seen ${
+        /^\d{4}-\d{2}-\d{2}$/.test(String(stats.first||"")) ? stats.first : "—"
+      }.`
     : (lastOwned&&lastOwned.rooms&&lastOwned.rooms.length)
     ? `<b>Holds ground.</b> This key owns ${lastOwned.rooms.length} ownable room${lastOwned.rooms.length===1?"":"s"} on Technocore \u2014 signed claims that do not expire.`
     : note?.registered

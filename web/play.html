@@ -3018,7 +3018,16 @@ function openRun(r,s){
   });
   row.append(dl);
 
-  if(r.proof){
+  /* The one href on this site built from a value read back out of storage
+     rather than from a literal. Everything that writes it writes
+     `${location.origin}/v#b=…`, so the test below is true today — and that is
+     exactly the kind of invariant that stops being true quietly. A javascript:
+     URL in an anchor is one click from script execution, so the rule is stated
+     where the value is USED rather than assumed from where it was written.
+     Anything that is not our own proof link gets no button. */
+  const proofOk = typeof r.proof === "string"
+    && r.proof.startsWith(location.origin + "/v#");
+  if(proofOk){
     const open2=document.createElement("a");
     open2.className="go ghost"; open2.href=r.proof; open2.target="_blank"; open2.rel="noopener noreferrer";
     open2.append(icon("i-seal"), el("span",null,"Check the proof"));

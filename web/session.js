@@ -341,6 +341,29 @@ export function onSession(fn) {
   return () => { removeEventListener(EVENT, local); removeEventListener("storage", cross); };
 }
 
+/* ── SIGNING OUT HAS TO REACH THE OTHER TABS' MEMORY, NOT JUST THEIR UI ────
+   `signOut()` clears localStorage, deletes the IndexedDB record and drops
+   `liveKey` — but only in the tab it was called in. Every other open tab
+   still holds its own `liveKey`: a live, usable, non-extractable CryptoKey
+   handle for the identity that was just signed out.
+
+   Those tabs repaint correctly, because `getSession()` reads localStorage and
+   `signingKey()` returns null when there is no session, so nothing in the
+   site will sign. The exposure is narrower than that and still real: the
+   handle sits in that tab's heap until the tab is closed, and the stated
+   threat model for sign-out is a shared machine. "I signed out" should mean
+   the key is gone from this browser, not gone from one of its tabs.
+
+   So a sign-out seen through the `storage` event drops the handle here too.
+   This listener is registered once, at module load, independently of whether
+   any page called onSession — the guarantee cannot depend on a caller having
+   subscribed to a UI event. */
+addEventListener("storage", (e) => {
+  if (e.key && e.key !== SESSION_KEY) return;      // somebody else's key
+  if (getSession()) return;                        // a sign-IN, or a touch
+  liveKey = null; livePub = null; keeping = null;
+});
+
 /**
  * Keep a vault in this browser, so next time is one passphrase.
  *

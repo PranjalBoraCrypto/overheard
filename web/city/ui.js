@@ -344,7 +344,12 @@ export function makeUI(els, cb) {
       const kind = r.line?.c?.kind || "message";
       if (g.dataset.kind !== kind) {
         g.dataset.kind = kind;
-        g.replaceChildren(icon(KIND_ICON[kind] || "c-msg"));
+        /* hasOwn, not a truthiness test on a plain-object lookup. `kind` comes
+           from classify(), which returns a closed set today — but a lookup
+           that falls through to Object.prototype answers "constructor" and
+           "toString" with an inherited value instead of taking the fallback,
+           and the guard costs nothing. */
+        g.replaceChildren(icon(Object.hasOwn(KIND_ICON, kind) ? KIND_ICON[kind] : "c-msg"));
         g.className = `g k-${kind}`;
       }
 

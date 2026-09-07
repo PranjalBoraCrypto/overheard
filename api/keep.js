@@ -67,10 +67,36 @@ const ROOM = "overheard-calls";
 const PREFIX = "call1 ";
 const PATH = `web/data/${ROOM}/all.ndjson`;
 
+/* The same spelling as web/session.js, api/post.js and api/orders.js. A key,
+   not a nickname — see frameFrom. */
+const DID_RE = /^did:key:z6Mk[1-9A-HJ-NP-Za-km-z]{44}$/;
+
 const TECHNOCORE = "https://technocore.chat";
 /* The ledger's ceiling, the same number archive.mjs uses. A file with no bound
    is a small file waiting to stop being one. */
 const MAX_LINES = 200_000;
+
+/* ── AND A CEILING IN BYTES, WHICH IS THE ONE THAT ACTUALLY BITES ──────────
+   MAX_LINES cannot fire before this does. 200,000 frames at ~150 bytes is
+   30MB, and the GitHub contents API stops returning a file's body at 1MB —
+   at which point it answers 200 with `"content": ""` and `"encoding":
+   "none"`, which the read below would have taken for an empty ledger.
+
+   That was a ledger-shredder. Empty `have` means an empty `seen`, which means
+   `lines` is 0 so MAX_LINES never fires, which means every frame in the room
+   reads as new — and the PUT that follows carries the file's real sha, so
+   GitHub accepts it as a legitimate replacement of the whole file by the last
+   200 messages. The market's entire history, gone in one commit, from one
+   anonymous POST, marked [skip ci] so nothing runs to notice.
+
+   It needed no attacker. It was going to happen on its own at roughly 7,000
+   frames, to whoever called this first.
+
+   So: refuse well before the cliff rather than at it, and refuse loudly. A
+   ledger that stops growing is an inconvenience — the frames are still in the
+   room, still signed, still in the day shards. A ledger that silently empties
+   itself is the loss of the only thing this endpoint exists to protect. */
+const MAX_BYTES = 900_000;
 /* A frame is ~150 bytes. Anything wildly longer is not one of ours and has no
    business being copied into the repository. */
 const MAX_TEXT = 4096;
@@ -98,14 +124,42 @@ const gh = (path, init = {}) =>
     },
   });
 
-/** One line of the ledger, or null. The same shape /api/calls reads back. */
+/** One line of the ledger, or null. The same shape /api/calls reads back.
+ *
+ *  ── WHY `from` IS NOW CHECKED, AND WHY `signed` IS RECORDED ──────────────
+ *  The reasoning this file was built on was that everything in the room got
+ *  there by being signed, "because that is the only way anything gets into
+ *  it". That is not true, and this repository says so in three other places:
+ *  Technocore accepts UNSIGNED posts with a caller-chosen `from`, which is a
+ *  nickname and proves nothing. /api/room already splits the two apart.
+ *
+ *  This read the raw room, so it never got that split. It accepted any
+ *  non-empty string as an author and dropped `sig` on the floor, so nothing
+ *  downstream could tell a signed frame from a nickname afterwards — and the
+ *  market's fold, reading it back through /api/calls, counted both.
+ *
+ *  Two changes. `from` must now be a canonical Ed25519 did:key, which a
+ *  nickname is very unlikely to be and which the fold requires anyway. And
+ *  whether the row carried a signature is RECORDED rather than discarded, so
+ *  the distinction survives the write and the reader can act on it.
+ *
+ *  Deliberately not refused outright here: a frame with no signature is still
+ *  a fact about the room, and a keeper that silently dropped rows because an
+ *  upstream field moved would be a worse failure than one that labels them.
+ *  The fold is where `signed: false` stops counting. */
 function frameFrom(row) {
   const text = String(row?.text ?? "");
   if (!text.startsWith(PREFIX) || text.length > MAX_TEXT) return null;
-  if (typeof row.from !== "string" || !row.from) return null;
+  if (typeof row.from !== "string" || !DID_RE.test(row.from)) return null;
   const seq = String(row.seq ?? "");
   if (!/^[0-9]{1,19}$/.test(seq)) return null;      // the server's own number
-  return { seq: Number(seq), ts: typeof row.ts === "string" ? row.ts : null, from: row.from, text };
+  return {
+    seq: Number(seq),
+    ts: typeof row.ts === "string" ? row.ts : null,
+    from: row.from,
+    signed: typeof row.sig === "string" && row.sig.length > 0,
+    text,
+  };
 }
 
 /* Base64 both ways, without Buffer — the edge runtime has no Node globals, and
@@ -186,6 +240,20 @@ export default async function handler(request) {
     if (cur.status === 200) {
       const j = await cur.json();
       sha = j.sha;
+      /* THE ONLY SAFE READING OF A BODY THIS API DECLINED TO SEND. Above 1MB
+         it returns `encoding: "none"` and an empty `content`, and treating
+         that as "the file is empty" is how the whole ledger gets replaced by
+         the last 200 messages. `encoding` is the exact signal — a genuinely
+         empty file still comes back as base64 with an empty body — so this
+         distinguishes the two cases rather than guessing between them. */
+      if (j.encoding !== "base64" || typeof j.content !== "string") {
+        return json({ ok: false, kept: 0, reason:
+          "the ledger is past the size the contents API will return, so this is refusing to rewrite it"
+          + " — the frames are still in the room and in the day shards" }, 200);
+      }
+      if (Number(j.size) >= MAX_BYTES) {
+        return json({ ok: true, kept: 0, reason: "the ledger is full" });
+      }
       have = j.content ? dec(j.content) : "";
     } else if (cur.status !== 404) {
       return json({ ok: false, kept: 0, reason: `GitHub answered HTTP ${cur.status} reading the ledger` }, 200);

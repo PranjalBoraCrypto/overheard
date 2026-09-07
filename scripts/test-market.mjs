@@ -226,8 +226,17 @@ console.log("\n=== K. the two files that have to agree");
     !/ledger[\s\S]{0,300}?\.shift\(\)/.test(arc));
   ok("the workflow commits it on every pass, in the small tier",
     new RegExp(`SMALL="[^"]*web/data/${ROOM}/all\\.ndjson`).test(wf));
+  /* Inside the handler, and with the prose taken out first. This compared
+     positions in the whole FILE, which made it a test of where the words
+     appear rather than of what the code does — a comment that mentioned
+     _meta.json above the ledger read was enough to fail it while the handler
+     was completely unchanged. The property worth holding is the order of the
+     two reads, so measure that and nothing else. */
+  const apiBody = api.slice(api.indexOf("export default async function handler"))
+    .replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
   ok("and the endpoint reads it before it reads anything else",
-    api.indexOf("all.ndjson") > 0 && api.indexOf("all.ndjson") < api.indexOf("_meta.json"),
+    apiBody.indexOf("all.ndjson") > 0 &&
+    apiBody.indexOf("all.ndjson") < apiBody.indexOf("_meta.json"),
     "one small read instead of a scan of the shards");
   ok("with the day shards still there as a fallback",
     /source: "shards"/.test(api) && /_meta\.json/.test(api));

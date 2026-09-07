@@ -38,6 +38,14 @@ const json = (body, status = 200) =>
   });
 
 const DID_RE = /^did:key:z6Mk[1-9A-HJ-NP-Za-km-z]{44}$/;
+
+/** First 16 hex of SHA-256(did) — the network's own note-shard rule, and the
+ *  same one api/note.js reads with. Derived from the DID rather than taken
+ *  from the caller; see the note branch for what that was costing. */
+async function fingerprintOf(did) {
+  const hash = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(did));
+  return [...new Uint8Array(hash)].map((b) => b.toString(16).padStart(2, "0")).join("").slice(0, 16);
+}
 const SIG_RE = /^[A-Za-z0-9_-]{86}$/;      // 64 bytes, unpadded base64url
 const NONCE_RE = /^[0-9]{1,19}$/;
 const ROOM_RE = /^[a-z0-9][a-z0-9_-]{0,47}$/;
@@ -183,11 +191,31 @@ async function route(request) {
   }
 
   if (kind === "note") {
-    const { value, fingerprint } = payload;
-    if (!/^[0-9a-f]{16}$/.test(fingerprint ?? "")) return json({ error: "bad fingerprint" }, 400);
+    const { value } = payload;
     if (typeof value !== "string" || !value.trim() || value.length > MAX_NOTE) {
       return json({ error: `note must be 1-${MAX_NOTE} characters` }, 400);
     }
+    /* ── THE FINGERPRINT IS DERIVED, NOT ACCEPTED ─────────────────────────
+       It used to come from the request. `did` was validated at the top of
+       this function and then never used again in this branch, so the DID in
+       the payload was decorative: the write target was chosen entirely by a
+       caller-supplied `fingerprint`, and the mapping from a DID to its
+       fingerprint is public and deterministic. Anyone could send their own
+       valid-looking DID to pass the check and somebody else's fingerprint to
+       choose the victim — a targeted overwrite of any identity's note, over
+       a wildcard CORS header, cached hard by /api/note for ten minutes
+       afterwards.
+
+       Deriving it here makes the endpoint self-consistent: the note that gets
+       written is the note belonging to the DID the request names.
+
+       This does NOT make note writes authenticated. Technocore's note
+       namespace is world-writable by design — signed writes exist only for
+       room-owners and room-allow — so the same write can still be made
+       directly against the network by anyone. What this removes is THIS
+       site's convenient, CORS-open, IP-laundering primitive for doing it,
+       and the appearance of a binding that was not there. */
+    const fingerprint = await fingerprintOf(did);
     const path = `/kv/did-${fingerprint.slice(0, 2)}/${fingerprint.slice(2)}/set/${encodeURIComponent(value)}`;
     const out = await forward(path);
     return json({ ok: out.status === 200, ...out });
