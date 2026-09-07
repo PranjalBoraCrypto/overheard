@@ -761,6 +761,57 @@ h1{font-size:clamp(23px,2.4vw,31px);line-height:1.12;letter-spacing:-.028em;
 .pay em{display:block;font-style:normal;font-size:var(--t-micro);color:var(--faint);
   letter-spacing:.08em}
 
+/* ── PAGING THE BOARD ──────────────────────────────────────────────────────
+   TWO CONTROLS, NOT ONE SHRUNK. A mouse can hit a 30px numbered square
+   precisely, and jumping straight to page 4 beats pressing "more" three
+   times — so the desktop gets numbers. A thumb cannot, and a row of small
+   numbered targets at the bottom of a phone is the worst tap target on the
+   page — so the phone gets one full-width button and a list that grows.
+   Same `page` number underneath both; only the spending of it differs.
+
+   The count line is not decoration. It is the only thing that tells a reader
+   the board is COMPLETE rather than trimmed, which is exactly what the old
+   silent .slice(0,25) could not say. */
+.pager{margin-top:var(--s3);display:flex;align-items:center;justify-content:space-between;
+  gap:var(--s3);flex-wrap:wrap}
+.pgcount{font-family:var(--mono);font-size:var(--t-micro);color:var(--faint);
+  letter-spacing:.06em;text-transform:uppercase}
+.pgctl{display:flex;align-items:center;gap:6px;margin-left:auto}
+.pgnums{display:flex;align-items:center;gap:6px}
+.pgb{min-width:32px;height:32px;padding:0 8px;border-radius:9px;cursor:pointer;
+  border:1px solid var(--edge);background:var(--surf-b);color:var(--dim);
+  font-family:var(--mono);font-size:var(--t-micro);font-variant-numeric:tabular-nums;
+  transition:color .14s,border-color .14s,background .14s}
+.pgb.nav{font-size:15px;line-height:1}
+.pgb.on{color:var(--void);background:var(--blue);border-color:var(--blue);font-weight:600}
+.pgb[disabled]{opacity:.4;cursor:not-allowed}
+.pgb:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
+.pggap{color:var(--faint);font-family:var(--mono);font-size:var(--t-micro);padding:0 2px}
+@media (hover:hover){
+  .pgb:not([disabled]):not(.on):hover{color:var(--white);border-color:rgba(88,233,255,.34);
+    background:#08171d}
+}
+/* The phone control. Full width and 48px tall because it is pressed with a
+   thumb, at the bottom of a long list, one-handed. */
+.pgmore{display:none}
+@media (max-width:900px){
+  .pager{flex-direction:column;align-items:stretch;gap:10px}
+  .pgcount{text-align:center}
+  .pgctl{display:none}
+  .pgmore{display:block;width:100%;min-height:48px;border-radius:12px;cursor:pointer;
+    border:1px solid rgba(88,233,255,.28);background:var(--surf-b);color:var(--blue);
+    font:inherit;font-size:var(--t-small);font-weight:600}
+  .pgmore.ghost{color:var(--faint);border-color:var(--edge);font-weight:500}
+  .pgmore:active{background:#08171d}
+}
+/* WHERE YOU STAND IS NEVER OFF THE BOARD. When the visible window does not
+   contain the signed-in caller, their real row is pinned under it — this is
+   the join, so the pinned row cannot be misread as the next in sequence. */
+.pinsep{display:flex;align-items:center;gap:10px;margin-top:4px;
+  font-family:var(--mono);font-size:var(--t-micro);color:var(--faint);
+  letter-spacing:.09em;text-transform:uppercase}
+.pinsep::before,.pinsep::after{content:"";flex:1;height:1px;background:var(--edge)}
+
 .blank{padding:var(--s5) var(--s4);text-align:center;display:grid;gap:8px;justify-items:center;
   border:1px dashed var(--line);border-radius:14px}
 .blank b{color:var(--white);font-size:16px}
@@ -1423,6 +1474,10 @@ h1{font-size:clamp(23px,2.4vw,31px);line-height:1.12;letter-spacing:-.028em;
       <section class="card board">
         <div class="ch"><h2>Who has called it</h2><em id="boardk">biggest first</em></div>
         <div class="feed" id="rows"><div class="blank"><b>Reading the room…</b></div></div>
+        <!-- Built by paintPager, and empty until there is a board to page
+             through — a page that could not read the room must not draw
+             controls for a list that is not there. -->
+        <div class="pager" id="pager" hidden></div>
       </section>
 
       <!-- ══ WHERE THE QUESTION CAME FROM ═════════════════════════════════ -->
@@ -2044,11 +2099,92 @@ function paintBelt() {
   run.style.setProperty("--dur", `${Math.max(24, rows.length * 7)}s`);
 }
 
+/* ── HOW MUCH OF THE BOARD IS ON SCREEN ────────────────────────────────────
+   This was `.slice(0, 25)` and nothing else. At twenty-six callers the
+   twenty-sixth was simply not there: no page, no count, no way to reach them.
+   A board that stops silently is worse than a short one, because somebody
+   missing from it cannot tell whether they were cut off or refused — and on
+   a board whose whole claim is that anyone can check it, that is the one
+   failure it cannot afford.
+
+   The desktop and the phone spend the same `page` number differently; the
+   CSS above says why.
+
+   `page` lives out here rather than inside paintFeed because paintFeed is
+   not the only thing that runs it. This page does NOT poll — it reads once
+   at start — but load() runs again after your own call lands, and again on
+   every sign-in and sign-out, and each of those repaints the whole board. A
+   page number scoped to the repaint would drop somebody back to the first
+   page for signing in, which is the moment they are most likely to be
+   looking for their own row. */
+const PAGE = 10;
+let page = 0;
+let feedUnread = false;
+const narrow = matchMedia("(max-width:900px)");
+/* Re-render on the crossing itself: turning a phone sideways otherwise
+   leaves an accumulated mobile list sitting under desktop page buttons that
+   disagree with it. */
+narrow.addEventListener("change", () => { if (fold) paintFeed(feedUnread); });
+
+/** Which page buttons to draw: all of them up to seven, and after that the
+ *  ends, the current page and its neighbours, with a gap mark where numbers
+ *  were skipped — so the row is the same width at three pages and at ninety. */
+function pageList(cur, total) {
+  if (total <= 7) return [...Array(total).keys()];
+  const keep = [...new Set([0, 1, cur - 1, cur, cur + 1, total - 2, total - 1]
+    .filter((n) => n >= 0 && n < total))].sort((a, b) => a - b);
+  const out = [];
+  keep.forEach((n, i) => { if (i && n - keep[i - 1] > 1) out.push("gap"); out.push(n); });
+  return out;
+}
+
+/** 1st, 2nd, 3rd, 4th \u2014 including the teens, which are all "th". */
+const ordinal = (n) => {
+  const t = n % 100;
+  return n + (t >= 11 && t <= 13 ? "th" : ["th", "st", "nd", "rd"][n % 10] || "th");
+};
+
+/** One row of the board. `rank` is the position in the WHOLE list, never in
+ *  the visible slice — a paged board that restarts its numbering at 1 tells
+ *  the reader they are looking at the leaders when they are not. */
+function feedRow(r, rank, settled) {
+  const pick = r.both ? "b" : r.side === "yes" ? "y" : "n";
+  const word = r.both ? "Both" : r.side === "yes" ? "Yes" : "No";
+  const who = el("div", "who", shortDid(r.did));
+  if (ID && r.did === ID.did) who.append(el("span", "me", "you"));
+
+  /* BEFORE IT SETTLES the useful number is what the call pays if it is right;
+     after, it is what it actually made. Somebody on both sides has no single
+     multiple, and inventing one for them would be worse than a dash. */
+  let pay;
+  if (settled) {
+    const n = Math.round(r.pnl);
+    pay = el("div", `pay ${n > 0 ? "up" : n < 0 ? "down" : "na"}`,
+      `${n > 0 ? "+" : n < 0 ? "−" : ""}${group(Math.abs(n))}`);
+    pay.append(el("em", "", "profit"));
+  } else if (r.both) {
+    pay = el("div", "pay na", "—");
+  } else {
+    pay = el("div", `pay ${r.multiple >= 1.5 ? "up" : ""}`.trim(), `×${r.multiple.toFixed(2)}`);
+    pay.append(el("em", "", "if right"));
+  }
+
+  return el("div", `fr ${pick}`, [
+    el("div", "rk", String(rank + 1)),
+    who,
+    el("div", `stake ${pick}`, [el("b", "", `${group(r.put)} paper`), el("span", "", word)]),
+    pay,
+    el("div", "frside", word),
+  ]);
+}
+
 function paintFeed(unread) {
+  feedUnread = unread;
   const box = $("rows");
   const settled = Boolean(fold.settled);
   $("boardk").textContent = settled ? "best first" : "biggest first";
   if (!fold.standings.length) {
+    $("pager").hidden = true;
     box.replaceChildren(unread
       ? el("div", "blank", [
           el("b", "", "Could not read the room"),
@@ -2061,36 +2197,101 @@ function paintFeed(unread) {
         ]));
     return;
   }
-  box.replaceChildren(...fold.standings.slice(0, 25).map((r, i) => {
-    const pick = r.both ? "b" : r.side === "yes" ? "y" : "n";
-    const word = r.both ? "Both" : r.side === "yes" ? "Yes" : "No";
-    const who = el("div", "who", shortDid(r.did));
-    if (ID && r.did === ID.did) who.append(el("span", "me", "you"));
 
-    /* BEFORE IT SETTLES the useful number is what the call pays if it is right;
-       after, it is what it actually made. Somebody on both sides has no single
-       multiple, and inventing one for them would be worse than a dash. */
-    let pay;
-    if (settled) {
-      const n = Math.round(r.pnl);
-      pay = el("div", `pay ${n > 0 ? "up" : n < 0 ? "down" : "na"}`,
-        `${n > 0 ? "+" : n < 0 ? "−" : ""}${group(Math.abs(n))}`);
-      pay.append(el("em", "", "profit"));
-    } else if (r.both) {
-      pay = el("div", "pay na", "—");
+  const all = fold.standings;
+  const pages = Math.max(1, Math.ceil(all.length / PAGE));
+  /* The board is live: calls arrive while somebody is reading it, and a
+     settlement reorders the whole thing. Clamp rather than trust. */
+  page = Math.min(Math.max(0, page), pages - 1);
+
+  const phone = narrow.matches;
+  const from = phone ? 0 : page * PAGE;
+  const to = Math.min(all.length, (page + 1) * PAGE);
+
+  const kids = [];
+  for (let i = from; i < to; i++) kids.push(feedRow(all[i], i, settled));
+
+  /* YOUR OWN ROW IS NEVER OFF THE BOARD. Somebody who called is here to find
+     out where they stand, and making them page through strangers to do it is
+     the one thing this list exists to prevent. Their real rank travels with
+     them, so a pinned row can never read as a promotion. */
+  const mine = ID ? all.findIndex((r) => r.did === ID.did) : -1;
+  if (mine >= 0 && (mine < from || mine >= to)) {
+    /* THE RANK GOES IN THE LABEL, not only in the row. The phone layout
+       hides .rk to buy width for two columns, which is right for a sorted
+       list where position is implicit — but a row lifted out of that list
+       has no position left to read. Said here, it survives both designs. */
+    kids.push(el("div", "pinsep",
+      `your call \u00b7 ${ordinal(mine + 1)} of ${group(all.length)}`));
+    kids.push(feedRow(all[mine], mine, settled));
+  }
+  box.replaceChildren(...kids);
+  paintPager(all.length, pages, phone, to);
+}
+
+function paintPager(total, pages, phone, to) {
+  const pager = $("pager");
+  const people = `${group(total)} ${total === 1 ? "caller" : "callers"}`;
+  const jump = (n) => { page = n; paintFeed(feedUnread); };
+
+  /* ONE PAGE HOLDS EVERYBODY, and the count still shows. It is the line that
+     says the list is finished rather than trimmed, which matters most in
+     exactly the case where there are no controls to imply it. */
+  if (pages <= 1) {
+    pager.replaceChildren(el("span", "pgcount", people));
+    pager.hidden = false;
+    return;
+  }
+
+  if (phone) {
+    const left = total - to;
+    const kids = [el("span", "pgcount", `Showing ${group(to)} of ${people}`)];
+    if (left > 0) {
+      const more = el("button", "pgmore", `Show ${group(Math.min(PAGE, left))} more`);
+      more.type = "button";
+      more.addEventListener("click", () => jump(page + 1));
+      kids.push(more);
     } else {
-      pay = el("div", `pay ${r.multiple >= 1.5 ? "up" : ""}`.trim(), `×${r.multiple.toFixed(2)}`);
-      pay.append(el("em", "", "if right"));
+      /* At the end of a long list the only thing left to offer is the way
+         back, and a button that says so beats a dead control. */
+      const top = el("button", "pgmore ghost", "Back to the top of the board");
+      top.type = "button";
+      top.addEventListener("click", () => {
+        page = 0; paintFeed(feedUnread);
+        $("rows").scrollIntoView({ block: "start", behavior: "smooth" });
+      });
+      kids.push(top);
     }
+    pager.replaceChildren(...kids);
+    pager.hidden = false;
+    return;
+  }
 
-    return el("div", `fr ${pick}`, [
-      el("div", "rk", String(i + 1)),
-      who,
-      el("div", `stake ${pick}`, [el("b", "", `${group(r.put)} paper`), el("span", "", word)]),
-      pay,
-      el("div", "frside", word),
-    ]);
-  }));
+  const nums = el("div", "pgnums");
+  for (const n of pageList(page, pages)) {
+    if (n === "gap") { nums.append(el("span", "pggap", "…")); continue; }
+    const b = el("button", `pgb${n === page ? " on" : ""}`, String(n + 1));
+    b.type = "button";
+    b.setAttribute("aria-label", `Page ${n + 1} of ${pages}`);
+    if (n === page) b.setAttribute("aria-current", "page");
+    b.addEventListener("click", () => jump(n));
+    nums.append(b);
+  }
+  const step = (glyph, label, dest, live) => {
+    const b = el("button", "pgb nav", glyph);
+    b.type = "button"; b.disabled = !live;
+    b.setAttribute("aria-label", label);
+    b.addEventListener("click", () => { if (live) jump(dest); });
+    return b;
+  };
+  pager.replaceChildren(
+    el("span", "pgcount", people),
+    el("div", "pgctl", [
+      step("‹", "Previous page", page - 1, page > 0),
+      nums,
+      step("›", "Next page", page + 1, page < pages - 1),
+    ]));
+  pager.hidden = false;
 }
 
 function paintRules(unread) {
@@ -2529,9 +2730,11 @@ function lean() {
 /* ══ YOUR OWN CALLS ════════════════════════════════════════════════════════
    Five to a page, because five is what fits without the section becoming the
    page — and because somebody with forty calls wants the last few, not a
-   wall. The page number is held rather than reset on every repaint: the room
-   refreshes underneath this list every few seconds, and a list that jumped
-   back to page one each time would be unusable for the one person it is for. */
+   wall. The page number is held rather than reset on every repaint, for the
+   reason given above PAGE: this page does not poll, but load() runs again
+   after a call lands and on every session change, and each one repaints
+   here. (This comment used to say the room refreshes "every few seconds".
+   It does not — there is no timer on this page, and there never was.) */
 const PER = 5;
 let histPage = 0;
 
