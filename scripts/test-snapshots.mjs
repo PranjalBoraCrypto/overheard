@@ -128,15 +128,39 @@ console.log("\n=== C. a good rebuild replaces the set completely");
   const D = build({ rooms: ["lobby", "technocore"], withData: ["lobby", "technocore"] });
   run(ROOMS, D);
   ok("both rooms are there to begin with", String(snapshots(D)) === "lobby.json,technocore.json");
-  /* A room that has left the city must leave the snapshots with it, or the
-     directory grows for ever and the site keeps serving a room nobody can
-     walk into. A build that only ADDED files would never notice. */
+  /* A room that is gone must leave the snapshots with it, or the directory
+     grows for ever and the site serves rooms nobody can walk into. A build
+     that only ADDED files would never notice.
+
+     "Gone" used to mean "not in the city". It cannot mean that any more, and
+     the reason is the bug in section F: the city's list comes from the
+     roster, the roster stopped listing lobby while the collector went on
+     archiving it, and a rule that pruned on the roster alone would now delete
+     the snapshot of a room that is still being written to — which is the one
+     room the fallback most needs.
+
+     So gone means gone from BOTH: no longer a room the city draws, and no
+     longer a room the archive holds. That still prunes, and the set stays
+     bounded — by the collector's own room list rather than by a roster that
+     churns through hundreds of names. */
   fs.writeFileSync(path.join(D, "city-snapshot.json"), JSON.stringify({
     landmarks: [{ room: "lobby", present: true }], named: [],
   }));
+  fs.rmSync(path.join(D, "technocore"), { recursive: true, force: true });
   run(ROOMS, D);
-  ok("a room that left the city leaves the snapshots too",
+  ok("a room gone from the city AND the archive leaves the snapshots too",
     String(snapshots(D)) === "lobby.json", String(snapshots(D)));
+
+  /* And the half that matters: still archived, so still served. */
+  const K = build({ rooms: ["lobby", "technocore"], withData: ["lobby", "technocore"] });
+  run(ROOMS, K);
+  fs.writeFileSync(path.join(K, "city-snapshot.json"), JSON.stringify({
+    landmarks: [{ room: "lobby", present: true }], named: [],
+  }));
+  run(ROOMS, K);
+  ok("but one the roster forgot while the archive kept it is still served",
+    String(snapshots(K)) === "lobby.json,technocore.json", String(snapshots(K)));
+  fs.rmSync(K, { recursive: true, force: true });
   fs.rmSync(D, { recursive: true, force: true });
 }
 
@@ -191,6 +215,73 @@ console.log("\n=== E. git never sees the half-built set");
     st.split("\n").filter(Boolean).join(" | ") || "(nothing)");
   ok("but does see the real one", st.includes("room-snapshots/lobby.json"));
   fs.rmSync(W, { recursive: true, force: true });
+}
+
+console.log("\n=== F. the room list is what the ARCHIVE has, not what the roster lists");
+{
+  /* THE BUG THIS EXISTS FOR. The list came from the city snapshot, which comes
+     from the roster — Technocore's listing of rooms it considers current. On
+     7 September that roster held 120 rooms and not one of the six landmarks:
+     no lobby, no technocore, no flop. The names on the network had moved on
+     while the collector went on archiving lobby, which was still there and
+     still being written to.
+
+     So every room the builder COULD serve was missing from the list it was
+     given, and every room on the list had nothing to build from. It wrote
+     zero, the swap correctly refused to replace a good set with an empty one,
+     and web/data/room-snapshots/lobby.json stayed stamped 30 August for over
+     a week while exiting zero the whole way. */
+  const D = build({ rooms: [], withData: ["lobby", "overheard-calls"] });
+  const r = run(ROOMS, D);
+  ok("a room the archive holds gets a snapshot even when the roster forgot it",
+    String(snapshots(D)) === "lobby.json,overheard-calls.json", String(snapshots(D)));
+  ok("and the rebuild is not reported as having written nothing",
+    !/nothing to write/.test(r.out), r.out.trim().split("\n").pop());
+
+  /* The other half: the city's rooms are still honoured. A room in both lists
+     is a room we can serve, and this must not have quietly become "archive
+     only". */
+  const B = build({ rooms: ["lobby"], withData: ["lobby"] });
+  run(ROOMS, B);
+  ok("a room in both lists is still served", String(snapshots(B)) === "lobby.json");
+
+  /* And a directory that is not a room does not become one. web/data holds
+     room-snapshots itself, and room-snapshots.tmp mid-build. */
+  const C = build({ rooms: [], withData: ["lobby"] });
+  fs.mkdirSync(path.join(C, "room-snapshots.tmp"), { recursive: true });
+  fs.mkdirSync(path.join(C, "NotARoom"), { recursive: true });
+  run(ROOMS, C);
+  ok("and nothing that is not a room is mistaken for one",
+    String(snapshots(C)) === "lobby.json", String(snapshots(C)));
+
+  for (const d of [D, B, C]) fs.rmSync(d, { recursive: true, force: true });
+}
+
+console.log("\n=== G. a rebuild that writes nothing says so where it can be read");
+{
+  /* It could not be. Both scripts reported trouble to stdout/stderr, which is
+     the run log, and downloading that needs admin rights on the repository —
+     403 from every machine that tried. The run said success, the annotations
+     said "0 failed", and the snapshots quietly stopped being new. Annotations
+     are the public channel, so the archiver now uses them. */
+  const arc = fs.readFileSync(path.join(ROOT, "scripts", "archive.mjs"), "utf8");
+  const block = arc.slice(arc.indexOf("the cold-start snapshots"));
+
+  ok("a failed rebuild becomes an annotation, not a log line",
+    /console\.log\(`::warning title=archive::snapshot \$\{s\} did not rebuild/.test(block));
+  ok("and so does a rebuild that wrote nothing",
+    /nothing to write/.test(block) && /::warning title=archive::\$\{s\} wrote nothing/.test(block));
+  /* Actions ignores an indented workflow command. The child's own output is
+     deliberately indented so it can never be mistaken for one; the
+     annotations must not be. */
+  ok("the annotations start at column zero",
+    !/\s+console\.log\(`\s+::warning/.test(block) && !/`  ::warning/.test(block));
+  /* execFileSync returns STDOUT ONLY, and "nothing to write" is a warning.
+     Testing that string against the wrong stream is how this stays broken. */
+  ok("and both streams are read, since the sentence is on stderr",
+    /spawnSync/.test(block) && /r\.stdout \?\? ""/.test(block) && /r\.stderr \?\? ""/.test(block));
+  ok("a non-zero exit is noticed without needing a throw",
+    /r\.error \|\| r\.status !== 0/.test(block));
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);

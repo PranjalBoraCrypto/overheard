@@ -2122,14 +2122,43 @@ async function main() {
      run. The archive is the record; the snapshots are a convenience derived
      from it. Yesterday's snapshot beside today's archive is a normal state
      that the page states honestly. A lost archive pass is not recoverable. */
-  const { execFileSync } = await import("node:child_process");
+  /* ── AND SAID OUT LOUD, IN THE ONE CHANNEL ANYBODY CAN READ ─────────────
+     This warned on failure and said nothing at all on the worse outcome:
+     succeeding while writing nothing. Both went to stdout, and stdout here is
+     the run log — which needs admin rights to download, and which returned
+     403 from every machine that tried. So the fact needed to explain a week
+     of stale snapshots was written to the one place nobody could look, while
+     the run reported success and the annotations said "0 failed".
+
+     Annotations are the public channel; that is why the window summary uses
+     them. These use them too. They must start at column 0 — Actions does not
+     read a workflow command that has been indented, and the child's own
+     output below stays indented precisely so it cannot be mistaken for one. */
+  /* spawnSync, not execFileSync, for one reason that matters: execFileSync
+     returns STDOUT ONLY, and both scripts report trouble on stderr. The
+     sentence this needs to notice — "nothing to write" — would never have
+     been in the string it was tested against. */
+  const { spawnSync } = await import("node:child_process");
   for (const s of ["make-city-snapshot.mjs", "make-room-snapshots.mjs"]) {
-    try {
-      const out = execFileSync(process.execPath, [fileURLToPath(new URL(s, import.meta.url))],
-        { encoding: "utf8", timeout: 180000 });
-      process.stdout.write("  " + out);
-    } catch (err) {
-      console.warn(`  snapshot ${s} did not rebuild (${String(err.message).split("\n")[0]}) — the previous one stands`);
+    const r = spawnSync(process.execPath, [fileURLToPath(new URL(s, import.meta.url))],
+      { encoding: "utf8", timeout: 180000 });
+    const said = `${r.stdout ?? ""}${r.stderr ?? ""}`;
+    if (said.trim()) process.stdout.write(said.trim().split("\n").map((l) => "  " + l).join("\n") + "\n");
+
+    if (r.error || r.status !== 0) {
+      const why = r.error ? String(r.error.message).split("\n")[0]
+        : `exit ${r.status}${r.signal ? ` (${r.signal})` : ""}`;
+      console.log(`::warning title=archive::snapshot ${s} did not rebuild (${why})`
+        + ` — the previous one stands`);
+      continue;
+    }
+    /* A rebuild that wrote nothing is not a rebuild. It is the failure mode
+       that hid for a week: `made` came out 0, the swap correctly refused to
+       replace a good set with an empty one, and the previous set stood —
+       exiting zero the whole way. Silence is what made it invisible. */
+    if (/nothing to write/.test(said)) {
+      console.log(`::warning title=archive::${s} wrote nothing — the previous set stands,`
+        + ` and will keep standing until somebody looks at why`);
     }
   }
 }

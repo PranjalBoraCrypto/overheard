@@ -47,6 +47,12 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 const DATA = path.resolve(process.env.OUT_DIR ?? path.join(HERE, "..", "web", "data"));
 const OUT = path.join(DATA, "room-snapshots");
 
+/* A room name, as Technocore spells them and as the archiver names the
+   directory it keeps one in. Applied when reading the directory listing,
+   because "every folder in web/data" would also sweep up room-snapshots.tmp
+   and anything else that happens to live there. */
+const ROOM_OK = /^[a-z0-9][a-z0-9_-]{0,63}$/;
+
 /** How much of a room's tail is worth shipping. Enough to fill a feed and
  *  populate a plaza with the agents who were actually talking; not so much
  *  that a hundred and twenty of these become a download. */
@@ -59,9 +65,39 @@ if (!fs.existsSync(cityPath)) {
 }
 const city = JSON.parse(fs.readFileSync(cityPath, "utf8"));
 
-/* Exactly the rooms the snapshot city draws as buildings. A snapshot for a
-   room with no door to walk through would never be read. */
-const rooms = [...city.landmarks.filter((l) => l.present), ...city.named].map((r) => r.room);
+/* ── THE ROOM LIST CAME FROM THE WRONG PLACE, AND IT COST A WEEK ───────────
+   This was exactly the rooms the snapshot city draws as buildings — the
+   reasoning being that a snapshot for a room with no door to walk through
+   would never be read. Sound, and it quietly stopped being true.
+
+   The city's list comes from the roster, which is Technocore's listing of
+   rooms it considers current. The ARCHIVE's list is the seven rooms the
+   collector follows. Those two were the same set once. On 7 September the
+   roster held 120 rooms and NOT ONE of the six landmarks: no lobby, no
+   technocore, no flop. The names on the network had moved on — meta,
+   consensus_layer, tee_attestation, gpu_mempool — while the collector went
+   on faithfully archiving lobby, which is still there and still being
+   written (137,204 messages, days through today).
+
+   So every room this script could build a snapshot for was absent from the
+   list it was given, and every room on the list had no archive to build
+   from. `made` came out 0, the swap below correctly refused to replace a
+   good set with an empty one, and the previous set — stamped 30 August —
+   stood, and stood, and stood. Nothing failed. Nothing was logged as wrong.
+   The site's offline fallback for every room simply stopped being new, and
+   the only visible symptom was a date on a page.
+
+   The list that matters is what the archive HAS. That is the set for which a
+   snapshot is both possible and useful, it is by definition the set the
+   fallback needs, and it cannot drift away from the collector because it IS
+   the collector's output. The city's rooms are still included — a room in
+   both is a room we can serve — but they are no longer the whole of it. */
+const fromCity = [...city.landmarks.filter((l) => l.present), ...city.named].map((r) => r.room);
+const archived = fs.readdirSync(DATA, { withFileTypes: true })
+  .filter((e) => e.isDirectory() && ROOM_OK.test(e.name)
+    && fs.existsSync(path.join(DATA, e.name, "_meta.json")))
+  .map((e) => e.name);
+const rooms = [...new Set([...fromCity, ...archived])];
 
 /* ── BUILT BESIDE, THEN SWAPPED IN ─────────────────────────────────────────
    This used to empty room-snapshots/ and then refill it. The archiver calls
