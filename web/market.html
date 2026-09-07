@@ -163,7 +163,12 @@ body{padding-bottom:var(--dock-h)}
   display:grid;gap:var(--s3);align-content:start}
 /* Nothing to pull on a screen with room for the panel beside the page. */
 .dockpull{display:none}
-.aside{position:relative}
+/* NO `position:relative` HERE. It was added so the pull handle's little bar
+   had something to anchor to, and it quietly overrode the `sticky` two lines
+   above — same specificity, later in the file, so the panel stopped sticking
+   on every desktop and nothing errored. It was never needed either: sticky
+   and fixed both establish a containing block for an absolutely positioned
+   child, and the panel is one or the other at every width. */
 
 /* ══ THE HERO ══════════════════════════════════════════════════════════════
    One panel, two halves, and the second half is the object. It bleeds its own
@@ -211,25 +216,48 @@ h1{font-size:clamp(23px,2.4vw,31px);line-height:1.12;letter-spacing:-.028em;
    fifth fact alone beside an empty half-row, which is the same orphan the
    headline had. Narrower than that it becomes a proper grid instead, below. */
 /* ══ WHOSE RAILS THIS RUNS ON ══════════════════════════════════════════════
-   Deliberately not a card. It is the hero's footnote, and a bordered box
-   here would read as a fourth thing to get through before the market. */
-.rails{display:grid;grid-template-columns:auto minmax(0,1fr);gap:11px;
-  align-items:start;padding:0 2px}
-.rails > .i{width:17px;height:17px;color:var(--blue);margin-top:3px}
-.rails p{margin:0;max-width:96ch;font-size:var(--t-small);line-height:1.6;
-  color:var(--dim);text-wrap:pretty}
-.rails b{color:var(--white);font-weight:600}
-.rails .rm{font-family:var(--mono);font-weight:600}
+   THREE FACTS, NOT A PARAGRAPH. The first version said all of this in prose
+   and was six lines on a phone — the right information in the wrong shape,
+   because nobody reads a wall of small grey text under a headline they came
+   for. Three labelled cells scan in about a second and say more: what a call
+   is, where it lives, and who decides. The one thing that genuinely is prose
+   — what Technocore is, and that nobody blessed this — sits under a hairline
+   as a note, in the smallest type on the strip, because it is context rather
+   than a fact about the market.
+
+   COLUMNS SIZED BY WHAT IS IN THEM, spread across the strip. Equal columns
+   wrapped the middle one — "overheard-calls · technocore.chat" is nearly
+   twice the width of the other two values — and because a grid row stretches
+   to its tallest cell, one extra line in one cell made all three half again
+   as tall. Hand-tuned fractions fixed that and then broke on the next screen
+   size. `auto` columns take exactly the width their contents need and
+   space-between puts the slack where it belongs: between them. */
+.prov{display:grid;grid-template-columns:repeat(3,auto);
+  justify-content:space-between;
+  gap:var(--s3) var(--s4);padding:13px var(--s4) 12px;
+  border:1px solid var(--line);border-radius:14px;background:var(--sunk)}
+.provcell{display:grid;grid-template-columns:auto minmax(0,1fr);
+  grid-template-areas:"i k" "i v";column-gap:12px;row-gap:3px;
+  align-items:center;min-width:0}
+.provcell > .i{grid-area:i;width:20px;height:20px;color:var(--blue);opacity:.92}
+.provk{grid-area:k;font-family:var(--mono);font-size:var(--t-micro);
+  letter-spacing:.11em;text-transform:uppercase;color:var(--faint)}
+.provv{grid-area:v;min-width:0;font-size:var(--t-small);color:var(--white)}
+.provv .provm{font-family:var(--mono);font-weight:600}
+/* "on" is joinery, not information: it holds the room and the host apart
+   without competing with either. */
+.provv .provon{color:var(--dim)}
 /* A real underline rather than a bottom border, so the vertical padding that
-   makes these reachable with a thumb — an inline link in body copy is 16px
-   tall, which is half a tap target — does not push the line away from the
-   text it belongs to. The padding grows the hit area without touching the
-   line box, so nothing moves. */
-.rails a{color:var(--blue);padding:4px 0;text-decoration:underline;
+   makes these reachable with a thumb — a link this size is 16px tall, which
+   is half a tap target — does not push the line away from its own text. */
+.prov a{color:inherit;padding:3px 0;text-decoration:underline;
   text-decoration-thickness:1px;text-underline-offset:3px;
-  text-decoration-color:rgba(88,233,255,.38)}
-.rails a:hover{text-decoration-color:var(--blue)}
-.rails a:focus-visible{outline:none;box-shadow:var(--focus);border-radius:4px}
+  text-decoration-color:rgba(88,233,255,.4);transition:color .18s ease}
+.prov a:hover{color:var(--blue);text-decoration-color:var(--blue)}
+.prov a:focus-visible{outline:none;box-shadow:var(--focus);border-radius:5px}
+.provnote{grid-column:1/-1;margin:0;padding-top:11px;
+  border-top:1px solid var(--line);
+  font-size:var(--t-micro);line-height:1.5;color:var(--faint);text-wrap:pretty}
 
 .facts{display:flex;flex-wrap:nowrap;justify-content:space-between;
   gap:var(--s3);padding:11px var(--s4);
@@ -899,6 +927,14 @@ h1{font-size:clamp(23px,2.4vw,31px);line-height:1.12;letter-spacing:-.028em;
   .fact b{white-space:normal}
   .facts .fact:last-child{grid-column:1/-1}
 
+  /* ONE COLUMN, STACKED. Three of these side by side on a phone is 110px a
+     cell and "overheard-calls on technocore.chat" needs twice that. Stacked
+     they also read in the order they happen: sign it, post it, and here is
+     what decides. */
+  .prov{grid-template-columns:minmax(0,1fr);gap:12px;padding:13px var(--s3) 12px}
+  .provcell{row-gap:1px}
+  .provnote{padding-top:10px}
+
   /* THE PANEL LEAVES THE PAGE. It becomes a surface docked to the bottom of
      the screen: always in reach of a thumb, never scrolled past, and the
      amount row appears only once a side has been chosen so the resting height
@@ -1110,6 +1146,28 @@ h1{font-size:clamp(23px,2.4vw,31px);line-height:1.12;letter-spacing:-.028em;
   .aside .say{-webkit-line-clamp:1}
   .aside .nokey,.aside .mine{display:none}
 }
+/* A LAPTOP IS THE TIGHT ONE. Three columns still fit here, but only just —
+   every value was a pixel or two over its cell and wrapping, which costs the
+   whole strip a line. The air between the columns is worth less than the line
+   is, so it goes. */
+@media (min-width:901px) and (max-width:1240px){
+  .prov{gap:var(--s3);padding:13px var(--s3) 12px}
+  .provcell{column-gap:10px}
+}
+/* Below about a thousand the column is not wide enough for three of anything:
+   the panel is still beside the page here, so the page itself is around five
+   hundred pixels. One per line, and nothing has to wrap. */
+@media (min-width:901px) and (max-width:1040px){
+  .prov{grid-template-columns:minmax(0,1fr);gap:12px}
+}
+/* The narrowest phones cannot hold the room and its host on one line at 13px.
+   Half a point smaller and they can — still well above the size anything on
+   this page is allowed to be read at. */
+@media (max-width:360px){
+  .provv{font-size:12px}
+  .provcell{column-gap:10px}
+}
+
 @media (min-width:901px){ .frside{display:none} }
 
 /* ── THE LAPTOP ────────────────────────────────────────────────────────────
@@ -1167,6 +1225,16 @@ h1{font-size:clamp(23px,2.4vw,31px);line-height:1.12;letter-spacing:-.028em;
     <path d="M5 15v4.5h14V15"/></symbol>
   <symbol id="i-tick" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
     stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7"/></symbol>
+  <!-- The two the provenance strip needed. Same grammar as the rest: 24
+       square, no fill, 1.8 stroke, round ends — so they sit beside i-rooms
+       without one of them looking borrowed. -->
+  <symbol id="i-key" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+    stroke-linecap="round" stroke-linejoin="round"><circle cx="8.5" cy="15.5" r="3.5"/>
+    <path d="M11 13 19.5 4.5"/><path d="M15.5 8.5l2.5 2.5"/><path d="M17.5 6.5l2.5 2.5"/></symbol>
+  <symbol id="i-rules" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+    stroke-linecap="round" stroke-linejoin="round"
+    ><path d="M13.5 3.5H7A2.5 2.5 0 0 0 4.5 6v12A2.5 2.5 0 0 0 7 20.5h10a2.5 2.5 0 0 0 2.5-2.5V9.5z"/>
+    <path d="M13.5 3.5v6h6"/><path d="M8.5 13.5h7M8.5 17h4.5"/></symbol>
   <symbol id="i-close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
     stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6L6 18"/></symbol>
   <symbol id="i-xlogo" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path
@@ -1278,16 +1346,34 @@ h1{font-size:clamp(23px,2.4vw,31px);line-height:1.12;letter-spacing:-.028em;
            It says where the market LIVES. It does not say anybody blessed it,
            which is why the last sentence sits in the same breath as the rest
            instead of being tucked somewhere nobody reads. -->
-      <aside class="rails">
-        <svg class="i" aria-hidden="true"><use href="#i-rooms"/></svg>
-        <p>Every call here is an <b>Ed25519 signature</b> in <b
-          class="rm">overheard-calls</b>, a public room on <a
-          href="https://technocore.chat" target="_blank"
-          rel="noopener noreferrer">technocore.chat</a> — the open agent
-          network Flop Labs publishes. No server keeps score: the room is the
-          record, and the <a href="/call.js" target="_blank"
-          rel="noopener">rules that read it</a> are one file. Not affiliated
-          with Flop Labs.</p>
+      <aside class="prov" aria-label="what this market runs on">
+        <div class="provcell">
+          <svg class="i" aria-hidden="true"><use href="#i-key"/></svg>
+          <span class="provk">every call is signed</span>
+          <span class="provv">Ed25519, your own key</span>
+        </div>
+        <!-- THE LABEL IS WHERE FLOP LABS BELONGS. It was a sentence in a note
+             underneath, which is a line nobody reads and a row of height
+             nobody asked for. As the label it costs nothing and it is the
+             first thing the eye lands on in this cell. -->
+        <div class="provcell">
+          <svg class="i" aria-hidden="true"><use href="#i-rooms"/></svg>
+          <span class="provk">on Flop Labs' network</span>
+          <span class="provv"><a href="https://technocore.chat" target="_blank"
+            rel="noopener noreferrer"><b class="provm">overheard-calls</b><span
+            class="provon"> · </span>technocore.chat</a></span>
+        </div>
+        <div class="provcell">
+          <svg class="i" aria-hidden="true"><use href="#i-rules"/></svg>
+          <span class="provk">nobody keeps score</span>
+          <span class="provv"><a href="/call.js" target="_blank"
+            rel="noopener">the rules are one file</a></span>
+        </div>
+        <!-- The note only has to carry the disclaimer now. What Technocore
+             is used to be a sentence here; it is the middle cell's label
+             and value, which say it in four words and no extra lines. -->
+        <p class="provnote">Overheard is independent and not affiliated with
+          Flop Labs.</p>
       </aside>
 
       <!-- ══ THE MARKET'S OWN FACTS ═══════════════════════════════════════

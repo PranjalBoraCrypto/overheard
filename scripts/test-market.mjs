@@ -273,6 +273,31 @@ console.log("\n=== L. the page, as text");
      one layout that shrinks. */
   ok("there is a phone layout at all", /@media \(max-width:900px\)/.test(page));
   ok("the panel is sticky on a wide screen", /\.aside\{[^}]*position:sticky/.test(page));
+  /* AND NOTHING LATER TAKES IT BACK. A `.aside{position:relative}` added two
+     lines below for an unrelated reason — same selector, same specificity,
+     later in the file — turned the sticky off on every desktop, and the rule
+     above still passed because the declaration was right there in the file.
+     What matters is which one wins, so this reads the last word rather than
+     the first. Only the unnested rules: the phone deliberately says fixed. */
+  {
+    const css = page.slice(page.indexOf("<style"), page.indexOf("</style>"));
+    const said = [];
+    let depth = 0;
+    for (let i = 0; i < css.length; i++) {
+      if (css[i] === "{") {
+        /* A rule opening at depth 0 is unnested; anything deeper is inside an
+           @media and is allowed to say something else. */
+        if (depth === 0 && /\.aside\s*$/.test(css.slice(Math.max(0, i - 40), i))) {
+          const body = css.slice(i + 1, css.indexOf("}", i));
+          const p = /position:([a-z-]+)/.exec(body);
+          if (p) said.push(p[1]);
+        }
+        depth++;
+      } else if (css[i] === "}") depth--;
+    }
+    ok("and nothing further down the file quietly unsticks it",
+      said.length > 0 && said[said.length - 1] === "sticky", said.join(" then "));
+  }
   /* On a phone it stops being a column and becomes a surface docked to the
      bottom edge: always under the thumb, never scrolled past. */
   ok("and on a narrow one it docks to the bottom edge instead",
@@ -929,16 +954,26 @@ console.log("\n=== W. whose rails this runs on");
   ok("the room has a name to be named", ROOM.length > 3, ROOM);
 
   /* ── on the page, right under the hero ── */
-  const rail = page.slice(page.indexOf('<aside class="rails">'),
-                          page.indexOf("</aside>", page.indexOf('<aside class="rails">')));
+  const rail = page.slice(page.indexOf('<aside class="prov"'),
+                          page.indexOf("</aside>", page.indexOf('<aside class="prov"')));
   ok("the page says what is holding the market up", rail.length > 200);
+  /* THREE LABELLED FACTS, NOT A PARAGRAPH. The first version said all of it
+     in prose and was six lines of small grey text on a phone — the right
+     information in a shape nobody reads under a headline they came for. */
+  ok("it is scannable rather than a wall of text",
+    (rail.match(/class="provcell"/g) ?? []).length === 3 &&
+    (rail.match(/class="provk"/g) ?? []).length === 3);
   ok("it names the network, and links somewhere you can go",
     /technocore\.chat/.test(rail) && /href="https:\/\/technocore\.chat"/.test(rail));
-  ok("it names Flop Labs as who publishes that network, not who blessed this",
-    /network Flop Labs publishes/.test(rail) && /[Nn]ot affiliated\s+with Flop Labs/.test(rail));
+  /* Flop Labs belongs in the label, where it is the first thing the eye
+     lands on and costs no extra line. */
+  ok("it says whose network that is",
+    /<span class="provk">on Flop Labs' network<\/span>/.test(rail));
+  ok("and still says nobody blessed this",
+    /independent and not affiliated with\s+Flop Labs/.test(rail));
   ok("it names the exact room the market writes to",
     rail.includes(ROOM), ROOM);
-  ok("and says what a call actually is", /Ed25519 signature/.test(rail));
+  ok("and says what a call actually is", /Ed25519/.test(rail));
   /* The rules being readable is the whole claim, so the link has to reach a
      file the site actually serves rather than a repo that may be private. */
   ok("the rules it points at are a file this site serves",
@@ -946,12 +981,27 @@ console.log("\n=== W. whose rails this runs on");
   /* Under the hero, above the facts: it answers "what is this" before
      "how big is it". */
   ok("it sits directly under the hero",
-    page.indexOf("</header>") < page.indexOf('<aside class="rails">') &&
-    page.indexOf('<aside class="rails">') < page.indexOf('<div class="facts">'));
-  /* A caption, not a fourth box to get through. */
-  ok("and reads as the hero's footnote rather than another card",
-    !/<aside class="rails">/.test(page.replace(/<aside class="rails">/, "")) &&
-    !/\.rails\{[^}]*border:1px/.test(page));
+    page.indexOf("</header>") < page.indexOf('<aside class="prov"') &&
+    page.indexOf('<aside class="prov"') < page.indexOf('<div class="facts">'));
+  /* Its own icons, in the sprite's own grammar, rather than one glyph used
+     three times or a borrowed set at the wrong stroke weight. */
+  for (const i of ["i-key", "i-rules"])
+    ok(`it draws its own ${i.slice(2)} icon in the page's hand`,
+      new RegExp(`<symbol id="${i}"[^>]*stroke-width="1\\.8"`).test(page) &&
+      rail.includes(`#${i}`));
+  /* A CLASS NAME THAT ALREADY EXISTS IS A CLASS NAME THAT ALREADY LOST.
+     `.rk` was taken by the belt's frame rows, which right-align — so every
+     label on this strip came out right-aligned and nothing errored. */
+  {
+    const mine = new Set([...rail.matchAll(/class="([^"]+)"/g)]
+      .flatMap((m) => m[1].split(/\s+/)).filter(Boolean));
+    ok("every class on the strip is one it made up for itself",
+      [...mine].every((c) => /^prov$|^provcell$|^provk$|^provv$|^provm$|^provon$|^provnote$|^i$/.test(c)),
+      [...mine].join(" "));
+    for (const c of ["rk", "rv", "rm", "rail", "rails", "on"])
+      ok(`and it does not reuse .${c}, which this page already spends`,
+        !mine.has(c), c);
+  }
 
   /* ── on the card, which travels furthest from the page ── */
   ok("the card names the room and the network",
