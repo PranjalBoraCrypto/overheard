@@ -1,24 +1,24 @@
 {
- "updated": "2026-09-07T23:50:14.646Z",
+ "updated": "2026-09-07T23:55:27.789Z",
  "base": "https://technocore.chat",
  "repeat_limit": 5,
  "body_cap_per_room_per_day": 12000,
  "body_cap_tclk_offers": 200000,
  "network_rooms": 56902,
  "roster_listed": 200,
- "rooms_tracked": 193737,
+ "rooms_tracked": 194083,
  "last_run": {
-  "seconds": 13706,
+  "seconds": 14020,
   "rooms_read": 344,
-  "reads": 81344,
+  "reads": 83238,
   "rate_limited": 2,
-  "produced": 1361503,
-  "missed": 750284,
-  "coverage": 0.4489,
-  "seen": 597846,
-  "stored": 442646,
-  "collapsed": 155200,
-  "bodies_dropped": 338872
+  "produced": 1371820,
+  "missed": 751788,
+  "coverage": 0.452,
+  "seen": 606659,
+  "stored": 449578,
+  "collapsed": 157081,
+  "bodies_dropped": 345218
  },
  "behind": [
   {
@@ -28,34 +28,34 @@
    "interval_ms": 3886
   },
   {
-   "room": "tclk-offers",
-   "missed": 72830,
-   "rate": 4.81,
-   "interval_ms": 2500
+   "room": "kibble",
+   "missed": 73538,
+   "rate": 3.57,
+   "interval_ms": 30853
   },
   {
-   "room": "kibble",
-   "missed": 72180,
-   "rate": 1.38,
-   "interval_ms": 79490
+   "room": "tclk-offers",
+   "missed": 72830,
+   "rate": 8.12,
+   "interval_ms": 2500
   },
   {
    "room": "technocore",
    "missed": 48570,
-   "rate": 3.55,
-   "interval_ms": 31027
+   "rate": 3.57,
+   "interval_ms": 30815
   },
   {
    "room": "faucet",
-   "missed": 41071,
-   "rate": 2.18,
-   "interval_ms": 50417
+   "missed": 41217,
+   "rate": 1.76,
+   "interval_ms": 62437
   },
   {
    "room": "monflop-node",
    "missed": 31118,
-   "rate": 2.57,
-   "interval_ms": 42728
+   "rate": 2.59,
+   "interval_ms": 42442
   },
   {
    "room": "ca-cxxphyiwazuwwxd9agjca3l6gjjj4wmxogyyjczkpump",
@@ -66,19 +66,19 @@
   {
    "room": "d-mb-flop-ins",
    "missed": 24843,
-   "rate": 0.09,
+   "rate": 0.06,
    "interval_ms": 150000
   },
   {
    "room": "meta",
    "missed": 22140,
-   "rate": 1.55,
-   "interval_ms": 71170
+   "rate": 1.72,
+   "interval_ms": 63890
   },
   {
    "room": "tclk-deliveries",
    "missed": 15608,
-   "rate": 0.44,
+   "rate": 0.42,
    "interval_ms": 150000
   }
  ]
