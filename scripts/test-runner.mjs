@@ -26,7 +26,7 @@ import {
   plan, refusals, framesFrom, ourDeals, wake, settle, annotate, ourArchive, loop,
 } from "./runner.mjs";
 import { secretFor, recoverSecret, minterFor } from "./secret.mjs";
-import { RAIL, RAILS, RAILS_WE_TAKE, IS_REHEARSAL, LOCK_VERIFIERS } from "./rail.mjs";
+import { RAIL, RAILS, RAILS_WE_TAKE, IS_REHEARSAL, LOCK_VERIFIERS, ASSET } from "./rail.mjs";
 import { canon, offerId, lintOffer, readFrame, runDeal, checkReveal, contractId, dealRoom }
   from "../web/tclk.js";
 import { CAN_DO } from "./work.mjs";
@@ -211,7 +211,10 @@ console.log("\n=== D. the plan");
   /* Terms. Each of these is money or a promise we could not keep. */
   const cases = [
     ["underpaid",        { amount: "1" },                       /priced at/],
-    ["wrong asset",      { asset: "DOGE" },                     /not FLOP/],
+    /* The message stopped naming FLOP when the asset started following the
+       rail — see ASSET in rail.mjs. What has to hold is that a currency this
+       shop cannot settle is refused and says so, not which one it names. */
+    ["wrong asset",      { asset: "DOGE" },                     /is not one this shop settles in/],
     ["a lock we cannot open", { lock: "point" },                /not one we can open/],
     ["no rail in common", { rails: ["lightning"] },             /no rail in common/],
     ["already expired",  { expiresMs: NOW - 1 },                /expired/],
@@ -223,6 +226,23 @@ console.log("\n=== D. the plan");
     const why = refuseTake({ body: theirOffer(BUILT, over) }, NOW);
     ok(`refused: ${name}`, why.some((w) => re.test(w)), why.join("; ") || "TAKEN");
   }
+
+  /* ── AND THE TRANSITION, WHICH IS THE HALF THAT COSTS SOMEBODY A DEAL ───
+     The shop stopped pricing in FLOP because the paper rail cannot move it.
+     But offers denominated in FLOP are on the board NOW, placed by strangers
+     who are waiting on them, and a check that simply swapped one literal for
+     another would refuse every one of them silently. Both are taken; neither
+     can move value on paper, so accepting both costs nothing and refusing the
+     old one costs a person their order. */
+  for (const a of [ASSET, "FLOP"]) {
+    ok(`an offer priced in ${a} is still taken`,
+      !refuseTake({ body: theirOffer(BUILT, { asset: a }) }, NOW)
+        .some((w) => /settles in/.test(w)),
+      refuseTake({ body: theirOffer(BUILT, { asset: a }) }, NOW).join("; ") || "taken");
+  }
+  /* And the page posts the one the rail actually settles, not the legacy one
+     it is merely tolerating. */
+  ok("but the shop's own offers name the rail's asset", ASSET !== "FLOP", ASSET);
 
   /* All the reasons, not just the first, so a log line cannot teach the
      reader the wrong lesson about why something was passed over. */

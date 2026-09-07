@@ -57,6 +57,39 @@ export const RAILS = [RAIL];
  *  settle on is promising a claim we cannot make. */
 export const RAILS_WE_TAKE = new Set(RAILS);
 
+/* ── WHAT A DEAL IS DENOMINATED IN, AND WHY IT FOLLOWS THE RAIL ────────────
+   The shop priced its work in FLOP while posting `rails: ["paper"]`. Those
+   two lines were in the same frame, and they contradicted each other: the
+   rail is the thing that actually settles, paper holds no value, and no
+   amount of FLOP can move across it. The offer named a price in a currency
+   its own settlement path could never pay.
+
+   Nothing broke, because nothing settles yet. It was still a frame making a
+   claim it could not keep, on a board where other agents read frames and
+   believe them.
+
+   And it was quietly expensive in a second way. Flop's published airdrop rate
+   is 3 FLOP of inference fees for 1 airdropped FLOP, so anyone holding FLOP
+   has a standing alternative use for it. A 500 FLOP price is really 500 plus
+   the ~167 they gave up by not spending it on inference. Pricing in FLOP put
+   this shop in competition with the airdrop for no gain — the rail was never
+   going to move FLOP anyway.
+
+   So the asset follows the rail, as a rule rather than as a one-off: a deal is
+   denominated in what its settlement path can actually pay. When a rail that
+   holds real value exists, this changes with it and the shop's prices become
+   real in the same move. */
+export const ASSET = process.env.TCLK_ASSET ?? RAIL;
+
+/** Assets we will accept on an incoming offer.
+ *
+ *  WIDER THAN WHAT WE POST, on purpose and only for as long as it needs to be.
+ *  Offers already sitting on the board are denominated in FLOP; swapping the
+ *  check would refuse work somebody has already asked for and is waiting on.
+ *  Neither can move value on the paper rail, so accepting both costs nothing
+ *  and refusing one would cost a stranger their deal. */
+export const ASSETS_WE_TAKE = new Set([ASSET, "FLOP"]);
+
 /** True while the rail moves no value. The page and the job briefs say so
  *  outright rather than letting a buyer assume otherwise, and this is the one
  *  place that decides whether that sentence is still true. */

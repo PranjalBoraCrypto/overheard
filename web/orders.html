@@ -533,7 +533,7 @@ h1{font-weight:800;font-size:clamp(30px,5vw,42px);line-height:1;letter-spacing:-
            this there was no figure on the page for that at all — the only
            sum shown was every order ever placed, refused ones included. -->
       <div class="sumbit"><span class="sumk"><svg class="i"><use href="#i-coin"/></svg>delivered</span>
-        <span class="sumval"><b id="nPaid">&mdash;</b><span class="sumu">FLOP</span></span></div>
+        <span class="sumval"><b id="nPaid">&mdash;</b><span class="sumu"></span></span></div>
     </div>
   </div>
 
@@ -996,7 +996,7 @@ function fieldsFor(o) {
   const about = field("About", o.brief || "—");
   about.classList.add("wide");
   dl.append(about);
-  dl.append(field("Price", `${group(o.amount || "0")} ${o.asset || "FLOP"}`,
+  dl.append(field("Price", `${group(o.amount || "0")} ${o.asset || "paper"}`,
     "Nothing of value moves yet — the rehearsal rail holds no money."));
 
   /* Date.parse and not Number(): `ts` is an ISO string here, which is what
@@ -1153,6 +1153,20 @@ const shopSaid = (t) =>
  */
 const flop = (list) => list.reduce((s, o) => s + (Number(o.amount) || 0), 0);
 
+/* ── AND THE UNIT THAT SUM IS IN, WHICH IS NO LONGER A CONSTANT ────────────
+   The shop used to price everything in FLOP while settling on the paper rail,
+   which could never move FLOP. It prices in paper now — so this list holds
+   both: old orders denominated in FLOP, new ones in paper. A total labelled
+   with either would be wrong about half of it.
+
+   So the label is read off the orders rather than written into the page. One
+   asset, and it is named; two, and the sum is honestly unitless rather than
+   quietly claiming to be in whichever the author typed. */
+const unitOf = (list) => {
+  const seen = [...new Set(list.map((o) => o.asset).filter(Boolean))];
+  return seen.length === 1 ? seen[0] : "";
+};
+
 function paintSum() {
   const going = orders.filter(stillOpen);
   /* ── AND THE ONE THAT IS EARNINGS RATHER THAN A TALLY ───────────────────
@@ -1164,7 +1178,10 @@ function paintSum() {
      counts here, and it is read from the shared vocabulary rather than
      re-derived, so this figure cannot disagree with the pill beside it. */
   const paid = $("nPaid");
-  if (paid) paid.textContent = group(flop(orders.filter((o) => statusOf(o).key === "claimed")));
+  const done = orders.filter((o) => statusOf(o).key === "claimed");
+  if (paid) paid.textContent = group(flop(done));
+  const paidUnit = document.querySelector("#nPaid + .sumu");
+  if (paidUnit) paidUnit.textContent = unitOf(done);
 
   const el = $("sumline");
   if (!el) return;
@@ -1175,7 +1192,8 @@ function paintSum() {
   el.replaceChildren(
     document.createTextNode(going.length === 1 ? "order still going — " : "orders still going — "),
     b,
-    document.createTextNode(" FLOP committed across " + (going.length === 1 ? "it" : "them")),
+    document.createTextNode((unitOf(going) ? " " + unitOf(going) : "")
+      + " committed across " + (going.length === 1 ? "it" : "them")),
   );
 }
 
@@ -1581,7 +1599,7 @@ function rowFor(o) {
   price.className = "hprice";
   price.append(document.createTextNode(group(o.amount || "0")));
   const unit = document.createElement("span");
-  unit.textContent = o.asset || "FLOP";
+  unit.textContent = o.asset || "paper";
   price.append(unit);
   const state = document.createElement("span");
   const st = statusOf(o);

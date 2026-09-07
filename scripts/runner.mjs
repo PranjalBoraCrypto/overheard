@@ -24,7 +24,8 @@ import { CAN_DO, doJob } from "./work.mjs";
 import { minterFor, recoverSecret } from "./secret.mjs";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
-import { RAILS, RAILS_WE_TAKE, RAIL, verifyLock, canFund, placeLock, claimLock } from "./rail.mjs";
+import { RAILS, RAILS_WE_TAKE, RAIL, ASSET, ASSETS_WE_TAKE,
+         verifyLock, canFund, placeLock, claimLock } from "./rail.mjs";
 import { WANTS, planBuys, wantFrame, lockFrame, refundFrame, cancelFrame, wire, safeRoom } from "./buy.mjs";
 
 /* The shop's public identity. The seed for it is in one secret store and is
@@ -501,7 +502,15 @@ export function refuseTake(offer, now = Date.now()) {
     if (!isFinite(asked)) no.push("amount is not a number");
     else if (asked < want) no.push(`offers ${b.amount} for work priced at ${shelf.amount}`);
   }
-  if (b.asset !== "FLOP") no.push(`asset ${JSON.stringify(b.asset ?? null)} is not FLOP`);
+  /* The asset has to be one this shop's rail could actually pay. See ASSET in
+     rail.mjs for why that stopped being the literal "FLOP" it was written as:
+     the frame named FLOP while advertising the paper rail, which cannot move
+     it. FLOP is still taken, because offers denominated that way are on the
+     board now and refusing them would cost a stranger a deal they are waiting
+     on — not because paper can honour it. */
+  if (!ASSETS_WE_TAKE.has(b.asset)) {
+    no.push(`asset ${JSON.stringify(b.asset ?? null)} is not one this shop settles in`);
+  }
 
   /* We can only open a lock we can compute. A point lock needs secp256k1,
      which checkReveal explicitly does not do, so accepting one would be

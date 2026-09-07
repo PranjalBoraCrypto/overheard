@@ -35,7 +35,7 @@
  */
 import fs from "node:fs";
 import { refuseTake, JOBS } from "./runner.mjs";
-import { RAIL } from "./rail.mjs";
+import { RAIL, ASSET } from "./rail.mjs";
 
 let pass = 0, fail = 0;
 const ok = (what, cond, detail = "") => {
@@ -92,7 +92,13 @@ console.log("\n=== B. the fields the runner will judge");
 /* Each of these is a whole class of silent refusal on its own. */
 ok("the buyer is the PAYER — a payee-opened offer cannot settle at all",
   composed.role === "payer", composed.role ?? "not stated");
-ok("priced in FLOP, which is the only asset the shop takes", composed.asset === "FLOP", composed.asset ?? "—");
+/* NOT "FLOP" ANY MORE, AND NOT A LITERAL EITHER. The page priced in FLOP
+   while advertising the paper rail, which cannot move FLOP — a frame naming a
+   price its own settlement path could never pay. The asset follows the rail
+   now, so this asks the rail what it settles in rather than repeating a
+   currency name that would go stale the day a real rail arrives. */
+ok("priced in whatever the shop's rail can actually settle",
+  composed.asset === ASSET, `${composed.asset ?? "—"} vs rail ${ASSET}`);
 ok("a HASH lock, because the shop cannot open a point lock",
   composed.lock === "hash", composed.lock ?? "—");
 ok("on the rail the shop actually runs, from one constant",
