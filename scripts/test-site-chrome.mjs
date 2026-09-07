@@ -494,7 +494,7 @@ console.log("\n=== 9. a pasted link arrives with a picture");
                  ["/play", "play"], ["/city", "city"], ["/what", "what"],
                  ["/hire", "hire"], ["/orders", "orders"], ["/profile", "profile"],
                  ["/deals-preview-78cb4a1be923c6b4.html", "deals"],
-                 ["/market", "market"]];
+                 ["/prediction", "prediction"]];
   for (const [route, img] of PAIRS) {
     await pg.goto("http://localhost:8971" + route);
     const m = await pg.evaluate(() => ({
@@ -570,7 +570,7 @@ console.log("\n=== 9. a pasted link arrives with a picture");
       own ? "a local .sky, .spot, field or spotlight" : "");
     check(`${f} has the light on it`, lit);
     /* ── AND THAT IT PAINTS A GROUND AT ALL ─────────────────────────────
-       market.html said `background:var(--bg)`, and --bg exists in deal.css
+       prediction.html said `background:var(--bg)`, and --bg exists in deal.css
        only inside .btn — so it resolved to nothing, the body stayed
        transparent, and the page shipped WHITE on a site that is black. Every
        other page here says --void; the one that did not was the one nobody

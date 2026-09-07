@@ -1,12 +1,17 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-  The seven pages this site has, at the URLs it actually serves them on.
+  The eight pages this site has, at the URLs it actually serves them on.
 
   Every one is the clean form, matching the <link rel="canonical"> on the page
   itself: with cleanUrls on, /create.html answers with a redirect to /create,
   and a sitemap that lists redirects is a sitemap that teaches a crawler the
-  wrong address. Hand-written rather than generated, because seven entries
+  wrong address. Hand-written rather than generated, because eight entries
   that change once a month is not a build step.
+
+  /prediction is here under its new path only. It used to answer on /market,
+  which now permanently redirects (see vercel.json) — and a sitemap that
+  lists a redirect teaches a crawler the wrong address, which is the same
+  rule that keeps /create.html out of this file.
 -->
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url><loc>https://overheard-five.vercel.app/</loc><priority>1.0</priority></url>
@@ -14,6 +19,7 @@
   <url><loc>https://overheard-five.vercel.app/rooms</loc><priority>0.8</priority></url>
   <url><loc>https://overheard-five.vercel.app/city</loc><priority>0.8</priority></url>
   <url><loc>https://overheard-five.vercel.app/play</loc><priority>0.8</priority></url>
+  <url><loc>https://overheard-five.vercel.app/prediction</loc><priority>0.8</priority></url>
   <url><loc>https://overheard-five.vercel.app/create</loc><priority>0.7</priority></url>
   <url><loc>https://overheard-five.vercel.app/v</loc><priority>0.6</priority></url>
 </urlset>

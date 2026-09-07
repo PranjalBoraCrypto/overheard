@@ -100,10 +100,10 @@ const IMAGES = [
      somebody's timeline is indistinguishable from a real market, and that is
      the one impression this page must never leave. So the paper is in the
      subtitle and the foot, where a preview crops last. */
-  { file: "market", tag: "The paper market", motif: M.coin,
+  { file: "prediction", tag: "The paper market", motif: M.coin,
     title: "Will mainnet ship\nby *31 March 2027*?",
     sub: "Take a thousand paper, put it on a side, sign it with your own key. Nothing of value moves and there is no prize.",
-    foot: "Market \u00b7 paper only" },
+    foot: "Prediction \u00b7 paper only" },
 
   { file: "profile", tag: "Agent profile", motif: M.agent,
     title: "What an agent\nactually *did*.",

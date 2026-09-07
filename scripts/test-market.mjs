@@ -244,7 +244,7 @@ console.log("\n=== K. the two files that have to agree");
 
 console.log("\n=== L. the page, as text");
 {
-  const page = read("web/market.html");
+  const page = read("web/prediction.html");
   ok("the page exists at all", page.length > 2000);
   /* ── THE WORD ─────────────────────────────────────────────────────────
      Not a style preference: it was asked for, and the whole framing of the
@@ -458,7 +458,7 @@ console.log("\n=== U. the card somebody puts their name to");
   ok("and it carries the subject's mark as well as ours",
     /flop\.png/.test(card) && /Overheard/.test(card));
 
-  const page = read("web/market.html");
+  const page = read("web/prediction.html");
   /* A CLASS NAME IS A GLOBAL. deal.css already owns `.sheet` — a bottom sheet
      with max-height:82vh and translateY(101%) — and reusing the name gave the
      share dialog those properties silently: it sized to 82% of the viewport
@@ -538,7 +538,7 @@ console.log("\n=== U. the card somebody puts their name to");
 
 console.log("\n=== V. the walk from arriving to sharing");
 {
-  const page = read("web/market.html");
+  const page = read("web/prediction.html");
   const nav = read("web/nav.js");
 
   /* THE TAP AND THE CALL ARE TWO SIGNATURES, and between them the panel used
@@ -682,27 +682,41 @@ console.log("\n=== Q. how anybody finds it");
      something to play does. Losing either is losing half the traffic to a
      page nothing else links. */
   const nav = read("web/nav.js");
-  ok("the market is in the site's own page list", /href: "\/market"/.test(nav));
-  /* THE LABEL IS "PREDICTION" AND THE PATH IS STILL /market. Every other tab
-     says what its page IS; "Market" said what kind of thing it is, in a word
-     this site also uses for the shop and the deals board. The path did not
-     move with it, and must not: it is drawn into every share card already in
-     somebody's timeline and written into the post text. A label is a word on
-     a bar. A path is a promise. */
+  ok("the market is in the site's own page list", /href: "\/prediction"/.test(nav));
+  /* THE LABEL AND THE PATH ARE BOTH "PREDICTION". Every other tab says what
+     its page IS; "Market" said what kind of thing it is, in a word this site
+     also uses for the shop and the deals board. The path moved with it — and
+     a path is a promise to everyone already holding one, so the old one has
+     to keep arriving. The redirect below is that promise; the three lines
+     here are the label, the new path, and the fact that the card and the page
+     agree about where they point. */
   ok("the tab is named for what the page is", /label: "Prediction"/.test(nav));
-  ok("and the path did not move with the label",
-    /\{ href: "\/market", label: "Prediction"/.test(nav));
-  ok("so the URL on the card still resolves",
-    /https:\/\/overheard-five\.vercel\.app\/market/.test(read("web/market.html")) &&
-    /overheard-five\.vercel\.app\/market/.test(read("web/card.js")));
+  ok("and the path says the same word as the label",
+    /\{ href: "\/prediction", label: "Prediction"/.test(nav));
+  ok("the URL on the card and the URL on the page are the same URL",
+    /https:\/\/overheard-five\.vercel\.app\/prediction/.test(read("web/prediction.html")) &&
+    /overheard-five\.vercel\.app\/prediction/.test(read("web/card.js")));
+  /* THE OLD PATH STILL ARRIVES. Every card already in somebody's timeline has
+     /market drawn into it, and Twitter has cached /og/market.png. Without
+     these three redirects each of those becomes a 404 nobody reports, so the
+     redirect is not tidiness — it is the only reason moving the path was
+     allowed at all. Asserted on the file, because a deploy config is exactly
+     the kind of thing a later cleanup deletes for looking unused. */
+  const vercel = JSON.parse(read("vercel.json"));
+  const red = (from, to) => (vercel.redirects ?? []).some(
+    (r) => r.source === from && r.destination === to && r.permanent === true);
+  ok("the old page path still lands on the new one",
+    red("/market", "/prediction") && red("/market.html", "/prediction"));
+  ok("and the old preview image still lands on the new one",
+    red("/og/market.png", "/og/prediction.png"));
   /* ON THE BAR, and before City — which carries the live dot and would make
      any tab after it read as an afterthought. */
   ok("and on the bar, ahead of City",
-    /\{ href: "\/market",[^}]*bar: true/.test(nav) &&
-    nav.indexOf('href: "/market"') < nav.indexOf('href: "/city"'));
+    /\{ href: "\/prediction",[^}]*bar: true/.test(nav) &&
+    nav.indexOf('href: "/prediction"') < nav.indexOf('href: "/city"'));
   const play = read("web/play.html");
   ok("Play links it, which is where things you can play live",
-    /<a class="tile" href="\/market">/.test(play));
+    /<a class="tile" href="\/prediction">/.test(play));
   ok("and Play reads as a shelf rather than one game with a link bolted on",
     /class="shelf"/.test(play) && /Also to play/.test(play) &&
     (play.match(/class="tile/g) ?? []).length >= 2);
@@ -763,7 +777,7 @@ console.log("\n=== T. the nonce on a signed write, which has to go up");
   /* EVERY page that signs a write, not just this one. The shop's checkout and
      the orders page had the identical line, so a real order could fail to
      post its payment lock for the same reason and read as a flaky network. */
-  for (const f of ["web/market.html", "web/hire.html", "web/orders.html"]) {
+  for (const f of ["web/prediction.html", "web/hire.html", "web/orders.html"]) {
     const src = read(f);
     ok(`${f.split("/").pop()} uses it`,
       /postNonce\(\)/.test(src) && !/Math\.random\(\) \* 1000/.test(src),
@@ -779,7 +793,7 @@ console.log("\n=== S. the second keeper");
      maintains, and the two converge rather than compete. */
   const keep = read("api/keep.js");
   const arc = read("scripts/archive.mjs");
-  const page = read("web/market.html");
+  const page = read("web/prediction.html");
 
   ok("there is a second keeper at all", keep.length > 2000);
   ok("it writes the file the collector writes and the endpoint reads",
@@ -844,7 +858,7 @@ console.log("\n=== R. the state almost everybody arrives in");
      page have never had a key. The first version met them with two disabled
      buttons and a grey line pointing at the top bar — a page saying "you
      cannot do this" and leaving them to work out why and what to do. */
-  const page = read("web/market.html");
+  const page = read("web/prediction.html");
   ok("the signed-out buttons are live, not disabled",
     /tapBtn\.disabled = shut;/.test(page) && /dataset\.signin = "1"/.test(page),
     "a way in that cannot be pressed is a locked door with the key on the far side");
@@ -928,7 +942,7 @@ console.log("\n=== O. profit, once it is settled");
 
 console.log("\n=== P. the FAQ, and the one thing it must say");
 {
-  const page = read("web/market.html");
+  const page = read("web/prediction.html");
   const faq = page.slice(page.indexOf('class="card faq"'), page.indexOf("</section>", page.indexOf('class="card faq"')));
   ok("there is an FAQ at all", faq.length > 1500);
   const qs = [...faq.matchAll(/<summary>([^<]+)<\/summary>/g)].map((m) => m[1]);
@@ -968,7 +982,7 @@ console.log("\n=== W. whose rails this runs on");
      "Signed in a public room" is the kind of sentence that sounds like
      something and leaves the reader no network to look at and no room to
      open. Three places carry it now: the page, the card and the post. */
-  const page = read("web/market.html");
+  const page = read("web/prediction.html");
   const card = read("web/card.js");
   const call = read("web/call.js");
   const ROOM = /export const ROOM = "([^"]+)"/.exec(call)?.[1] ?? "";

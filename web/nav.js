@@ -77,16 +77,20 @@ export const PAGES = [
      board and anywhere money changes hands. One label for two ideas.
      "Prediction" is the only one of them that is a prediction.
 
-     THE URL STAYS /market. It is drawn into every share card already in
-     somebody's timeline, written into the post text, and carried by the
-     canonical tag and the sitemap. A label is a word on a bar and costs
-     nothing to change; a path is a promise to everyone who already has it.
+     THE URL MOVED WITH THE LABEL, to /prediction. A path is a promise to
+     everyone who already has one — it is drawn into every share card sitting
+     in somebody's timeline and written into the post text — so moving it is
+     only honest if the old one still arrives. It does: vercel.json carries a
+     permanent redirect from /market to /prediction, and a second one from
+     /og/market.png to /og/prediction.png for the preview images Twitter has
+     already cached. That redirect IS the promise; deleting it silently breaks
+     every card in the wild, which is why test-market.mjs asserts it exists.
 
      It is also on the shelf at the bottom of /play. Two ways in is right for
      this one: the bar is how somebody who came for something else finds it,
      and the shelf is how somebody looking for something to play does. */
-  { href: "/market", label: "Prediction", icon: "coin", bar: true,
-    match: (p) => p.startsWith("/market"),
+  { href: "/prediction", label: "Prediction", icon: "coin", bar: true,
+    match: (p) => p.startsWith("/prediction"),
     blurb: "One question, in paper" },
   /* LAST, AND ON PURPOSE — but no longer lit. It carried the live dot, which
      made it the loudest thing on the bar for a page that is not more

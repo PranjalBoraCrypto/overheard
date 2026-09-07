@@ -7,6 +7,23 @@
       "main": false
     }
   },
+  "redirects": [
+    {
+      "source": "/market",
+      "destination": "/prediction",
+      "permanent": true
+    },
+    {
+      "source": "/market.html",
+      "destination": "/prediction",
+      "permanent": true
+    },
+    {
+      "source": "/og/market.png",
+      "destination": "/og/prediction.png",
+      "permanent": true
+    }
+  ],
   "rewrites": [
     {
       "source": "/data/profiles/:path*",

@@ -468,7 +468,7 @@ export function drawCard(canvas, card, scale = 2) {
   g.textAlign = "right";
   g.fillStyle = C.blue;
   g.font = `600 17px ${MONO}`;
-  g.fillText("overheard-five.vercel.app/market", W - 64, H - 48);
+  g.fillText("overheard-five.vercel.app/prediction", W - 64, H - 48);
   g.fillStyle = C.faint;
   g.font = `500 13px ${MONO}`;
   g.fillText(`${ROOM.toUpperCase()} ON TECHNOCORE.CHAT · ANYONE CAN CHECK IT`,
