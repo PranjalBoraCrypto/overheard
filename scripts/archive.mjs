@@ -499,9 +499,16 @@ const TAIL_MAX = Number(process.env.TAIL_MAX ?? 4000);
 const CALLS_ROOM = process.env.CALLS_ROOM ?? "overheard-calls";
 const CALLS_PREFIX = "call1 ";
 const CALLS_MAX = Number(process.env.CALLS_MAX ?? 200_000);
-/* The same spelling as web/call.js, web/session.js, api/keep.js and
-   api/calls.js. See pushCall for why the ledger asks for one. */
-const CALLS_DID_RE = /^did:key:z6Mk[1-9A-HJ-NP-Za-km-z]{44}$/;
+/* The same spelling as web/call.js, web/session.js, api/keep.js, api/room.js
+   and api/calls.js. See pushCall for why the ledger asks for one.
+
+   IT WAS CALLED CALLS_DID_RE, and the name was the reason for a bug. Reading
+   it as "the pattern the calls ledger uses" made it look like a rule about
+   calls, so the OTHER durable thing this file writes — the per-identity
+   profiles a card is built from — was left on a .startsWith("did:key:")
+   check that any string can satisfy. One name, one rule, every place this
+   file decides a key is a key. */
+const DID_RE = /^did:key:z6Mk[1-9A-HJ-NP-Za-km-z]{44}$/;
 
 /** One arriving call, kept for good. Deduplicated on the server's sequence
  *  number, which is the only identifier a reader and this both agree on. */
@@ -518,7 +525,7 @@ function pushCall(state, r) {
      into the room.
 
      `sig` still travels with the row, so a reader can tell for itself. */
-  if (typeof r?.from !== "string" || !CALLS_DID_RE.test(r.from)) return;
+  if (typeof r?.from !== "string" || !DID_RE.test(r.from)) return;
   const k = String(r?.seq ?? "");
   if (!k || L.seqs.has(k)) return;
   /* A ceiling, because "append for ever" with no bound is how a small file
@@ -1393,9 +1400,21 @@ async function readRoom(state, e) {
       if (e.room === OFFERS_ROOM) noteDeal(state, m, text);
 
       const isTemplate = t.n > REPEAT_LIMIT;
-      // COUNTING IS NEVER CAPPED. Whatever happens to the bodies below, every
-      // message the archive sees reaches the profile that a card is built on.
-      if (m.from?.startsWith("did:key:")) await recordProfile(state, m.from, e.room, m.ts, isTemplate, text);
+      /* COUNTING IS NEVER CAPPED. Whatever happens to the bodies below, every
+         message the archive sees reaches the profile that a card is built on.
+
+         WHICH IS EXACTLY WHY THE GATE HAS TO BE THE REAL ONE. This asked for
+         .startsWith("did:key:") — a prefix any caller can type into `from`,
+         on a network that takes unsigned posts — while pushCall two hundred
+         lines up was already refusing the same strings against the anchored
+         pattern. So the ledger was clean and the profiles were not: a made-up
+         key earned a profile page, a place in the identity list, and an
+         uncapped count feeding the cards. Durable, published, and ours.
+
+         Shape is still not proof — a real keypair costs nothing to mint, and
+         these messages carry no signature to check. It is the floor, not the
+         ceiling: it keeps typed junk out of the permanent record. */
+      if (typeof m.from === "string" && DID_RE.test(m.from)) await recordProfile(state, m.from, e.room, m.ts, isTemplate, text);
 
       if (isTemplate) { p.collapsed++; continue; }
 

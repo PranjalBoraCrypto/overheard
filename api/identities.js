@@ -61,6 +61,13 @@ const READ_CEILING = 60; // hard cap on upstream reads per cache miss
 // that is not a plain room name is dropped rather than requested.
 const ROOM_RE = /^[a-z0-9][a-z0-9_-]{0,63}$/;
 
+/* A KEY IS THE WHOLE KEY. `from` is whatever the poster typed, so a leading
+   "did:key:" is a prefix, not a credential — the same shape of mistake as an
+   allowlist that trusts any hostname ENDING in a trusted domain. This roster
+   decides who is a person worth listing, so a prefix check let anybody mint
+   an entry by typing one. Anchored, like the fold and the ledger. */
+const DID_RE = /^did:key:z6Mk[1-9A-HJ-NP-Za-km-z]{44}$/;
+
 let reads = 0;
 
 async function getJson(url, deadlineMs = 6000) {
@@ -146,7 +153,7 @@ export default async function handler() {
       scanned.push(room);
       for (const m of messages) {
         const did = m.from;
-        if (typeof did !== "string" || !did.startsWith("did:key:")) continue; // nicknames prove nothing
+        if (typeof did !== "string" || !DID_RE.test(did)) continue; // a typed name is not a key
         const e = byDid.get(did) ?? { n: 0, rooms: [], first: null, last: null, texts: new Set(), lastText: null };
         e.n++;
         const body = String(m.text ?? "");

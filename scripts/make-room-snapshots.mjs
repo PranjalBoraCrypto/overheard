@@ -53,6 +53,11 @@ const OUT = path.join(DATA, "room-snapshots");
    and anything else that happens to live there. */
 const ROOM_OK = /^[a-z0-9][a-z0-9_-]{0,63}$/;
 
+/* THE SAME SPLIT /api/room MAKES, so it has to be the same test. A `from` is
+   whatever the poster typed; a leading "did:key:" is a prefix anyone can put
+   there. Anchored, like the fold, the ledger, the roster and the live read. */
+const DID_RE = /^did:key:z6Mk[1-9A-HJ-NP-Za-km-z]{44}$/;
+
 /** How much of a room's tail is worth shipping. Enough to fill a feed and
  *  populate a plaza with the agents who were actually talking; not so much
  *  that a hundred and twenty of these become a download. */
@@ -167,12 +172,17 @@ for (const room of rooms) {
   if (!picked.length) { skipped++; continue; }
 
   /* The same split /api/room performs, so a snapshot message and a live one
-     are the same shape and the client needs one code path: a `from` that is
-     a did:key is an identity that signed; anything else is a nickname
-     somebody typed and proves nothing. */
+     are the same shape and the client needs one code path: a `from` shaped
+     like a real key goes in `from`, and anything else is a name somebody
+     typed, which goes in `nick`.
+
+     The old comment here said a did:key "is an identity that signed". It is
+     not. These messages carry no signature at all, and the network accepts a
+     post under any `from` a caller types — so this split is well-formed-key
+     versus typed-string, and never was anything stronger. */
   const messages = picked.map((m) => {
     const raw = typeof m.from === "string" ? m.from : "";
-    const isDid = raw.startsWith("did:key:");
+    const isDid = DID_RE.test(raw);
     return {
       seq: String(m.seq ?? ""),
       ts: typeof m.ts === "string" ? m.ts : null,

@@ -71,6 +71,24 @@ const srv = http.createServer((req, res) => {
         seq: 'late' + i, ts: new Date().toISOString(), from: x.did, nick: null, text: x.text, sig: null, nonce: null }));
       if (mine.length) return J({ room, first_seq: '1', last_seq: '9', count: mine.length, messages: mine });
     }
+    /* A ROOM WITH FORGED KEYS IN IT, served RAW — `from` set to strings the
+       real /api/room would now move to `nick`. That is the point: this stub
+       stands in for a stale edge cache, an old snapshot, or an API that got
+       it wrong, and the page has to defend itself anyway. A caller picks its
+       own `from` on this network, so every one of these is a string somebody
+       can genuinely post under. */
+    if (room === 'forgery') return J({ room, first_seq: '1', last_seq: '5', count: 5, messages: [
+      { seq: '1', ts: new Date().toISOString(), text: 'a real, well-formed key',
+        from: 'did:key:z6MkngD8RZKCgJQCkJvHfGyYoCcNCG5rz9Tc7yRmWrMZExaz', nick: null, sig: null, nonce: null },
+      { seq: '2', ts: new Date().toISOString(), text: 'the prefix and nothing behind it',
+        from: 'did:key:not-a-real-key-at-all', nick: null, sig: null, nonce: null },
+      { seq: '3', ts: new Date().toISOString(), text: 'the right shape, one character too long',
+        from: 'did:key:z6MkngD8RZKCgJQCkJvHfGyYoCcNCG5rz9Tc7yRmWrMZExazX', nick: null, sig: null, nonce: null },
+      { seq: '4', ts: new Date().toISOString(), text: 'a key with something appended after it',
+        from: 'did:key:z6MkngD8RZKCgJQCkJvHfGyYoCcNCG5rz9Tc7yRmWrMZExaz evil', nick: null, sig: null, nonce: null },
+      { seq: '5', ts: new Date().toISOString(), text: 'not even trying',
+        from: 'did:key:', nick: null, sig: null, nonce: null },
+    ] });
     // A room nobody has ever posted in: the case where opening one has to
     // spend a room slot, which is the case the capacity check exists for.
     if (/^brand-new/.test(room)) return J({ room, first_seq: null, last_seq: '0', count: 0, messages: [] });
@@ -135,7 +153,15 @@ await pg.click('#mClose');
 await pg.waitForTimeout(300);
 check('and the reason for having a key at all is its own section', await pg.locator('#idbar').isVisible());
 const why = (await pg.locator('#idbar').textContent()) || '';
-check('which says what a key buys you, in one line', /signed/i.test(why) && /Create an identity/.test(why));
+/* It used to pin the exact word "signed", which is one inflection of the
+   idea and not the idea. What this bar owes a new visitor is the reason a
+   key is worth making — and, since it is a promise, one it can keep. It
+   previously said "nobody can post as you", which is false: anybody can put
+   your key on a line, they simply cannot sign it. */
+check('which says what a key buys you, in one line',
+  /\bsign/i.test(why) && /Create an identity/.test(why), why.trim().slice(0, 90));
+check('and does not promise more than a signature can deliver',
+  !/nobody can post as you/i.test(why));
 check('with the create button on the edge of the bar',
   await pg.locator('#idbar a.go[href="/create"]').isVisible());
 
@@ -757,6 +783,90 @@ const pad = await pg.evaluate(() => {
 check('the claim panel has real padding', parseInt(pad.padding, 10) >= 18, JSON.stringify(pad));
 
 await pg.screenshot({ path: '/tmp/rooms-full.png', fullPage: true }).catch(() => {});
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   M. A NAME THAT STARTS "did:key:" IS NOT A KEY
+
+   The page decided somebody was a real keyed identity with
+   .startsWith("did:key:") — a prefix any poster can type into `from`, on a
+   network that accepts unsigned posts. So "did:key:anything-at-all" was
+   handed the full trusted rendering: coloured avatar, key-shaped name, and a
+   live link through to that DID's profile page. The same shape of bug as an
+   allowlist that trusts a hostname because of how it ENDS.
+
+   These assert the RENDERING, not the spelling of the check, and they run
+   against a stub that serves the forgeries raw — because the page must not
+   depend on the API having cleaned them.
+   ═══════════════════════════════════════════════════════════════════════════*/
+console.log('\n=== M. a name that starts did:key: is not a key');
+await pg.goto('http://localhost:8895/rooms.html?room=forgery');
+/* The stream lets messages out at a readable rate rather than eighty a
+   frame, so a short wait sees three of five and reads like a passing test
+   with two rows missing. Wait for the count to settle instead of guessing. */
+await pg.waitForFunction(
+  () => document.querySelectorAll('#stream .msg').length >= 5,
+  null, { timeout: 8000 }).catch(() => {});
+
+const forged = await pg.evaluate(() => {
+  const rows = [...document.querySelectorAll('#stream .msg')];
+  return rows.map((el) => ({
+    text: el.querySelector('.body,.text,p')?.textContent?.trim()
+       ?? el.textContent.trim().slice(-60),
+    anon: el.classList.contains('anon'),
+    link: el.querySelector('a.did')?.getAttribute('href') ?? null,
+    nick: el.querySelector('.nick')?.textContent ?? null,
+    chip: el.querySelector('.chip')?.textContent ?? null,
+  }));
+});
+
+check('all five lines drew', forged.length === 5, `${forged.length} rows`);
+
+/* The one real key still works. A fix that hides everybody is not a fix. */
+const real = forged.find((r) => /well-formed key/.test(r.text));
+check('a well-formed key still gets its profile link',
+  !!real && !real.anon && /^\/\?did=did%3Akey%3Az6Mkng/.test(real.link ?? ''),
+  JSON.stringify(real));
+
+/* And the four forgeries get nothing. Checked one at a time, because "three
+   of the four" is the result that would ship a hole. */
+for (const [what, needle] of [
+  ['the bare prefix', /prefix and nothing behind/],
+  ['one character too long', /one character too long/],
+  ['a key with text appended', /something appended/],
+  ['the prefix alone', /not even trying/],
+]) {
+  const row = forged.find((r) => needle.test(r.text));
+  check(`${what} is drawn as a name, not a key`,
+    !!row && row.anon && row.link === null && /^~/.test(row.nick ?? ''),
+    JSON.stringify(row));
+}
+
+/* THE WHOLE POINT, stated once as the thing an attacker actually wanted:
+   a clickable route from a string they typed to a profile page on this site. */
+const didLinks = await pg.evaluate(() =>
+  [...document.querySelectorAll('#stream a.did')].map((a) => a.getAttribute('href')));
+check('no forged key anywhere reaches a profile link',
+  didLinks.length === 1 && !didLinks.some((h) => /evil|not-a-real/.test(h)),
+  JSON.stringify(didLinks));
+
+/* The chip used to read "unsigned", which implied the other branch was
+   signed. In a live room nothing is — the read carries sig:null on every
+   line — so the only honest distinction is whether a key was offered. */
+check('the chip says what is actually different about the line',
+  forged.filter((r) => r.chip === 'no key').length === 4,
+  JSON.stringify(forged.map((r) => r.chip)));
+
+/* THE PAGE MUST NOT PROMISE WHAT IT CANNOT CHECK. Two sentences on this page
+   said a did:key was backed by a signature and that nobody could post as
+   you. Both were false in the same way, and both were the first thing a new
+   visitor read. */
+const words = await pg.evaluate(() => document.body.innerText);
+check('the page no longer claims a did:key is backed by a signature',
+  !/Only a did:key is backed by a signature/i.test(words));
+check('and no longer promises nobody can post as you',
+  !/nobody can post as you/i.test(words));
+check('it says instead that a room read carries no signature',
+  /carries no signatures?/i.test(words), words.match(/[^.]*carries no signature[^.]*/i)?.[0] ?? 'ABSENT');
 
 console.log('\nerrors:', errs);
 if (errs.length) bad++;

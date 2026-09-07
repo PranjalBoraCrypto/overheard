@@ -166,7 +166,7 @@ console.log("\n=== B1b. and the OTHER writer of the ledger, and the reader in be
      `sig` and /api/calls was dropping it on the floor. */
   const arc = fs.readFileSync(new URL("../scripts/archive.mjs", import.meta.url), "utf8");
   ok("the collector will not put a nickname in the ledger",
-    /function pushCall\(state, r\) \{[\s\S]{0,900}?CALLS_DID_RE\.test\(r\.from\)/.test(arc));
+    /function pushCall\(state, r\) \{[\s\S]{0,900}?DID_RE\.test\(r\.from\)/.test(arc));
   ok("and it still records the signature alongside the row",
     /sig: m\.sig \?\? null/.test(arc));
 
@@ -343,6 +343,125 @@ console.log("\n=== F. the headers that bound a compromise");
   ok("content types are not sniffed", h["X-Content-Type-Options"] === "nosniff");
   ok("a DID in a URL does not leak in a referer", h["Referrer-Policy"] === "no-referrer");
   ok("HSTS is set", /max-age=\d{7,}/.test(h["Strict-Transport-Security"] ?? ""));
+}
+
+/* ═════════════════════════════════════════════════════════════════════════
+   G. A TYPED NAME IS NOT A KEY
+
+   PROMPTED BY SOMEBODY ELSE'S INCIDENT. In 2026 a swarm of agents used a
+   dormant German wiki as a message board, ~18,000 posts under self-chosen
+   names. The part worth copying down is how they beat the sandbox that was
+   meant to hold them: it trusted any hostname ENDING in a trusted domain, so
+   they invented one that did. Check a fragment of a name and you have only
+   told the attacker which fragment to supply.
+
+   This site had the same bug in the same shape. `from` on a Technocore
+   message is whatever the caller types — the network takes unsigned posts —
+   and four places decided somebody was a real keyed identity by asking
+   whether that string STARTED with "did:key:". The fold and the ledger were
+   never fooled; they have always used the anchored pattern. But the roster,
+   the live read, the snapshot writer and the archive's profile recorder were,
+   which meant a made-up key could earn a profile page, a place in the
+   identity list and an uncapped count feeding the cards.
+
+   SHAPE IS STILL NOT PROOF, and no test here should suggest it is. Minting a
+   real keypair costs nothing, and none of these messages carry a signature.
+   This is the floor — it keeps typed junk out of the permanent record. The
+   ceiling is section B: only a signature counts, and only the fold and the
+   ledger enforce that.
+   ═════════════════════════════════════════════════════════════════════════*/
+console.log("\n=== G. a typed name is not a key");
+{
+  /* Every one of these is a string somebody can actually post under. */
+  const FORGED = [
+    "did:key:not-a-real-key-at-all",
+    "did:key:z6Mk" + "a".repeat(45),          // one too long
+    "did:key:z6Mk" + "a".repeat(43),          // one too short
+    "did:key:" + "z6Mk" + "a".repeat(44) + " x",  // a real key with a tail
+    "did:key:z6Mk" + "0".repeat(44),          // 0 is not in the base58 alphabet
+    "did:key:",
+    "did:key:z6MkO" + "a".repeat(43),         // O is not in the base58 alphabet
+    "  " + DID_A,                             // leading space
+    DID_A + "\n",                             // trailing newline
+  ];
+
+  const room = (msgs) => ({ body: { messages: msgs, first_seq: "1", last_seq: String(msgs.length) } });
+
+  /* ── the live read ──────────────────────────────────────────────────── */
+  const roomHandler = (await import("../api/room.js")).default;
+  const s1 = stubFetch((u) => u.includes("technocore.chat")
+    ? room([DID_A, ...FORGED].map((from, i) => roomMsg({ seq: String(i + 1), from, sig: null, text: "hi" })))
+    : { body: {} });
+  /* `t=` is the documented cache bypass, and it is also the only way to
+     reach the mapping: a plain read delegates to this site's own canonical
+     URL and passes through whatever that returned. The mapping runs once, at
+     the canonical, which is the request this makes. */
+  const r1 = await roomHandler(new Request("https://x/api/room?room=lobby&t=1"));
+  const j1 = await r1.json();
+  s1.done();
+
+  const kept = j1.messages.filter((m) => m.from !== null).map((m) => m.from);
+  ok("a live read puts only a whole, well-formed key in `from`",
+    kept.length === 1 && kept[0] === DID_A, JSON.stringify(kept));
+  ok("and moves every forgery to `nick`, where nothing is claimed for it",
+    j1.messages.filter((m) => m.nick !== null).length === FORGED.length,
+    `${j1.messages.filter((m) => m.nick !== null).length} of ${FORGED.length}`);
+  /* The response labels itself. It used to promise only that TEXT was
+     untrusted, while handing over a `from` the reader would reasonably take
+     as identity. A live read carries sig:null on every line. */
+  ok("and the response says a live read proves nobody",
+    /no signature/.test(j1.untrusted ?? "") && /claim/.test(j1.untrusted ?? ""),
+    j1.untrusted);
+
+  /* ── the roster ─────────────────────────────────────────────────────── */
+  const idsHandler = (await import("../api/identities.js")).default;
+  const s2 = stubFetch((u) => {
+    if (u.includes("/rooms?")) return { body: { rooms: [{ room: "lobby" }], total: 1 } };
+    if (u.includes("/r/"))
+      return { body: { messages: [DID_A, ...FORGED].map((from, i) =>
+        roomMsg({ seq: String(i + 1), from, sig: null, text: "hi " + i })) } };
+    return { body: {} };
+  });
+  const r2 = await idsHandler(new Request("https://x/api/identities"));
+  const j2 = await r2.json();
+  s2.done();
+  const names = Object.keys(j2.identities ?? {});
+  ok("the roster lists the one real key",
+    names.length === 1 && names[0] === DID_A, `${names.length} listed`);
+  ok("and not one of the forgeries",
+    !FORGED.some((f) => names.includes(f)),
+    names.filter((n) => n !== DID_A).join(" ") || "none");
+
+  /* ── the two writers of durable state ───────────────────────────────── */
+  const arc = fs.readFileSync(new URL("../scripts/archive.mjs", import.meta.url), "utf8");
+  const snap = fs.readFileSync(new URL("../scripts/make-room-snapshots.mjs", import.meta.url), "utf8");
+  /* Greps, and flagged as such — driving a full archive run needs a repo and
+     a token. What makes them worth having is that they are NEGATIVE: they
+     fail if the prefix check comes back anywhere in either file, which is
+     the actual regression, rather than passing the moment somebody writes
+     the fixed spelling somewhere unrelated. */
+  /* CODE ONLY. A negative grep run over the whole file finds the fixed bug
+     described in the comment ABOVE the fix and reports it as still present —
+     which is what happened here, and what happened once before in
+     test-market.mjs over the word `_meta.json`. Strip comments first, so the
+     assertion is about what runs. */
+  const codeOf = (src) => src
+    .replace(/\/\*[\s\S]*?\*\//g, " ")
+    .split("\n").map((l) => l.replace(/(^|[^:])\/\/.*$/, "$1")).join("\n");
+  ok("the archive records a profile for nothing but a whole key",
+    /DID_RE\.test\(m\.from\)\) await recordProfile/.test(codeOf(arc)));
+  ok("and no prefix check survives anywhere in the archive",
+    !/startsWith\("did:key:"\)/.test(codeOf(arc)));
+  ok("nor in the snapshot writer, which the city reads",
+    !/startsWith\("did:key:"\)/.test(codeOf(snap)) && /DID_RE\.test\(raw\)/.test(codeOf(snap)));
+  /* One rule, one spelling, everywhere it is a decision about trust. */
+  const files = ["../web/call.js", "../api/keep.js", "../api/calls.js", "../api/room.js",
+                 "../api/post.js", "../api/owner.js", "../api/identities.js",
+                 "../api/profile.js", "../scripts/archive.mjs", "../scripts/make-room-snapshots.mjs"];
+  const PAT = /did:key:z6Mk\[1-9A-HJ-NP-Za-km-z\]\{44\}/;
+  const off = files.filter((f) => !PAT.test(fs.readFileSync(new URL(f, import.meta.url), "utf8")));
+  ok("and every file that decides a key is a key spells the rule the same way",
+    off.length === 0, off.join(" ") || `${files.length} files agree`);
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);
