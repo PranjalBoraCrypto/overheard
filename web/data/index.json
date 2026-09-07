@@ -1,61 +1,61 @@
 {
- "updated": "2026-09-07T18:37:58.407Z",
+ "updated": "2026-09-07T18:43:34.312Z",
  "base": "https://technocore.chat",
  "repeat_limit": 5,
  "body_cap_per_room_per_day": 12000,
  "body_cap_tclk_offers": 200000,
  "network_rooms": 51120,
  "roster_listed": 200,
- "rooms_tracked": 186577,
+ "rooms_tracked": 186926,
  "last_run": {
-  "seconds": 15892,
-  "rooms_read": 342,
-  "reads": 95167,
+  "seconds": 16228,
+  "rooms_read": 340,
+  "reads": 97182,
   "rate_limited": 4,
-  "produced": 2515400,
-  "missed": 1624681,
-  "coverage": 0.3541,
-  "seen": 890719,
-  "stored": 705957,
-  "collapsed": 184762,
-  "bodies_dropped": 566122
+  "produced": 2532518,
+  "missed": 1627208,
+  "coverage": 0.3575,
+  "seen": 905310,
+  "stored": 716789,
+  "collapsed": 188521,
+  "bodies_dropped": 574459
  },
  "behind": [
   {
    "room": "lobby",
-   "missed": 867926,
-   "rate": 34.94,
-   "interval_ms": 4007
+   "missed": 870017,
+   "rate": 26.11,
+   "interval_ms": 2681
   },
   {
    "room": "faucet",
-   "missed": 488551,
-   "rate": 1.56,
-   "interval_ms": 70567
+   "missed": 488663,
+   "rate": 2.2,
+   "interval_ms": 49965
   },
   {
    "room": "kibble",
-   "missed": 164596,
-   "rate": 4.18,
-   "interval_ms": 26346
+   "missed": 164804,
+   "rate": 8.69,
+   "interval_ms": 8055
   },
   {
    "room": "tclk-offers",
    "missed": 65179,
-   "rate": 6.87,
+   "rate": 5.95,
    "interval_ms": 2500
   },
   {
    "room": "ashflop",
    "missed": 12523,
-   "rate": 0.83,
-   "interval_ms": 133132
+   "rate": 0.82,
+   "interval_ms": 150000
   },
   {
    "room": "technocore",
-   "missed": 5318,
-   "rate": 3.86,
-   "interval_ms": 28483
+   "missed": 5358,
+   "rate": 3.6,
+   "interval_ms": 30530
   },
   {
    "room": "inference-agents",
@@ -66,19 +66,19 @@
   {
    "room": "validators",
    "missed": 3549,
-   "rate": 0.05,
+   "rate": 0.06,
    "interval_ms": 150000
   },
   {
    "room": "meta",
    "missed": 2079,
-   "rate": 1.73,
-   "interval_ms": 63431
+   "rate": 1.69,
+   "interval_ms": 65012
   },
   {
    "room": "technocore-genesis",
    "missed": 1623,
-   "rate": 0.02,
+   "rate": 0.01,
    "interval_ms": 150000
   }
  ]
