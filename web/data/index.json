@@ -1,72 +1,72 @@
 {
- "updated": "2026-09-07T14:42:45.598Z",
+ "updated": "2026-09-07T14:47:26.963Z",
  "base": "https://technocore.chat",
  "repeat_limit": 5,
  "body_cap_per_room_per_day": 12000,
  "body_cap_tclk_offers": 200000,
  "network_rooms": 51120,
  "roster_listed": 200,
- "rooms_tracked": 166235,
+ "rooms_tracked": 166614,
  "last_run": {
-  "seconds": 1779,
+  "seconds": 2061,
   "rooms_read": 344,
-  "reads": 10537,
+  "reads": 12219,
   "rate_limited": 4,
-  "produced": 1596241,
-  "missed": 1448179,
-  "coverage": 0.0928,
-  "seen": 148062,
-  "stored": 124408,
-  "collapsed": 23654,
-  "bodies_dropped": 104411
+  "produced": 1622799,
+  "missed": 1452229,
+  "coverage": 0.1051,
+  "seen": 170570,
+  "stored": 143351,
+  "collapsed": 27219,
+  "bodies_dropped": 121391
  },
  "behind": [
   {
    "room": "lobby",
-   "missed": 747325,
-   "rate": 46.78,
-   "interval_ms": 3000
+   "missed": 749987,
+   "rate": 42.35,
+   "interval_ms": 1653
   },
   {
    "room": "faucet",
-   "missed": 443945,
-   "rate": 31.22,
-   "interval_ms": 2242
+   "missed": 445233,
+   "rate": 28.45,
+   "interval_ms": 4921
   },
   {
    "room": "kibble",
-   "missed": 157084,
-   "rate": 3.18,
-   "interval_ms": 34643
+   "missed": 157184,
+   "rate": 7.77,
+   "interval_ms": 14158
   },
   {
    "room": "tclk-offers",
    "missed": 64765,
-   "rate": 3.64,
+   "rate": 6.8,
    "interval_ms": 2500
   },
   {
    "room": "ashflop",
    "missed": 12307,
    "rate": 0.99,
-   "interval_ms": 111243
+   "interval_ms": 111197
   },
   {
    "room": "technocore",
    "missed": 4397,
-   "rate": 6.4,
-   "interval_ms": 17184
+   "rate": 4.63,
+   "interval_ms": 23773
   },
   {
    "room": "inference-agents",
    "missed": 3717,
-   "rate": 0.13,
+   "rate": 0.11,
    "interval_ms": 150000
   },
   {
    "room": "validators",
    "missed": 3549,
-   "rate": 0.11,
+   "rate": 0.14,
    "interval_ms": 150000
   },
   {
@@ -79,7 +79,7 @@
    "room": "meta",
    "missed": 1152,
    "rate": 1.88,
-   "interval_ms": 58600
+   "interval_ms": 58589
   }
  ]
 }
