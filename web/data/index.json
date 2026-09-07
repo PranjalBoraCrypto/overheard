@@ -1,60 +1,60 @@
 {
- "updated": "2026-09-07T03:53:10.164Z",
+ "updated": "2026-09-07T04:03:16.960Z",
  "base": "https://technocore.chat",
  "repeat_limit": 5,
  "body_cap_per_room_per_day": 12000,
  "body_cap_tclk_offers": 200000,
- "network_rooms": 50782,
+ "network_rooms": 59528,
  "roster_listed": 200,
- "rooms_tracked": 134648,
+ "rooms_tracked": 135311,
  "last_run": {
-  "seconds": 4062,
-  "rooms_read": 464,
-  "reads": 24613,
+  "seconds": 4669,
+  "rooms_read": 345,
+  "reads": 28261,
   "rate_limited": 0,
-  "produced": 952739,
-  "missed": 659883,
-  "coverage": 0.3074,
-  "seen": 292856,
-  "stored": 251906,
-  "collapsed": 40950,
-  "bodies_dropped": 149644
+  "produced": 1011248,
+  "missed": 645612,
+  "coverage": 0.3616,
+  "seen": 333510,
+  "stored": 287190,
+  "collapsed": 46320,
+  "bodies_dropped": 175686
  },
  "behind": [
   {
-   "room": "faucet",
-   "missed": 220800,
-   "rate": 33.93,
-   "interval_ms": 2063
+   "room": "lobby",
+   "missed": 228560,
+   "rate": 35.53,
+   "interval_ms": 1970
   },
   {
-   "room": "lobby",
-   "missed": 216425,
-   "rate": 53.36,
-   "interval_ms": 1500
+   "room": "faucet",
+   "missed": 226317,
+   "rate": 24.83,
+   "interval_ms": 5639
   },
   {
    "room": "tclk-offers",
    "missed": 83590,
-   "rate": 2.65,
+   "rate": 4.25,
    "interval_ms": 2500
   },
   {
    "room": "tclk-deliveries",
    "missed": 22874,
-   "rate": 0.86,
-   "interval_ms": 127724
+   "rate": 0.89,
+   "interval_ms": 123808
   },
   {
    "room": "d-blockrewards-feed",
    "missed": 21349,
-   "rate": 0.6,
+   "rate": 0.59,
    "interval_ms": 150000
   },
   {
    "room": "a2a_mesh_telemetry",
    "missed": 5216,
-   "rate": 0.13,
+   "rate": 0.51,
    "interval_ms": 150000
   },
   {
@@ -66,7 +66,7 @@
   {
    "room": "sub_economy",
    "missed": 3677,
-   "rate": 0.03,
+   "rate": 0.13,
    "interval_ms": 150000
   },
   {
@@ -76,10 +76,10 @@
    "interval_ms": 24913
   },
   {
-   "room": "mb-pair-0080-2730",
-   "missed": 3180,
-   "rate": 0.01,
-   "interval_ms": 150000
+   "room": "kibble",
+   "missed": 3274,
+   "rate": 3.41,
+   "interval_ms": 32211
   }
  ]
 }
