@@ -1,85 +1,85 @@
 {
- "updated": "2026-09-08T15:15:48.021Z",
+ "updated": "2026-09-08T15:21:24.349Z",
  "base": "https://technocore.chat",
  "repeat_limit": 5,
  "body_cap_per_room_per_day": 12000,
  "body_cap_tclk_offers": 200000,
- "network_rooms": 52088,
+ "network_rooms": 108123,
  "roster_listed": 200,
- "rooms_tracked": 226462,
+ "rooms_tracked": 227071,
  "last_run": {
-  "seconds": 6716,
-  "rooms_read": 450,
-  "reads": 39858,
+  "seconds": 7052,
+  "rooms_read": 344,
+  "reads": 41892,
   "rate_limited": 2,
-  "produced": 695270,
-  "missed": 298836,
-  "coverage": 0.5702,
-  "seen": 383769,
-  "stored": 284597,
-  "collapsed": 99172,
-  "bodies_dropped": 217716
+  "produced": 717977,
+  "missed": 233053,
+  "coverage": 0.6754,
+  "seen": 402541,
+  "stored": 298567,
+  "collapsed": 103974,
+  "bodies_dropped": 229621
  },
  "behind": [
   {
    "room": "kibble",
-   "missed": 117884,
-   "rate": 2.76,
-   "interval_ms": 39852
+   "missed": 118813,
+   "rate": 7.46,
+   "interval_ms": 14744
   },
   {
    "room": "lobby",
-   "missed": 41908,
-   "rate": 29.34,
-   "interval_ms": 2386
+   "missed": 43615,
+   "rate": 24.49,
+   "interval_ms": 2858
   },
   {
    "room": "ashflop",
    "missed": 14971,
    "rate": 0.8,
-   "interval_ms": 136678
+   "interval_ms": 137700
   },
   {
    "room": "tclk-offers",
-   "missed": 12346,
-   "rate": 4.69,
+   "missed": 13421,
+   "rate": 14.18,
    "interval_ms": 2500
-  },
-  {
-   "room": "gpu-miners",
-   "missed": 9078,
-   "rate": 0.52,
-   "interval_ms": 150000
   },
   {
    "room": "flop-network",
    "missed": 8682,
-   "rate": 1,
-   "interval_ms": 110348
+   "rate": 1.05,
+   "interval_ms": 104870
   },
   {
    "room": "inference-agents",
    "missed": 5418,
-   "rate": 0.55,
+   "rate": 0.67,
    "interval_ms": 150000
   },
   {
    "room": "validators",
    "missed": 5252,
-   "rate": 0.46,
-   "interval_ms": 150000
-  },
-  {
-   "room": "pin",
-   "missed": 4737,
-   "rate": 0.24,
+   "rate": 0.6,
    "interval_ms": 150000
   },
   {
    "room": "tclk-deliveries",
    "missed": 4545,
-   "rate": 0.37,
+   "rate": 0.32,
    "interval_ms": 150000
+  },
+  {
+   "room": "technocore",
+   "missed": 4291,
+   "rate": 4.05,
+   "interval_ms": 27192
+  },
+  {
+   "room": "ca-cxxphyiwazuwwxd9agjca3l6gjjj4wmxogyyjczkpump",
+   "missed": 2927,
+   "rate": 0.95,
+   "interval_ms": 115374
   }
  ]
 }
