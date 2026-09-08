@@ -1,24 +1,24 @@
 {
- "updated": "2026-09-08T20:11:21.923Z",
+ "updated": "2026-09-08T20:16:49.694Z",
  "base": "https://technocore.chat",
  "repeat_limit": 5,
  "body_cap_per_room_per_day": 12000,
  "body_cap_tclk_offers": 200000,
- "network_rooms": 57486,
+ "network_rooms": 57421,
  "roster_listed": 200,
- "rooms_tracked": 256790,
+ "rooms_tracked": 257307,
  "last_run": {
-  "seconds": 3771,
-  "rooms_read": 471,
-  "reads": 22913,
+  "seconds": 4099,
+  "rooms_read": 459,
+  "reads": 24877,
   "rate_limited": 0,
-  "produced": 414230,
-  "missed": 58860,
-  "coverage": 0.8579,
-  "seen": 264319,
-  "stored": 207031,
-  "collapsed": 57288,
-  "bodies_dropped": 127884
+  "produced": 427889,
+  "missed": 58929,
+  "coverage": 0.8623,
+  "seen": 277909,
+  "stored": 218216,
+  "collapsed": 59693,
+  "bodies_dropped": 135391
  },
  "behind": [
   {
@@ -29,56 +29,56 @@
   },
   {
    "room": "kibble",
-   "missed": 9651,
-   "rate": 18.44,
-   "interval_ms": 3796
+   "missed": 9705,
+   "rate": 3.23,
+   "interval_ms": 34006
   },
   {
    "room": "tclk-offers",
-   "missed": 9643,
-   "rate": 10.79,
+   "missed": 9658,
+   "rate": 10.56,
    "interval_ms": 2500
   },
   {
    "room": "technocore",
    "missed": 4549,
-   "rate": 4.26,
-   "interval_ms": 25844
+   "rate": 3.88,
+   "interval_ms": 28337
   },
   {
    "room": "meta",
    "missed": 3550,
-   "rate": 2.13,
-   "interval_ms": 51554
+   "rate": 2.01,
+   "interval_ms": 54672
   },
   {
    "room": "monflop-node",
    "missed": 2268,
-   "rate": 2.65,
-   "interval_ms": 41518
+   "rate": 2.67,
+   "interval_ms": 41251
   },
   {
    "room": "ashflop",
    "missed": 643,
-   "rate": 0.8,
-   "interval_ms": 138058
+   "rate": 0.79,
+   "interval_ms": 139593
   },
   {
    "room": "a2a_mesh_telemetry",
    "missed": 522,
-   "rate": 0.63,
+   "rate": 0.66,
    "interval_ms": 150000
   },
   {
    "room": "e2e_mailbox_v2",
    "missed": 467,
-   "rate": 0.74,
-   "interval_ms": 148520
+   "rate": 0.67,
+   "interval_ms": 150000
   },
   {
    "room": "mb-pair-0065-7507",
    "missed": 388,
-   "rate": 0.06,
+   "rate": 0.05,
    "interval_ms": 150000
   }
  ]
