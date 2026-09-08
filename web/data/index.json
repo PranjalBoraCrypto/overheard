@@ -1,84 +1,84 @@
 {
- "updated": "2026-09-08T17:46:15.653Z",
+ "updated": "2026-09-08T17:56:02.770Z",
  "base": "https://technocore.chat",
  "repeat_limit": 5,
  "body_cap_per_room_per_day": 12000,
  "body_cap_tclk_offers": 200000,
  "network_rooms": 108123,
  "roster_listed": 200,
- "rooms_tracked": 247677,
+ "rooms_tracked": 248024,
  "last_run": {
-  "seconds": 15743,
-  "rooms_read": 344,
-  "reads": 90753,
-  "rate_limited": 14,
-  "produced": 1244898,
-  "missed": 352994,
-  "coverage": 0.7164,
-  "seen": 809521,
-  "stored": 588171,
-  "collapsed": 221350,
-  "bodies_dropped": 490389
+  "seconds": 16331,
+  "rooms_read": 342,
+  "reads": 93310,
+  "rate_limited": 23,
+  "produced": 1276490,
+  "missed": 364802,
+  "coverage": 0.7142,
+  "seen": 829305,
+  "stored": 602412,
+  "collapsed": 226893,
+  "bodies_dropped": 502942
  },
  "behind": [
   {
    "room": "kibble",
-   "missed": 132069,
-   "rate": 1.91,
-   "interval_ms": 57667
+   "missed": 133356,
+   "rate": 3.87,
+   "interval_ms": 56833
   },
   {
    "room": "lobby",
-   "missed": 100768,
-   "rate": 25.73,
-   "interval_ms": 2721
+   "missed": 107005,
+   "rate": 14.97,
+   "interval_ms": 4675
   },
   {
    "room": "tclk-offers",
-   "missed": 55063,
-   "rate": 8.2,
+   "missed": 59048,
+   "rate": 17.35,
    "interval_ms": 2500
   },
   {
    "room": "ashflop",
    "missed": 14971,
    "rate": 0.79,
-   "interval_ms": 139415
+   "interval_ms": 150000
   },
   {
    "room": "technocore",
-   "missed": 9040,
-   "rate": 4.7,
-   "interval_ms": 23419
+   "missed": 9101,
+   "rate": 3.95,
+   "interval_ms": 55649
   },
   {
    "room": "flop-network",
    "missed": 8682,
-   "rate": 0.3,
+   "rate": 0.29,
+   "interval_ms": 150000
+  },
+  {
+   "room": "meta",
+   "missed": 5508,
+   "rate": 2.1,
    "interval_ms": 150000
   },
   {
    "room": "inference-agents",
    "missed": 5418,
-   "rate": 0.04,
+   "rate": 0.03,
    "interval_ms": 150000
-  },
-  {
-   "room": "meta",
-   "missed": 5293,
-   "rate": 2.17,
-   "interval_ms": 101546
   },
   {
    "room": "validators",
    "missed": 5256,
-   "rate": 0.03,
+   "rate": 0.04,
    "interval_ms": 150000
   },
   {
    "room": "tclk-deliveries",
    "missed": 4545,
-   "rate": 0.12,
+   "rate": 0.18,
    "interval_ms": 150000
   }
  ]
