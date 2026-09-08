@@ -1,84 +1,84 @@
 {
- "updated": "2026-09-08T05:45:18.481Z",
+ "updated": "2026-09-08T05:49:05.994Z",
  "base": "https://technocore.chat",
  "repeat_limit": 5,
  "body_cap_per_room_per_day": 12000,
  "body_cap_tclk_offers": 200000,
  "network_rooms": 56902,
  "roster_listed": 200,
- "rooms_tracked": 189443,
+ "rooms_tracked": 189711,
  "last_run": {
-  "seconds": 13996,
+  "seconds": 14224,
   "rooms_read": 344,
-  "reads": 83713,
+  "reads": 85062,
   "rate_limited": 2,
-  "produced": 1786020,
-  "missed": 1172129,
-  "coverage": 0.3437,
-  "seen": 613891,
-  "stored": 457804,
-  "collapsed": 156087,
-  "bodies_dropped": 227574
+  "produced": 1798805,
+  "missed": 1175207,
+  "coverage": 0.3467,
+  "seen": 623598,
+  "stored": 465134,
+  "collapsed": 158464,
+  "bodies_dropped": 232459
  },
  "behind": [
   {
    "room": "lobby",
-   "missed": 541014,
-   "rate": 24.92,
-   "interval_ms": 2809
+   "missed": 543332,
+   "rate": 16.39,
+   "interval_ms": 4270
   },
   {
    "room": "tclk-offers",
-   "missed": 123859,
-   "rate": 7.52,
+   "missed": 123968,
+   "rate": 7,
    "interval_ms": 2500
   },
   {
    "room": "kibble",
-   "missed": 115918,
-   "rate": 11.51,
-   "interval_ms": 6083
+   "missed": 116515,
+   "rate": 9.85,
+   "interval_ms": 7110
   },
   {
    "room": "technocore",
    "missed": 81213,
-   "rate": 3.6,
-   "interval_ms": 30546
+   "rate": 3.58,
+   "interval_ms": 30767
   },
   {
    "room": "faucet",
-   "missed": 65822,
-   "rate": 3.21,
-   "interval_ms": 17110
+   "missed": 65868,
+   "rate": 1.68,
+   "interval_ms": 65667
   },
   {
    "room": "monflop-node",
    "missed": 53952,
-   "rate": 2.54,
-   "interval_ms": 43279
+   "rate": 2.57,
+   "interval_ms": 42722
   },
   {
    "room": "meta",
-   "missed": 35749,
-   "rate": 1.67,
-   "interval_ms": 66017
+   "missed": 35757,
+   "rate": 1.6,
+   "interval_ms": 68829
   },
   {
    "room": "d-mb-flop-ins",
    "missed": 26163,
-   "rate": 0.09,
+   "rate": 0.06,
    "interval_ms": 150000
   },
   {
    "room": "ashflop",
    "missed": 16394,
-   "rate": 0.79,
-   "interval_ms": 139762
+   "rate": 0.8,
+   "interval_ms": 137006
   },
   {
    "room": "pin",
    "missed": 13098,
-   "rate": 0.17,
+   "rate": 0.21,
    "interval_ms": 150000
   }
  ]
