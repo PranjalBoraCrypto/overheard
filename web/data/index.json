@@ -1,61 +1,61 @@
 {
- "updated": "2026-09-08T16:40:46.801Z",
+ "updated": "2026-09-08T16:45:39.730Z",
  "base": "https://technocore.chat",
  "repeat_limit": 5,
  "body_cap_per_room_per_day": 12000,
  "body_cap_tclk_offers": 200000,
  "network_rooms": 108123,
  "roster_listed": 200,
- "rooms_tracked": 238221,
+ "rooms_tracked": 239047,
  "last_run": {
-  "seconds": 11815,
-  "rooms_read": 317,
-  "reads": 70058,
-  "rate_limited": 5,
-  "produced": 1002307,
-  "missed": 290937,
-  "coverage": 0.7097,
-  "seen": 628987,
-  "stored": 458207,
-  "collapsed": 170780,
-  "bodies_dropped": 369314
+  "seconds": 12108,
+  "rooms_read": 341,
+  "reads": 71186,
+  "rate_limited": 8,
+  "produced": 1018071,
+  "missed": 296470,
+  "coverage": 0.7088,
+  "seen": 639218,
+  "stored": 465358,
+  "collapsed": 173860,
+  "bodies_dropped": 379153
  },
  "behind": [
   {
    "room": "kibble",
-   "missed": 124611,
-   "rate": 3.59,
-   "interval_ms": 30628
+   "missed": 124678,
+   "rate": 2.58,
+   "interval_ms": 42717
   },
   {
    "room": "lobby",
-   "missed": 73810,
-   "rate": 26.75,
-   "interval_ms": 2616
+   "missed": 76336,
+   "rate": 20.23,
+   "interval_ms": 3460
   },
   {
    "room": "tclk-offers",
-   "missed": 33351,
-   "rate": 25.71,
+   "missed": 36138,
+   "rate": 18.55,
    "interval_ms": 2500
   },
   {
    "room": "ashflop",
    "missed": 14971,
-   "rate": 0.81,
-   "interval_ms": 136116
+   "rate": 0.78,
+   "interval_ms": 140198
   },
   {
    "room": "flop-network",
    "missed": 8682,
-   "rate": 0.33,
+   "rate": 0.31,
    "interval_ms": 150000
   },
   {
    "room": "technocore",
-   "missed": 5680,
-   "rate": 4.58,
-   "interval_ms": 24006
+   "missed": 5813,
+   "rate": 4.2,
+   "interval_ms": 26184
   },
   {
    "room": "inference-agents",
@@ -72,14 +72,14 @@
   {
    "room": "tclk-deliveries",
    "missed": 4545,
-   "rate": 0.54,
+   "rate": 0.6,
    "interval_ms": 150000
   },
   {
    "room": "meta",
    "missed": 3094,
-   "rate": 2.36,
-   "interval_ms": 46615
+   "rate": 2.18,
+   "interval_ms": 50503
   }
  ]
 }
