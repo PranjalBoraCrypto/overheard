@@ -1,61 +1,61 @@
 {
- "updated": "2026-09-08T17:09:46.612Z",
+ "updated": "2026-09-08T17:15:04.986Z",
  "base": "https://technocore.chat",
  "repeat_limit": 5,
  "body_cap_per_room_per_day": 12000,
  "body_cap_tclk_offers": 200000,
  "network_rooms": 108123,
  "roster_listed": 200,
- "rooms_tracked": 243275,
+ "rooms_tracked": 244434,
  "last_run": {
-  "seconds": 13554,
-  "rooms_read": 342,
-  "reads": 78872,
+  "seconds": 13873,
+  "rooms_read": 280,
+  "reads": 80722,
   "rate_limited": 10,
-  "produced": 1112384,
-  "missed": 321411,
-  "coverage": 0.7111,
-  "seen": 708590,
-  "stored": 515355,
-  "collapsed": 193235,
-  "bodies_dropped": 424223
+  "produced": 1134661,
+  "missed": 326244,
+  "coverage": 0.7125,
+  "seen": 726034,
+  "stored": 528395,
+  "collapsed": 197639,
+  "bodies_dropped": 436379
  },
  "behind": [
   {
    "room": "kibble",
-   "missed": 127375,
-   "rate": 4.85,
-   "interval_ms": 22682
+   "missed": 128752,
+   "rate": 15.89,
+   "interval_ms": 8810
   },
   {
    "room": "lobby",
-   "missed": 85647,
-   "rate": 19.69,
-   "interval_ms": 3555
+   "missed": 87124,
+   "rate": 12.93,
+   "interval_ms": 5414
   },
   {
    "room": "tclk-offers",
-   "missed": 46589,
-   "rate": 14.85,
+   "missed": 48219,
+   "rate": 20.22,
    "interval_ms": 2500
   },
   {
    "room": "ashflop",
    "missed": 14971,
-   "rate": 0.79,
-   "interval_ms": 138707
+   "rate": 0.8,
+   "interval_ms": 137755
   },
   {
    "room": "flop-network",
    "missed": 8682,
-   "rate": 0.35,
+   "rate": 0.33,
    "interval_ms": 150000
   },
   {
    "room": "technocore",
-   "missed": 7132,
-   "rate": 7.2,
-   "interval_ms": 15279
+   "missed": 7305,
+   "rate": 5.72,
+   "interval_ms": 19221
   },
   {
    "room": "inference-agents",
@@ -66,20 +66,20 @@
   {
    "room": "validators",
    "missed": 5256,
-   "rate": 0.04,
+   "rate": 0.03,
    "interval_ms": 150000
   },
   {
    "room": "tclk-deliveries",
    "missed": 4545,
-   "rate": 0.35,
+   "rate": 0.4,
    "interval_ms": 150000
   },
   {
    "room": "meta",
-   "missed": 4257,
-   "rate": 3.31,
-   "interval_ms": 33212
+   "missed": 4433,
+   "rate": 6.26,
+   "interval_ms": 35117
   }
  ]
 }
