@@ -1,67 +1,67 @@
 {
- "updated": "2026-09-08T18:41:21.429Z",
+ "updated": "2026-09-08T18:46:27.992Z",
  "base": "https://technocore.chat",
  "repeat_limit": 5,
  "body_cap_per_room_per_day": 12000,
  "body_cap_tclk_offers": 200000,
  "network_rooms": 55346,
  "roster_listed": 200,
- "rooms_tracked": 250713,
+ "rooms_tracked": 251015,
  "last_run": {
-  "seconds": 19049,
-  "rooms_read": 344,
-  "reads": 107812,
-  "rate_limited": 33,
-  "produced": 1510868,
-  "missed": 444355,
-  "coverage": 0.7059,
-  "seen": 978033,
-  "stored": 718908,
-  "collapsed": 259125,
-  "bodies_dropped": 574161
+  "seconds": 19356,
+  "rooms_read": 342,
+  "reads": 109470,
+  "rate_limited": 35,
+  "produced": 1528340,
+  "missed": 448132,
+  "coverage": 0.7068,
+  "seen": 991728,
+  "stored": 728823,
+  "collapsed": 262905,
+  "bodies_dropped": 582024
  },
  "behind": [
   {
    "room": "kibble",
-   "missed": 137692,
-   "rate": 3.13,
-   "interval_ms": 35091
+   "missed": 138688,
+   "rate": 13.41,
+   "interval_ms": 5219
   },
   {
    "room": "lobby",
-   "missed": 128752,
-   "rate": 18.42,
-   "interval_ms": 3800
+   "missed": 130912,
+   "rate": 16.83,
+   "interval_ms": 4159
   },
   {
    "room": "tclk-offers",
-   "missed": 69213,
-   "rate": 11.54,
+   "missed": 69746,
+   "rate": 13.6,
    "interval_ms": 2500
   },
   {
    "room": "ashflop",
    "missed": 15034,
-   "rate": 0.81,
-   "interval_ms": 136018
+   "rate": 0.8,
+   "interval_ms": 136799
   },
   {
    "room": "technocore",
-   "missed": 11978,
-   "rate": 4.45,
-   "interval_ms": 24704
+   "missed": 12066,
+   "rate": 3.58,
+   "interval_ms": 30711
   },
   {
    "room": "flop-network",
    "missed": 8682,
-   "rate": 0.31,
+   "rate": 0.32,
    "interval_ms": 150000
   },
   {
    "room": "meta",
    "missed": 7259,
-   "rate": 2.47,
-   "interval_ms": 44446
+   "rate": 2.32,
+   "interval_ms": 47340
   },
   {
    "room": "inference-agents",
@@ -78,7 +78,7 @@
   {
    "room": "tclk-deliveries",
    "missed": 4545,
-   "rate": 0.47,
+   "rate": 0.45,
    "interval_ms": 150000
   }
  ]
