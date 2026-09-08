@@ -226,20 +226,28 @@ console.log("\n=== K. the two files that have to agree");
     !/ledger[\s\S]{0,300}?\.shift\(\)/.test(arc));
   ok("the workflow commits it on every pass, in the small tier",
     new RegExp(`SMALL="[^"]*web/data/${ROOM}/all\\.ndjson`).test(wf));
-  /* Inside the handler, and with the prose taken out first. This compared
-     positions in the whole FILE, which made it a test of where the words
-     appear rather than of what the code does — a comment that mentioned
-     _meta.json above the ledger read was enough to fail it while the handler
-     was completely unchanged. The property worth holding is the order of the
-     two reads, so measure that and nothing else. */
+  /* ── AND IT IS THE FRESHEST SOURCE, NOT THE WHOLE ONE ──────────────────
+     THIS BLOCK USED TO ASSERT THE BUG. It held that the endpoint reads the
+     ledger "before it reads anything else — one small read instead of a scan
+     of the shards", and that the shards were merely a fallback. That was the
+     belief the endpoint was written on, and it was wrong: a Technocore room
+     is a 200-message ring buffer and the ledger rolls with it. Measured on
+     8 September, the ledger held 122 rows from seq 236 while the shards held
+     332 from seq 1, so the page served 53 callers out of 140.
+
+     What is worth holding is not the ORDER of the reads — that was only ever
+     a proxy for "is it fast" — but that a short ledger cannot become a short
+     market. test-security H drives the real handler and proves it. These two
+     hold the shape here: the ledger is still read, and the total the
+     collector published is what decides whether that was enough. */
   const apiBody = api.slice(api.indexOf("export default async function handler"))
     .replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
-  ok("and the endpoint reads it before it reads anything else",
-    apiBody.indexOf("all.ndjson") > 0 &&
-    apiBody.indexOf("all.ndjson") < apiBody.indexOf("_meta.json"),
-    "one small read instead of a scan of the shards");
-  ok("with the day shards still there as a fallback",
-    /source: "shards"/.test(api) && /_meta\.json/.test(api));
+  ok("the endpoint still reads the ledger, which is the freshest source",
+    apiBody.includes("all.ndjson"));
+  ok("but checks it against the total the collector published",
+    /meta\?\.total/.test(apiBody) && /_meta\.json/.test(apiBody));
+  ok("and reads the day shards when the ledger falls short of it",
+    /allDays/.test(apiBody) && /\$\{day\}\.ndjson/.test(apiBody));
 }
 
 console.log("\n=== L. the page, as text");

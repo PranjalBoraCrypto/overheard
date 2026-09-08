@@ -121,73 +121,104 @@ function frameFrom(line) {
 }
 
 export default async function handler() {
-  /* ── THE LEDGER FIRST ────────────────────────────────────────────────────
-     The collector keeps every call in one small file and commits it on EVERY
-     pass, rather than on every twelfth like a day shard. So this is both the
-     freshest source and the only one that survives a collector dying mid-hour
-     — and it is one read of a few kilobytes instead of a scan of the shards.
-     The shards stay as the fallback: they are the same records by another
-     road, and a ledger that ever failed to be written must not take the
-     market with it. */
-  const ledger = await grabText(`${ROOM}/all.ndjson`);
-  if (ledger !== null) {
-    const frames = [];
-    for (const line of ledger.split("\n")) {
-      if (frames.length >= MAX_FRAMES) break;
+  /* ── THE LEDGER IS THE FRESHEST SOURCE, NOT THE WHOLE ONE ────────────────
+     This used to return the moment `all.ndjson` could be read, on the stated
+     grounds that "the collector keeps every call in one small file". It does
+     not, and the file itself says so: on 8 September the ledger held 122 rows
+     covering seq 236-357 while the day shards held 332 rows from seq 1, and
+     _meta.json agreed with the shards — total 332, no gaps. Every call made
+     before the room's 200-message ring buffer rolled had left the ledger.
+
+     So the shortcut was quietly serving a market of 53 callers when 140 had
+     called. Not an outage, not an error, nothing in a log: just a smaller
+     number, on the page whose entire claim is that the record is complete and
+     anybody can check it. The people missing from it were the earliest ones.
+
+     THE LEDGER IS STILL READ FIRST, because it is genuinely the freshest —
+     /api/keep appends to it the instant somebody calls, and the collector
+     commits it on every pass rather than on every twelfth like a shard. It is
+     just no longer trusted to be everything. _meta.json publishes the total
+     the collector has actually seen; when the ledger falls short of it, the
+     shards are read too and the two are merged by the server's own sequence
+     number. Same rule the collector itself uses when its two writers meet:
+     union by seq, and neither can erase the other. */
+  const [ledgerText, metaText] = await Promise.all([
+    grabText(`${ROOM}/all.ndjson`),
+    grabText(`${ROOM}/_meta.json`),
+  ]);
+
+  let meta = null;
+  try { meta = metaText ? JSON.parse(metaText) : null; } catch { meta = null; }
+
+  /* Keyed by seq so the two roads to the same record cannot double-count it,
+     and so a frame the ledger has but no shard does yet still arrives. */
+  const bySeq = new Map();
+  const eat = (text) => {
+    if (text === null) return 0;
+    let n = 0;
+    for (const line of text.split("\n")) {
+      if (bySeq.size >= MAX_FRAMES) break;
+      /* The prefilter: a substring test rules out almost every line before
+         JSON.parse is asked to look at it. */
       if (!line || !line.includes(PREFIX)) continue;
       const f = frameFrom(line);
-      if (f) frames.push(f);
+      if (!f) continue;
+      n++;
+      if (!bySeq.has(f.seq)) bySeq.set(f.seq, f);
     }
-    return json({
-      room: ROOM, archived: true, source: "ledger", frames,
-      truncated: frames.length >= MAX_FRAMES,
-      checked: new Date().toISOString(),
-    });
+    return n;
+  };
+
+  const fromLedger = eat(ledgerText);
+
+  /* WHEN THE SHARDS ARE WORTH READING. `total` is every row the collector has
+     written for this room, calls and anything else it saw, so it is an upper
+     bound rather than a count of frames — which is exactly the right shape for
+     this test. Reading them when the ledger is genuinely complete would cost a
+     scan per request for nothing; not reading them when it is short is the bug
+     above. A ledger that could not be read at all means the shards are the
+     only road left, so they are read then too. */
+  const total = Number(meta?.total);
+  const short = ledgerText === null
+    || (Number.isFinite(total) && fromLedger < total);
+
+  let scanned = 0;
+  const allDays = (Array.isArray(meta?.days) ? meta.days : [])
+    /* Shaped, because every one of these is interpolated into a URL this
+       function then fetches. See DAY_RE. */
+    .filter((d) => typeof d === "string" && DAY_RE.test(d)).sort();
+
+  if (short && allDays.length) {
+    /* Oldest first, and no early stop: this endpoint answers "what is the
+       total", which is not a question with an early stop in it. */
+    for (const day of allDays.slice(-MAX_DAYS)) {
+      if (bySeq.size >= MAX_FRAMES) break;
+      const text = await grabText(`${ROOM}/${day}.ndjson`);
+      if (text === null) continue;            // a missing shard is not an error
+      scanned++;
+      eat(text);
+    }
   }
 
-  const metaText = await grabText(`${ROOM}/_meta.json`);
-  if (!metaText) {
-    /* NOT AN ERROR, AND THE DIFFERENCE MATTERS. Until the collector has been
-       round this room once there is no archive of it, which is exactly the
-       state the room is in on its first day — and a page told "unavailable"
-       would say the market could not be read when it can, live, perfectly
-       well. `archived: false` is the honest word for it. */
+  /* NOT AN ERROR, AND THE DIFFERENCE MATTERS. Until the collector has been
+     round this room once there is no archive of it, which is exactly the state
+     the room is in on its first day — and a page told "unavailable" would say
+     the market could not be read when it can, live, perfectly well.
+     `archived: false` is the honest word for it. */
+  if (ledgerText === null && !allDays.length) {
     return json({ room: ROOM, archived: false, frames: [], days_scanned: 0,
                   note: "the collector has not been round this room yet; the live room is the whole record so far" }, 200, 20);
   }
-  let meta;
-  try { meta = JSON.parse(metaText); } catch { meta = null; }
-  /* Shaped, because every one of these is interpolated into a URL this
-     function then fetches. See DAY_RE. */
-  const allDays = (Array.isArray(meta?.days) ? meta.days : [])
-    .filter((d) => typeof d === "string" && DAY_RE.test(d)).sort();
-  /* Oldest first here, unlike /api/orders. That endpoint answers "what are my
-     most recent orders" and can stop early; this one answers "what is the
-     total", which is not a question with an early stop in it. */
-  const days = allDays.slice(-MAX_DAYS);
 
-  const frames = [];
-  let scanned = 0;
-  for (const day of days) {
-    if (frames.length >= MAX_FRAMES) break;
-    const text = await grabText(`${ROOM}/${day}.ndjson`);
-    if (text === null) continue;              // a missing shard is not an error
-    scanned++;
-    for (const line of text.split("\n")) {
-      if (frames.length >= MAX_FRAMES) break;
-      /* The prefilter, as in /api/orders: a substring test rules out almost
-         every line before JSON.parse is asked to look at it. */
-      if (!line || !line.includes(PREFIX)) continue;
-      const f = frameFrom(line);
-      if (f) frames.push(f);
-    }
-  }
-
+  const frames = [...bySeq.values()].sort((a, b) => a.seq - b.seq);
   return json({
     room: ROOM,
     archived: true,
-    source: "shards",
+    /* Said out loud, because "where did this number come from" is the first
+       question worth asking when two readers disagree. */
+    source: scanned ? (ledgerText === null ? "shards" : "ledger+shards") : "ledger",
     frames,
+    ledger_frames: fromLedger,
     days_scanned: scanned,
     days_available: allDays.length,
     truncated: frames.length >= MAX_FRAMES,

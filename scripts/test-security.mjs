@@ -464,5 +464,82 @@ console.log("\n=== G. a typed name is not a key");
     off.length === 0, off.join(" ") || `${files.length} files agree`);
 }
 
+/* ═════════════════════════════════════════════════════════════════════════
+   H. THE LEDGER IS THE FRESHEST SOURCE, NOT THE WHOLE ONE
+
+   FOUND IN PRODUCTION, on the morning a founder's quote-tweet pointed 45,000
+   people at the page. /api/calls returned the moment `all.ndjson` could be
+   read, on the stated grounds that the collector "keeps every call in one
+   small file". It does not. A Technocore room is a 200-message ring buffer,
+   and the ledger had rolled with it: 122 rows from seq 236, while the day
+   shards held 332 rows from seq 1 and _meta.json agreed with the shards.
+
+   So the page was serving a market of 53 callers when 140 had called. No
+   error, no log line, nothing to notice — just a smaller number, on the one
+   page whose whole claim is that the record is complete and checkable. The
+   people missing were the earliest ones, which is the worst possible subset.
+
+   This is the same shape as the ledger shredder in section A: a read that
+   came back short was treated as a read that came back whole.
+   ═════════════════════════════════════════════════════════════════════════*/
+console.log("\n=== H. a short ledger does not become a short market");
+{
+  const calls = (await import("../api/calls.js")).default;
+  const row = (seq, from, text) => JSON.stringify({ seq, ts: "2026-09-08T09:00:00Z", from, sig: "s", text });
+  const frame = (from, n) => PREFIX + JSON.stringify(
+    { amount: "1000", from, market: MARKET, nonce: "n" + n, type: "tap" });
+
+  /* Ten calls exist. The ledger has rolled and holds only the last three. */
+  const everyone = Array.from({ length: 10 }, (_, i) =>
+    row(i + 1, "did:key:z6Mk" + String.fromCharCode(97 + i).repeat(44), frame("did:key:z6Mk" + String.fromCharCode(97 + i).repeat(44), i)));
+  const rolled = everyone.slice(-3).join("\n");
+  const shard = everyone.join("\n");
+  const meta = JSON.stringify({ room: "overheard-calls", days: ["2026-09-08"], total: 10, gaps: [] });
+
+  const serve = (table) => stubFetch((u) => {
+    for (const [suffix, body] of Object.entries(table)) {
+      if (u.endsWith(suffix)) return body === null
+        ? new Response("", { status: 404 })
+        : new Response(body, { status: 200 });
+    }
+    return new Response("", { status: 404 });
+  });
+
+  let s1 = serve({ "all.ndjson": rolled, "_meta.json": meta, "2026-09-08.ndjson": shard });
+  let j = await (await calls(new Request("https://x/api/calls"))).json();
+  s1.done();
+  ok("a ledger shorter than the archive is topped up from the shards",
+    j.frames.length === 10, `${j.frames.length} of 10, source ${j.source}`);
+  ok("and the two roads to one record do not double-count it",
+    new Set(j.frames.map((f) => f.seq)).size === j.frames.length);
+  ok("the earliest callers are the ones it was losing, and they are back",
+    j.frames.some((f) => f.seq === 1) && j.frames.some((f) => f.seq === 10));
+  ok("it says which sources it actually used", j.source === "ledger+shards", j.source);
+
+  /* THE FAST PATH SURVIVES. Reading every shard on every request when the
+     ledger is genuinely complete would trade one bug for a slower endpoint. */
+  const s2 = serve({ "all.ndjson": everyone.join("\n"), "_meta.json": meta, "2026-09-08.ndjson": shard });
+  j = await (await calls(new Request("https://x/api/calls"))).json();
+  const shardReads = s2.calls.filter((c) => /2026-09-08\.ndjson/.test(c.url)).length;
+  s2.done();
+  ok("a complete ledger still answers without touching a shard",
+    j.frames.length === 10 && shardReads === 0 && j.source === "ledger",
+    `${shardReads} shard reads, source ${j.source}`);
+
+  /* And the ledger failing entirely must not take the market with it. */
+  const s3 = serve({ "all.ndjson": null, "_meta.json": meta, "2026-09-08.ndjson": shard });
+  j = await (await calls(new Request("https://x/api/calls"))).json();
+  s3.done();
+  ok("a ledger that cannot be read at all falls back to the shards",
+    j.frames.length === 10 && j.source === "shards", `${j.frames.length}, ${j.source}`);
+
+  /* A room nobody has collected yet is not a broken one. */
+  const s4 = serve({ "all.ndjson": null, "_meta.json": null });
+  j = await (await calls(new Request("https://x/api/calls"))).json();
+  s4.done();
+  ok("and a room with no archive yet says so, rather than erroring",
+    j.archived === false && j.frames.length === 0);
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 if (fail) process.exitCode = 1;
