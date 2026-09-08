@@ -1,61 +1,61 @@
 {
- "updated": "2026-09-08T17:05:16.484Z",
+ "updated": "2026-09-08T17:09:46.612Z",
  "base": "https://technocore.chat",
  "repeat_limit": 5,
  "body_cap_per_room_per_day": 12000,
  "body_cap_tclk_offers": 200000,
  "network_rooms": 108123,
  "roster_listed": 200,
- "rooms_tracked": 242505,
+ "rooms_tracked": 243275,
  "last_run": {
-  "seconds": 13284,
-  "rooms_read": 328,
-  "reads": 77488,
+  "seconds": 13554,
+  "rooms_read": 342,
+  "reads": 78872,
   "rate_limited": 10,
-  "produced": 1093908,
-  "missed": 316930,
-  "coverage": 0.7103,
-  "seen": 694595,
-  "stored": 505403,
-  "collapsed": 189192,
-  "bodies_dropped": 415349
+  "produced": 1112384,
+  "missed": 321411,
+  "coverage": 0.7111,
+  "seen": 708590,
+  "stored": 515355,
+  "collapsed": 193235,
+  "bodies_dropped": 424223
  },
  "behind": [
   {
    "room": "kibble",
-   "missed": 127164,
-   "rate": 4.64,
-   "interval_ms": 23707
+   "missed": 127375,
+   "rate": 4.85,
+   "interval_ms": 22682
   },
   {
    "room": "lobby",
-   "missed": 83708,
-   "rate": 16.16,
-   "interval_ms": 4331
+   "missed": 85647,
+   "rate": 19.69,
+   "interval_ms": 3555
   },
   {
    "room": "tclk-offers",
-   "missed": 44794,
-   "rate": 20.47,
+   "missed": 46589,
+   "rate": 14.85,
    "interval_ms": 2500
   },
   {
    "room": "ashflop",
    "missed": 14971,
    "rate": 0.79,
-   "interval_ms": 139228
+   "interval_ms": 138707
   },
   {
    "room": "flop-network",
    "missed": 8682,
-   "rate": 0.32,
+   "rate": 0.35,
    "interval_ms": 150000
   },
   {
    "room": "technocore",
-   "missed": 6956,
-   "rate": 5.32,
-   "interval_ms": 20686
+   "missed": 7132,
+   "rate": 7.2,
+   "interval_ms": 15279
   },
   {
    "room": "inference-agents",
@@ -72,14 +72,14 @@
   {
    "room": "tclk-deliveries",
    "missed": 4545,
-   "rate": 0.39,
+   "rate": 0.35,
    "interval_ms": 150000
   },
   {
    "room": "meta",
-   "missed": 3897,
-   "rate": 4.48,
-   "interval_ms": 24540
+   "missed": 4257,
+   "rate": 3.31,
+   "interval_ms": 33212
   }
  ]
 }
