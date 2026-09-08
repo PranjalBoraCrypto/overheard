@@ -1,61 +1,61 @@
 {
- "updated": "2026-09-08T17:15:04.986Z",
+ "updated": "2026-09-08T17:20:20.396Z",
  "base": "https://technocore.chat",
  "repeat_limit": 5,
  "body_cap_per_room_per_day": 12000,
  "body_cap_tclk_offers": 200000,
  "network_rooms": 108123,
  "roster_listed": 200,
- "rooms_tracked": 244434,
+ "rooms_tracked": 245606,
  "last_run": {
-  "seconds": 13873,
-  "rooms_read": 280,
-  "reads": 80722,
+  "seconds": 14188,
+  "rooms_read": 224,
+  "reads": 82106,
   "rate_limited": 10,
-  "produced": 1134661,
-  "missed": 326244,
-  "coverage": 0.7125,
-  "seen": 726034,
-  "stored": 528395,
-  "collapsed": 197639,
-  "bodies_dropped": 436379
+  "produced": 1155744,
+  "missed": 331375,
+  "coverage": 0.7133,
+  "seen": 741986,
+  "stored": 540125,
+  "collapsed": 201861,
+  "bodies_dropped": 447071
  },
  "behind": [
   {
    "room": "kibble",
-   "missed": 128752,
-   "rate": 15.89,
-   "interval_ms": 8810
+   "missed": 129067,
+   "rate": 3.99,
+   "interval_ms": 27574
   },
   {
    "room": "lobby",
-   "missed": 87124,
-   "rate": 12.93,
-   "interval_ms": 5414
+   "missed": 89224,
+   "rate": 16.05,
+   "interval_ms": 4362
   },
   {
    "room": "tclk-offers",
-   "missed": 48219,
-   "rate": 20.22,
+   "missed": 50459,
+   "rate": 20.63,
    "interval_ms": 2500
   },
   {
    "room": "ashflop",
    "missed": 14971,
-   "rate": 0.8,
-   "interval_ms": 137755
+   "rate": 0.78,
+   "interval_ms": 141818
   },
   {
    "room": "flop-network",
    "missed": 8682,
-   "rate": 0.33,
+   "rate": 0.32,
    "interval_ms": 150000
   },
   {
    "room": "technocore",
-   "missed": 7305,
-   "rate": 5.72,
-   "interval_ms": 19221
+   "missed": 7687,
+   "rate": 4.52,
+   "interval_ms": 24355
   },
   {
    "room": "inference-agents",
@@ -72,14 +72,14 @@
   {
    "room": "tclk-deliveries",
    "missed": 4545,
-   "rate": 0.4,
+   "rate": 0.33,
    "interval_ms": 150000
   },
   {
    "room": "meta",
-   "missed": 4433,
-   "rate": 6.26,
-   "interval_ms": 35117
+   "missed": 4527,
+   "rate": 3.05,
+   "interval_ms": 36045
   }
  ]
 }
