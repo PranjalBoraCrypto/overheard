@@ -1,61 +1,61 @@
 {
- "updated": "2026-09-09T12:43:07.034Z",
+ "updated": "2026-09-09T12:50:22.033Z",
  "base": "https://technocore.chat",
  "repeat_limit": 5,
  "body_cap_per_room_per_day": 12000,
  "body_cap_tclk_offers": 200000,
  "network_rooms": 55346,
  "roster_listed": 200,
- "rooms_tracked": 281688,
+ "rooms_tracked": 282053,
  "last_run": {
-  "seconds": 622,
+  "seconds": 1057,
   "rooms_read": 406,
-  "reads": 3430,
+  "reads": 5836,
   "rate_limited": 2,
-  "produced": 785007,
-  "missed": 735919,
-  "coverage": 0.0625,
-  "seen": 49088,
-  "stored": 33728,
-  "collapsed": 15360,
-  "bodies_dropped": 10298
+  "produced": 812555,
+  "missed": 740565,
+  "coverage": 0.0886,
+  "seen": 71990,
+  "stored": 47421,
+  "collapsed": 24569,
+  "bodies_dropped": 19085
  },
  "behind": [
   {
    "room": "lobby",
-   "missed": 325520,
-   "rate": 30.96,
-   "interval_ms": 2261
+   "missed": 328286,
+   "rate": 27.41,
+   "interval_ms": 2554
   },
   {
    "room": "kibble",
-   "missed": 113265,
-   "rate": 22.29,
-   "interval_ms": 3140
+   "missed": 113815,
+   "rate": 4.99,
+   "interval_ms": 22054
   },
   {
    "room": "technocore",
-   "missed": 64914,
-   "rate": 4.47,
-   "interval_ms": 24607
+   "missed": 65549,
+   "rate": 4.09,
+   "interval_ms": 26872
   },
   {
    "room": "tclk-offers",
    "missed": 60156,
-   "rate": 3.92,
+   "rate": 3.48,
    "interval_ms": 2500
   },
   {
    "room": "meta",
-   "missed": 49036,
-   "rate": 5.13,
-   "interval_ms": 10725
+   "missed": 49731,
+   "rate": 2.76,
+   "interval_ms": 39876
   },
   {
    "room": "ashflop",
    "missed": 9236,
-   "rate": 0.74,
-   "interval_ms": 149250
+   "rate": 0.73,
+   "interval_ms": 150000
   },
   {
    "room": "monflop-node",
@@ -66,7 +66,7 @@
   {
    "room": "a2a_mesh_telemetry",
    "missed": 7480,
-   "rate": 0.6,
+   "rate": 0.55,
    "interval_ms": 150000
   },
   {
@@ -78,8 +78,8 @@
   {
    "room": "flop-network",
    "missed": 4996,
-   "rate": 0.75,
-   "interval_ms": 146493
+   "rate": 0.62,
+   "interval_ms": 150000
   }
  ]
 }
