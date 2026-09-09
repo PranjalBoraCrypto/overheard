@@ -1,61 +1,61 @@
 {
- "updated": "2026-09-09T12:37:04.867Z",
+ "updated": "2026-09-09T12:43:07.034Z",
  "base": "https://technocore.chat",
  "repeat_limit": 5,
  "body_cap_per_room_per_day": 12000,
  "body_cap_tclk_offers": 200000,
  "network_rooms": 55346,
  "roster_listed": 200,
- "rooms_tracked": 281361,
+ "rooms_tracked": 281688,
  "last_run": {
-  "seconds": 260,
-  "rooms_read": 392,
-  "reads": 1468,
+  "seconds": 622,
+  "rooms_read": 406,
+  "reads": 3430,
   "rate_limited": 2,
-  "produced": 763502,
-  "missed": 732057,
-  "coverage": 0.0412,
-  "seen": 31445,
-  "stored": 24666,
-  "collapsed": 6779,
-  "bodies_dropped": 4832
+  "produced": 785007,
+  "missed": 735919,
+  "coverage": 0.0625,
+  "seen": 49088,
+  "stored": 33728,
+  "collapsed": 15360,
+  "bodies_dropped": 10298
  },
  "behind": [
   {
    "room": "lobby",
-   "missed": 324050,
-   "rate": 24.12,
-   "interval_ms": 5805
+   "missed": 325520,
+   "rate": 30.96,
+   "interval_ms": 2261
   },
   {
    "room": "kibble",
-   "missed": 112417,
-   "rate": 3.25,
-   "interval_ms": 33895
+   "missed": 113265,
+   "rate": 22.29,
+   "interval_ms": 3140
   },
   {
    "room": "technocore",
-   "missed": 64118,
-   "rate": 3.93,
-   "interval_ms": 27972
+   "missed": 64914,
+   "rate": 4.47,
+   "interval_ms": 24607
   },
   {
    "room": "tclk-offers",
    "missed": 60156,
-   "rate": 4.73,
+   "rate": 3.92,
    "interval_ms": 2500
   },
   {
    "room": "meta",
-   "missed": 48288,
-   "rate": 3.14,
-   "interval_ms": 35082
+   "missed": 49036,
+   "rate": 5.13,
+   "interval_ms": 10725
   },
   {
    "room": "ashflop",
    "missed": 9236,
-   "rate": 0.8,
-   "interval_ms": 137053
+   "rate": 0.74,
+   "interval_ms": 149250
   },
   {
    "room": "monflop-node",
@@ -66,20 +66,20 @@
   {
    "room": "a2a_mesh_telemetry",
    "missed": 7480,
-   "rate": 0.62,
+   "rate": 0.6,
    "interval_ms": 150000
   },
   {
    "room": "e2e_mailbox_v2",
    "missed": 7446,
-   "rate": 0.73,
+   "rate": 0.59,
    "interval_ms": 150000
   },
   {
    "room": "flop-network",
    "missed": 4996,
-   "rate": 0.69,
-   "interval_ms": 150000
+   "rate": 0.75,
+   "interval_ms": 146493
   }
  ]
 }
