@@ -1,24 +1,24 @@
 {
- "updated": "2026-09-09T14:37:00.474Z",
+ "updated": "2026-09-09T14:43:04.398Z",
  "base": "https://technocore.chat",
  "repeat_limit": 5,
  "body_cap_per_room_per_day": 12000,
  "body_cap_tclk_offers": 200000,
  "network_rooms": 52088,
  "roster_listed": 200,
- "rooms_tracked": 288614,
+ "rooms_tracked": 288934,
  "last_run": {
-  "seconds": 7455,
-  "rooms_read": 511,
-  "reads": 32035,
+  "seconds": 7819,
+  "rooms_read": 516,
+  "reads": 33274,
   "rate_limited": 2,
-  "produced": 1137103,
-  "missed": 770477,
-  "coverage": 0.3224,
-  "seen": 289051,
-  "stored": 220633,
-  "collapsed": 68418,
-  "bodies_dropped": 86625
+  "produced": 1148821,
+  "missed": 771529,
+  "coverage": 0.3284,
+  "seen": 299717,
+  "stored": 228725,
+  "collapsed": 70992,
+  "bodies_dropped": 91755
  },
  "behind": [
   {
@@ -29,32 +29,32 @@
   },
   {
    "room": "kibble",
-   "missed": 124672,
-   "rate": 2.84,
-   "interval_ms": 38709
+   "missed": 125192,
+   "rate": 14.88,
+   "interval_ms": 4704
   },
   {
    "room": "technocore",
    "missed": 74746,
-   "rate": 6.23,
-   "interval_ms": 17658
+   "rate": 3.87,
+   "interval_ms": 28414
   },
   {
    "room": "tclk-offers",
-   "missed": 60443,
-   "rate": 4.54,
+   "missed": 60543,
+   "rate": 5.28,
    "interval_ms": 2500
   },
   {
    "room": "meta",
-   "missed": 57820,
-   "rate": 1.92,
-   "interval_ms": 57175
+   "missed": 58252,
+   "rate": 2.4,
+   "interval_ms": 45814
   },
   {
    "room": "ashflop",
    "missed": 9307,
-   "rate": 0.66,
+   "rate": 0.69,
    "interval_ms": 150000
   },
   {
@@ -66,19 +66,19 @@
   {
    "room": "a2a_mesh_telemetry",
    "missed": 7480,
-   "rate": 0.56,
+   "rate": 0.6,
    "interval_ms": 150000
   },
   {
    "room": "e2e_mailbox_v2",
    "missed": 7446,
-   "rate": 0.55,
+   "rate": 0.54,
    "interval_ms": 150000
   },
   {
    "room": "flop-network",
    "missed": 5013,
-   "rate": 0.52,
+   "rate": 0.68,
    "interval_ms": 150000
   }
  ]
