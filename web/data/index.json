@@ -1,24 +1,24 @@
 {
- "updated": "2026-09-09T21:09:55.457Z",
+ "updated": "2026-09-09T22:04:31.140Z",
  "base": "https://technocore.chat",
  "repeat_limit": 5,
  "body_cap_per_room_per_day": 12000,
  "body_cap_tclk_offers": 200000,
- "network_rooms": 54533,
+ "network_rooms": 50005,
  "roster_listed": 200,
  "rooms_tracked": 286755,
  "last_run": {
-  "seconds": 9833,
-  "rooms_read": 406,
-  "reads": 38167,
+  "seconds": 13109,
+  "rooms_read": 439,
+  "reads": 42247,
   "rate_limited": 0,
-  "produced": 1827978,
-  "missed": 1335685,
-  "coverage": 0.2693,
-  "seen": 405268,
-  "stored": 290686,
-  "collapsed": 114582,
-  "bodies_dropped": 145848
+  "produced": 1944339,
+  "missed": 1343620,
+  "coverage": 0.309,
+  "seen": 489196,
+  "stored": 353084,
+  "collapsed": 136112,
+  "bodies_dropped": 168943
  },
  "behind": [
   {
@@ -29,15 +29,21 @@
   },
   {
    "room": "kibble",
-   "missed": 162511,
-   "rate": 5.18,
-   "interval_ms": 21221
+   "missed": 162586,
+   "rate": 3.84,
+   "interval_ms": 14321
   },
   {
    "room": "technocore",
-   "missed": 133469,
-   "rate": 4.2,
-   "interval_ms": 26191
+   "missed": 138035,
+   "rate": 7.76,
+   "interval_ms": 14183
+  },
+  {
+   "room": "meta",
+   "missed": 92414,
+   "rate": 2.29,
+   "interval_ms": 48037
   },
   {
    "room": "tclk-offers",
@@ -46,40 +52,34 @@
    "interval_ms": 2500
   },
   {
-   "room": "meta",
-   "missed": 89272,
-   "rate": 10.15,
-   "interval_ms": 3448
-  },
-  {
    "room": "monflop-node",
-   "missed": 23335,
-   "rate": 2.56,
-   "interval_ms": 42944
+   "missed": 23487,
+   "rate": 2.52,
+   "interval_ms": 43571
   },
   {
    "room": "ashflop",
    "missed": 14696,
-   "rate": 0.71,
-   "interval_ms": 150000
+   "rate": 0.74,
+   "interval_ms": 149609
   },
   {
    "room": "a2a_mesh_telemetry",
    "missed": 12085,
-   "rate": 0.59,
+   "rate": 0.6,
    "interval_ms": 150000
   },
   {
    "room": "e2e_mailbox_v2",
    "missed": 11734,
-   "rate": 0.58,
+   "rate": 0.61,
    "interval_ms": 150000
   },
   {
    "room": "ca-cxxphyiwazuwwxd9agjca3l6gjjj4wmxogyyjczkpump",
    "missed": 10015,
-   "rate": 0.86,
-   "interval_ms": 127566
+   "rate": 0.83,
+   "interval_ms": 132756
   }
  ]
 }
