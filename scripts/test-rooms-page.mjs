@@ -32,6 +32,9 @@ let TRIES = 0;
 const LATE = [];
 let CAP = { known: true, rooms: { total: 19116, capacity: 20480, left: 1364, full: false },
             notes: { total: 600000, capacity: 655360, left: 55360, full: false } };
+/* Set by section N to watch what the poll actually asks for. Null the rest of
+   the time, so no other section pays for it. */
+let srvRoomHook = null;
 
 const srv = http.createServer((req, res) => {
   const u = new URL(req.url, 'http://x');
@@ -55,6 +58,7 @@ const srv = http.createServer((req, res) => {
     });
   }
   if (p === '/api/room') {
+    if (srvRoomHook) srvRoomHook(req.url);
     const room = u.searchParams.get('room') || '';
     // A firehose, like the real lobby: 200 messages per read. This is the
     // room where "my message vanished" was reported.
@@ -867,6 +871,75 @@ check('and no longer promises nobody can post as you',
   !/nobody can post as you/i.test(words));
 check('it says instead that a room read carries no signature',
   /carries no signatures?/i.test(words), words.match(/[^.]*carries no signature[^.]*/i)?.[0] ?? 'ABSENT');
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   N. THE POLL, AND WHAT IT COSTS SOMEBODY ELSE
+
+   This page asked the server for new messages every four seconds, in every
+   open tab, for as long as the browser was open — with no visibility check
+   anywhere in the file. And it asked using `since=<this viewer's own
+   sequence number>`, which no two viewers ever share, so no two ever asked
+   the same URL and the edge cache could not collapse a single one of them:
+   every poll from every tab woke the function up.
+
+   MEASURED on the September bill: 1.6M function invocations and 14 CPU-hours
+   against a 4-hour allowance. 900 polls an hour per open tab, and almost
+   nothing else on the site.
+
+   These three hold the shape of the fix. They are about REQUESTS, not about
+   rendering, because the bug was never visible on the page — a forgotten tab
+   costs nothing a user can see, which is exactly why it ran for a month.
+   ═══════════════════════════════════════════════════════════════════════════*/
+console.log('\n=== N. the poll asks one question, and stops when nobody is looking');
+{
+  const seenUrls = [];
+  const origRoom = srvRoomHook;
+  srvRoomHook = (u) => seenUrls.push(u);
+
+  const ctxA = await b.newContext({ viewport: { width: 1100, height: 900 } });
+  const pa = await ctxA.newPage();
+  const ctxB = await b.newContext({ viewport: { width: 1100, height: 900 } });
+  const pb = await ctxB.newPage();
+  await pa.goto('http://localhost:8895/rooms.html?room=lobby');
+  await pb.goto('http://localhost:8895/rooms.html?room=lobby');
+  await pa.waitForTimeout(9000);
+
+  /* SCOPED TO THIS SECTION'S ROOM. Section M leaves its page open on
+     ?room=forgery and that page polls too — counting it here would measure
+     the test harness rather than the fix. Both tabs below are on lobby. */
+  const polls = seenUrls.filter((u) => u.includes('/api/room') && u.includes('room=lobby'));
+  const shapes = new Set(polls.map((u) => u.replace(/[?&]t=\d+/, '')));
+  check('both tabs polled at all', polls.length >= 4, `${polls.length} reads`);
+  /* ONE URL FOR EVERYONE is the whole saving: it is what lets the edge answer
+     nearly every poll from a four-second cache instead of running the
+     function once per tab per four seconds. */
+  check('and every poll is the same url, whoever is asking',
+    shapes.size === 1, [...shapes].join(' | '));
+  check('the canonical spelling, and no per-viewer cursor in it',
+    [...shapes][0].includes('c=1') && !/since=/.test([...shapes][0]), [...shapes][0]);
+
+  const lobbyReads = () => seenUrls.filter((u) => u.includes('room=lobby')).length;
+  const before = lobbyReads();
+  const hide = (pg, hidden) => pg.evaluate((h) => {
+    Object.defineProperty(document, 'hidden', { value: h, configurable: true });
+    Object.defineProperty(document, 'visibilityState', { value: h ? 'hidden' : 'visible', configurable: true });
+    document.dispatchEvent(new Event('visibilitychange'));
+  }, hidden);
+
+  await hide(pa, true);
+  await pb.close(); await ctxB.close();
+  await pa.waitForTimeout(9000);
+  const during = lobbyReads() - before;
+  check('a tab nobody is looking at asks for nothing', during === 0, `${during} reads in 9s`);
+
+  await hide(pa, false);
+  await pa.waitForTimeout(1200);
+  check('and it catches up the moment it comes back, not on the next timer',
+    lobbyReads() - before - during >= 1, `${lobbyReads() - before - during} reads`);
+
+  await pa.close(); await ctxA.close();
+  srvRoomHook = origRoom;
+}
 
 console.log('\nerrors:', errs);
 if (errs.length) bad++;

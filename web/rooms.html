@@ -1233,7 +1233,49 @@ $("find").addEventListener("keydown",e=>{
    Polled, not streamed. Every visitor's read comes from this site's IP
    against 600/minute shared by everyone, so /api/room is cached for four
    seconds at the edge and a thousand readers cost one request. */
-let since="0", seen=new Set(), timer=null, backoff=4000, freshRead=0;
+/* `since` used to live here and is deliberately gone: the poll no longer
+   sends one, and a variable still being assigned on every read is how the
+   next person concludes it is load-bearing and puts it back in the URL. */
+let seen=new Set(), timer=null, backoff=4000, freshRead=0;
+
+/* ── HOW OFTEN IT IS WORTH ASKING ──────────────────────────────────────────
+   Four seconds is right for somebody reading a room. It is wrong for a tab
+   that has been behind three others since this morning, and it never stopped
+   being four seconds: there was no visibility check here at all, so one
+   forgotten tab cost 900 requests an hour for as long as the browser was
+   open. That, and not the traffic, is what emptied a month of allowance.
+
+   Two rules, and neither of them slows down the case that matters:
+     hidden  → stop entirely, and catch up the moment it comes back
+     idle    → step down, because a page nobody has touched in ten minutes
+               does not need the same cadence as one being read
+   Any real interaction puts it straight back to four seconds. */
+const IDLE_SLOW = 120000, IDLE_SLEEP = 600000;
+let lastActive = Date.now();
+function pollWait() {
+  if (backoff > 4000) return backoff;         // an error backoff outranks this
+  const idle = Date.now() - lastActive;
+  if (idle > IDLE_SLEEP) return 60000;
+  if (idle > IDLE_SLOW) return 15000;
+  return backoff;
+}
+/* `capture` and `passive` so this never interferes with the handlers that do
+   the actual work, and pointerdown rather than pointermove: a cursor crossing
+   the window on its way somewhere else is not somebody reading. */
+for (const ev of ["pointerdown", "keydown", "wheel", "touchstart", "focus"]) {
+  addEventListener(ev, () => {
+    const wasIdle = Date.now() - lastActive > IDLE_SLOW;
+    lastActive = Date.now();
+    /* Coming back from a slowed cadence should feel immediate rather than
+       waiting out the last long timer. */
+    if (wasIdle && timer && !document.hidden) { clearTimeout(timer); timer = null; poll(); }
+  }, { capture: true, passive: true });
+}
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) { clearTimeout(timer); timer = null; return; }
+  lastActive = Date.now();
+  if (!timer) poll();                         // catch up, then resume the loop
+});
 
 /* Messages this browser drew the moment Technocore accepted them, waiting
    for the room to echo them back. Without this the echo arrives carrying a
@@ -1266,7 +1308,7 @@ const roomWindow=()=>{
 };
 
 function switchRoom(next,focus=true){
-  room=next; since="0"; seen.clear(); rate=null; seqAt=0; seqVal=0; mineWaiting=[];
+  room=next; seen.clear(); rate=null; seqAt=0; seqVal=0; mineWaiting=[];
   queue=[]; clearTimeout(dripTimer); dripTimer=0; holdUntil=0; lastWho=null;
   $("stream").textContent=""; $("stream").classList.remove("holding");
   $("rname").textContent=next; $("rmeta").textContent="";
@@ -1553,7 +1595,26 @@ async function poll(){
        contain a message that did not exist when it was built. So the poll
        right after a post carries a nonce and gets a real read. */
     const bust = freshRead ? `&t=${freshRead--}` : "";
-    const r=await fetch(`/api/room?room=${encodeURIComponent(room)}&since=${since}&limit=200${bust}`);
+    /* ── THE SAME URL FOR EVERY VIEWER, WHICH IS THE WHOLE POINT ──────────
+       This used to send `since=<this viewer's own sequence number>`. No two
+       viewers of a room ever hold the same one, so no two ever asked the
+       same URL, so the CDN could not collapse them: every poll from every
+       tab woke the function up. MEASURED on the September bill — 1.6M
+       function invocations and 14 CPU-hours against a 4-hour allowance,
+       which is 900 polls an hour per open tab and almost nothing else.
+
+       `c=1` is the canonical spelling the function already fetches
+       internally (see canonicalUrl in api/room.js). Asking for it directly
+       means one fixed string per room: the edge answers nearly all of it
+       from a four-second cache and the function runs about once per room
+       per four seconds no matter how many people are watching.
+
+       The cost is that every poll now carries the whole 200-message window
+       rather than only what is new. That lands on Fast Data Transfer, which
+       had headroom, instead of on invocations and CPU, which did not — and
+       `seen` has always deduped by sequence number, so a window full of
+       lines this tab already drew costs nothing but the bytes. */
+    const r=await fetch(`/api/room?room=${encodeURIComponent(room)}&limit=200&c=1${bust}`);
     const j=await r.json();
     if(r.status===429){ stalled("throttled upstream"); backoff=15000; }
     else if(!r.ok){ stalled(j.error||"unreachable"); backoff=10000; }
@@ -1595,14 +1656,14 @@ async function poll(){
       }
       if(head){ seqVal=head; seqAt=now; }
 
-      if(j.last_seq) since=j.last_seq;
       $("rmeta").textContent = j.count
         ? `${seen.size} shown · ${roomWindow().replace(/^This view holds /,"")}`
         : "quiet right now";
       if(atBottom) box.scrollTop=box.scrollHeight;
     }
   }catch{ stalled("network"); backoff=10000; }
-  timer=setTimeout(poll,backoff);
+  /* Hidden tabs schedule nothing at all; visibilitychange restarts them. */
+  timer = document.hidden ? null : setTimeout(poll, pollWait());
 }
 const live=()=>{ $("live").classList.remove("stalled"); $("livetext").textContent="live"; };
 const stalled=(why)=>{ $("live").classList.add("stalled"); $("livetext").textContent=why; };
