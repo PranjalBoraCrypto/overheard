@@ -358,13 +358,61 @@ let tokens = READS_PER_MIN;
 let lastRefill = Date.now();
 let reads = 0, rateLimited = 0;
 
+/* A HOLD THE BUCKET ACTUALLY HONOURS. The 429 path used to express "everybody
+   wait" by setting `lastRefill` into the future. It did not work: the very
+   next takeToken computed `now - lastRefill` as a NEGATIVE interval, drove
+   `tokens` below zero, and then overwrote lastRefill with `now` — so the hold
+   it was reaching for lasted exactly one call, and what remained was an
+   accidental deficit rather than a deadline. A hold is its own field. */
+let holdUntil = 0;
+
 function takeToken() {
   const now = Date.now();
+  if (now < holdUntil) return false;
   tokens = Math.min(READS_PER_MIN, tokens + ((now - lastRefill) / 60000) * READS_PER_MIN);
   lastRefill = now;
   if (tokens < 1) return false;
   tokens -= 1;
   return true;
+}
+
+/** Everybody backs off together, so the other lanes do not walk straight into
+ *  the wall this one just hit. */
+function holdEveryone(secs) {
+  tokens = 0;
+  lastRefill = Date.now();
+  holdUntil = Date.now() + (secs + 1) * 1000;
+}
+
+/* ── A 429 IS A DELAY, NOT A PROMISE ───────────────────────────────────────
+   The retry below used to be `await sleep(...); return get(url)` — no bound
+   on the number of attempts, no ceiling on the wait, and the caller's
+   deadline silently dropped.
+
+   THAT HUNG A WHOLE WINDOW ON 10 SEPTEMBER. This site's own Rooms page was
+   polling this same network every four seconds from every open tab during a
+   traffic spike, and the 600-reads-a-minute allowance is SHARED with this
+   collector — so every retry walked back into the same wall. The process
+   stayed alive, which is the cruel part: the workflow's `kill -0` check saw a
+   healthy collector, the commit loop found nothing new on every pass, and the
+   run stayed green for five and a half hours having archived nothing after
+   11:51. Every room in the repository stops at that minute.
+
+   Three bounds, each closing a different way to hang:
+     - a retry ceiling, so a wall that does not move becomes a thrown error,
+       which the per-room lane already knows how to handle: back that room off
+       and carry on with the others
+     - a cap on the wait, because `secs` is parsed out of a response body this
+       code does not control, and one large number is an idle window
+     - the caller's deadline carried into the retry rather than reverting */
+const RATE_TRIES = 4;
+const RATE_MAX_WAIT_S = 60;
+
+/** How long a 429 asks for, bounded to something a window can afford. */
+function backoffSeconds(body) {
+  const asked = Number((String(body).match(/(\d+)\s*second/i) ?? [])[1]);
+  const wanted = Number.isFinite(asked) && asked > 0 ? asked : 30;
+  return Math.min(wanted, RATE_MAX_WAIT_S);
 }
 
 /* Every read carries a deadline. Without one, a single hung request holds a
@@ -374,7 +422,7 @@ function takeToken() {
    MEASURED: steady-state coverage sat at ~88% with the schedule provably
    correct (the lobby's interval was a third of its safe value), which is the
    signature of the loop not running rather than running late. */
-async function get(url, deadlineMs = 8000) {
+export async function get(url, deadlineMs = 8000, tries = 0) {
   reads++;
   const res = await fetch(url, {
     headers: { Accept: "application/json", "User-Agent": UA },
@@ -382,31 +430,62 @@ async function get(url, deadlineMs = 8000) {
   });
   if (res.status === 429) {
     rateLimited++;
-    const body = await res.text();
-    const secs = Number((body.match(/(\d+)\s*second/i) ?? [])[1] ?? 30);
-    console.warn(`  rate limited, waiting ${secs}s`);
-    // Spend the bucket too, so every other in-flight room backs off with us
-    // instead of walking straight into the same wall.
-    tokens = 0; lastRefill = Date.now() + (secs + 1) * 1000;
-    await sleep((secs + 1) * 1000);
-    return get(url);
+    const secs = backoffSeconds(await res.text());
+    if (tries >= RATE_TRIES) {
+      /* Thrown, not slept on again. The lane above catches this, doubles that
+         room's interval and moves on — which is a collector still working on
+         everything else, rather than one asleep on all of it. */
+      throw new Error(`rate limited ${tries + 1} times, giving this room up for now: ${url}`);
+    }
+    console.warn(`  rate limited, waiting ${secs}s (attempt ${tries + 1} of ${RATE_TRIES})`);
+    holdEveryone(secs);
+    await sleep(secs * 1000);
+    return get(url, deadlineMs, tries + 1);
   }
   if (!res.ok) throw new Error(`HTTP ${res.status} for ${url}`);
   return res.json();
 }
 
 /** The KV store answers text/plain, so it needs its own reader. Same budget,
- *  same deadline, same 429 handling — just no JSON.parse at the end. */
-async function getText(url, deadlineMs = 8000) {
+ *  same deadline, same 429 handling — just no JSON.parse at the end.
+ *
+ *  THAT SENTENCE WAS NOT TRUE until now: this had no 429 branch at all, so a
+ *  rate-limited KV read threw on the first refusal while a rate-limited room
+ *  read retried for ever. Two readers, one comment, opposite behaviour. Both
+ *  now back off the same bounded way. */
+export async function getText(url, deadlineMs = 8000, tries = 0) {
   reads++;
   const res = await fetch(url, {
     headers: { Accept: "text/plain", "User-Agent": UA },
     signal: AbortSignal.timeout(deadlineMs),
   });
   if (res.status === 404) return null;                 // absent, definitively
+  if (res.status === 429) {
+    rateLimited++;
+    const secs = backoffSeconds(await res.text());
+    if (tries >= RATE_TRIES) throw new Error(`rate limited ${tries + 1} times: ${url}`);
+    console.warn(`  rate limited on ${url}, waiting ${secs}s (attempt ${tries + 1} of ${RATE_TRIES})`);
+    holdEveryone(secs);
+    await sleep(secs * 1000);
+    return getText(url, deadlineMs, tries + 1);
+  }
   if (!res.ok) throw new Error(`HTTP ${res.status} for ${url}`);
   return (await res.text()).trim();
 }
+
+/** For the suite: the rate limiter is module state, and a test that leaves it
+ *  held would silently starve the next one. */
+export const __rate = {
+  reset() { tokens = READS_PER_MIN; lastRefill = Date.now(); holdUntil = 0; rateLimited = 0; },
+  held: () => holdUntil > Date.now(),
+  limited: () => rateLimited,
+  tries: RATE_TRIES,
+  maxWait: RATE_MAX_WAIT_S,
+  /* Exposed so the cap can be asserted on the arithmetic rather than by
+     sitting through sixty seconds of it. A test nobody will wait for is a
+     test somebody deletes. */
+  backoffSeconds,
+};
 
 const readJson = async (file, fallback) =>
   existsSync(file) ? JSON.parse(await readFile(file, "utf8")) : fallback;

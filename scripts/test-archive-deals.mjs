@@ -184,11 +184,22 @@ console.log("\n=== F. the workflow that asks for the next run");
      runs fire, and #86 ran 5h30m and published nothing because its push loop
      could not rebase under a working tree the collector was writing to. That
      is tested in test-archive-push.mjs, which is the file that matters here.
-     Six stays for its own smaller reasons, and claims nothing. */
+
+     AND THIS ASSERTION WAS STALE, which is worse than absent. It demanded six
+     firings an hour long after six was deliberately cut to two — measured on
+     7 September, six was producing 87 cancelled runs in every hundred, and
+     the workflow's own comment carries that reasoning in full. So the suite
+     had been failing on a decision that was made on purpose, which is exactly
+     how a suite teaches people to skim past red.
+
+     What the handover actually needs is a successor already pending when a
+     window ends. Concurrency keeps at most one, so twice an hour buys that
+     for a 5.5-hour window with room to spare. */
   const crons = [...wf.matchAll(/- cron: "([^"]+)"/g)].map((m) => m[1]);
-  ok("the schedule asks at least six times an hour", crons.length >= 6, crons.join(" | "));
-  ok("and they are spread across the hour rather than bunched",
-    new Set(crons.map((c) => c.split(" ")[0])).size >= 6, crons.map((c) => c.split(" ")[0]).join(","));
+  ok("the schedule asks more than once an hour", crons.length >= 2, crons.join(" | "));
+  ok("and they are spread across the hour rather than bunched together",
+    new Set(crons.map((c) => c.split(" ")[0])).size === crons.length,
+    crons.map((c) => c.split(" ")[0]).join(","));
   ok("the dormant chain step is still there, costing nothing until a token exists",
     /ARCHIVE_CHAIN_TOKEN/.test(wf));
 }
