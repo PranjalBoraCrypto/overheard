@@ -90,10 +90,22 @@ const IMAGES = [
     title: "Every order you\nsigned, *in one place*.",
     sub: "What you asked for, what it cost, and exactly where each one stands — read back off the public room.",
     foot: "Orders · signed by your key" },
+  /* ── AND THE ONE THAT SAID SOMETHING THE PAGE DOES NOT DO ──────────────
+     This read "Every signature, checked in your browser." Nothing on the
+     deals board verifies a signature — grep the page, web/tclk.js and
+     web/deal-ui.js for `subtle.verify` and there is none. There is nothing
+     there to verify either: a LIVE room read comes back with `sig: null` on
+     every line, measured, which api/room.js says out loud in its own
+     response. The board rendered an "unsigned" chip on every card under a
+     share image promising the opposite.
+     What it really does is worth just as much and is true: it reproduces the
+     canonical bytes of each frame, recomputes the contract id from them, and
+     folds the state machine over what survives. The one page that DOES check
+     a signature is /verify, and its card above says so. */
   { file: "deals",  tag: "The deals board", motif: M.board,
-    title: "Every signature,\nchecked *in your browser*.",
+    title: "Every contract id,\nrecomputed *in your browser*.",
     sub: "Offers, accepts, locks and reveals as they land — and the maths that says which of them hold.",
-    foot: "Board · nothing taken on trust" },
+    foot: "Board · the working, shown" },
   /* ── THE PAPER MARKET ───────────────────────────────────────────────────
      The share card has to carry the disclaimer, not just the question. A
      picture that says only "will mainnet ship by 31 March 2027?" arriving in

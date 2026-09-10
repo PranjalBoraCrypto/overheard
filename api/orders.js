@@ -342,13 +342,23 @@ export default async function handler(request) {
       }
     }
   };
-  for (const o of orders.filter((o) => o.id).slice(0, ACCEPT_LOOKUPS)) {
-    findAccept(o, [indexText, tail]);
-  }
-
-  /* Newest first, by the server's own sequence number rather than by a
+  /* ── SORTED BEFORE THE HUNT, NOT AFTER IT ────────────────────────────────
+     This sort used to happen below the loop, and the loop takes the first
+     ACCEPT_LOOKUPS orders. `eat` reads the index and then the tail in FILE
+     order, which is oldest first — so the lookups were spent on a buyer's
+     oldest orders and every newer one came back with no accept.
+     The consequence is not cosmetic. No accept means the orders page has no
+     deal room to look up, falls back to the offer's own clock, and prints
+     "nobody took it on before the deadline" over an order that was accepted,
+     funded and delivered. That is the exact sentence this file's header says
+     it fixed in September; putting the slice above the sort reintroduced it
+     for anybody past their twenty-fourth order.
+     Newest first, by the server's own sequence number rather than by a
      timestamp any sender could have written. */
   orders.sort((a, b) => b.seq - a.seq);
+
+  const hunted = orders.filter((o) => o.id).slice(0, ACCEPT_LOOKUPS);
+  for (const o of hunted) findAccept(o, [indexText, tail]);
 
   return json({
     did,
@@ -361,6 +371,13 @@ export default async function handler(request) {
     index_rows: indexText === null ? 0 : indexRows,
     tail: tail !== null,
     truncated: orders.length >= MAX_ORDERS,
+    /* ── AND THE CAP THAT WAS INVISIBLE ────────────────────────────────────
+       The accept hunt is bounded, and a bounded thing that does not say so
+       reads as a complete one: an order past the bound comes back looking
+       exactly like an order nobody answered. Now the caller can tell the two
+       apart, and the page can decline to make a claim about the rest. */
+    accepts_checked: hunted.length,
+    accepts_capped: orders.filter((o) => o.id).length > hunted.length,
     archive_lag: tail !== null
       ? "the tail is rewritten every archiver pass, about five minutes"
       : "no tail available, so anything placed since the last commit of the index is not here yet",

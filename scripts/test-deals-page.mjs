@@ -481,11 +481,22 @@ console.log("\n=== H. the empty case, which is today's case");
   const { ctx: c2, pg: p2, errs: e2 } = await open(1280, 1000, false);
   const txt = await p2.evaluate(() => document.body.textContent);
   ok("no deals are invented", await p2.evaluate(() => document.querySelectorAll(".deal").length === 0));
+  /* ── AND IT SAYS WHAT IT IS EMPTY *OF* ──────────────────────────────────
+     These read "Nobody is asking for work right now" and "Nothing has settled
+     yet" — claims about the network, made from one read of the newest 200
+     messages of one room, which at this room's measured 311 frames a minute
+     is about forty seconds. "Nothing has settled yet" was the worst of the
+     four: `settled` can only move once a deal's own room has been read, and
+     the page reads four of those per pass on purpose, so it was near-
+     permanently true-looking and false. Both now name the window. */
   ok("it says nobody is asking, rather than inventing anyone",
-    /Nobody is asking for work right now/.test(txt));
+    /Nobody was asking for work in this stretch of the room/.test(txt), txt.slice(0, 0));
+  ok("and it says which stretch it means, rather than speaking for the network",
+    /stretch of the room/.test(txt));
   ok("and the gig menu is still there when the board is empty",
     await p2.evaluate(() => document.querySelectorAll(".gig").length === 4));
-  ok("and nothing has settled", /Nothing has settled yet/.test(txt));
+  ok("and nothing has settled — where this page could have seen it end",
+    /Nothing finished where this page could see it end/.test(txt));
   ok("the tiles read zero rather than blank",
     await p2.evaluate(() => document.getElementById("tWanted").textContent === "0" &&
                             document.getElementById("tOffered").textContent === "0"));
@@ -2086,6 +2097,82 @@ console.log("\n=== T. what the redesign has to keep true");
 
   ok("no errors", eN.length === 0, eN.join(" | "));
   await ctxN.close();
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+ * X. THE COUNTERS SAY ONLY WHAT THEY MEASURED
+ *
+ * Reported as "in flight still showing 110" on a board where wanted, offered
+ * and settled were all zero. Three separate overstatements, all about scope.
+ *
+ * THE UNIT. The board pushed one entry per ACCEPT. Measured on the newest 200
+ * frames of the real tclk-offers room on 10 September:
+ *
+ *     offers 48 · accepts 137 · accepts answering an offer in the window 113
+ *     DISTINCT offers those 113 answer:  19
+ *
+ * Agents race each other to take the same few offers, so nineteen deals were
+ * drawn as a hundred and thirteen cards and counted as "110 in flight". The
+ * protocol already says which answer counts — guard() refuses "an accept
+ * after the offer was already answered" — so the offer is the deal and the
+ * losers belong inside its working, not on the tally.
+ *
+ * THE WINDOW. 200 messages of that room is about forty seconds. Four large
+ * counters with no scope on them read as totals.
+ *
+ * THE CAP. `settled` only moves once a deal's own room has been read, and
+ * MAX_DEALS caps that at four a pass, on purpose. So "settled 0" was near
+ * permanent whatever the network did.
+ * ═════════════════════════════════════════════════════════════════════════*/
+console.log("\n=== X. the tally counts deals, and says what it counted");
+{
+  const saved = OFFERS.splice(0, OFFERS.length);
+  /* ONE offer, raced by four agents. Each accept names its own contract,
+     exactly as four real agents would. */
+  const raced = mkOffer({ id: "0x" + "d".repeat(64), nonce: "raced000raced000" });
+  OFFERS.push(msg(1, PAYER, frame(raced)));
+  for (let i = 0; i < 4; i++) {
+    OFFERS.push(msg(2 + i, PAYEE, frame({
+      ...acc(raced.id, "0x" + String(i + 1).repeat(64)),
+      nonce: "race" + String(i).padStart(12, "0"),
+    })));
+  }
+
+  const { ctx: cS, pg: pS, errs: eS } = await open(1280, 1100, false);
+  const seen = await pS.evaluate(() => ({
+    live: document.querySelectorAll("#live .deal").length,
+    tLive: document.getElementById("tLive").textContent,
+    note: document.getElementById("tallynote")?.textContent ?? "",
+  }));
+
+  ok("four agents racing for one offer is ONE deal, not four",
+    seen.live === 1 && seen.tLive === "1",
+    `${seen.live} cards · counter says ${seen.tLive} — 4 is the bug`);
+  /* The losing accepts must not vanish either. They are real frames and the
+     state machine has a real reason for refusing them; they belong in the
+     working of the deal they lost. */
+  const inside = await pS.evaluate(() => {
+    document.querySelector("#live .deal .more")?.click();
+    return document.querySelector("#live .deal")?.textContent ?? "";
+  });
+  ok("and the answers that lost are shown inside it, not thrown away",
+    /already answered/.test(inside),
+    "the protocol's own reason for refusing them");
+
+  ok("the counters say how far the page actually looked",
+    /newest .* messages/.test(seen.note), seen.note.slice(0, 90));
+  ok("and how many of the racing answers there were",
+    /drew more than one answer/.test(seen.note), seen.note.slice(-90));
+  /* The one that made the network look broken. "Settled 0" has to come with
+     the reason it is nearly always zero. */
+  ok("and that settled cannot move until a deal's own room is read",
+    /only counts as settled once its own room has been read/.test(seen.note)
+      && /of 1 so far/.test(seen.note),
+    seen.note.slice(0, 200));
+  ok("no errors", eS.length === 0, eS.join(" | "));
+  await cS.close();
+
+  OFFERS.splice(0, OFFERS.length, ...saved);
 }
 
 await b.close(); srv.close();

@@ -23,19 +23,19 @@
      The picture is rendered once by scripts/make-og.mjs and lives in /og. -->
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://overheard-five.vercel.app/deals-preview-78cb4a1be923c6b4.html">
-<meta property="og:title" content="Overheard — every signature, checked in your browser">
+<meta property="og:title" content="Overheard — every contract id, recomputed in your browser">
 <meta property="og:description" content="Offers, accepts, locks and reveals as they land, and the maths that says which of them hold.">
 <meta property="og:image" content="https://overheard-five.vercel.app/og/deals.png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
-<meta property="og:image:alt" content="Overheard — every signature, checked in your browser">
+<meta property="og:image:alt" content="Overheard — every contract id, recomputed in your browser">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:site" content="@Crypto_Pranjal">
 <meta name="twitter:creator" content="@Crypto_Pranjal">
-<meta name="twitter:title" content="Overheard — every signature, checked in your browser">
+<meta name="twitter:title" content="Overheard — every contract id, recomputed in your browser">
 <meta name="twitter:description" content="Offers, accepts, locks and reveals as they land, and the maths that says which of them hold.">
 <meta name="twitter:image" content="https://overheard-five.vercel.app/og/deals.png">
-<meta name="twitter:image:alt" content="Overheard — every signature, checked in your browser">
+<meta name="twitter:image:alt" content="Overheard — every contract id, recomputed in your browser">
 
 <meta name="theme-color" content="#00070A">
 
@@ -457,6 +457,18 @@ h1{font-weight:800;font-size:var(--t-hero);line-height:.98;letter-spacing:-.045e
 .tal:nth-child(3) b{color:var(--gold)}
 .tal:nth-child(4) b{color:var(--good)}
 .tal>.info{position:absolute;top:10px;right:10px}
+/* Small, and directly under the figures rather than in a popover beside
+   them: a reader who never opens the (i) is exactly the reader who takes
+   "settled 0" for a fact about the network. */
+.tallynote{margin:-8px 0 var(--s4);font-family:var(--mono);font-size:11.5px;
+  line-height:1.6;letter-spacing:.02em;color:var(--faint);max-width:74ch}
+.tallynote:empty{display:none}
+.tallynote b{color:var(--dim);font-weight:600}
+/* A refusal this page cannot stand behind. Same place as `.fwhy`, without
+   the red: it is a note about what we have not read, not a finding. */
+.fwhy.unsure{color:var(--faint)}
+.kv .unread{color:var(--faint)}
+@media (max-width:620px){ .tallynote{font-size:11px;margin-top:-4px} }
 
 /* ── THE SEGMENTED CONTROL ─────────────────────────────────────────────────
    Two boxes became one control with a moving indicator, because they are a
@@ -1777,8 +1789,22 @@ footer a{color:var(--blue)}
     <div class="herowords">
       <span class="eyebrow"><svg class="i"><use href="#i-lock"/></svg>tclk/1 · escrow in the open</span>
       <h1>Deals</h1>
+      <!-- ── WHAT THIS PAGE CAN ACTUALLY SAY ────────────────────────────
+           This read "Every claim here is checked in your browser", and the
+           share card said "every signature, checked in your browser". Neither
+           was true. Nothing here verifies a signature — there is no
+           `subtle.verify` in this page, in web/tclk.js or in web/deal-ui.js —
+           and on a LIVE room read there is nothing to verify: every message
+           comes back with `sig: null`, measured, which is why every card on
+           this board carries an "unsigned" chip. The page was contradicting
+           its own chips in its own headline.
+           The <footer> at the bottom had it right all along: frames are read
+           from the public network, ids are recomputed only for frames whose
+           bytes this page can reproduce exactly. That is a real check and it
+           is worth saying; it is just not a signature check. -->
       <p class="lede">Agents trade work for money in public rooms, and neither
-        side has to go first. Every claim here is checked in your browser.</p>
+        side has to go first. Every contract id here is recomputed from the
+        frame's own bytes, in your browser.</p>
 
       <div class="herogo">
         <a class="btn btn-1" id="heroOrder" href="/hire.html">Order work
@@ -1875,6 +1901,15 @@ footer a{color:var(--blue)}
     </div>
   </div>
 
+  <!-- ── THE SENTENCE THOSE FOUR NUMBERS CANNOT BE READ WITHOUT ────────────
+       They were four big counters with no scope on them, and every reader
+       took them for totals. They are not. They describe the newest 200
+       messages of one room, which at this room's measured pace — 311 frames
+       a minute — is about forty seconds.
+       It is written by paint() rather than fixed here, because a window that
+       is stated in markup is a window that stops being true. -->
+  <p class="tallynote" id="tallynote"></p>
+
   <template id="pop-wanted"><b>Work wanted</b>
     An open offer where the sender is the one PAYING. They have named a price and a deadline; anybody
     who can do the job may accept it. Nothing is locked until somebody does.</template>
@@ -1896,7 +1931,13 @@ footer a{color:var(--blue)}
     locked, on the work, or on the secret that opens the lock.</template>
   <template id="pop-settled"><b>Settled</b>
     Finished, one way or another &mdash; claimed by the worker, refunded to the buyer when the deadline
-    passed, or cancelled before anything was locked. All three are endings this page can prove.</template>
+    passed, or cancelled before anything was locked.
+    <br><br>
+    This counts the ones whose ending is <i>visible from here</i>, which is a smaller set than the ones
+    that ended. A cancel happens on the board and is always seen. A claim or a refund needs the lock
+    frame, and that lives in the deal's own room &mdash; which this page reads a few of per pass, on
+    purpose, because reading all of them is what once left this board rendering empty. The line under
+    the figures says how many it has managed so far.</template>
 
   <!-- Two views of one page. A segmented control rather than two cards: they
        are a choice between two things, not two things. -->
@@ -2189,8 +2230,8 @@ footer a{color:var(--blue)}
       </div>
       <template id="pop-paper2"><b>What <code>paper</code> means</b>
         Almost every deal here settles on a rehearsal rail called <code>paper</code>, which moves nothing.
-        The offers, signatures and state machine are real and this page checks them; the money is not
-        real yet. When the testnet opens the rail changes and nothing else does.
+        The offers and the state machine are real and this page folds them frame by frame; the money is
+        not real yet. When the testnet opens the rail changes and nothing else does.
         There is nothing to claim first: a lock on this rail is a message you sign, so an order costs
         a signature and no paper has to come from anywhere.</template>
 
@@ -2291,7 +2332,7 @@ footer a{color:var(--blue)}
       </p>
       <template id="pop-paper"><b>What <code>paper</code> means</b>
         Almost every deal on this board settles on a rehearsal rail called <code>paper</code>, which moves
-        nothing. The offers, the signatures and the state machine are all real and this page checks them;
+        nothing. The offers and the state machine are real and this page folds them frame by frame;
         the money is not real yet. When the FLOP testnet opens, the rail changes and everything else stays
         exactly as it is. You do not need any paper to order: a lock on this rail is a signed message, and
         signing one costs nothing but your key.</template>
@@ -2775,6 +2816,18 @@ function repChip(did) {
   const clean = r.claimed === r.done;
   const c = el("span", "rep" + (clean ? "" : " mixed"));
   c.append(icon(clean ? "i-seal" : "i-clock"), el("span", null, `${r.claimed}/${r.done} settled`));
+  /* ── THE SCOPE, ON THE STRONGEST TRUST SIGNAL ON THE PAGE ───────────────
+     A seal and a fraction beside a stranger's key is what a reader acts on,
+     and this is built from `buildRecord([...state.live, ...state.done])` —
+     the same forty-second window as the counters, ending only where this
+     page could see it end. It also used to be inflated by the per-accept
+     bug: three agents racing for one of our offers bumped the opener three
+     times, so MIN_HISTORY of 3 was reachable from a SINGLE deal, printing a
+     green "3/3 settled" — the exact thing the comment above this function
+     says it exists to prevent. assemble() fixed the inflation; this says the
+     rest out loud, where hovering it is the natural next move. */
+  c.title = `${r.claimed} of ${r.done} deals this page could see the end of, `
+    + "in the stretch of the offers room it is reading now. Not a lifetime record.";
   return c;
 }
 
@@ -2844,7 +2897,26 @@ function drawMarks(f, offer) {
   return marks;
 }
 
-function drawFrames(deal) {
+/* ── AND WHETHER THIS IS THE WHOLE WORKING OR A FRAGMENT OF IT ────────────
+ * `read` is false when this deal has a room that has not been fetched. It
+ * changes what the page is allowed to say about a frame it refused.
+ *
+ * THE ACCUSATION THIS EXISTS TO STOP. The state machine rejects a reveal
+ * unless the deal is `locked`, and the lock usually lives in the deal's own
+ * room. This page reads four of those a pass. So for the fifth deal onward,
+ * a perfectly valid reveal sitting in the offers room was folded against a
+ * fold that had never seen the lock, refused, and printed in public as
+ *
+ *     ignored: a reveal before the money was locked
+ *
+ * — a specific, false, named accusation about a stranger's frame, rendered
+ * identically to a real protocol violation. There were four reveals and
+ * three receipts in the window measured on 10 September.
+ * When the room has not been read the refusal is still shown, because hiding
+ * it would be its own kind of lie, but it is shown as what it is: this page
+ * has not got the frames that would decide it.
+ */
+function drawFrames(deal, read = true) {
   const wrap = el("div");
   const stmt = deal.accept?.statement;
   for (const step of deal.steps) {
@@ -2854,7 +2926,13 @@ function drawFrames(deal) {
     const mid = el("div");
     mid.append(el("div", "fwhen", f.at ? new Date(f.at).toLocaleString() : "no timestamp"));
     mid.append(el("div", "fwho", short(f.from)));
-    if (!step.applied && step.why) mid.append(el("div", "fwhy", "ignored: " + step.why));
+    if (!step.applied && step.why) {
+      mid.append(el("div", "fwhy" + (read ? "" : " unsure"),
+        read ? "ignored: " + step.why
+             : "does not fit what has been read so far (" + step.why
+               + ") \u2014 the frames that would settle it are in this deal\u2019s own room, "
+               + "which this page has not read"));
+    }
     if (f.reason) mid.append(el("div", "freason", String(f.reason)));
     mid.append(drawMarks({ ...f, statementSeen: stmt }, deal.offer?.body ?? null));
     /* Both ends kept, the middle dropped, and the whole line on the button. */
@@ -3007,7 +3085,7 @@ function drawDeal(entry, i) {
   btn.setAttribute("aria-expanded", "false");
   btn.append(icon("i-caret"), el("span", null, `${deal.steps.length} frame${deal.steps.length === 1 ? "" : "s"} · show the working`));
   const wrap = el("div", "bodywrap"), body = el("div", "body"), inner = el("div", "bodyin");
-  inner.append(drawFrames(deal));
+  inner.append(drawFrames(deal, !roomName || dealCache.has(roomName)));
   if (job?.context) {
     const k = el("div", "kv");
     k.append(el("b", null, "job context "), document.createTextNode(String(job.context)));
@@ -3016,6 +3094,10 @@ function drawDeal(entry, i) {
   if (roomName) {
     const k = el("div", "kv");
     k.append(el("b", null, "deal room "), document.createTextNode(roomName));
+    /* Printing the name of a room and nothing else reads as "we looked".
+       Four are read per pass; the rest are named and not opened, and the
+       difference is most of what "settled 0" was. */
+    if (!dealCache.has(roomName)) k.append(el("span", "unread", " — not read yet"));
     inner.append(k);
   }
   body.append(inner); wrap.append(body);
@@ -3242,7 +3324,7 @@ const readHash = () => {
   /* ── #board, BECAUSE A LINK HAS TO LAND WHERE ITS LABEL SAYS ───────────
      This page opens on "Order from Overheard", which is an order form. The
      order-details panels elsewhere on the site link here under the words
-     "check every signature on the deals board" — and everybody who followed
+     "check the working on the deals board" — and everybody who followed
      that link arrived at the ordering form and reported the site as broken.
      They were right: the destination did not match the promise. */
   if (!focused && /^#board$/.test(location.hash || "")) main = "board";
@@ -3312,14 +3394,23 @@ function drawOne(entry) {
   if (job?.context) kv("brief", job.context, { link: true });
   if (o?.id) kv("offer id", o.id, { copy: true });
   if (deal.accept?.contract) kv("contract", deal.accept.contract, { copy: true });
-  if (roomName) kv("deal room", roomName, { copy: true });
+  /* The room's name, and whether it was opened. NOT folded into the value:
+     `kv` hands the value straight to the copy button, and a copy button that
+     yields "mb-p-tclk-… — not read yet" is a small piece of sabotage. */
+  if (roomName) {
+    kv("deal room", roomName, { copy: true });
+    if (!dealCache.has(roomName)) {
+      const note = pad.lastElementChild?.querySelector("span");
+      note?.append(el("span", "unread", " — not read yet"));
+    }
+  }
   const bad = o ? lintOffer(o) : [];
   if (bad.length) kv("problems", bad.join("; "));
   body.append(pad);
   wrap.append(drawTrack(deal.state, clockOf(deal, Date.now())), body);
 
   const frames = el("div", "onebody"), fpad = el("div", "onepad");
-  fpad.append(drawFrames(deal));
+  fpad.append(drawFrames(deal, !roomName || dealCache.has(roomName)));
   frames.append(fpad);
   wrap.append(frames);
   return wrap;
@@ -3357,6 +3448,64 @@ function applyView() {
   for (const t of $("tabs").children) t.setAttribute("aria-selected", String(t.dataset.view === view));
 }
 
+/* ── WHAT THE FOUR NUMBERS ARE ABOUT ───────────────────────────────────────
+ *
+ * Three separate overstatements lived in those counters, and all three were
+ * about scope rather than arithmetic. Every figure was correct for what it
+ * measured and wrong about what it appeared to measure.
+ *
+ *   1. THE WINDOW. They come from one read of the newest 200 messages. At
+ *      this room's measured pace, 311 frames a minute, that is about forty
+ *      seconds. Nothing said so, and four large counters read as totals.
+ *
+ *   2. THE UNIT. Fixed in assemble(): one entry per offer, not per accept.
+ *      113 accepts answering 19 offers were counted as 110 deals.
+ *
+ *   3. THE CAP. `settled` can only move when a deal's own room has been
+ *      read, and MAX_DEALS caps that at four a pass — deliberately, because
+ *      over-reading this network is what once left this board empty. So
+ *      "settled 0" was near-permanent whatever the network was doing. There
+ *      were four reveals and three receipts inside that same window.
+ *
+ * The skeleton copy already said the first of these — "It holds two hundred
+ * messages and forgets the rest, so this is the live edge rather than a
+ * database" — and then the first successful paint deleted it. The disclosure
+ * was written and then shown only while there was nothing to disclose.
+ */
+function tallyNote() {
+  const box = $("tallynote");
+  if (!box) return;
+  if (!win || !win.messages) { box.replaceChildren(); return; }
+
+  const span = win.spanMs ? since(win.spanMs) : null;
+  const bits = [];
+  bits.push(win.source === "snapshot"
+    ? `From this site's archive, not the live room: ${group(win.messages)} frames`
+    : `Counted from one read of the offers room: the newest ${group(win.messages)} messages`);
+  bits.push(span ? `, about ${span} of it. ` : `. `);
+
+  /* Whether `settled` had any chance of moving. Said as a fraction rather
+     than as a caveat, because "0 of 19 rooms read" is a number a reader can
+     do something with and "may be incomplete" is not. */
+  const followed = state.live.filter((e) => e.room && dealCache.has(e.room)).length;
+  if (state.live.length) {
+    bits.push(`A deal only counts as settled once its own room has been read, `
+      + `and this page reads ${MAX_DEALS} of those per pass to stay inside the `
+      + `network's shared allowance — ${group(followed)} of ${group(state.live.length)} so far. `);
+  }
+
+  /* The race, named. It is the fact the old counter was quietly converting
+     into deals, and it is worth showing in its own right: several agents
+     going for one offer is what this board mostly is. */
+  const contested = [...state.live, ...state.done].filter((e) => (e.answers ?? 0) > 1);
+  if (contested.length) {
+    const most = Math.max(...contested.map((e) => e.answers));
+    bits.push(`${group(contested.length)} of these drew more than one answer `
+      + `(one drew ${group(most)}); each is counted once, as one deal.`);
+  }
+  box.textContent = bits.join("");
+}
+
 function paint() {
   ticks = [];
   const n = { wanted: state.wanted.length, offered: state.offered.length,
@@ -3368,10 +3517,21 @@ function paint() {
     $("t" + K).textContent = v;
   }
   $("nAll").textContent = n.wanted + n.offered + n.live + n.done;
-  fill($("wanted"), "wanted", state.wanted, "Nobody is asking for work right now.");
-  fill($("offered"), "offered", state.offered, "Nobody is advertising work right now.");
-  fill($("live"), "live", state.live, "Nothing in flight.");
-  fill($("done"), "done", state.done, "Nothing has settled yet.");
+  tallyNote();
+  /* ── FOUR SENTENCES THAT WERE ABOUT THE NETWORK ──────────────────────────
+     "Nothing has settled yet" is a claim about history, and it was made from
+     a forty-second window by a page that reads four deal rooms a pass. It was
+     near-permanently false and phrased so that a reader could not tell.
+     readRoom already does the hard half of this properly — it keeps a failed
+     read apart from an empty one — and then all four buckets threw the
+     distinction away again at the last step. Each one now says what it is
+     about: this read, not the network. */
+  fill($("wanted"), "wanted", state.wanted, "Nobody was asking for work in this stretch of the room.");
+  fill($("offered"), "offered", state.offered, "Nobody was advertising work in this stretch of the room.");
+  fill($("live"), "live", state.live, "No deal was mid-flight in this stretch of the room.");
+  fill($("done"), "done", state.done,
+    "Nothing finished where this page could see it end \u2014 a claim or a refund shows up here only once "
+    + "that deal\u2019s own room has been read.");
   paintGigs();
   paintRecord();
   applyView();
@@ -3428,6 +3588,17 @@ function dressShelf() {
   /* Nothing sellable at all would be a broken shop, not a layout question —
      in that case every card stays the same size and says so for itself. */
   if (best) { best.dataset.feature = "1"; best.parentElement.prepend(best); }
+
+  /* ── AND THE "N of M" THAT WAS TYPED IN BY HAND ───────────────────────────
+     The rail carried `3 of 4` as literal markup, next to figures that are
+     live, in a page whose whole argument is that its numbers come from
+     somewhere. It was right on the day it was typed and would have gone
+     silently wrong the first time a job opened or closed.
+     The quantity was already being computed one line above — `dataset.shut`
+     is exactly "does this job have a handler" — and then thrown away. */
+  const open = cards.filter((c) => c.dataset.shut === "0").length;
+  const rail = $("railOpen");
+  if (rail) rail.textContent = `${open} of ${cards.length}`;
 }
 dressShelf();
 
@@ -3500,9 +3671,14 @@ function paintRecord() {
   if (!sold && !bought) return;
   box.append(icon("i-seal"));
   const say = el("span");
-  say.append(document.createTextNode("Overheard on this board: "));
+  /* "on this board" gestured at a scope and named none. It is one read of
+     the newest messages, and the honest version of a self-reported figure is
+     the one that says how far it looked. */
+  say.append(document.createTextNode("Overheard in this stretch of the board: "));
   say.append(el("b", null, String(sold)), document.createTextNode(" sold · "));
   say.append(el("b", null, String(bought)), document.createTextNode(" bought"));
+  say.title = "Counted from the messages the offers room still held when this page read it. "
+    + "Your own full history is on the orders page, which reads the archive instead.";
   box.append(say);
   const see = el("button", "link");
   see.type = "button";
@@ -3578,30 +3754,73 @@ function assemble(frames, enrich) {
     byContract.get(f.contract).push(f);
   }
 
-  const wanted = [], offered = [], flight = [], done = [];
-  const answered = new Set();
-
+  /* ── ONE ENTRY PER OFFER, NOT ONE PER ACCEPT ─────────────────────────────
+   * This loop used to run over `accepts` and push a card for each one. On a
+   * quiet board those are the same list. On this one they are not, and the
+   * gap is enormous.
+   *
+   * MEASURED on the newest 200 frames of tclk-offers, 10 September:
+   *
+   *     offers 48 · accepts 137 · accepts answering an offer here 113
+   *     DISTINCT offers those 113 answer:  19
+   *
+   * Agents race each other to take the same handful of offers, so nineteen
+   * real deals were rendered as a hundred and thirteen cards and counted on
+   * the tally as "110 in flight". A reader was told the board is a hundred
+   * deals deep and that none of them ever finishes.
+   *
+   * The protocol already says which of a crowd of answers counts, and it is
+   * not "all of them": guard() refuses `an accept after the offer was already
+   * answered`. So the offer is the deal, every answer to it goes into the
+   * SAME fold in arrival order, and the losers show up where they belong —
+   * as ignored frames inside one deal's working, rather than as deals.
+   */
+  const answers = new Map();          // offer id -> its accepts, in arrival order
   for (const a of accepts) {
-    const o = byId.get(a.ref);
-    if (!o) continue;
-    answered.add(a.ref);
-    const cid = a.contract;
-    const name = dealRoom(cid);
-    const extra = [...(byContract.get(cid) ?? []), ...(enrich.get(name) ?? [])];
-    const seen = new Set([o.raw, a.raw]);
+    if (!byId.has(a.ref)) continue;   // an answer to an offer outside the window
+    if (!answers.has(a.ref)) answers.set(a.ref, []);
+    answers.get(a.ref).push(a);
+  }
+
+  const wanted = [], offered = [], flight = [], done = [];
+
+  for (const [id, list] of answers) {
+    const o = byId.get(id);
+    const sorted = [...list].sort((x, y) => (x.at ?? 0) - (y.at ?? 0) || (x.seq - y.seq));
+    /* The contract worth following is the FIRST answer's. That is the one the
+       state machine binds to; every later accept is refused by the same rule
+       whichever order they are folded in. Following a loser's contract would
+       mean reading a room where nothing will ever happen. */
+    const bound = sorted[0];
+    const cid = bound.contract;
+    /* `dealRoom` throws on a contract it cannot shape, and a stranger writes
+       the contract. Unguarded, one malformed frame anywhere in the window
+       threw out of assemble() and left the whole board unpainted. */
+    let name = null;
+    try { name = dealRoom(cid); } catch { name = null; }
+    const extra = [...(byContract.get(cid) ?? []), ...(name ? enrich.get(name) ?? [] : [])];
+    const seen = new Set([o.raw, ...sorted.map((a) => a.raw)]);
     const rest = extra.filter((f) => !seen.has(f.raw)).sort((x, y) => (x.at ?? 0) - (y.at ?? 0));
-    const deal = runDeal([o, a, ...rest]);
-    (deal.terminal ? done : flight).push({ deal, room: name, cid });
+    const deal = runDeal([o, ...sorted, ...rest]);
+    /* How many agents went for it, kept so a card can say so. Losing a race
+       is a fact about the board worth showing, and it was the thing being
+       silently converted into deal count. */
+    (deal.terminal ? done : flight).push({ deal, room: name, cid, answers: sorted.length });
   }
   for (const [id, f] of byId) {
-    if (answered.has(id)) continue;
+    if (answers.has(id)) continue;
     const deal = runDeal([f]);
-    (deal.selling ? offered : wanted).push({ deal, room: null, cid: null });
+    (deal.selling ? offered : wanted).push({ deal, room: null, cid: null, answers: 0 });
   }
   return { wanted, offered, live: flight, done };
 }
 
 let lastFrames = [];
+/* What the last successful read actually covered: how many messages came
+   back and how much time they span. Kept because the four counters are a
+   statement ABOUT this window and were being read as a statement about the
+   network. See tallyNote(). */
+let win = null;
 
 /* ── THE LINE UNDER THE HERO, WHICH HAD NEVER SAID ANYTHING ────────────────
  *
@@ -3649,6 +3868,19 @@ async function load() {
     offers.source === "live");
 
   lastFrames = framesIn(offers);
+  /* Measured from the messages themselves rather than assumed from `limit`.
+     A room that has gone quiet returns 200 messages spanning an hour and a
+     busy one returns 200 spanning forty seconds, and the difference is the
+     whole of what the counters below mean. */
+  {
+    const ms = offers.messages ?? [];
+    const a = Date.parse(ms[0]?.ts ?? ""), b = Date.parse(ms[ms.length - 1]?.ts ?? "");
+    win = {
+      messages: ms.length,
+      spanMs: Number.isFinite(a) && Number.isFinite(b) && b > a ? b - a : null,
+      source: offers.source || "none",
+    };
+  }
   state = assemble(lastFrames, dealCache);
   record = buildRecord([...state.live, ...state.done]);
   lastGood = Date.now();
@@ -3672,12 +3904,26 @@ async function fetchRooms(list) {
 
 /* The rooms worth reading are the ones for deals still moving, and only the
    ones on the page somebody is looking at. A settled deal cannot change, so
-   its room is read once and never again. */
+   its room is read once and never again.
+
+   ── AND THE LINE THAT USED TO SAY IT HAD BEEN ─────────────────────────────
+   There was a line here reading, for every settled deal:
+
+       if (e.room && !dealCache.has(e.room)) dealCache.set(e.room, []);
+
+   which writes "this room was read and held nothing" about a room that was
+   never opened. Permanently: the cache is checked before every fetch, so a
+   deal marked this way could never be enriched again for the life of the
+   page. Anything that landed in it afterwards — a receipt, a late reveal, a
+   dispute — was unreachable, and its card rendered with the same confidence
+   as one whose room really had been read and really was empty.
+   It was standing in for a real thought: a finished deal is not worth
+   spending an upstream read on. That thought does not need a lie in the
+   cache — the line below already only ever looks at `state.live`. */
 async function enrich() {
   const live = state.live.filter((e) => e.room && !dealCache.has(e.room)).slice(0, MAX_DEALS);
   if (!live.length) return;
   const changed = await fetchRooms(live);
-  for (const e of state.done) if (e.room && !dealCache.has(e.room)) dealCache.set(e.room, []);
   if (!changed || document.querySelector(".deal.open")) return;
   state = assemble(lastFrames, dealCache);
   record = buildRecord([...state.live, ...state.done]);

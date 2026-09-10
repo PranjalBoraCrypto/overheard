@@ -68,7 +68,7 @@
   board render empty because it had spent the shared allowance on itself. So
   "open" here means one thing only: this offer's own expiry has not passed, so
   it could still be accepted. Every row links to the board, which is the page
-  that resolves the rest properly and checks every signature while it does.
+  that resolves the rest properly and recomputes every contract id while it does.
 -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -928,7 +928,13 @@ function paint() {
   $("nofilter").hidden = rows.length > 0;
   if (!rows.length) {
     $("nofiltertext").textContent =
-      filter === "open" ? "None of your orders are still open — every one has passed its own expiry."
+      /* NOT "every one has passed its own expiry". An order stops being open
+       by being claimed, refunded, cancelled or refused, and none of those is
+       an expiry — this page draws that exact distinction two hundred lines
+       up ("`open` means STILL GOING, which is not the same as unexpired")
+       and then contradicted it here. A buyer whose orders were all delivered
+       on time was told every one of them had expired. */
+    filter === "open" ? "None of your orders are still going — every one has already ended, one way or another."
                         : "None of your orders have closed yet.";
   }
   $("hlist").hidden = rows.length === 0;
@@ -1732,7 +1738,9 @@ function paintFoot() {
   const a = document.createElement("a");
   a.href = "/deals-preview-78cb4a1be923c6b4.html";
   a.textContent = "deals board";
-  f.append(a, document.createTextNode(", which checks every signature itself."));
+  /* NOT "checks every signature". Nothing on the board does, and on a live
+     room read there is no signature present to check — see the lede there. */
+  f.append(a, document.createTextNode(", which recomputes every contract id itself."));
   if (meta.truncated) f.append(document.createTextNode(" This list is capped and older orders are not shown."));
 }
 

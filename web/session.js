@@ -358,11 +358,22 @@ export function onSession(fn) {
    This listener is registered once, at module load, independently of whether
    any page called onSession — the guarantee cannot depend on a caller having
    subscribed to a UI event. */
-addEventListener("storage", (e) => {
-  if (e.key && e.key !== SESSION_KEY) return;      // somebody else's key
-  if (getSession()) return;                        // a sign-IN, or a touch
-  liveKey = null; livePub = null; keeping = null;
-});
+/* ── GUARDED, SO THIS MODULE CAN BE IMPORTED OUTSIDE A BROWSER ────────────
+   In a browser `addEventListener` is always there and this is a no-op. In
+   Node it is not, and a bare call at module load threw ReferenceError on
+   IMPORT — which meant scripts/test-deals-page.mjs, the only test suite for
+   the deals board, could not start at all. It imports `hueOf` from here and
+   died on line one for weeks: a whole page's coverage silently switched off
+   by a global that is missing in the test runner rather than by anything
+   wrong with the page.
+   The guarantee below is unchanged where it applies. */
+if (typeof addEventListener === "function") {
+  addEventListener("storage", (e) => {
+    if (e.key && e.key !== SESSION_KEY) return;      // somebody else's key
+    if (getSession()) return;                        // a sign-IN, or a touch
+    liveKey = null; livePub = null; keeping = null;
+  });
+}
 
 /**
  * Keep a vault in this browser, so next time is one passphrase.
