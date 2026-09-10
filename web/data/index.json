@@ -1,85 +1,85 @@
 {
- "updated": "2026-09-10T06:31:02.751Z",
+ "updated": "2026-09-10T06:38:33.201Z",
  "base": "https://technocore.chat",
  "repeat_limit": 5,
  "body_cap_per_room_per_day": 12000,
  "body_cap_tclk_offers": 200000,
  "network_rooms": 55346,
  "roster_listed": 200,
- "rooms_tracked": 300202,
+ "rooms_tracked": 300619,
  "last_run": {
-  "seconds": 1851,
-  "rooms_read": 406,
-  "reads": 8176,
+  "seconds": 2301,
+  "rooms_read": 403,
+  "reads": 10409,
   "rate_limited": 0,
-  "produced": 746287,
-  "missed": 635291,
-  "coverage": 0.1487,
-  "seen": 111104,
-  "stored": 69976,
-  "collapsed": 41127,
-  "bodies_dropped": 31496
+  "produced": 775308,
+  "missed": 640472,
+  "coverage": 0.1739,
+  "seen": 134893,
+  "stored": 84210,
+  "collapsed": 50682,
+  "bodies_dropped": 40912
  },
  "behind": [
   {
    "room": "lobby",
-   "missed": 388004,
-   "rate": 29.97,
-   "interval_ms": 2336
+   "missed": 390828,
+   "rate": 27.72,
+   "interval_ms": 2525
   },
   {
    "room": "kibble",
-   "missed": 101689,
-   "rate": 13.45,
-   "interval_ms": 10405
+   "missed": 101988,
+   "rate": 2.43,
+   "interval_ms": 45307
   },
   {
    "room": "technocore",
-   "missed": 49441,
-   "rate": 4.15,
-   "interval_ms": 26517
+   "missed": 50056,
+   "rate": 5.16,
+   "interval_ms": 21304
   },
   {
    "room": "tclk-offers",
    "missed": 19070,
-   "rate": 5.19,
+   "rate": 3.09,
    "interval_ms": 2500
   },
   {
    "room": "monflop-node",
    "missed": 8465,
-   "rate": 2.49,
-   "interval_ms": 44111
+   "rate": 2.68,
+   "interval_ms": 40972
+  },
+  {
+   "room": "meta",
+   "missed": 6787,
+   "rate": 6.23,
+   "interval_ms": 17655
   },
   {
    "room": "sub_economy",
    "missed": 6394,
-   "rate": 0.16,
+   "rate": 0.14,
    "interval_ms": 150000
   },
   {
    "room": "d-blockrewards-feed",
    "missed": 6232,
-   "rate": 0.17,
+   "rate": 0.19,
    "interval_ms": 150000
   },
   {
    "room": "pin",
    "missed": 6102,
-   "rate": 0.14,
+   "rate": 0.16,
    "interval_ms": 150000
   },
   {
    "room": "web_chat",
    "missed": 5724,
-   "rate": 0.22,
+   "rate": 0.31,
    "interval_ms": 150000
-  },
-  {
-   "room": "meta",
-   "missed": 5344,
-   "rate": 2.04,
-   "interval_ms": 53845
   }
  ]
 }
