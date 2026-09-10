@@ -267,7 +267,17 @@ jobs:
           # that told them it was kept. It is a hundred and forty bytes a
           # call on a question that runs until March 2027, so every pass is
           # affordable and every pass is what it gets.
-          SMALL="web/data/cursors.json web/data/recent.json web/data/standings.json web/data/index.json web/data/owners.json web/data/roster.json web/data/tclk-offers/tail.ndjson web/data/tclk-offers/tail.json web/data/overheard-calls/all.ndjson"
+          #
+          # tclk-offers/orders.ndjson joins for the same reason and one more.
+          # /api/orders no longer reads the day shards at all. It used to scan
+          # them newest-first at the edge, which stopped working when a day of
+          # that room reached a HUNDRED MEGABYTES — a six-second fetch cannot
+          # lift one, so every shard read failed in silence and a buyer with
+          # six signed orders in the archive was shown "Nothing ordered yet".
+          # Ninety-nine lines out of nine hundred and fifty thousand are ours;
+          # this file is those. It is now the ONLY source that page has, so a
+          # pass that does not commit it is an order somebody cannot see.
+          SMALL="web/data/cursors.json web/data/recent.json web/data/standings.json web/data/index.json web/data/owners.json web/data/roster.json web/data/tclk-offers/tail.ndjson web/data/tclk-offers/tail.json web/data/tclk-offers/orders.ndjson web/data/overheard-calls/all.ndjson"
 
           # ── WHICH PASSES CARRY THE WHOLE ARCHIVE ───────────────────────
           # Every twelfth one, AND the last one of the window — and the last

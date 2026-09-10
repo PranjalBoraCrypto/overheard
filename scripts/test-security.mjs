@@ -282,19 +282,38 @@ console.log("\n=== D. values fed to a scan are shaped first");
 
   /* A shard name is interpolated straight into a URL that then gets fetched.
      It comes from the project's own _meta.json today, which is exactly the
-     kind of trust boundary that moves without anyone noticing. */
+     kind of trust boundary that moves without anyone noticing.
+     /api/calls still walks shards and still needs the rule. /api/orders does
+     NOT — see below — so it is checked for the stronger property instead. */
+  ok("calls validates a shard name before putting it in a URL",
+    /const DAY_RE = \/\^\\d\{4\}-\\d\{2\}-\\d\{2\}\$\//.test(calls) &&
+    /\.filter\(\(d\) => typeof d === "string" && DAY_RE\.test\(d\)\)/.test(calls));
   for (const [name, s] of [["orders", orders], ["calls", calls]]) {
-    ok(`${name} validates a shard name before putting it in a URL`,
-      /const DAY_RE = \/\^\\d\{4\}-\\d\{2\}-\\d\{2\}\$\//.test(s) &&
-      /\.filter\(\(d\) => typeof d === "string" && DAY_RE\.test\(d\)\)/.test(s));
     ok(`${name} gives its archive fetch a timeout`,
       /async function grabText[\s\S]{0,900}?AbortSignal\.timeout\(/.test(s));
   }
 
-  /* MAX_ORDERS bounds a customer with many orders. It does nothing about a
-     DID with NONE, which is the cheap case an attacker can mint forever. */
-  ok("a read budget bounds a request for a DID with no orders",
-    /const MAX_SCAN_BYTES = /.test(orders) && /if \(read >= MAX_SCAN_BYTES\)/.test(orders));
+  /* ── THE BUDGET IS GONE, AND THAT IS THE STRONGER ANSWER ─────────────────
+     There was a MAX_SCAN_BYTES here and this asserted it, because /api/orders
+     walked day shards: a DID with NO orders never tripped MAX_ORDERS, so all
+     fourteen shards were fetched and scanned in full. Anybody can mint an
+     Ed25519 key, so every made-up DID was a fresh CDN cache key costing tens
+     of megabytes of edge egress for a request that cost the attacker nothing.
+
+     Bounding the work was the right fix at the time. Not doing the work is
+     better, and it is what the endpoint does now: two reads, both FIXED
+     paths, whatever the DID. There is no date to validate because no date is
+     interpolated, and no budget to blow because the files are the shop's own
+     index and its tail rather than somebody else's traffic.
+     So the assertion is about the absence — a day loop reappearing here is
+     the amplifier coming back, and the DAY_RE rule with it. */
+  {
+    const code = orders.replace(/\/\*[\s\S]*?\*\//g, "");
+    ok("a request for a DID with no orders cannot cost more than two reads",
+      !/allDays|MAX_DAYS|MAX_SCAN_BYTES|\$\{day\}/.test(code)
+      && (code.match(/grabText\(/g) ?? []).length === 3,
+      "one definition and two fixed paths; a loop here is an amplifier");
+  }
 }
 
 /* ══════════════════════════════════════════════════════════════════════════

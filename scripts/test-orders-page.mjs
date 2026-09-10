@@ -135,7 +135,24 @@ ok("and refuses anything that is not a canonical did:key",
 ok("it reads the repository, not the deployed copy",
   /raw\.githubusercontent\.com/.test(api),
   "the deployed files are only as fresh as the last build");
-ok("it bounds how far back it looks", /MAX_DAYS/.test(api) && /slice\(-MAX_DAYS\)/.test(api));
+/* ── THE RULE THAT REPLACED "BOUND HOW FAR BACK IT LOOKS" ────────────────
+   It used to walk day shards newest-first with a MAX_DAYS window and a
+   MAX_SCAN_BYTES budget, because the files it read were somebody else's
+   traffic and grew without limit. They grew to a HUNDRED MEGABYTES A DAY,
+   which no six-second fetch can lift, so every shard read failed in silence
+   and a buyer with six signed orders was shown "Nothing ordered yet".
+   The bound is no longer a window over the room. It is that the room is not
+   read at all: the collector keeps a 92 KB index of this shop's own orders
+   and this reads that. Asserted as an absence, because the absence is the
+   fix — a day shard fetched from here is the bug coming back. */
+ok("it reads the collector's index rather than the room's day shards",
+  /ORDERS_FILE/.test(api) && /orders\.ndjson/.test(api));
+/* Against the CODE, not the file: the comment above those constants explains
+   why they are gone, and a rule that cannot tell an explanation from a use is
+   a rule that punishes writing the explanation down. */
+ok("and never fetches a day shard again",
+  !/\$\{day\}|MAX_DAYS|MAX_SCAN_BYTES|allDays/.test(strip(api)),
+  "a hundred megabytes does not arrive inside a six-second timeout");
 ok("and caps one identity's list", /MAX_ORDERS/.test(api));
 /* The prefilter is the whole reason this is affordable: a substring test
    rules out ~99.9% of lines before any of them is parsed. */
@@ -156,8 +173,9 @@ ok("an accept only counts as an answer if the shop signed it",
 ok("and the shop's identity comes from the same place the runner's does",
   /SHOP = process\.env\.SHOP_DID/.test(api),
   "two spellings of who we are is one too many");
-ok("it reports how much it actually read",
-  /days_scanned/.test(api) && /days_available/.test(api) && /truncated/.test(api),
+ok("it reports which sources it actually read",
+  /index: indexText !== null/.test(api) && /tail: tail !== null/.test(api)
+    && /truncated/.test(api),
   "a bare array looks complete whatever happened");
 /* THIS RULE USED TO READ "and it does not follow deal rooms", enforced by
    grepping for the word `contract`. It now derives one, because an order the
@@ -182,8 +200,14 @@ ok("it reports how much it actually read",
      The rule was never "exactly two reads". It is that the number of reads is
      BOUNDED and none of them is per-order — that is what once spent the
      shared allowance and left the deals board empty. */
-  ok("and every read it makes is one of three kinds", grabs === 4,
-    `${grabs - 1} call sites: the archive index, the tail, and one day shard at a time`);
+  /* TWO call sites now, and they are both fixed paths. There is no longer a
+     loop, a day name, or a file whose size depends on somebody else's
+     traffic. The rule was never "exactly two reads" — it is that the number
+     of reads is BOUNDED and none of them is per-order, which is what once
+     spent the shared allowance and left the deals board empty. It is now
+     bounded at two, which is as bounded as it gets. */
+  ok("and every read it makes is one of two fixed files", grabs === 3,
+    `${grabs - 1} call sites: the order index and the tail`);
   /* ── THE HUNT MOVED INSIDE THE FETCH LOOP, AND THE RULE DID NOT CHANGE ──
      It used to run once at the end, over a list of the newest few shard texts
      — which held the tail and TWO days rather than the three it was written
@@ -204,16 +228,19 @@ ok("it reports how much it actually read",
     "a path would have to become a read; an array of strings cannot");
 }
 
-console.log("\n=== D2. the endpoint, driven for real, against the gap that hid an order");
+console.log("\n=== D2. the endpoint, driven for real, against the two ways it has lied");
 {
-  /* Section D reads this file as text. This runs it. The distinction earned
-     its keep today: a real order, offer and accept and payment lock all on
-     the board, was reported to its own buyer as "Nothing ordered yet".
-     Day shards are committed on every twelfth archiver pass — that day the
-     shard had not been rewritten since 08:46 — and the live room the page
-     merges reaches back FIVE MINUTES (probed: the venue caps limit at 200
-     however much is asked for, and `since` will not page backwards).
-     An order in between existed in tail.ndjson and nowhere else. */
+  /* Section D reads this file as text. This runs it. The distinction has now
+     earned its keep twice.
+     ONCE, when a real order — offer, accept and payment lock all on the
+     board — was reported to its own buyer as "Nothing ordered yet", because
+     day shards are committed on every twelfth archiver pass and the live room
+     the page merges reaches back FIVE MINUTES. The order existed in
+     tail.ndjson and nowhere else.
+     AND AGAIN, when the day shards this read grew to a hundred megabytes and
+     stopped arriving inside the fetch timeout at all. Six signed orders, all
+     accepted by this shop, all still in the archive, all invisible. That is
+     why the shards are gone from here and an index took their place. */
   process.env.SHOP_DID = "did:key:z6MkiuhfekPgiihLWarPAzhuvoMjg86F8dqmLiCTmtQgMrR3";
   const handler = (await import("../api/orders.js")).default;
   const { canon, offerId } = await import("../web/tclk.js");
@@ -231,77 +258,86 @@ console.log("\n=== D2. the endpoint, driven for real, against the gap that hid a
   const row = JSON.stringify({ seq: 70001, ts: new Date(t).toISOString(), from: BUYER, sig: "s",
     text: "tclk1 " + canon({ ...offer, id }) });
 
-  let TAILTEXT = row, SHARDTEXT = "";
+  let TAILTEXT = row, INDEXTEXT = "";
+  let reads = [];
   const real = globalThis.fetch;
-  globalThis.fetch = async (u) => {
+  const serve = (u) => {
     const s = String(u);
-    if (s.endsWith("_meta.json")) return new Response(JSON.stringify({ days: ["2026-09-04"] }), { status: 200 });
-    if (s.endsWith("tail.ndjson")) return TAILTEXT === null ? new Response("no", { status: 404 }) : new Response(TAILTEXT, { status: 200 });
-    if (s.endsWith(".ndjson")) return new Response(SHARDTEXT, { status: 200 });
+    reads.push(s);
+    if (s.endsWith("tail.ndjson")) {
+      return TAILTEXT === null ? new Response("no", { status: 404 }) : new Response(TAILTEXT, { status: 200 });
+    }
+    if (s.endsWith("orders.ndjson")) {
+      return INDEXTEXT === null ? new Response("no", { status: 404 }) : new Response(INDEXTEXT, { status: 200 });
+    }
+    /* THE WHOLE POINT OF THE CHANGE, ENFORCED BY THE FIXTURE. Anything else
+       is a read this endpoint is no longer allowed to make — a day shard, a
+       _meta.json, a path built from a date. Throwing here means the test
+       fails loudly rather than quietly serving something. */
     throw new Error("unexpected fetch " + s);
   };
-  const call = async () => (await handler(new Request(`http://x/api/orders?did=${BUYER}`))).json();
+  globalThis.fetch = async (u) => serve(u);
+  const call = async () => {
+    reads = [];
+    return (await handler(new Request(`http://x/api/orders?did=${BUYER}`))).json();
+  };
 
   let r = await call();
   ok("an order that exists only in the tail is returned", (r.orders || []).length === 1,
     `${(r.orders || []).length} orders — this read 0 while the buyer's order was live and funded`);
   ok("and it carries the id an accept points at", r.orders?.[0]?.id === id);
+  ok("and it did it with exactly two reads, both fixed paths", reads.length === 2,
+    reads.map((u) => u.split("/").pop()).join(" + "));
 
-  /* THE CONTROL. Same board, no tail: the bug exactly as the buyer met it. */
+  /* THE CONTROL for the tail, and then the one that matters more: BOTH
+     sources gone. An empty list is not an answer when nothing was read, and
+     this is the exact shape the day-shard version got wrong — it returned
+     `orders: []` with a 200 while every read had failed. */
   TAILTEXT = null;
   r = await call();
-  ok("without the tail the buyer is told they have never ordered", (r.orders || []).length === 0,
-    "stated as the control, so the assertion above cannot pass for some other reason");
-
-  /* The tail overlaps the newest shard on purpose, so the same order arrives
-     twice and must be shown once. */
-  TAILTEXT = row; SHARDTEXT = row;
+  ok("with no tail but an index, the answer is still the index's",
+    r.source === "repository" && r.tail === false, `${r.source} · tail ${r.tail}`);
+  INDEXTEXT = null;
   r = await call();
-  ok("an order in both the tail and the shard is listed once", (r.orders || []).length === 1,
+  ok("with neither source, it does NOT answer with an empty order list",
+    r.source === "unavailable" && r.index === false && r.tail === false,
+    `${r.source} · index ${r.index} · tail ${r.tail}`);
+  ok("and it says so in words, so the page can tell the two apart",
+    /could not read/.test(String(r.note)), String(r.note).slice(0, 60));
+
+  /* The tail overlaps the index on purpose — the index is committed every
+     pass, the tail every pass too, and the newest frames are in both — so the
+     same order arrives twice and must be shown once. */
+  TAILTEXT = row; INDEXTEXT = row;
+  r = await call();
+  ok("an order in both the index and the tail is listed once", (r.orders || []).length === 1,
     `${(r.orders || []).length} — the overlap is deliberate; showing it twice is not`);
 
-  /* ── THE BUDGET, WHICH THE RESTRUCTURE QUIETLY BROKE ─────────────────────
-     Collecting every text before scanning any of it made `orders.length >=
-     MAX_ORDERS` a test against an empty list — so every shard in the
-     fourteen-day window was FETCHED (2.5 to 7.4 MB each, at the edge, which
-     is the exact cost this file's header says must never be paid per
-     request), and the scan then had no outer guard. Measured with 700 orders
-     across three sources: 301 came back, and `truncated: false` was asserted
-     over the top of it. */
+  /* ── THE CAP, WHICH IS NOW THE ONLY BOUND LEFT ───────────────────────────
+     There used to be a byte budget here as well, because the files being read
+     were somebody else's traffic and grew without limit. They are the shop's
+     own index now: 99 lines in the first nine days. MAX_ORDERS remains, for
+     the one case it was always for — a single identity with more orders than
+     a cached response should carry. */
   {
     const many = (n, from) => Array.from({ length: n }, (_, i) => JSON.stringify({
       seq: from + i, ts: new Date(t).toISOString(), from: BUYER, sig: "s",
       text: "tclk1 " + JSON.stringify({ ...offer, nonce: "n" + (from + i), id: "0x" + String(from + i).padStart(64, "0") }),
     })).join("\n");
-    let fetched = 0;
-    globalThis.fetch = async (u) => {
-      const q = String(u);
-      if (q.endsWith("_meta.json")) return new Response(JSON.stringify({ days: ["2026-09-01", "2026-09-02", "2026-09-03", "2026-09-04"] }), { status: 200 });
-      fetched++;
-      if (q.endsWith("tail.ndjson")) return new Response(many(300, 1), { status: 200 });
-      return new Response(many(300, 1), { status: 200 });   // the SAME 300, overlapping
-    };
-    const r2 = await call();
-    ok("the overlap between tail and shard costs one entry, not two",
-      (r2.orders || []).length === 300,
-      `${(r2.orders || []).length} orders from 300 distinct, served three times over`);
-    /* Four shards are still fetched here and that is RIGHT: 300 distinct
-       orders is under the cap, so there is more to look for. The property is
-       that a SPENT budget stops the fetching — asserted next, because an
-       assertion that passes while the budget never binds is testing nothing. */
 
-    fetched = 0;
-    globalThis.fetch = async (u) => {
-      const q = String(u);
-      if (q.endsWith("_meta.json")) return new Response(JSON.stringify({ days: ["2026-09-01", "2026-09-02", "2026-09-03", "2026-09-04"] }), { status: 200 });
-      fetched++;
-      if (q.endsWith("tail.ndjson")) return new Response(many(600, 1), { status: 200 });
-      return new Response(many(600, 10000), { status: 200 });
-    };
+    TAILTEXT = many(300, 1); INDEXTEXT = many(300, 1);      // the SAME 300
+    const r2 = await call();
+    ok("the overlap between index and tail costs one entry, not two",
+      (r2.orders || []).length === 300,
+      `${(r2.orders || []).length} orders from 300 distinct, served twice over`);
+
+    TAILTEXT = many(600, 1); INDEXTEXT = many(600, 10000);
     const r2b = await call();
-    ok("a spent budget stops it fetching shards it cannot use",
-      fetched === 1, `${fetched} reads — the tail alone filled the cap, and each shard is megabytes at the edge`);
+    ok("one identity cannot turn a cached answer into a megabyte",
+      (r2b.orders || []).length === 500, `${(r2b.orders || []).length} returned`);
     ok("and the answer says it was truncated", r2b.truncated === true);
+    ok("and it still cost two reads, not one per order", reads.length === 2,
+      `${reads.length} reads for 1,200 rows`);
   }
 
   /* The answer must say whether the fresh source was there. It used to assert
@@ -309,27 +345,25 @@ console.log("\n=== D2. the endpoint, driven for real, against the gap that hid a
      shard is committed hourly, and wildly untrue on the day the shard also
      hit its body cap and stopped at 08:46. */
   {
-    globalThis.fetch = async (u) => {
-      const q = String(u);
-      if (q.endsWith("_meta.json")) return new Response(JSON.stringify({ days: ["2026-09-04"] }), { status: 200 });
-      if (q.endsWith("tail.ndjson")) return new Response("no", { status: 404 });
-      return new Response("", { status: 200 });
-    };
+    TAILTEXT = null; INDEXTEXT = "";
     const r3 = await call();
     ok("with no tail, the answer says so rather than claiming freshness",
-      r3.tail === false && /hours behind/.test(String(r3.archive_lag)),
+      r3.tail === false && /not here yet/.test(String(r3.archive_lag)),
       String(r3.archive_lag).slice(0, 60));
+    ok("and it names the day the record itself starts",
+      r3.since === "2026-09-02",
+      "a ring buffer dropped everything before the collector arrived, and that is not recoverable");
   }
 
   /* ══════════════════════════════════════════════════════════════════════
    * THE ACCEPT THAT WAS THREE DAYS BACK, WHICH IS TO SAY: THE DAY BEFORE
    * YESTERDAY
    *
-   * The accept hunt used to search a list of the three newest texts — except
-   * the tail was pushed into that list first and took one of the three slots,
-   * so it was really the tail and TWO days. An order placed on the 4th and
-   * accepted three seconds later was, by the 6th, in the third shard back and
-   * never searched.
+   * The accept hunt used to search a list of the three newest shard texts —
+   * except the tail was pushed into that list first and took one of the three
+   * slots, so it was really the tail and TWO days. An order placed on the 4th
+   * and accepted three seconds later was, by the 6th, in the third shard back
+   * and never searched.
    *
    * MEASURED, 6 September, on this shop's own orders: five placed on the 4th,
    * every one accepted by the shop within three seconds, every one returned
@@ -338,8 +372,11 @@ console.log("\n=== D2. the endpoint, driven for real, against the gap that hid a
    * the deadline" — about work that had been accepted, funded and delivered.
    * One of the five still had three hours left in which to fund it.
    *
-   * The fixture is that day, exactly: the offer and its accept together in
-   * the oldest of four shards.
+   * There is no window left for it to fall out of. The index holds every
+   * accept this shop has ever posted, and the hunt searches all of it. The
+   * fixture keeps the old shape anyway — the offer and its accept buried
+   * under a thousand rows of other people's trade — because "it is all in one
+   * file now" is a reason the hunt is CORRECT, not a reason to stop checking.
    * ═══════════════════════════════════════════════════════════════════*/
   {
     const CONTRACT = "0x" + "5a".repeat(32);
@@ -350,19 +387,19 @@ console.log("\n=== D2. the endpoint, driven for real, against the gap that hid a
         from: "did:key:z6MkiuhfekPgiihLWarPAzhuvoMjg86F8dqmLiCTmtQgMrR3",
         contract: CONTRACT, ref: id, statement: "0x" + "d9".repeat(32) }),
     });
-    /* Four days, newest first as the endpoint reads them. The order lives in
-       the oldest — the one the old code stopped one short of. */
-    const days = ["2026-09-03", "2026-09-04", "2026-09-05", "2026-09-06"];
-    const shard = { "2026-09-03": row + "\n" + accept };
-    globalThis.fetch = async (u) => {
-      const q = String(u);
-      if (q.endsWith("_meta.json")) return new Response(JSON.stringify({ days }), { status: 200 });
-      if (q.endsWith("tail.ndjson")) return new Response("", { status: 200 });
-      const day = q.slice(-("2026-09-03.ndjson".length), -".ndjson".length);
-      return new Response(shard[day] ?? "", { status: 200 });
-    };
+    /* A thousand rows of somebody else's board on top, so "found" cannot mean
+       "it was the first line". */
+    const noise = Array.from({ length: 1000 }, (_, i) => JSON.stringify({
+      seq: 90000 + i, ts: new Date(t).toISOString(),
+      from: "did:key:z6Mkf4hsuVz6R8R2yrRqgTWbFjEDDyRG8cPFfeaDSHxquhHy", sig: "s",
+      text: "tclk1 " + JSON.stringify({ type: "offer", amount: "200", asset: "FLOP",
+        job: { id: "task-" + i, proto: "a2a" }, nonce: "x" + i }),
+    })).join("\n");
+
+    TAILTEXT = "";
+    INDEXTEXT = row + "\n" + accept + "\n" + noise;
     let r4 = await call();
-    ok("an order three shards back is still found", (r4.orders || []).length === 1,
+    ok("an order at the far end of the index is still found", (r4.orders || []).length === 1,
       `${(r4.orders || []).length} orders`);
     ok("AND the shop's answer to it is found with it", Boolean(r4.orders?.[0]?.accept),
       r4.orders?.[0]?.accept ? "accept attached" : "no accept — the page will say nobody took it on");
@@ -381,9 +418,9 @@ console.log("\n=== D2. the endpoint, driven for real, against the gap that hid a
     const oldOffer = { ...offer, nonce: "old1old1old1old1",
       expiresMs: t - 72 * 3600e3, claimByMs: t - 72 * 3600e3, refundAfterMs: t - 48 * 3600e3 };
     const oldId = await offerId(oldOffer);
-    shard["2026-09-03"] = JSON.stringify({ seq: 70003, ts: new Date(t - 96 * 3600e3).toISOString(),
+    INDEXTEXT = JSON.stringify({ seq: 70003, ts: new Date(t - 96 * 3600e3).toISOString(),
       from: BUYER, sig: "s", text: "tclk1 " + canon({ ...oldOffer, id: oldId }) })
-      + "\n" + accept.replace(id, oldId);
+      + "\n" + accept.replace(id, oldId) + "\n" + noise;
     r4 = await call();
     ok("an order long past its refund deadline still gets its accept",
       Boolean(r4.orders?.[0]?.accept),
@@ -393,7 +430,7 @@ console.log("\n=== D2. the endpoint, driven for real, against the gap that hid a
        age of the order: that is the path to a buyer locking a payment against
        somebody else's contract, and it is checked on `row.from`, which is the
        transport's account of who signed rather than the body's claim. */
-    shard["2026-09-03"] = row + "\n" + accept.replace(
+    INDEXTEXT = row + "\n" + accept.replace(
       /"from":"did:key:z6Mkiuhfek[^"]*"/, '"from":"did:key:z6MkngD8RZKCgJQCkJvHfGyYoCcNCG5rz9Tc7yRmWrMZExaz"');
     r4 = await call();
     ok("but a stranger's accept is not the shop's answer", !r4.orders?.[0]?.accept,
@@ -548,6 +585,12 @@ let posts = [];
 let roomReads = [];
 /* Held open on purpose for the first-paint test — see section H. */
 let archiveDelayMs = 0;
+/* The fixture's orders carry asset "FLOP", because the shop really did price
+   in FLOP until 6 September. Flipping this serves the SAME orders signed as
+   paper, which is the control for the "signed as FLOP" note: a note that
+   appears either way is not telling anybody anything. */
+let assetIsPaper = false;
+const served = () => assetIsPaper ? FIXTURE.map((o) => ({ ...o, asset: "paper" })) : FIXTURE;
 
 const srv = http.createServer((q, r) => {
   const u = q.url.split("?")[0];
@@ -558,8 +601,9 @@ const srv = http.createServer((q, r) => {
   if (u === "/api/orders") {
     if (archiveBroken) { r.writeHead(503, { "content-type": "application/json" }); return r.end('{"error":"upstream"}'); }
     const body = archiveAnswers
-      ? JSON.stringify({ did: DID, source: "repository", orders: FIXTURE,
-          days_scanned: 2, days_available: 2, window_days: 14, truncated: false })
+      ? JSON.stringify({ did: DID, source: "repository", orders: served(),
+          index: true, index_rows: FIXTURE.length, tail: true,
+          truncated: false, since: "2026-09-02" })
       : JSON.stringify({ source: "unavailable", orders: [] });
     const send = () => { r.writeHead(200, { "content-type": "application/json" }); r.end(body); };
     if (archiveDelayMs) setTimeout(send, archiveDelayMs); else send();
@@ -596,7 +640,7 @@ const srv = http.createServer((q, r) => {
     /* The overlap is the point: these are the SAME orders the archive
        returned, arriving by the other road. */
     return r.end(JSON.stringify({ source: "live",
-      messages: [...FIXTURE.slice(0, liveOverlap).map(asMessage), ...boardExtra] }));
+      messages: [...served().slice(0, liveOverlap).map(asMessage), ...boardExtra] }));
   }
   const f = path.join(ROOT, "web", u);
   if (!fs.existsSync(f) || fs.statSync(f).isDirectory()) { r.writeHead(404); return r.end("no"); }
@@ -719,8 +763,39 @@ console.log("\n=== E2. the delivered figure counts deliveries and nothing else")
   ok("and an order that finished WITHOUT being delivered adds nothing to it",
     Number(s.stats.shut) > 1 && s.stats.paid === "250",
     `${s.stats.shut} finished, ${s.stats.paid} FLOP delivered`);
+  /* ── AND THE UNIT IS PAPER, WHATEVER THE FRAME SAID ────────────────────
+     The fixture's orders carry `asset: "FLOP"`, because the shop really did
+     price in FLOP until 6 September while posting `rails: ["paper"]` — a rail
+     that holds nothing and could never have moved one. The page shows what
+     the money IS rather than what the frame called it, on a site whose entire
+     claim is that nothing of value has moved yet.
+     What it must never do is relabel in silence: section D3 below checks that
+     the original word is still on the page. */
   ok("the figure carries its unit, so it cannot be read as a count",
-    (await pg.$eval(".sumval .sumu", (e) => e.textContent.trim())) === "FLOP");
+    (await pg.$eval(".sumval .sumu", (e) => e.textContent.trim())) === "PAPER",
+    await pg.$eval(".sumval .sumu", (e) => e.textContent.trim()));
+  /* ── AND IT SAYS SO, WHICH IS THE HALF THAT MAKES IT HONEST ────────────
+     Relabelling a signed figure is fine; relabelling it in silence is the
+     page asserting something the signature does not. The fixture's orders
+     carry asset "FLOP", so the line has to appear and has to name it. */
+  {
+    const said = await pg.$eval(".sumas", (e) => e.textContent.trim()).catch(() => "");
+    ok("and the page admits the frames said something else",
+      /FLOP/.test(said) && /paper rail/.test(said), said || "no line at all");
+
+    /* THE CONTROL. The same orders, signed as paper: no note, because there
+       is nothing to admit. A note that appears either way says nothing. */
+    assetIsPaper = true;
+    const ctx2 = await browser.newContext();
+    const pg2 = await ctx2.newPage();
+    await pg2.goto("http://localhost:9441/orders.html", { waitUntil: "domcontentloaded" });
+    await pg2.waitForTimeout(1800);
+    const none = await pg2.$eval(".sumas", (e) => e.textContent.trim()).catch(() => "");
+    ok("and it says nothing when the frames agree with the page", none === "",
+      none || "no line, which is right");
+    await ctx2.close();
+    assetIsPaper = false;
+  }
   dealFrames = []; lateFrames = [];
   await ctx.close();
 }
@@ -879,7 +954,8 @@ console.log("\n=== I. it admits what it cannot know");
   await pg.waitForTimeout(1200);
   const s = await read(pg);
   ok("the footer says how far back it read",
-    /archived day/.test(s.foot), s.foot.slice(0, 60) + "…");
+    /every order this shop has archived/.test(s.foot) && /2026-09-02/.test(s.foot),
+    s.foot.slice(0, 70) + "…");
   /* ── THE SENTENCE THAT HAD TO CHANGE WITH THE PILL ────────────────────
      It used to read: "open" means this offer's expiry has not passed, not
      that nobody has accepted it. That was honest while the page knew nothing

@@ -89,7 +89,10 @@ import { readFile, writeFile, appendFile, rename, mkdir, readdir, rm } from "nod
 /* The deal-room name comes from the protocol module the site already uses, so
    the archiver and the page can never disagree about which room a deal is in. */
 import { readFrame, isFrameText, dealRoom, OFFERS_ROOM } from "../web/tclk.js";
-import { existsSync } from "node:fs";
+import { existsSync, createReadStream } from "node:fs";
+/* Line-at-a-time, because the offers room's day shards are a hundred
+   megabytes each and the backfill must not hold one in memory. */
+import { createInterface } from "node:readline";
 import { createHash } from "node:crypto";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -618,17 +621,173 @@ function pushCall(state, r) {
 
 /** Seeded from the last run's file, exactly as the tail is: a fresh process
  *  starts with an empty ledger, and writing that over the real one would
- *  delete every call made before this window. */
-async function loadCalls() {
+ *  delete every call made before this window.
+ *
+ *  ── AND IT WAS NOT SEEDING, FOR THE STUPIDEST POSSIBLE REASON ────────────
+ *  This said `fs.readFile`. Nothing in this file is called `fs`; the promises
+ *  API is imported by NAME at the top. So the line threw ReferenceError: fs is
+ *  not defined, on every run, straight into a catch whose comment says "no
+ *  ledger yet" — and the same typo sat in writeCalls, where the catch says
+ *  "none yet". Two silent failures wearing each other's excuse.
+ *
+ *  WHAT IT COST, MEASURED ON THE LIVE FILE. all.ndjson held FIVE rows —
+ *  seq 535 to 539 — while _meta.json for the same room said total 539. The
+ *  ledger this file's own header calls "appended and never trimmed" had been
+ *  overwritten down to whatever one run happened to see, over and over, for
+ *  the life of the market. Every call /api/keep wrote straight to GitHub in
+ *  between was erased by the next flush for the same reason.
+ *
+ *  Nobody's position was actually lost, and that is luck rather than design:
+ *  /api/calls merges the ledger with the day shards precisely because a short
+ *  ledger is not a short market. This was the failure that guard was written
+ *  for, firing every hour, unseen. */
+export async function loadCalls() {
   const holder = { ledger: { rows: [], seqs: new Set() } };
   try {
-    const text = await fs.readFile(path.join(OUT, CALLS_ROOM, "all.ndjson"), "utf8");
+    const text = await readFile(path.join(OUT, CALLS_ROOM, "all.ndjson"), "utf8");
     for (const line of text.split("\n")) {
       if (!line) continue;
       try { pushCall(holder, JSON.parse(line)); } catch { /* torn line: skip it */ }
     }
   } catch { /* no ledger yet, which is the state on the first ever pass */ }
   return holder.ledger;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+ * AND ONE INDEX, BECAUSE THE ROOM OUTGREW BEING READ
+ *
+ * ── WHAT BROKE, MEASURED ─────────────────────────────────────────────────
+ *
+ * /api/orders answers "what have I ordered?" by scanning the offers room's
+ * day shards at the edge, newest first, and stopping when it has read enough.
+ * When it was written a day of tclk-offers was 2.5 MB and its comments say so.
+ *
+ * On 10 September the same shards were:
+ *
+ *     02 Sep  0.6 MB      06 Sep  91.9 MB
+ *     03 Sep  7.4 MB      07 Sep  94.9 MB
+ *     04 Sep 18.5 MB      08 Sep  99.4 MB
+ *     05 Sep 39.3 MB      09 Sep  99.0 MB
+ *                         10 Sep 100.3 MB
+ *
+ * A hundred megabytes does not arrive inside a six-second fetch timeout, so
+ * every shard read returned null, and a buyer with six signed orders in the
+ * archive was told "Nothing ordered yet". Not truncated — the page had no way
+ * to know it had failed, because a failed shard is skipped in silence and an
+ * empty result looks exactly like an empty history.
+ *
+ * ── WHY AN INDEX AND NOT A BIGGER BUDGET ─────────────────────────────────
+ *
+ * Of 950,497 lines in that room over nine days, NINETY-NINE are ours: 93
+ * offers naming `proto: "overheard"` and 6 accepts posted by this shop. The
+ * endpoint was moving 900 MB to find 92 KB, and every extra day the collector
+ * runs makes that ratio worse. No timeout and no byte budget fixes an
+ * approach whose cost is the size of somebody else's traffic.
+ *
+ * So the collector — which sees every frame anyway, once, as it arrives —
+ * writes the ninety-nine down. The endpoint reads one small file. This is the
+ * same argument as the calls ledger above and the same shape of file, for the
+ * same reason: it is tiny, it is somebody's money, and it must not depend on
+ * a reader being able to lift the room it came from.
+ *
+ * ONE DELIBERATE LOOSENESS. Accepts are kept if they were posted by the SHOP,
+ * without checking that they answer an offer already in here. Checking would
+ * make the index depend on arrival order — an accept landing in the same batch
+ * as its offer, or across a restart, would be dropped for good — and the
+ * shop's accepts are six in nine days. Keeping all of them costs nothing and
+ * cannot go wrong quietly.
+ * ═════════════════════════════════════════════════════════════════════════*/
+const ORDERS_FILE = "orders.ndjson";
+/* Two hundred times the whole of the first nine days. A ceiling exists so
+   that "append for ever" is not literally true, not because this is expected
+   to approach it. */
+const ORDERS_MAX = Number(process.env.ORDERS_MAX ?? 20_000);
+const TCLK_PREFIX = "tclk1 ";
+
+/** One arriving frame, kept only if it is an Overheard order or this shop's
+ *  answer to one. Returns true if it was kept, which the backfill counts. */
+export function pushOrder(state, r) {
+  if (!state.orders) state.orders = { rows: [], seqs: new Set() };
+  const O = state.orders;
+  const text = String(r?.text ?? "");
+  if (!text.startsWith(TCLK_PREFIX)) return false;
+  let b;
+  try { b = JSON.parse(text.slice(TCLK_PREFIX.length)); } catch { return false; }
+  if (b?.type === "offer") {
+    /* THE SHOP'S OWN PROTOCOL NAME, not "an offer". tclk-offers is a public
+       board and most of what is posted there is other people's trade. */
+    if (b?.job?.proto !== "overheard") return false;
+  } else if (b?.type === "accept") {
+    /* From the transport, not from the body. A stranger can put our DID
+       inside a frame; they cannot post as us. Same rule, same reason, as
+       api/orders.js and api/accept.mjs. */
+    if (r?.from !== SHOP_DID) return false;
+  } else return false;
+
+  const k = String(r?.seq ?? "");
+  if (!k || O.seqs.has(k)) return false;
+  if (O.rows.length >= ORDERS_MAX) return false;
+  O.rows.push(JSON.stringify(r));
+  O.seqs.add(k);
+  return true;
+}
+
+/** Seeded from the last run's file, like the ledger and the tail. */
+export async function loadOrders() {
+  const holder = { orders: { rows: [], seqs: new Set() } };
+  let had = false;
+  try {
+    const text = await readFile(path.join(OUT, OFFERS_ROOM, ORDERS_FILE), "utf8");
+    had = true;
+    for (const line of text.split("\n")) {
+      if (!line) continue;
+      try { pushOrder(holder, JSON.parse(line)); } catch { /* torn line: skip it */ }
+    }
+  } catch { /* not written yet — see the backfill below */ }
+  if (!had) await backfillOrders(holder);
+  return holder.orders;
+}
+
+/* ── THE ONE-OFF WALK BACK THROUGH WHAT IS ALREADY ON DISK ────────────────
+   The index starts empty, and an index that only knows what arrived after it
+   was invented would tell every existing customer they have never ordered —
+   which is the exact bug it is here to fix, moved from the reader to the
+   writer.
+   The shards are already checked out on the runner, so this is a local read
+   rather than nine hundred megabytes over the wire. It happens ONCE: the
+   moment orders.ndjson exists, loadOrders takes the branch above.
+   Streamed line by line, and prefiltered by substring before anything is
+   parsed — JSON.parse on a million lines is minutes, `includes` on them is
+   seconds. The prefilter can only produce false positives; pushOrder throws
+   those out. */
+export async function backfillOrders(holder) {
+  const dir = path.join(OUT, OFFERS_ROOM);
+  let names;
+  try { names = await readdir(dir); } catch { return 0; }
+  const shards = names.filter((n) => /^\d{4}-\d{2}-\d{2}\.ndjson$/.test(n)).sort();
+  if (!shards.length) return 0;
+
+  const started = Date.now();
+  let kept = 0, lines = 0;
+  for (const name of shards) {
+    const rl = createInterface({
+      input: createReadStream(path.join(dir, name), { encoding: "utf8" }),
+      crlfDelay: Infinity,
+    });
+    try {
+      for await (const line of rl) {
+        lines++;
+        if (!line) continue;
+        if (!line.includes("overheard") && !line.includes(SHOP_DID)) continue;
+        let r;
+        try { r = JSON.parse(line); } catch { continue; }
+        if (pushOrder(holder, r)) kept++;
+      }
+    } finally { rl.close(); }
+  }
+  console.log(`  orders index: backfilled ${kept} from ${lines} archived lines `
+    + `in ${shards.length} shard(s), ${((Date.now() - started) / 1000).toFixed(1)}s`);
+  return kept;
 }
 
 /** One arriving record, appended to the rolling window. */
@@ -737,7 +896,7 @@ async function loadTail() {
  *  turns to lose each other's work.
  *  Reading first makes them converge instead. Union by the server's own
  *  sequence number, ordered by it, and neither can erase the other. */
-async function writeCalls(state) {
+export async function writeCalls(state) {
   const L = state.ledger;
   if (!L?.rows.length) return;
   const dir = path.join(OUT, CALLS_ROOM);
@@ -755,7 +914,11 @@ async function writeCalls(state) {
       } catch { /* torn line: it is not a record until it parses */ }
     }
   };
-  try { eat(await fs.readFile(file, "utf8")); } catch { /* none yet */ }
+  /* `readFile`, not `fs.readFile` — see loadCalls for what the second spelling
+     cost. This catch is for a file that genuinely is not there yet; it was
+     swallowing a ReferenceError instead, which turned this merge into a
+     wholesale overwrite of every call made before this run. */
+  try { eat(await readFile(file, "utf8")); } catch { /* none yet */ }
   eat(L.rows.join("\n"));
 
   const out = [...rows.entries()].sort((a, b) => Number(a[0]) - Number(b[0])).map(([, l]) => l);
@@ -763,6 +926,37 @@ async function writeCalls(state) {
      same lines from disk on every flush for the rest of the window. */
   L.rows = out;
   L.seqs = new Set(rows.keys());
+  await writeAtomic(file, out.join("\n") + "\n");
+}
+
+/** The orders index, merged with whatever is on disk and written whole —
+ *  the same shape as writeCalls, and for the same two reasons: a rename is
+ *  the only write `git add` can never catch half-finished, and this process
+ *  is not the only thing that may have touched the file since it started. */
+export async function writeOrders(state) {
+  const O = state.orders;
+  if (!O?.rows.length) return;
+  const dir = path.join(OUT, OFFERS_ROOM);
+  await mkdir(dir, { recursive: true });
+  const file = path.join(dir, ORDERS_FILE);
+
+  const rows = new Map();
+  const eat = (text) => {
+    for (const line of String(text).split("\n")) {
+      if (!line) continue;
+      try {
+        const r = JSON.parse(line);
+        const k = String(r?.seq ?? "");
+        if (k && !rows.has(k)) rows.set(k, line);
+      } catch { /* torn line: it is not a record until it parses */ }
+    }
+  };
+  try { eat(await readFile(file, "utf8")); } catch { /* none yet */ }
+  eat(O.rows.join("\n"));
+
+  const out = [...rows.entries()].sort((a, b) => Number(a[0]) - Number(b[0])).map(([, l]) => l);
+  O.rows = out;
+  O.seqs = new Set(rows.keys());
   await writeAtomic(file, out.join("\n") + "\n");
 }
 
@@ -1037,6 +1231,9 @@ async function loadState() {
     /* Carried over the run boundary — see loadTail(). */
     tail: await loadTail(),
     ledger: await loadCalls(),
+    /* Carried over the run boundary too, and backfilled from the shards on
+       the first run that finds no file — see loadOrders(). */
+    orders: await loadOrders(),
   };
 }
 
@@ -1673,6 +1870,11 @@ async function flush(state, rows, total, standings = false) {
            recording newest frames. It is fed from the arriving records and
            bounded by its own rules, so a capped shard cannot silence it. */
         if (room === OFFERS_ROOM) pushTail(state, r);
+        /* And the orders index, here rather than downstream of the shard for
+           exactly the reason above: this room is the one that hits the body
+           cap, and a capped shard must not be able to silence the file the
+           orders page is now entirely built from. */
+        if (room === OFFERS_ROOM) pushOrder(state, r);
         /* Fed from the arriving records for the same reason the tail is, and
            BEFORE the body cap: a capped shard must not be able to silence the
            one file that is somebody's position. */
@@ -1711,6 +1913,7 @@ async function flush(state, rows, total, standings = false) {
 
   await writeTail(state);
   await writeCalls(state);
+  await writeOrders(state);
 
   await writeCursors(state, cursors);
 

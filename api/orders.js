@@ -5,19 +5,50 @@
  * server-side.
  *
  * ═══════════════════════════════════════════════════════════════════════════
- * WHY THIS IS AN ENDPOINT AND NOT A FETCH FROM THE BROWSER
+ * WHAT THIS USED TO DO, AND WHY IT STOPPED WORKING
  *
- * The archive is committed to git and served as static files, so the orders
- * page could in principle read `data/tclk-offers/<day>.ndjson` itself and
- * filter in JavaScript. MEASURED: one day's shard is 2.5 MB and the day
- * before it 0.6 MB. Downloading three megabytes onto a phone to find the four
- * lines that belong to one visitor is not a design, it is a bill sent to the
- * wrong person — and it grows every day the collector runs.
+ * It scanned the offers room's day shards at the edge, newest first, keeping
+ * the handful of lines whose `from` matched. The argument for doing the
+ * filtering here rather than in the browser was that a day's shard was 2.5 MB
+ * and nobody should download that onto a phone to find four lines.
  *
- * The filter belongs where the data already is. This reads the same shards at
- * the edge, keeps the handful of lines whose `from` matches, and answers with
- * a few kilobytes. The response is cacheable per DID, so a visitor refreshing
- * their own page costs nothing after the first read.
+ * The argument was right. The number was not, for long. MEASURED on
+ * 10 September, the same nine shards this walked:
+ *
+ *     02 Sep  0.6 MB      06 Sep  91.9 MB
+ *     03 Sep  7.4 MB      07 Sep  94.9 MB
+ *     04 Sep 18.5 MB      08 Sep  99.4 MB
+ *     05 Sep 39.3 MB      09 Sep  99.0 MB
+ *                         10 Sep 100.3 MB
+ *
+ * A hundred megabytes does not arrive inside the six-second fetch timeout
+ * below, so `grabText` returned null for every shard — and a null shard is
+ * skipped in silence, because a missing shard is not an error. The endpoint
+ * then answered `orders: []` with `days_scanned: 0`, and the page, having no
+ * orders to show, showed "Nothing ordered yet".
+ *
+ * IT WAS NOT A GUESS. The buyer who reported it had six offers in the
+ * archive, every one signed, every one accepted by this shop, five on
+ * 4 September and one on the 6th. They were all still there. Nothing could
+ * lift the file they were in.
+ *
+ * ── WHAT REPLACED IT ──────────────────────────────────────────────────────
+ *
+ * Of 950,497 lines in that room over nine days, NINETY-NINE are ours: 93
+ * offers naming `proto: "overheard"` and 6 accepts posted by this shop. The
+ * collector sees every one of those frames as it arrives, so it now writes
+ * them down — `tclk-offers/orders.ndjson`, 92 KB, committed on every pass.
+ * This reads that one file.
+ *
+ * No day is fetched any more, so there is no day window, no byte budget and
+ * no shard that can be too big: 900 MB of reads to find 92 KB became 92 KB.
+ * The response is cacheable per DID, so a visitor refreshing their own page
+ * costs nothing after the first read.
+ *
+ * WHAT THE INDEX CANNOT DO. It starts where the collector's own record does.
+ * An order that scrolled out of the 200-message ring before the archiver
+ * began following tclk-offers on 2 September is gone from everywhere, and no
+ * reader here can invent it.
  *
  * WHY raw.githubusercontent AND NOT THE DEPLOYED COPY. Same reason
  * /api/profile does it: the deployed files are only as fresh as the last
@@ -53,11 +84,9 @@ const SHOP = process.env.SHOP_DID ?? "did:key:z6MkiuhfekPgiihLWarPAzhuvoMjg86F8d
 const BRANCH = "main";
 const ROOM = "tclk-offers";
 
-/* Bounded on purpose. Every extra day is another multi-megabyte fetch and
-   scan at the edge, and an order older than a fortnight has long since
-   expired — the window is 24 hours. The response says how many days it
-   looked at, so a caller is never guessing whether it saw everything. */
-const MAX_DAYS = 14;
+/* The collector's index of this shop's orders — see the header. It is the
+   whole of what this endpoint reads, apart from the tail. */
+const ORDERS_FILE = "orders.ndjson";
 /* A single identity with more than this many orders is not a customer, it is
    a load test. The cap keeps one DID from turning a cached response into a
    megabyte. */
@@ -68,22 +97,18 @@ const MAX_ORDERS = 500;
    the runner; scripts/test-api.mjs asserts the two agree. */
 const OFFER_ID = /^0x[0-9a-f]{64}$/;
 
-/* How much archive one request may read before it stops. Generous next to any
-   real customer — a fortnight of this shop's orders is kilobytes — and a hard
-   ceiling on what a made-up DID can cost. See the loop for why MAX_ORDERS
-   could not do this job. */
-const MAX_SCAN_BYTES = 12_000_000;
-
-/* A day shard is named by its date and nothing else. It is read out of
-   _meta.json — the project's own file, so this is not a live attack surface —
-   and interpolated straight into a URL that gets fetched. A `day` of
-   "../../../x" or "x?token=" would reshape that request, and the distance
-   between "our repository" and "attacker-controlled" is one bad archiver
-   write or one bad commit. Cheap to close now, impossible to notice later. */
-const DAY_RE = /^\d{4}-\d{2}-\d{2}$/;
-/* How many orders the accept hunt runs for PER SHARD. Each is a substring
-   sweep of the few texts in hand, which is fast but not free. */
-const ACCEPT_LOOKUPS = 12;
+/* ── THE BUDGET THAT IS NO LONGER NEEDED, AND WHY IT IS WORTH SAYING SO ────
+   There was a MAX_SCAN_BYTES here, and a MAX_DAYS, and a DAY_RE to keep a
+   date out of a URL it was interpolated into. All three existed because this
+   function fetched files whose size it did not control, named by strings it
+   read out of another file. It fetches two fixed paths now. The amplification
+   this guarded against — a stranger minting unlimited DIDs, each a fresh CDN
+   cache key costing tens of megabytes of edge egress — is gone with it: the
+   worst a made-up DID can now cost is two small reads that the CDN already
+   has. Bounding the work was the right fix; not doing the work is better. */
+/* How many orders the accept hunt runs for. Each is a substring sweep of the
+   two texts in hand, which is fast but not free. */
+const ACCEPT_LOOKUPS = 24;
 
 const json = (body, status = 200, ttl = 45) =>
   new Response(JSON.stringify(body), {
@@ -225,62 +250,47 @@ export default async function handler(request) {
     return json({ error: "not a canonical Ed25519 did:key" }, 400, 0);
   }
 
-  const metaText = await grabText(`${ROOM}/_meta.json`);
-  if (!metaText) {
+  /* ── TWO FILES, FETCHED TOGETHER ─────────────────────────────────────────
+     The index is the record: every Overheard order the collector has ever
+     seen, and this shop's answers to them. The tail is the newest stretch of
+     the same room, rewritten every archiver pass, and it exists because the
+     index is only as fresh as the last commit while an order somebody just
+     placed is seconds old.
+     In parallel, because they are independent and this is an edge function
+     where two sequential 6-second timeouts is twelve seconds of nothing. */
+  const [indexText, tail] = await Promise.all([
+    grabText(`${ROOM}/${ORDERS_FILE}`),
+    grabText(`${ROOM}/tail.ndjson`),
+  ]);
+
+  /* ── NEITHER SOURCE ANSWERED, WHICH IS NOT THE SAME AS NO ORDERS ─────────
+     This is the whole lesson of the bug in the header. A read that failed and
+     a history that is empty look identical to a caller unless the answer says
+     which one happened, and the page paints "Nothing ordered yet" on the
+     second. Said out loud, so it cannot be mistaken for the first. */
+  if (indexText === null && tail === null) {
     return json({
-      did, source: "unavailable", orders: [], days_scanned: 0, days_available: null,
-      note: "could not read the archive index from the repository",
+      did, source: "unavailable", orders: [], index: false, tail: false,
+      note: "could not read the order index or the tail from the repository",
     }, 200, 30);
   }
-  let meta;
-  try { meta = JSON.parse(metaText); } catch { meta = null; }
-  /* Shaped, because every one of these is interpolated into a URL this
-     function then fetches. See DAY_RE. */
-  const allDays = (Array.isArray(meta?.days) ? meta.days : [])
-    .filter((d) => typeof d === "string" && DAY_RE.test(d)).sort();
-  /* Newest first: a visitor's most recent orders are the ones they came to
-     look at, and stopping early is only safe if the newest were read first. */
-  const days = allDays.slice(-MAX_DAYS).reverse();
 
   const orders = [];
-  let scanned = 0;
-
-  /* ── THE TAIL, READ FIRST, BECAUSE THE SHARDS ARE NOT FRESH ──────────────
-     This endpoint told visitors the archive "trails the network by about one
-     collector pass". That was wrong: the every-five-minutes commits do not
-     write day shards — those land on every twelfth pass, and on 4 September
-     the day's shard had not been rewritten since 08:46.
-     The page merges a live room read to cover the gap, and that read reaches
-     back FIVE MINUTES (probed: technocore caps limit at 200 however much you
-     ask for, and `since` will not page backwards). So a buyer who ordered
-     between five minutes and several hours ago was told "Nothing ordered
-     yet" about an order that existed, was accepted, and was paid for.
-     tail.ndjson is the archiver's bounded window over the same room, written
-     every pass. Reading it first is what makes the three sources meet. */
-  const tail = await grabText(`${ROOM}/tail.ndjson`);
-
-  /* ── SCANNED AS EACH ONE ARRIVES, NOT AFTER THEY ALL HAVE ────────────────
-     An earlier version collected every text first and scanned afterwards.
-     That quietly broke two things at once: `orders.length >= MAX_ORDERS`
-     became a test against an empty list, so every shard in the fourteen-day
-     window was FETCHED — 2.5 to 7.4 MB each, at the edge, which is precisely
-     the cost the header of this file says must never be paid per request —
-     and the scan itself then had no budget guard at the outer level.
-     Measured with 700 orders across three sources: 301 returned of 700, and
-     `truncated: false` asserted over the top of it.
-     Seen is by NONCE, so the deliberate overlap between the tail and the
-     newest shard costs one entry rather than two — and the budget is spent on
-     distinct orders rather than on duplicates. */
+  /* Seen is by NONCE, so the deliberate overlap between the index and the
+     tail costs one entry rather than two. */
   const seen = new Set();
   const eat = (text) => {
+    if (!text) return 0;
+    let n = 0;
     for (const line of text.split("\n")) {
-      if (orders.length >= MAX_ORDERS) return;
       if (!line) continue;
-      /* THE PREFILTER IS THE WHOLE PERFORMANCE STORY. A day holds thousands
-         of frames and JSON.parse on every one of them is most of the cost of
-         this request; a substring test rules out ~99.9% of lines first. It
-         can only ever produce FALSE POSITIVES — a line mentioning the did
-         somewhere else — and those are thrown out by the real check below. */
+      n++;
+      if (orders.length >= MAX_ORDERS) continue;
+      /* THE PREFILTER. The index is small, but the tail is not — a megabyte
+         and a half of somebody else's trade — and JSON.parse on every line of
+         it is most of the cost of this request. A substring test rules out
+         almost all of them, and can only ever produce FALSE positives, which
+         the real check below throws out. */
       if (!line.includes(did)) continue;
       const o = orderFrom(line, did);
       if (!o) continue;
@@ -289,7 +299,11 @@ export default async function handler(request) {
       seen.add(k);
       orders.push(o);
     }
+    return n;
   };
+
+  const indexRows = eat(indexText);
+  eat(tail);
 
   /* ── DID THE SHOP ANSWER? ────────────────────────────────────────────────
    * An order the shop has accepted is one the buyer must now FUND, and after
@@ -297,41 +311,23 @@ export default async function handler(request) {
    * order on at all — the accept is a frame from the SHOP, so the
    * `line.includes(did)` prefilter in eat() steps straight over it.
    *
-   * WHY NOT READ THE LIVE ROOM INSTEAD. Because it does not go back far
-   * enough. MEASURED: 4,192 frames in one day of tclk-offers, so the 200-frame
-   * live window covers about an hour, and an order stays actionable for 48.
+   * WHY THIS COSTS NO EXTRA UPSTREAM READS. It searches the two texts already
+   * in hand, and it searches them by SUBSTRING: an offer id is 66 characters
+   * of hex, so a line containing one is a line about this order, and only
+   * those few lines are ever parsed.
    *
-   * WHY THIS COSTS NO EXTRA UPSTREAM READS. It searches shards already
-   * fetched and still in hand, and it searches them by SUBSTRING: an offer id
-   * is 66 characters of hex, so a line containing one is a line about this
-   * order, and only those few lines are ever parsed.
-   *
-   * ── AND WHY IT NOW HAPPENS INSIDE THE LOOP ──────────────────────────────
-   * It used to run at the end, over a `recent` list of the three newest texts
-   * — except the tail was pushed into that list first, so it held the tail
-   * and TWO days, not three. An order placed on the 4th was answered three
-   * seconds later in the 4th's shard, and by the 6th that shard was the third
-   * one back and never searched.
-   *
-   * MEASURED, 6 September, on this shop's own orders: five real orders placed
-   * on the 4th, every one of them accepted by the shop within three seconds,
-   * every one of them reported here with no accept — so the orders page found
-   * no deal to look up, fell back to the offer's own clock, and told the buyer
-   * "nobody took it on before the deadline" about work that had been accepted,
-   * funded and delivered. One of them still had three hours left to fund.
-   *
-   * The rule that replaces the day count is a fact about the protocol rather
-   * than a budget: an accept arrives seconds after the offer it answers, so it
-   * is in the SAME day shard, or — if the offer landed just before midnight —
-   * in the next one. Each order is therefore searched in the shard it was
-   * found in, the shard fetched just before it (which is the newer day), and
-   * the tail. Three texts, once, per order.
-   *
-   * That covers the whole fourteen-day window instead of two days, and holds
-   * at most two shards in memory instead of three. There is no filter on the
-   * order's age any more: what an order's history SAYS is a question about
-   * every order ever placed, and refusing to answer it after 48 hours is what
-   * turned this page from a record into a page that forgets. */
+   * ── AND WHY THE OLD VERSION KEPT MISSING THEM ───────────────────────────
+   * It searched the shard an order was found in, the shard fetched before it,
+   * and the tail — three texts out of a fourteen-day window — because holding
+   * more than two hundred-megabyte shards in memory was not possible. So an
+   * accept three seconds after its offer was found only if that day happened
+   * to still be in hand, and on 6 September five real orders from the 4th
+   * were all reported with no accept: the page found no deal, fell back to
+   * the offer's own clock, and told the buyer "nobody took it on before the
+   * deadline" about work that had been accepted, funded and delivered.
+   * The index holds every accept this shop has ever posted, in 92 KB. There
+   * is nothing left to page over.
+   */
   const findAccept = (o, texts) => {
     for (const text of texts) {
       if (!text) continue;
@@ -346,51 +342,12 @@ export default async function handler(request) {
       }
     }
   };
-
-  /* The tail first: it is the only source that is minutes rather than hours
-     old, so a budget spent before reaching it would spend it on history.
-     Its orders wait for the first shard, because the tail is a window over
-     the newest day and the accept for anything in it is in that same day. */
-  if (tail !== null) eat(tail);
-  let waiting = orders.filter((o) => o.id);
-  let newer = null;                 // the shard fetched just before this one
-  let read = tail === null ? 0 : tail.length;
-  let overBudget = false;
-  for (const day of days) {
-    if (orders.length >= MAX_ORDERS) break;
-    /* ── AND A BUDGET IN BYTES, WHICH IS THE BOUND THAT ACTUALLY HOLDS ────
-       MAX_ORDERS stops a customer with a thousand orders. It does nothing
-       about the opposite and much cheaper case: a DID with NO orders never
-       increments `orders.length`, so the break above never fires and all
-       fourteen shards get fetched and scanned in full. A shard is megabytes.
-
-       That made this endpoint an amplifier. The DID can only ever be
-       shape-checked — anybody can generate a real Ed25519 key, so no amount
-       of stricter validation shrinks the space — which means an attacker
-       mints unlimited distinct DIDs, each one a fresh CDN cache key, each
-       costing tens of megabytes of egress and a full scan at the edge, for a
-       request that costs them a few bytes. Validating the key harder does not
-       help. Bounding the work does. */
-    if (read >= MAX_SCAN_BYTES) { overBudget = true; break; }
-    const text = await grabText(`${ROOM}/${day}.ndjson`);
-    if (text === null) continue;             // a missing shard is not an error
-    read += text.length;
-    scanned++;
-    const before = orders.length;
-    eat(text);
-    const hunt = [...waiting, ...orders.slice(before).filter((o) => o.id)];
-    for (const o of hunt.slice(0, ACCEPT_LOOKUPS)) findAccept(o, [text, newer, tail]);
-    waiting = [];
-    newer = text;
+  for (const o of orders.filter((o) => o.id).slice(0, ACCEPT_LOOKUPS)) {
+    findAccept(o, [indexText, tail]);
   }
-  /* No shards at all — a brand new room, or every fetch failed. The tail is
-     still worth searching on its own rather than dropping the question. */
-  for (const o of waiting.slice(0, ACCEPT_LOOKUPS)) findAccept(o, [tail]);
 
   /* Newest first, by the server's own sequence number rather than by a
-     timestamp any sender could have written.
-     Deduplication happens during the scan rather than after it, so the
-     MAX_ORDERS budget is spent on distinct orders — see `eat`. */
+     timestamp any sender could have written. */
   orders.sort((a, b) => b.seq - a.seq);
 
   return json({
@@ -398,31 +355,20 @@ export default async function handler(request) {
     source: "repository",
     orders,
     /* Everything a caller needs to know how much to trust the list, rather
-       than a bare array that looks complete whatever happened. */
-    days_scanned: scanned,
-    days_available: allDays.length,
-    window_days: MAX_DAYS,
-    truncated: orders.length >= MAX_ORDERS,
-    /* Said out loud rather than left for the caller to infer from a short
-       days_scanned. A list that stopped early because the read budget ran out
-       is not the same answer as a list that saw everything, and the page is
-       entitled to know which one it has. */
-    ...(overBudget ? { budget_reached: true } : {}),
-    /* The archive trails the network by roughly one collector pass. An order
-       placed in the last few minutes is genuinely not here yet, and the page
-       merges a live read to cover exactly that gap. */
-    /* WHAT WAS ACTUALLY READ, rather than a sentence about what usually is.
-       This said "about one collector pass, ~5 minutes" unconditionally, and
-       it was wrong twice over: day shards are committed every twelfth pass,
-       and on 4 September the offers shard had also hit its body cap and
-       stopped growing at 08:46. A caller could not tell any of that from the
-       answer. Now the tail's presence is a field, because whether the fresh
-       source was there is the single fact that decides how much to trust
-       this list. */
+       than a bare array that looks complete whatever happened. Which source
+       was there is the fact that decides it — see the empty-list branch. */
+    index: indexText !== null,
+    index_rows: indexText === null ? 0 : indexRows,
     tail: tail !== null,
+    truncated: orders.length >= MAX_ORDERS,
     archive_lag: tail !== null
       ? "the tail is rewritten every archiver pass, about five minutes"
-      : "no tail available; the newest day shard is committed roughly hourly, so this may be hours behind",
+      : "no tail available, so anything placed since the last commit of the index is not here yet",
+    /* The floor under the whole record, stated rather than implied. The
+       collector began following this room on 2 September; the 200-message
+       ring had already dropped everything before that, and it is not
+       recoverable from anywhere. */
+    since: "2026-09-02",
     checked: new Date().toISOString(),
   });
 }

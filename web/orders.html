@@ -176,6 +176,12 @@ h1{font-weight:800;font-size:clamp(30px,5vw,42px);line-height:1;letter-spacing:-
   line-height:1;letter-spacing:-.03em;color:var(--gold);font-variant-numeric:tabular-nums}
 .sumsub{color:var(--dim);font-size:var(--t-small);line-height:1.55}
 .sumsub b{font-family:var(--mono);font-size:inherit;color:var(--white);letter-spacing:0}
+/* The line admitting that the word on the wire is not the word on the page.
+   Small and quiet, because it qualifies the total rather than competing with
+   it — but present, because a page that relabels a signed figure without
+   saying so has stopped being a record. */
+.sumas{display:block;margin-top:6px;font-family:var(--mono);font-size:var(--t-micro);
+  letter-spacing:.04em;line-height:1.5;color:var(--faint)}
 .sumside{display:grid;grid-template-rows:1fr 1fr 1fr;gap:1px;background:rgba(27,100,120,.22)}
 .sumbit{background:var(--surf-b);padding:var(--s3) var(--s4);
   display:flex;align-items:baseline;justify-content:space-between;gap:var(--s3)}
@@ -370,8 +376,21 @@ h1{font-weight:800;font-size:clamp(30px,5vw,42px);line-height:1;letter-spacing:-
    Three of them, and each says what to DO next rather than only what is
    wrong. An empty state with no way forward is a dead end with better
    typography. */
+/* ── AND THE MARGIN THAT WAS NOT THERE ────────────────────────────────────
+   Reported as "that nothing ordered section is touching the upper section",
+   with a screenshot, and it was exactly that. Every one of these cards sits
+   between blocks that carry their own spacing — `.sum` has a top margin,
+   `.listhead` has both — so in the ordinary case the gap above a card was
+   somebody else's margin.
+   In the empty case there is no somebody else. `#stats`, `#listhead`, the
+   list and the pager are ALL hidden when there are no orders, which is
+   precisely when one of these cards is shown: it lands directly under the
+   hero panel with nothing between them. The one state where the spacing was
+   borrowed from a neighbour is the one state that has no neighbour.
+   So the card carries its own now, and the crowded case cannot come back by
+   something above it being hidden. */
 .card{border:1px solid var(--edge);border-radius:16px;padding:var(--s5);
-  background:var(--panel);text-align:center}
+  margin-top:var(--s5);background:var(--panel);text-align:center}
 .card .i{width:26px;height:26px;color:var(--blue);margin-bottom:var(--s3)}
 .card h3{font-size:17px;font-weight:700;margin-bottom:var(--s2)}
 .card p{color:var(--dim);font-size:14px;max-width:52ch;margin:0 auto}
@@ -996,8 +1015,14 @@ function fieldsFor(o) {
   const about = field("About", o.brief || "—");
   about.classList.add("wide");
   dl.append(about);
-  dl.append(field("Price", `${group(o.amount || "0")} ${o.asset || "paper"}`,
-    "Nothing of value moves yet — the rehearsal rail holds no money."));
+  dl.append(field("Price", `${group(o.amount || "0")} ${UNIT}`,
+    signedAs(o)
+      /* The panel is where somebody checks a row against the frame it came
+         from, so this is the one place the original word is spelled out in
+         full rather than summarised over a total. */
+      ? `Signed as ${signedAs(o)}, on rails: ["paper"] — a rail that holds nothing, `
+        + "so this order settled in paper like every other one."
+      : "Nothing of value moves yet — the rehearsal rail holds no money."));
 
   /* Date.parse and not Number(): `ts` is an ISO string here, which is what
      ago() has always been handed. The first version read it as a number, got
@@ -1153,19 +1178,36 @@ const shopSaid = (t) =>
  */
 const flop = (list) => list.reduce((s, o) => s + (Number(o.amount) || 0), 0);
 
-/* ── AND THE UNIT THAT SUM IS IN, WHICH IS NO LONGER A CONSTANT ────────────
-   The shop used to price everything in FLOP while settling on the paper rail,
-   which could never move FLOP. It prices in paper now — so this list holds
-   both: old orders denominated in FLOP, new ones in paper. A total labelled
-   with either would be wrong about half of it.
+/* ── AND THE UNIT THAT SUM IS IN ───────────────────────────────────────────
+   The shop priced its work in FLOP until 6 September while posting
+   `rails: ["paper"]` — a rail that, as scripts/rail.mjs puts it, holds
+   nothing, so it could never have moved a FLOP. Then it started pricing in
+   paper, which is what it had been settling in all along. Both spellings are
+   in this list.
 
-   So the label is read off the orders rather than written into the page. One
-   asset, and it is named; two, and the sum is honestly unitless rather than
-   quietly claiming to be in whichever the author typed. */
-const unitOf = (list) => {
-  const seen = [...new Set(list.map((o) => o.asset).filter(Boolean))];
-  return seen.length === 1 ? seen[0] : "";
+   The version before this read the word off each order and labelled the total
+   with whichever it found, or with nothing when it found two. Honest, and it
+   made a customer read two currencies down one page that were the same thing
+   throughout — and it put "FLOP" beside money that was never FLOP and never
+   could have been, on a site whose entire claim is that nothing of value has
+   moved yet.
+
+   So the unit shown is PAPER, everywhere, because paper is what every order
+   here settles in. The frame's own word is NOT thrown away: a row signed as
+   something else says so beside the price, in small type. Relabelling in
+   silence would be the page asserting what the signature does not, and the
+   signature is the only reason any of this is worth reading. */
+const UNIT = "PAPER";
+/* The asset the frame actually carried, when it was not paper — "" otherwise,
+   so this reads as a flag at every call site. */
+const signedAs = (o) => {
+  const a = String(o?.asset ?? "").trim();
+  return a && a.toLowerCase() !== "paper" ? a : "";
 };
+/* Which of the old spellings this set contains, if any, for one line under a
+   total rather than a badge repeated on every row of it. */
+const oldAssets = (list) =>
+  [...new Set(list.map(signedAs).filter(Boolean))].sort();
 
 function paintSum() {
   const going = orders.filter(stillOpen);
@@ -1181,7 +1223,7 @@ function paintSum() {
   const done = orders.filter((o) => statusOf(o).key === "claimed");
   if (paid) paid.textContent = group(flop(done));
   const paidUnit = document.querySelector("#nPaid + .sumu");
-  if (paidUnit) paidUnit.textContent = unitOf(done);
+  if (paidUnit) paidUnit.textContent = done.length ? UNIT : "";
 
   const el = $("sumline");
   if (!el) return;
@@ -1192,9 +1234,21 @@ function paintSum() {
   el.replaceChildren(
     document.createTextNode(going.length === 1 ? "order still going — " : "orders still going — "),
     b,
-    document.createTextNode((unitOf(going) ? " " + unitOf(going) : "")
+    document.createTextNode(" " + UNIT
       + " committed across " + (going.length === 1 ? "it" : "them")),
   );
+  /* One line for the whole set rather than a badge on every row of it. The
+     point is that the word on the wire differs from the word on the page; it
+     needs saying once, where the total is, not six times. */
+  const old = oldAssets(going);
+  if (old.length) {
+    const n = going.filter(signedAs).length;
+    const s = document.createElement("span");
+    s.className = "sumas";
+    s.textContent = (n === going.length ? "signed as " : `${group(n)} of them signed as `)
+      + old.join(" or ") + ", settled on the paper rail either way";
+    el.append(s);
+  }
 }
 
 /* The four figures at the top are counted from the same statusOf(), so they
@@ -1599,7 +1653,7 @@ function rowFor(o) {
   price.className = "hprice";
   price.append(document.createTextNode(group(o.amount || "0")));
   const unit = document.createElement("span");
-  unit.textContent = o.asset || "paper";
+  unit.textContent = UNIT;
   price.append(unit);
   const state = document.createElement("span");
   const st = statusOf(o);
@@ -1619,13 +1673,22 @@ function rowFor(o) {
 
   a.append(em, words, meta2, go);
   a.setAttribute("aria-label",
-    `${spec.name}, ${o.brief || "no brief"}, ${o.amount} ${o.asset}, ${st.word} — show the details`);
+    `${spec.name}, ${o.brief || "no brief"}, ${o.amount} ${UNIT}, ${st.word} — show the details`);
   return a;
 }
 
 /* The footer is where the list admits its own limits. A record that does not
-   say how far back it looked is a record you cannot rely on, and this one has
-   two real edges: the endpoint's day window, and the archive's lag. */
+   say how far back it looked is a record you cannot rely on.
+
+   IT USED TO NAME THE WRONG EDGE. It said "read from N archived days of M
+   held — the window is the newest 14", because the endpoint walked day shards
+   and could run out of budget partway. That is gone: the collector keeps a
+   small index of this shop's orders and the endpoint reads all of it, so
+   there is no window to report and no partial day to warn about.
+   The edge that remains is where the record STARTS. The offers room is a
+   200-message ring; the archiver began following it on 2 September, and
+   anything that scrolled past before then exists nowhere. That is the one
+   limit this page still has, and it is the one worth printing. */
 function paintFoot() {
   const f = $("foot");
   f.replaceChildren();
@@ -1639,11 +1702,16 @@ function paintFoot() {
     return;
   }
   const bits = [];
-  if (meta.days_scanned != null && meta.days_available != null) {
-    bits.push(`Read from ${meta.days_scanned} archived ${meta.days_scanned === 1 ? "day" : "days"}`
-      + (meta.days_available > meta.days_scanned
-        ? ` of ${meta.days_available} held — the window is the newest ${meta.window_days}`
-        : ""));
+  if (meta.index === true) {
+    bits.push("Read from every order this shop has archived"
+      + (meta.since ? `, back to ${meta.since}` : ""));
+  } else if (meta.index === false) {
+    /* Not a footnote. The index is the record; without it this list is the
+       last few minutes of the room and nothing else, and saying "read from
+       the archive" over the top of that would be the page vouching for
+       something it did not read. */
+    bits.push("The order index could not be read just now, so this is only what the "
+      + "live offers room still holds — about the last few minutes");
   }
   bits.push("merged with the live offers room so an order placed a moment ago is not missing");
   f.append(document.createTextNode(bits.join(", ") + ". "));
