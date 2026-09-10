@@ -36,14 +36,12 @@
   ],
   "headers": [
     {
-      "//": "STATIC FILES CACHE IN THE BROWSER, because every re-fetch of an unchanged stylesheet is a billable edge request. Each page pulls five css/js files plus its html; without this a returning visitor pays for all six again. An hour is deliberately modest: these filenames carry no content hash, so a long max-age would serve stale script against fresh html after a deploy. An hour bounds that while still collapsing the repeat visits that make up most of the traffic.",
       "source": "/(.*)\\.(css|js)",
       "headers": [
         { "key": "Cache-Control", "value": "public, max-age=3600" }
       ]
     },
     {
-      "//": "Pictures do not change without changing their name, and the og images are only ever fetched by link scrapers. A week costs nothing and saves every repeat.",
       "source": "/(.*)\\.(png|svg|jpg|jpeg|webp|ico)",
       "headers": [
         { "key": "Cache-Control", "value": "public, max-age=604800" }

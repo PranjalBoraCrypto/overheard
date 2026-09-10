@@ -331,6 +331,32 @@ console.log("\n=== F. the headers that bound a compromise");
      assertions failing at once because a list grew, not because anything got
      less safe. The rule that carries these is the one applying to every path;
      find it that way and the order stops mattering. */
+  /* ── AND THE FILE ITSELF HAS TO BE DEPLOYABLE ─────────────────────────
+     A build failed on this file. Not the code — the config: two `"//"` keys
+     added as comments, which JSON does not have and Vercel's schema rejects
+     outright ("should NOT have additional property"). The deploy errored, the
+     previous build stayed live, and every fix in that patch sat on GitHub
+     doing nothing while the meters kept climbing at the old rate.
+
+     Nothing in the repo could have caught it, because every test here reads
+     vercel.json with JSON.parse — which is perfectly happy with extra keys.
+     So this checks what VERCEL will accept, not what JavaScript will parse. */
+  const LEGAL = {
+    headers: ["source", "headers", "has", "missing"],
+    redirects: ["source", "destination", "permanent", "statusCode", "has", "missing"],
+    rewrites: ["source", "destination", "has", "missing"],
+  };
+  const strays = [];
+  for (const [section, allowed] of Object.entries(LEGAL)) {
+    (v[section] ?? []).forEach((entry, i) => {
+      for (const k of Object.keys(entry)) {
+        if (!allowed.includes(k)) strays.push(`${section}[${i}].${k}`);
+      }
+    });
+  }
+  ok("vercel.json carries no key the deploy would refuse",
+    strays.length === 0, strays.join(" ") || "headers, redirects and rewrites all clean");
+
   const rule = (v.headers ?? []).find((r) => r.source === "/(.*)");
   const h = Object.fromEntries((rule?.headers ?? []).map((x) => [x.key, x.value]));
   ok("the security headers apply to every path, not just some of them",
