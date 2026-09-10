@@ -1203,7 +1203,13 @@ canvas.confetti{position:fixed;inset:0;width:100%;height:100%;pointer-events:non
         </div>
         <p>Now read these two dates in order, because the order is the surprising part.</p>
         <ul class="tl">
-          <li><b>Q4 2026 &middot; testnet</b><span>A practice network opens. What you do on it decides your slice of the <b>3.5 billion $FLOP</b> airdrop &mdash; earned, not claimed. Flop&rsquo;s own draft puts the rate at <b>3 FLOP of inference fees for 1 airdropped FLOP</b>, and says the airdrop is locked to inference spend or delegated stake.</span></li>
+          <!-- THE RATE MOVED FROM "RULE" TO "OPEN QUESTION", so this line moved
+               with it. The 3-for-1 figure came from a design note, and the
+               Yellow Paper v0.5.0 now lists the whole distribution path as
+               unresolved (Appendix E.38) — including whether spend-to-unlock
+               ships at all. Stating it as the rate would be repeating
+               something the people who wrote it have since unwritten. -->
+          <li><b>Q4 2026 &middot; testnet</b><span>A practice network opens. What you do on it is meant to decide your slice of the airdrop &mdash; earned, not claimed. <b>How that is worked out is not settled yet.</b> A figure of <b>3 $FLOP spent for 1 earned</b> appears in Flop&rsquo;s design notes, but their Yellow Paper lists the airdrop&rsquo;s schedule, its ratio and its claim path as still open.</span></li>
           <li class="odd"><b>&hellip; then the airdrop</b><span>Tokens are handed out here &mdash; while the real chain still does not exist.</span></li>
           <li><b>Q1 2027 &middot; mainnet</b><span>The first real block. Roughly one second per block, 96 $FLOP each, halving every 730 days for five halvings.</span></li>
         </ul>
@@ -1216,16 +1222,20 @@ canvas.confetti{position:fixed;inset:0;width:100%;height:100%;pointer-events:non
           <div><span class="step">Block 8 of 8</span><h3>How solid is any of this</h3></div>
         </div>
         <p>Flop Labs is run by <b>Arthur Hayes</b>, co-founder of BitMEX. The launch terms are blunt: <b>no pre-sale, no VCs, 100% fair launch.</b></p>
-        <p>And every number in the seven blocks above comes from a document that <b>calls itself version 0.1, draft</b>, and says in its own words that the figures are provisional and the Yellow Paper is not final.</p>
-        <!-- ── AND THE NUMBER MOST WORTH DOUBTING SAYS SO ITSELF ──────────
-             The block above states 3.5 billion, because that is what the
-             teaser states and the teaser is where every figure here comes
-             from. Flop's own revenue page then says the 3.5B restatement is
-             not ratified and the parameters page still reads 2.48B — a gap of
-             more than a billion tokens, published by the same people, in the
-             same week. A page whose whole claim is that it says which numbers
-             might move does not get to leave that one out. -->
-        <p>One number is worth naming, because Flop&rsquo;s own pages disagree about it: the <b>3.5 billion</b> airdrop pool is a restatement they say is <b>not yet ratified</b>, and their parameters page still reads <b>2.48 billion</b>.</p>
+        <p>Every number above comes from Flop&rsquo;s own material, and it keeps moving. The teaser they were drawn from calls itself <b>version 0.1, draft</b>; the <b>Yellow Paper is now v0.5.0</b> &mdash; still a draft, still listing what it has not decided.</p>
+        <!-- ── THIS PARAGRAPH USED TO NAME A CONTRADICTION. IT IS CLOSED. ──
+             It said the 3.5B pool was "not yet ratified" while their
+             parameters page still read 2.48B — a gap of more than a billion,
+             published by the same people in the same week. The Yellow Paper
+             v0.5.0 pins it: 3.5B is the TOTAL genesis supply, and the three
+             airdrops inside it come to 2,705,505,000, with a 794,495,000
+             reserve the paper says is explicitly not an airdrop.
+
+             So the gap is gone AND the old sentence was loose in a second
+             way: it called 3.5B "the airdrop pool", which it is not. A page
+             that points at other people's moving numbers has to correct its
+             own the same day they settle. -->
+        <p>Their pages once disagreed about the supply by more than a billion tokens. That is now pinned: <b>3.5 billion</b> in total, of which the airdrops are <b>2.71 billion</b>. What is <b>not</b> pinned is how the airdrop is earned &mdash; their paper still lists it as open.</p>
         <div class="chips">
           <span class="chip warn">provisional by its own admission</span>
           <span class="chip warn">not launched</span>
@@ -1305,10 +1315,19 @@ canvas.confetti{position:fixed;inset:0;width:100%;height:100%;pointer-events:non
              specific, and a page that tells people to go and read for
              themselves has to link the thing worth reading rather than only
              the thing it quoted from. -->
-        <a class="srccard" href="https://flop.finance/intro/yellowpaper/" target="_blank" rel="noopener noreferrer">
+        <!-- POINTED AT THE DOCUMENT, NOT A PAGE ABOUT IT. v0.5.0 is published
+             as a repository: the specification itself, a changelog, the
+             decision records behind each parameter, and a numbered list of
+             what is still open. That last file is the reason to send anybody
+             there — it is the project marking its own homework.
+             The date that used to sit in this line has gone: it was not
+             checkable against anything the repository actually states, and a
+             card whose job is "go and verify this yourself" is the worst
+             place to keep an unverifiable detail. -->
+        <a class="srccard" href="https://github.com/flop-labs/yellowpaper" target="_blank" rel="noopener noreferrer">
           <svg class="i"><use href="#i-book"/></svg>
           <span class="nm">the Yellow Paper<svg class="i"><use href="#i-out"/></svg></span>
-          <span class="what">The spec the teaser defers to. Now <b>version 0.5.0</b>, 5 September, still calling itself an implementation spec that is iterating &mdash; real parameters, and unsettled ones.</span>
+          <span class="what">The spec the teaser defers to, published in full: <b>version 0.5.0</b>, its own first public draft. Every parameter is pinned in one appendix &mdash; and the ones it has not settled are listed in another.</span>
         </a>
         <a class="srccard" href="https://technocore.chat" target="_blank" rel="noopener noreferrer">
           <svg class="i"><use href="#i-chip"/></svg>
@@ -1590,8 +1609,8 @@ const GATES=[
     src:"flop.finance/teaser" },
 
   { lvl:3,
-    beat:`<p>Last gate, and the one that matters most. Every number in this run &mdash; 85/15, 1,000 validators, 17.2 billion &mdash; came from one document, and that document describes itself.</p>`,
-    chips:["version 0.1","draft","Yellow Paper not final"],
+    beat:`<p>Last gate, and the one that matters most. Every number in this run &mdash; 85/15, 1,000 validators, 17.2 billion &mdash; came from documents that describe themselves.</p>`,
+    chips:["teaser v0.1","Yellow Paper v0.5.0","both drafts"],
     q:"So how settled are the numbers in this run?",
     opts:[
       "Final — they are on-chain already",
@@ -1599,8 +1618,8 @@ const GATES=[
       "Audited by a third party",
       "Set by a validator vote that has happened",
     ], right:1,
-    why:`Provisional. A project telling you which numbers might move is doing you a favour; repeating them as settled is how a draft becomes a rumour.`,
-    src:"flop.finance/teaser" },
+    why:`Provisional. The Yellow Paper reached v0.5.0 and still ships a numbered list of what it has not decided — the airdrop's own rules are on it. A project telling you which numbers might move is doing you a favour; repeating them as settled is how a draft becomes a rumour.`,
+    src:"flop.finance/teaser · flop-labs/yellowpaper" },
 ];
 
 /* ── scoring ───────────────────────────────────────────────────────────────
