@@ -727,8 +727,20 @@ async function load() {
      Both reads can fail, and when they did the page went on to say "Nothing
      ordered yet" to somebody with nine orders — the same false statement the
      skeleton at the top of this file exists to prevent, arriving through a
-     different door. A read that did not happen is not an empty result. */
-  unread = arch === null && live === null;
+     different door. A read that did not happen is not an empty result.
+
+     ── AND "THE ENDPOINT ANSWERED" IS NOT "THE ENDPOINT READ ANYTHING" ────
+     /api/orders returns 200 with an empty list when it could not read the
+     order index — the index is a file in the repository, and a fetch of it
+     can fail like any other fetch. It says so, in `index: false`, and this
+     line did not look: `arch` was non-null, so the page called that an empty
+     history and painted "Nothing ordered yet".
+     Which is the exact bug this whole change is about, arriving through a
+     third door. The index IS the record now; without it, whatever the live
+     room still holds is a few minutes of frames, not a history, and it must
+     not be presented as one. */
+  const noIndex = arch !== null && arch.index === false;
+  unread = (arch === null || noIndex) && !(live ?? []).length;
   const seen = new Map();
   /* Live first so its copy wins on a tie — same order, but read a moment
      closer to now.

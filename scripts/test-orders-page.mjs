@@ -604,7 +604,13 @@ const srv = http.createServer((q, r) => {
       ? JSON.stringify({ did: DID, source: "repository", orders: served(),
           index: true, index_rows: FIXTURE.length, tail: true,
           truncated: false, since: "2026-09-02" })
-      : JSON.stringify({ source: "unavailable", orders: [] });
+      /* THE ENDPOINT'S OWN SHAPE for "I could not read the index". It is a
+         200 with an empty list, which is exactly the answer a genuinely
+         empty history gives — `index: false` is the only thing separating
+         them, and a page that does not look at it repeats the bug. */
+      : JSON.stringify({ source: "unavailable", orders: [],
+          index: false, tail: false,
+          note: "could not read the order index or the tail from the repository" });
     const send = () => { r.writeHead(200, { "content-type": "application/json" }); r.end(body); };
     if (archiveDelayMs) setTimeout(send, archiveDelayMs); else send();
     return;
@@ -934,16 +940,20 @@ console.log("\n=== H. the states that are not a list");
   signedInAs = DID;
 }
 {
-  archiveAnswers = false;
+  /* GENUINELY nothing, which since the index landed means the endpoint READ
+     the index and it held nothing for this key — not `archiveAnswers = false`,
+     which is now the shape of a read that failed and is checked as such in
+     section I2. Two different answers that used to look the same. */
+  const saved = FIXTURE.splice(0, FIXTURE.length);
   liveOverlap = 0;
   const { ctx, pg } = await open();
   await pg.goto("http://localhost:9441/orders.html", { waitUntil: "domcontentloaded" });
   await pg.waitForTimeout(1000);
   const s = await read(pg);
   ok("with an identity and nothing ordered, it says THAT instead",
-    s.empty === false && s.signedout === true);
+    s.empty === false && s.signedout === true, JSON.stringify(s).slice(0, 120));
   await ctx.close();
-  archiveAnswers = true;
+  FIXTURE.push(...saved);
   liveOverlap = 3;
 }
 
@@ -1443,10 +1453,27 @@ console.log("\n=== I2. a read that did not happen is not an empty list");
     await ctx.close();
   }
 
+  /* ── THE 200 THAT MEANS "I READ NOTHING" ────────────────────────────────
+     A read can fail without failing loudly. /api/orders answers 200 with an
+     empty list when the order index — a file in the repository — could not
+     be fetched, and says so in `index: false`. That is byte-for-byte the
+     shape of a genuinely empty history apart from one boolean, and the page
+     used to ignore it: `arch` was not null, so it painted "Nothing ordered
+     yet" over a read that never happened. The same mistake as the endpoint's
+     own, one building along. */
+  archiveBroken = false; roomBroken = true; archiveAnswers = false;
+  {
+    const { out, ctx } = await state();
+    ok("a 200 that read nothing is not an empty history",
+      !out.empty && out.unread,
+      `empty ${out.empty} · unread ${out.unread}`);
+    await ctx.close();
+  }
+
   /* AND THE OTHER SIDE OF IT. A page that shows "could not read" whenever a
      list is empty is the same bug facing the other way — a first-time
      visitor would be told the network is broken. */
-  archiveBroken = false; roomBroken = false; archiveAnswers = false;
+  archiveBroken = false; roomBroken = false; archiveAnswers = true;
   const savedFixture = FIXTURE.splice(0, FIXTURE.length);
   const savedOverlap = liveOverlap; liveOverlap = 0;
   {
