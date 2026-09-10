@@ -146,6 +146,9 @@ h1{font-weight:800;font-size:clamp(30px,4.4vw,44px);letter-spacing:-.035em;margi
 .live{margin-left:auto;display:inline-flex;align-items:center;gap:8px;font-family:var(--mono);font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--faint)}
 .live i{width:7px;height:7px;border-radius:50%;background:var(--cy);box-shadow:0 0 10px var(--cy);animation:blip 2s infinite}
 .live.stalled i{background:var(--warn);box-shadow:0 0 10px var(--warn);animation:none}
+/* Only pressable when there is something to press for. */
+.live.wake{cursor:pointer}
+.live.wake:focus-visible{outline:2px solid var(--cy);outline-offset:3px;border-radius:6px}
 @keyframes blip{0%,100%{opacity:1}50%{opacity:.3}}
 
 /* ── the room ──────────────────────────────────────────────────────────────
@@ -1236,7 +1239,14 @@ $("find").addEventListener("keydown",e=>{
 /* `since` used to live here and is deliberately gone: the poll no longer
    sends one, and a variable still being assigned on every read is how the
    next person concludes it is load-bearing and puts it back in the URL. */
-let seen=new Set(), timer=null, backoff=4000, freshRead=0;
+/* TEN SECONDS, NOT FOUR. Four was chosen when nobody was paying for it: it
+   costs 900 requests an hour from every open tab, and the free tier is a
+   million a month for the ENTIRE site — one and a half tabs read continuously
+   would spend all of it. Ten costs 360. A message can now take up to ten
+   seconds to appear instead of four, which is the price of the room staying
+   up, and it is the right trade: a room that is occasionally ten seconds
+   behind beats a room that is paused for the rest of the month. */
+let seen=new Set(), timer=null, backoff=10000, freshRead=0;
 
 /* ── HOW OFTEN IT IS WORTH ASKING ──────────────────────────────────────────
    Four seconds is right for somebody reading a room. It is wrong for a tab
@@ -1250,32 +1260,54 @@ let seen=new Set(), timer=null, backoff=4000, freshRead=0;
      idle    → step down, because a page nobody has touched in ten minutes
                does not need the same cadence as one being read
    Any real interaction puts it straight back to four seconds. */
-const IDLE_SLOW = 120000, IDLE_SLEEP = 600000;
-let lastActive = Date.now();
+const IDLE_SLOW = 120000, IDLE_STOP = 600000;
+let lastActive = Date.now(), asleep = false;
+
+/* AN ABANDONED TAB ASKS FOR NOTHING AT ALL. Slowing to one read a minute was
+   the first cut and it was not enough: a minute apart is still 43,000 reads a
+   month from a tab nobody has touched since breakfast, and the free tier is a
+   million requests for the WHOLE site. Ten minutes untouched and it stops
+   completely, says so, and waits to be asked. */
+function sleepPoll() {
+  asleep = true;
+  clearTimeout(timer); timer = null;
+  $("live").classList.add("stalled", "wake");
+  $("livetext").textContent = "paused \u2014 tap to resume";
+}
+function wakePoll() {
+  lastActive = Date.now();
+  if (!asleep) return;
+  asleep = false;
+  $("live").classList.remove("wake");
+  $("livetext").textContent = "resuming\u2026";
+  if (!timer && !document.hidden) poll();
+}
 function pollWait() {
-  if (backoff > 4000) return backoff;         // an error backoff outranks this
-  const idle = Date.now() - lastActive;
-  if (idle > IDLE_SLEEP) return 60000;
-  if (idle > IDLE_SLOW) return 15000;
-  return backoff;
+  if (backoff > 10000) return backoff;        // an error backoff outranks this
+  return Date.now() - lastActive > IDLE_SLOW ? 30000 : backoff;
 }
 /* `capture` and `passive` so this never interferes with the handlers that do
    the actual work, and pointerdown rather than pointermove: a cursor crossing
    the window on its way somewhere else is not somebody reading. */
 for (const ev of ["pointerdown", "keydown", "wheel", "touchstart", "focus"]) {
   addEventListener(ev, () => {
-    const wasIdle = Date.now() - lastActive > IDLE_SLOW;
+    const wasSlow = Date.now() - lastActive > IDLE_SLOW;
     lastActive = Date.now();
+    if (asleep) { wakePoll(); return; }
     /* Coming back from a slowed cadence should feel immediate rather than
        waiting out the last long timer. */
-    if (wasIdle && timer && !document.hidden) { clearTimeout(timer); timer = null; poll(); }
+    if (wasSlow && timer && !document.hidden) { clearTimeout(timer); timer = null; poll(); }
   }, { capture: true, passive: true });
 }
 document.addEventListener("visibilitychange", () => {
   if (document.hidden) { clearTimeout(timer); timer = null; return; }
   lastActive = Date.now();
+  if (asleep) { wakePoll(); return; }
   if (!timer) poll();                         // catch up, then resume the loop
 });
+/* The pill is the affordance, so it has to be pressable — somebody who reads
+   "tap to resume" will tap the words, not hunt for a button. */
+$("live").addEventListener("click", () => { if (asleep) wakePoll(); });
 
 /* Messages this browser drew the moment Technocore accepted them, waiting
    for the room to echo them back. Without this the echo arrives carrying a
@@ -1617,10 +1649,10 @@ async function poll(){
     const r=await fetch(`/api/room?room=${encodeURIComponent(room)}&limit=200&c=1${bust}`);
     const j=await r.json();
     if(r.status===429){ stalled("throttled upstream"); backoff=15000; }
-    else if(!r.ok){ stalled(j.error||"unreachable"); backoff=10000; }
+    else if(!r.ok){ stalled(j.error||"unreachable"); backoff=20000; }
     else{
       live();
-      backoff=4000;
+      backoff=10000;
       for(const m of j.messages){
         if(seen.has(m.seq)) continue;
 
@@ -1661,9 +1693,13 @@ async function poll(){
         : "quiet right now";
       if(atBottom) box.scrollTop=box.scrollHeight;
     }
-  }catch{ stalled("network"); backoff=10000; }
-  /* Hidden tabs schedule nothing at all; visibilitychange restarts them. */
-  timer = document.hidden ? null : setTimeout(poll, pollWait());
+  }catch{ stalled("network"); backoff=20000; }
+  /* Three states, and only one of them costs anything: hidden schedules
+     nothing (visibilitychange restarts it), ten minutes untouched stops and
+     waits to be asked, and everything else carries on. */
+  if (document.hidden) { timer = null; }
+  else if (Date.now() - lastActive > IDLE_STOP) sleepPoll();
+  else timer = setTimeout(poll, pollWait());
 }
 const live=()=>{ $("live").classList.remove("stalled"); $("livetext").textContent="live"; };
 const stalled=(why)=>{ $("live").classList.add("stalled"); $("livetext").textContent=why; };

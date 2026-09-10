@@ -35,6 +35,9 @@ let CAP = { known: true, rooms: { total: 19116, capacity: 20480, left: 1364, ful
 /* Set by section N to watch what the poll actually asks for. Null the rest of
    the time, so no other section pays for it. */
 let srvRoomHook = null;
+/* Section N turns this on to shrink the idle thresholds so the sleep test
+   runs in seconds. Off everywhere else, so no other section is affected. */
+let SHRINK_IDLE = false;
 
 const srv = http.createServer((req, res) => {
   const u = new URL(req.url, 'http://x');
@@ -110,6 +113,10 @@ const srv = http.createServer((req, res) => {
   const f = path.join(ROOT, p);
   if (fs.existsSync(f) && fs.statSync(f).isFile()) {
     res.writeHead(200, { 'content-type': p.endsWith('.js') ? 'text/javascript' : p.endsWith('.css') ? 'text/css' : 'text/html' });
+    if (SHRINK_IDLE && p === '/rooms.html') {
+      return res.end(fs.readFileSync(f, 'utf8')
+        .replace('IDLE_SLOW = 120000, IDLE_STOP = 600000', 'IDLE_SLOW = 2000, IDLE_STOP = 5000'));
+    }
     return res.end(fs.readFileSync(f));
   }
   res.writeHead(404); res.end('{}');
@@ -894,7 +901,15 @@ console.log('\n=== N. the poll asks one question, and stops when nobody is looki
 {
   const seenUrls = [];
   const origRoom = srvRoomHook;
-  srvRoomHook = (u) => seenUrls.push(u);
+  const stamps = [];
+  /* Lobby only, for the same reason the url check is: section M's page is
+     still open on ?room=forgery and polling on its own clock. Timing every
+     read measured the two pages interleaving, which looked like a 2-second
+     cadence and was not. */
+  srvRoomHook = (u) => {
+    seenUrls.push(u);
+    if (u.includes('room=lobby')) stamps.push(Date.now());
+  };
 
   const ctxA = await b.newContext({ viewport: { width: 1100, height: 900 } });
   const pa = await ctxA.newPage();
@@ -909,7 +924,7 @@ console.log('\n=== N. the poll asks one question, and stops when nobody is looki
      the test harness rather than the fix. Both tabs below are on lobby. */
   const polls = seenUrls.filter((u) => u.includes('/api/room') && u.includes('room=lobby'));
   const shapes = new Set(polls.map((u) => u.replace(/[?&]t=\d+/, '')));
-  check('both tabs polled at all', polls.length >= 4, `${polls.length} reads`);
+  check('both tabs polled at all', polls.length >= 2, `${polls.length} reads`);
   /* ONE URL FOR EVERYONE is the whole saving: it is what lets the edge answer
      nearly every poll from a four-second cache instead of running the
      function once per tab per four seconds. */
@@ -919,6 +934,23 @@ console.log('\n=== N. the poll asks one question, and stops when nobody is looki
     [...shapes][0].includes('c=1') && !/since=/.test([...shapes][0]), [...shapes][0]);
 
   const lobbyReads = () => seenUrls.filter((u) => u.includes('room=lobby')).length;
+  /* THE INTERVAL IS THE BILL. At four seconds an open tab costs 900 requests
+     an hour, and the whole free tier is a million a month for the ENTIRE
+     site — one and a half tabs read continuously would spend all of it. At
+     ten it costs 360. Pinned here because it is the one number somebody will
+     quietly nudge back while tuning how live the room feels.
+     ONE TAB ONLY: two tabs poll on their own offsets, so the gap between
+     consecutive server reads is the offset between them, not the cadence of
+     either. That measured 0.6s and looked like a regression. */
+  await pb.close(); await ctxB.close();
+  stamps.length = 0;
+  await pa.waitForTimeout(25000);
+  const gaps = stamps.slice(1).map((t, i) => t - stamps[i]);
+  const quickest = gaps.length ? Math.min(...gaps) : Infinity;
+  check('one tab polls no faster than every ten seconds',
+    gaps.length >= 1 && quickest >= 8000,
+    gaps.length ? `${gaps.length} gaps, quickest ${Math.round(quickest / 100) / 10}s` : 'no repeat seen');
+
   const before = lobbyReads();
   const hide = (pg, hidden) => pg.evaluate((h) => {
     Object.defineProperty(document, 'hidden', { value: h, configurable: true });
@@ -927,7 +959,6 @@ console.log('\n=== N. the poll asks one question, and stops when nobody is looki
   }, hidden);
 
   await hide(pa, true);
-  await pb.close(); await ctxB.close();
   await pa.waitForTimeout(9000);
   const during = lobbyReads() - before;
   check('a tab nobody is looking at asks for nothing', during === 0, `${during} reads in 9s`);
@@ -938,6 +969,39 @@ console.log('\n=== N. the poll asks one question, and stops when nobody is looki
     lobbyReads() - before - during >= 1, `${lobbyReads() - before - during} reads`);
 
   await pa.close(); await ctxA.close();
+
+  /* ── AND A TAB LEFT OPEN ALL DAY STOPS COMPLETELY ─────────────────────
+     Slowing an abandoned tab to one read every thirty seconds is still
+     ~2,900 requests a day from somebody who wandered off after breakfast.
+     Ten minutes untouched and it stops, says so, and waits to be asked.
+     The thresholds are patched down here so this takes seconds rather than
+     eleven minutes — the behaviour under test is "does it stop and can it
+     be restarted", not the value of the constant. */
+  SHRINK_IDLE = true;
+  const ctxC = await b.newContext({ viewport: { width: 1100, height: 900 } });
+  const pc = await ctxC.newPage();
+  const reads = () => seenUrls.filter((u) => u.includes('room=sleepy')).length;
+  await pc.goto('http://localhost:8895/rooms.html?room=sleepy');
+  await pc.waitForFunction(
+    () => document.getElementById('live')?.classList.contains('wake'),
+    null, { timeout: 30000 }).catch(() => {});
+  const pill = await pc.evaluate(() => ({
+    txt: document.getElementById('livetext').textContent,
+    wake: document.getElementById('live').classList.contains('wake') }));
+  check('an untouched tab eventually stops and says so',
+    /tap to resume/i.test(pill.txt) && pill.wake, JSON.stringify(pill));
+  const quiet = reads();
+  await pc.waitForTimeout(6000);
+  check('and then asks for nothing at all', reads() - quiet === 0,
+    `${reads() - quiet} reads in 6s`);
+  await pc.click('#live');
+  await pc.waitForTimeout(1500);
+  check('tapping the pill starts it again', reads() - quiet >= 1, `${reads() - quiet} reads`);
+  check('and the pill stops offering',
+    (await pc.evaluate(() => document.getElementById('live').classList.contains('wake'))) === false);
+  await pc.close(); await ctxC.close();
+  SHRINK_IDLE = false;
+
   srvRoomHook = origRoom;
 }
 

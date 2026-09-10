@@ -326,7 +326,15 @@ console.log("\n=== E. signing out drops the key in every tab");
 console.log("\n=== F. the headers that bound a compromise");
 {
   const v = JSON.parse(fs.readFileSync(new URL("../vercel.json", import.meta.url), "utf8"));
-  const h = Object.fromEntries((v.headers?.[0]?.headers ?? []).map((x) => [x.key, x.value]));
+  /* BY WHAT IT MATCHES, NOT BY WHERE IT SITS. This read headers[0] and broke
+     the day a caching rule was added above the security one — eleven
+     assertions failing at once because a list grew, not because anything got
+     less safe. The rule that carries these is the one applying to every path;
+     find it that way and the order stops mattering. */
+  const rule = (v.headers ?? []).find((r) => r.source === "/(.*)");
+  const h = Object.fromEntries((rule?.headers ?? []).map((x) => [x.key, x.value]));
+  ok("the security headers apply to every path, not just some of them",
+    !!rule, rule ? rule.source : "no catch-all rule found");
   const csp = h["Content-Security-Policy"] ?? "";
   /* `unsafe-inline` for scripts is a documented, accepted residual — a
      no-build static site cannot issue nonces. Which is precisely why the
