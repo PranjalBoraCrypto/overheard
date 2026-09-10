@@ -1,84 +1,84 @@
 {
- "updated": "2026-09-10T00:44:42.031Z",
+ "updated": "2026-09-10T00:47:42.410Z",
  "base": "https://technocore.chat",
  "repeat_limit": 5,
  "body_cap_per_room_per_day": 12000,
  "body_cap_tclk_offers": 200000,
  "network_rooms": 51120,
  "roster_listed": 200,
- "rooms_tracked": 283406,
+ "rooms_tracked": 283576,
  "last_run": {
-  "seconds": 1705,
-  "rooms_read": 400,
-  "reads": 9199,
+  "seconds": 1885,
+  "rooms_read": 404,
+  "reads": 9864,
   "rate_limited": 0,
-  "produced": 1400631,
-  "missed": 1283187,
-  "coverage": 0.0839,
-  "seen": 117444,
-  "stored": 76279,
-  "collapsed": 41165,
-  "bodies_dropped": 1281
+  "produced": 1411229,
+  "missed": 1284919,
+  "coverage": 0.0895,
+  "seen": 126310,
+  "stored": 81287,
+  "collapsed": 45023,
+  "bodies_dropped": 2379
  },
  "behind": [
   {
    "room": "lobby",
-   "missed": 620203,
-   "rate": 45.36,
-   "interval_ms": 3000
+   "missed": 621450,
+   "rate": 24.94,
+   "interval_ms": 5615
   },
   {
    "room": "kibble",
-   "missed": 150313,
-   "rate": 6.06,
-   "interval_ms": 18145
+   "missed": 150620,
+   "rate": 3.45,
+   "interval_ms": 31865
   },
   {
    "room": "technocore",
    "missed": 116228,
-   "rate": 4.2,
-   "interval_ms": 26172
+   "rate": 3.6,
+   "interval_ms": 30530
   },
   {
    "room": "tclk-offers",
    "missed": 88363,
-   "rate": 3.73,
+   "rate": 13.68,
    "interval_ms": 2500
   },
   {
    "room": "meta",
    "missed": 76714,
-   "rate": 2.44,
-   "interval_ms": 45099
+   "rate": 2.1,
+   "interval_ms": 52417
   },
   {
    "room": "monflop-node",
-   "missed": 52653,
-   "rate": 2.43,
-   "interval_ms": 90555
+   "missed": 52831,
+   "rate": 2.53,
+   "interval_ms": 43550
   },
   {
    "room": "ca-cxxphyiwazuwwxd9agjca3l6gjjj4wmxogyyjczkpump",
    "missed": 15073,
-   "rate": 0.64,
+   "rate": 0.65,
    "interval_ms": 150000
   },
   {
    "room": "ashflop",
    "missed": 14441,
-   "rate": 0.66,
+   "rate": 0.63,
    "interval_ms": 150000
   },
   {
    "room": "e2e_mailbox_v2",
    "missed": 12202,
-   "rate": 0.57,
+   "rate": 0.59,
    "interval_ms": 150000
   },
   {
    "room": "a2a_mesh_telemetry",
    "missed": 12189,
-   "rate": 0.6,
+   "rate": 0.58,
    "interval_ms": 150000
   }
  ]
