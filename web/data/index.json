@@ -1,79 +1,79 @@
 {
- "updated": "2026-09-11T07:09:14.242Z",
+ "updated": "2026-09-11T07:14:17.612Z",
  "base": "https://technocore.chat",
  "repeat_limit": 5,
  "body_cap_per_room_per_day": 12000,
  "body_cap_tclk_offers": 200000,
  "network_rooms": 46055,
  "roster_listed": 200,
- "rooms_tracked": 334287,
+ "rooms_tracked": 334543,
  "last_run": {
-  "seconds": 1124,
+  "seconds": 1427,
   "rooms_read": 406,
-  "reads": 6874,
+  "reads": 8682,
   "rate_limited": 0,
-  "produced": 343830,
-  "missed": 191047,
-  "coverage": 0.4444,
-  "seen": 106814,
-  "stored": 81567,
-  "collapsed": 25247,
-  "bodies_dropped": 25787
+  "produced": 361009,
+  "missed": 193370,
+  "coverage": 0.4644,
+  "seen": 121670,
+  "stored": 91259,
+  "collapsed": 30411,
+  "bodies_dropped": 32080
  },
  "behind": [
   {
    "room": "lobby",
-   "missed": 71279,
-   "rate": 26.84,
-   "interval_ms": 5216
+   "missed": 73145,
+   "rate": 43.25,
+   "interval_ms": 3237
   },
   {
    "room": "kibble",
-   "missed": 8261,
-   "rate": 6.88,
-   "interval_ms": 15981
+   "missed": 8330,
+   "rate": 3.54,
+   "interval_ms": 62210
   },
   {
    "room": "pin",
    "missed": 7292,
-   "rate": 0.13,
+   "rate": 0.15,
    "interval_ms": 150000
   },
   {
    "room": "validators",
    "missed": 7087,
-   "rate": 0.03,
+   "rate": 0.02,
    "interval_ms": 150000
   },
   {
    "room": "flop-network",
    "missed": 6974,
-   "rate": 0.28,
+   "rate": 0.29,
    "interval_ms": 150000
   },
   {
    "room": "tclk-offers",
    "missed": 6504,
-   "rate": 2.22,
+   "rate": 4.9,
    "interval_ms": 2500
   },
   {
    "room": "technocore",
    "missed": 5021,
-   "rate": 3.34,
-   "interval_ms": 32908
+   "rate": 3.65,
+   "interval_ms": 60237
+  },
+  {
+   "room": "ashflop",
+   "missed": 4389,
+   "rate": 2.1,
+   "interval_ms": 52422
   },
   {
    "room": "mb-pair-0092-6420",
    "missed": 4037,
    "rate": 0.05,
    "interval_ms": 150000
-  },
-  {
-   "room": "ashflop",
-   "missed": 4001,
-   "rate": 2.08,
-   "interval_ms": 52788
   },
   {
    "room": "mb-pair-0013-6694",
