@@ -1,43 +1,49 @@
 {
- "updated": "2026-09-11T13:25:50.872Z",
+ "updated": "2026-09-11T13:31:27.669Z",
  "base": "https://technocore.chat",
  "repeat_limit": 5,
  "body_cap_per_room_per_day": 12000,
  "body_cap_tclk_offers": 200000,
  "network_rooms": 55346,
  "roster_listed": 200,
- "rooms_tracked": 340575,
+ "rooms_tracked": 340934,
  "last_run": {
-  "seconds": 2864,
-  "rooms_read": 406,
-  "reads": 17081,
+  "seconds": 3201,
+  "rooms_read": 405,
+  "reads": 19166,
   "rate_limited": 3,
-  "produced": 893056,
-  "missed": 721640,
-  "coverage": 0.1919,
-  "seen": 171416,
-  "stored": 107329,
-  "collapsed": 64087,
-  "bodies_dropped": 57889
+  "produced": 916032,
+  "missed": 726490,
+  "coverage": 0.2069,
+  "seen": 189542,
+  "stored": 118412,
+  "collapsed": 71130,
+  "bodies_dropped": 63119
  },
  "behind": [
   {
    "room": "lobby",
-   "missed": 518326,
-   "rate": 27.92,
-   "interval_ms": 5015
+   "missed": 520903,
+   "rate": 31.69,
+   "interval_ms": 2209
   },
   {
    "room": "tclk-offers",
-   "missed": 110953,
-   "rate": 12.52,
+   "missed": 111285,
+   "rate": 2.77,
    "interval_ms": 2500
   },
   {
    "room": "meta",
    "missed": 23816,
-   "rate": 1.73,
-   "interval_ms": 63738
+   "rate": 1.89,
+   "interval_ms": 58107
+  },
+  {
+   "room": "kibble",
+   "missed": 10021,
+   "rate": 3.98,
+   "interval_ms": 27629
   },
   {
    "room": "web_chat",
@@ -46,34 +52,28 @@
    "interval_ms": 150000
   },
   {
-   "room": "kibble",
-   "missed": 9161,
-   "rate": 2.27,
-   "interval_ms": 48515
-  },
-  {
    "room": "a2a_mesh_telemetry",
    "missed": 8748,
-   "rate": 0.03,
+   "rate": 0.04,
    "interval_ms": 150000
   },
   {
    "room": "technocore-genesis",
    "missed": 7471,
-   "rate": 0.27,
+   "rate": 0.21,
    "interval_ms": 150000
   },
   {
    "room": "ashflop",
-   "missed": 6486,
-   "rate": 1.73,
-   "interval_ms": 63438
+   "missed": 7317,
+   "rate": 1.7,
+   "interval_ms": 64877
   },
   {
    "room": "technocore",
-   "missed": 4335,
-   "rate": 3.33,
-   "interval_ms": 33058
+   "missed": 4585,
+   "rate": 3.7,
+   "interval_ms": 29720
   },
   {
    "room": "mb-pair-0041-5951",
