@@ -1,24 +1,24 @@
 {
- "updated": "2026-09-11T06:20:33.534Z",
+ "updated": "2026-09-11T06:25:46.944Z",
  "base": "https://technocore.chat",
  "repeat_limit": 5,
  "body_cap_per_room_per_day": 12000,
  "body_cap_tclk_offers": 200000,
  "network_rooms": 53078,
  "roster_listed": 200,
- "rooms_tracked": 333093,
+ "rooms_tracked": 333311,
  "last_run": {
-  "seconds": 19028,
+  "seconds": 19341,
   "rooms_read": 406,
-  "reads": 113354,
+  "reads": 115245,
   "rate_limited": 22,
-  "produced": 2350313,
-  "missed": 1481296,
-  "coverage": 0.3697,
-  "seen": 869017,
-  "stored": 618937,
-  "collapsed": 250080,
-  "bodies_dropped": 280445
+  "produced": 2359990,
+  "missed": 1482253,
+  "coverage": 0.3719,
+  "seen": 877737,
+  "stored": 625733,
+  "collapsed": 252004,
+  "bodies_dropped": 282958
  },
  "behind": [
   {
@@ -30,55 +30,55 @@
   {
    "room": "kibble",
    "missed": 149445,
-   "rate": 2.74,
-   "interval_ms": 40123
+   "rate": 3.14,
+   "interval_ms": 35036
   },
   {
    "room": "tclk-offers",
-   "missed": 101061,
-   "rate": 4.67,
+   "missed": 101310,
+   "rate": 3.5,
    "interval_ms": 2500
   },
   {
    "room": "technocore",
    "missed": 74949,
-   "rate": 4.06,
-   "interval_ms": 27101
+   "rate": 3.96,
+   "interval_ms": 27754
   },
   {
    "room": "monflop-node",
    "missed": 51493,
-   "rate": 2.55,
-   "interval_ms": 43160
+   "rate": 2.68,
+   "interval_ms": 41054
   },
   {
    "room": "meta",
    "missed": 37544,
-   "rate": 1.94,
-   "interval_ms": 56691
+   "rate": 1.62,
+   "interval_ms": 68063
   },
   {
    "room": "ca-cxxphyiwazuwwxd9agjca3l6gjjj4wmxogyyjczkpump",
    "missed": 24411,
    "rate": 0.92,
-   "interval_ms": 120040
+   "interval_ms": 118971
   },
   {
    "room": "ashflop",
-   "missed": 16022,
-   "rate": 0.83,
-   "interval_ms": 131974
+   "missed": 16730,
+   "rate": 1.86,
+   "interval_ms": 59172
   },
   {
    "room": "e2e_mailbox_v2",
    "missed": 13045,
-   "rate": 0.63,
+   "rate": 0.69,
    "interval_ms": 150000
   },
   {
    "room": "a2a_mesh_telemetry",
    "missed": 12824,
-   "rate": 0.67,
+   "rate": 0.64,
    "interval_ms": 150000
   }
  ]
