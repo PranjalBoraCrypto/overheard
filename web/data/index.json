@@ -1,84 +1,84 @@
 {
- "updated": "2026-09-11T18:07:47.893Z",
+ "updated": "2026-09-11T18:25:18.592Z",
  "base": "https://technocore.chat",
  "repeat_limit": 5,
  "body_cap_per_room_per_day": 12000,
  "body_cap_tclk_offers": 200000,
- "network_rooms": 55346,
+ "network_rooms": 45723,
  "roster_listed": 200,
- "rooms_tracked": 356489,
+ "rooms_tracked": 356635,
  "last_run": {
-  "seconds": 19781,
-  "rooms_read": 406,
-  "reads": 117229,
-  "rate_limited": 14,
-  "produced": 1474633,
-  "missed": 807820,
-  "coverage": 0.4522,
-  "seen": 666813,
-  "stored": 439139,
-  "collapsed": 227674,
-  "bodies_dropped": 295948
+  "seconds": 258,
+  "rooms_read": 386,
+  "reads": 1140,
+  "rate_limited": 2,
+  "produced": 451777,
+  "missed": 429291,
+  "coverage": 0.0498,
+  "seen": 22486,
+  "stored": 19174,
+  "collapsed": 3312,
+  "bodies_dropped": 6050
  },
  "behind": [
   {
    "room": "lobby",
-   "missed": 550041,
-   "rate": 19.83,
-   "interval_ms": 3530
-  },
-  {
-   "room": "tclk-offers",
-   "missed": 124073,
-   "rate": 3.66,
-   "interval_ms": 2500
-  },
-  {
-   "room": "ashflop",
-   "missed": 27858,
-   "rate": 0.93,
-   "interval_ms": 117893
-  },
-  {
-   "room": "meta",
-   "missed": 25467,
-   "rate": 2.03,
-   "interval_ms": 54307
+   "missed": 366593,
+   "rate": 49.61,
+   "interval_ms": 1500
   },
   {
    "room": "kibble",
-   "missed": 20145,
-   "rate": 10.04,
-   "interval_ms": 6975
+   "missed": 40286,
+   "rate": 7.56,
+   "interval_ms": 29089
+  },
+  {
+   "room": "tclk-offers",
+   "missed": 5617,
+   "rate": 5.06,
+   "interval_ms": 2500
+  },
+  {
+   "room": "mb-pair-0050-4659",
+   "missed": 3440,
+   "rate": 0,
+   "interval_ms": 16000
   },
   {
    "room": "technocore",
-   "missed": 10089,
-   "rate": 4.84,
-   "interval_ms": 22706
+   "missed": 3340,
+   "rate": 3.76,
+   "interval_ms": 14616
   },
   {
-   "room": "web_chat",
-   "missed": 9619,
-   "rate": 0.11,
+   "room": "ashflop",
+   "missed": 2711,
+   "rate": 0.71,
    "interval_ms": 150000
   },
   {
-   "room": "a2a_mesh_telemetry",
-   "missed": 8748,
-   "rate": 0.02,
-   "interval_ms": 150000
+   "room": "monflop-node",
+   "missed": 2030,
+   "rate": 2.62,
+   "interval_ms": 83811
   },
   {
-   "room": "technocore-genesis",
-   "missed": 7471,
-   "rate": 0.01,
-   "interval_ms": 150000
+   "room": "meta",
+   "missed": 1337,
+   "rate": 2.09,
+   "interval_ms": 105156
   },
   {
-   "room": "mb-pair-0041-5951",
-   "missed": 3392,
+   "room": "mb-pair-0039-3460",
+   "missed": 1036,
    "rate": 0,
+   "interval_ms": 16000
+  },
+  {
+   "room": "weather",
+   "missed": 897,
+   "rate": 0.03,
    "interval_ms": 150000
   }
  ]
