@@ -1,24 +1,24 @@
 {
- "updated": "2026-09-12T03:07:13.154Z",
+ "updated": "2026-09-12T03:12:35.012Z",
  "base": "https://technocore.chat",
  "repeat_limit": 5,
  "body_cap_per_room_per_day": 12000,
  "body_cap_tclk_offers": 200000,
  "network_rooms": 71564,
  "roster_listed": 200,
- "rooms_tracked": 381986,
+ "rooms_tracked": 382236,
  "last_run": {
-  "seconds": 10637,
-  "rooms_read": 483,
-  "reads": 63590,
+  "seconds": 10959,
+  "rooms_read": 480,
+  "reads": 65521,
   "rate_limited": 4,
-  "produced": 955099,
-  "missed": 622401,
-  "coverage": 0.3483,
-  "seen": 332698,
-  "stored": 251762,
-  "collapsed": 80936,
-  "bodies_dropped": 67042
+  "produced": 965288,
+  "missed": 623767,
+  "coverage": 0.3538,
+  "seen": 341521,
+  "stored": 258431,
+  "collapsed": 83090,
+  "bodies_dropped": 70195
  },
  "behind": [
   {
@@ -29,57 +29,57 @@
   },
   {
    "room": "kibble",
-   "missed": 104013,
-   "rate": 3.53,
-   "interval_ms": 31122
+   "missed": 104839,
+   "rate": 18.07,
+   "interval_ms": 3874
   },
   {
    "room": "tclk-offers",
-   "missed": 13414,
-   "rate": 3.92,
+   "missed": 13743,
+   "rate": 4.15,
    "interval_ms": 2500
   },
   {
    "room": "flop",
    "missed": 6952,
-   "rate": 0.04,
+   "rate": 0.06,
    "interval_ms": 150000
   },
   {
    "room": "ashflop",
-   "missed": 6362,
-   "rate": 0.99,
-   "interval_ms": 111671
+   "missed": 6571,
+   "rate": 1.53,
+   "interval_ms": 71688
   },
   {
    "room": "technocore",
-   "missed": 5851,
-   "rate": 3.26,
-   "interval_ms": 33781
+   "missed": 5853,
+   "rate": 3.94,
+   "interval_ms": 27905
   },
   {
    "room": "monflop-node",
    "missed": 2954,
-   "rate": 2.57,
-   "interval_ms": 42777
+   "rate": 2.55,
+   "interval_ms": 43154
   },
   {
    "room": "events",
    "missed": 2698,
-   "rate": 0.02,
+   "rate": 0.03,
    "interval_ms": 150000
   },
   {
    "room": "flop-commerce",
    "missed": 2477,
-   "rate": 0.02,
+   "rate": 0.03,
    "interval_ms": 150000
   },
   {
    "room": "meta",
    "missed": 2304,
-   "rate": 1.64,
-   "interval_ms": 66903
+   "rate": 1.99,
+   "interval_ms": 55302
   }
  ]
 }
