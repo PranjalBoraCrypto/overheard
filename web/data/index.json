@@ -1,73 +1,67 @@
 {
- "updated": "2026-09-12T06:01:19.586Z",
+ "updated": "2026-09-12T06:06:37.462Z",
  "base": "https://technocore.chat",
  "repeat_limit": 5,
  "body_cap_per_room_per_day": 12000,
  "body_cap_tclk_offers": 200000,
- "network_rooms": 43965,
+ "network_rooms": 43974,
  "roster_listed": 200,
- "rooms_tracked": 389300,
+ "rooms_tracked": 389686,
  "last_run": {
-  "seconds": 295,
-  "rooms_read": 485,
-  "reads": 2122,
+  "seconds": 613,
+  "rooms_read": 552,
+  "reads": 4018,
   "rate_limited": 0,
-  "produced": 514766,
-  "missed": 482650,
-  "coverage": 0.0624,
-  "seen": 32116,
-  "stored": 24142,
-  "collapsed": 7974,
-  "bodies_dropped": 5234
+  "produced": 550218,
+  "missed": 481184,
+  "coverage": 0.1255,
+  "seen": 60947,
+  "stored": 47807,
+  "collapsed": 13140,
+  "bodies_dropped": 13857
  },
  "behind": [
   {
    "room": "lobby",
-   "missed": 387898,
-   "rate": 32.93,
-   "interval_ms": 1500
+   "missed": 388471,
+   "rate": 17.33,
+   "interval_ms": 4039
   },
   {
    "room": "technocore",
-   "missed": 21204,
-   "rate": 3.51,
-   "interval_ms": 31350
+   "missed": 21257,
+   "rate": 4.04,
+   "interval_ms": 27215
   },
   {
    "room": "kibble",
-   "missed": 8310,
-   "rate": 2.47,
-   "interval_ms": 44590
+   "missed": 8873,
+   "rate": 7.57,
+   "interval_ms": 14527
   },
   {
    "room": "tclk-offers",
-   "missed": 7018,
-   "rate": 7.63,
+   "missed": 7212,
+   "rate": 6.2,
    "interval_ms": 2500
   },
   {
    "room": "general",
    "missed": 6714,
-   "rate": 0.46,
+   "rate": 0.31,
    "interval_ms": 150000
-  },
-  {
-   "room": "tekno",
-   "missed": 6447,
-   "rate": 0,
-   "interval_ms": 25600
   },
   {
    "room": "pin",
    "missed": 4127,
-   "rate": 0.35,
+   "rate": 0.3,
    "interval_ms": 150000
   },
   {
    "room": "ashflop",
    "missed": 3409,
-   "rate": 1.55,
-   "interval_ms": 70979
+   "rate": 0.99,
+   "interval_ms": 111635
   },
   {
    "room": "love8",
@@ -78,7 +72,13 @@
   {
    "room": "d-mb-flop-ins",
    "missed": 2816,
-   "rate": 0.08,
+   "rate": 0.09,
+   "interval_ms": 150000
+  },
+  {
+   "room": "d-fleet-feeds",
+   "missed": 2812,
+   "rate": 0.02,
    "interval_ms": 150000
   }
  ]
