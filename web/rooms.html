@@ -151,6 +151,32 @@ h1{font-weight:800;font-size:clamp(30px,4.4vw,44px);letter-spacing:-.035em;margi
 .live.wake:focus-visible{outline:2px solid var(--cy);outline-offset:3px;border-radius:6px}
 @keyframes blip{0%,100%{opacity:1}50%{opacity:.3}}
 
+/* The export button. Quiet by default: it sits beside a live indicator that
+   is already blinking, and two things competing for the eye in a six-word
+   header is one too many.
+
+   NO HOVER STATE ON A TOUCH SCREEN. `:hover` on a phone latches — it sticks
+   after the tap and stays lit until you press something else — so the whole
+   affordance lives inside `@media (hover:hover)`, where there is a pointer
+   that can actually leave. What a phone gets instead is `:active`, which is
+   honest about being a press, and it is not animated. */
+.rexp{display:inline-flex;align-items:center;gap:7px;padding:6px 11px;border-radius:9px;
+  background:none;border:1px solid rgba(0,180,215,.26);color:var(--dim);cursor:pointer;
+  font-family:var(--mono);font-size:10.5px;letter-spacing:.11em;text-transform:uppercase;
+  -webkit-tap-highlight-color:transparent}
+.rexp .i{width:13px;height:13px;color:var(--cy)}
+.rexp:disabled{opacity:.5;cursor:default}
+.rexp:focus-visible{outline:2px solid var(--cy);outline-offset:3px}
+.rexp:active:not(:disabled){background:rgba(0,180,215,.1)}
+@media (hover:hover){
+  /* Bounded on purpose: colour only. No transform, no shadow, no filter —
+     nothing that asks a weak GPU to composite a new layer for a button that
+     is being pointed at. */
+  .rexp{transition:border-color .18s var(--ease),background .18s var(--ease),color .18s var(--ease)}
+  .rexp:hover:not(:disabled){border-color:rgba(95,235,255,.55);background:rgba(0,180,215,.07);color:var(--txt)}
+}
+@media (prefers-reduced-motion:reduce){ .rexp{transition:none} }
+
 /* ── the room ──────────────────────────────────────────────────────────────
    ONE scroller, filling a panel of known height. It used to be a stream with
    max-height:56vh inside a column of auto height, so the region that actually
@@ -667,6 +693,15 @@ footer a:hover{color:var(--cy-hi)}
         <h2 id="rname">lobby</h2>
         <span class="tag" id="rmeta"></span>
         <span class="live" id="live"><i></i><span id="livetext">live</span></span>
+        <!-- THE RECORD, NOT THE WINDOW. The stream below holds 200 messages
+             and shows them unsigned, because that is all a live read carries.
+             This downloads the room's full history from seq 1 with every
+             author's signature attached — the thing you keep, and the thing
+             somebody else can check later without trusting this page. -->
+        <button class="rexp" id="rexp" type="button"
+                title="Download this room's full signed history as a file">
+          <svg class="i"><use href="#ic-file"/></svg><span>Export</span>
+        </button>
       </div>
 
       <div class="stream" id="stream"></div>
@@ -1353,6 +1388,67 @@ function switchRoom(next,focus=true){
      than the click it saves. */
   if(focus && ID && !$("open").hidden) $("say").focus({preventScroll:true});
 }
+
+/* ── export ────────────────────────────────────────────────────────────────
+   Saves the room's full signed history to a file.
+
+   WHY THIS FETCHES RATHER THAN JUST NAVIGATING. Setting location.href to the
+   endpoint would work when it works: the Content-Disposition header makes the
+   browser download instead of render. But when it does NOT work — the room
+   has no export, technocore is down, we are being throttled — navigation
+   dumps a JSON error object into a tab and leaves the room behind. Fetching
+   means a failure stays on this page, in the same message line every other
+   failure here uses, next to the room it is about.
+
+   The button is disabled while it runs. An export is the most expensive read
+   this site makes of the network, and a person watching nothing happen will
+   press a button again; without this, an impatient double-press is two full
+   room histories pulled through a 600/minute allowance shared with everyone
+   else on the site. */
+let exporting=false;
+async function exportRoom(){
+  if(exporting) return;
+  const which=room;                       // may change under us; captured once
+  exporting=true;
+  const b=$("rexp"); if(b) b.disabled=true;
+  say(`Fetching the full history of ${which}…`);
+  let url=null;
+  try{
+    const r=await fetch(`/api/export?room=${encodeURIComponent(which)}`,
+                        {headers:{Accept:"application/x-ndjson"}});
+    if(!r.ok){
+      /* The endpoint says why in plain words; prefer its sentence to a
+         status code, and fall back to the code when it cannot be read. */
+      let why=`the server said ${r.status}`;
+      try{ const j=await r.json(); if(j && typeof j.error==="string") why=j.error; }catch{}
+      say(`Could not export ${which} — ${why}.`,"err");
+      return;
+    }
+    const blob=await r.blob();
+    if(!blob.size){ say(`${which} has no history to export yet.`,"warn"); return; }
+    /* An <a download> on an object URL, rather than trusting the header
+       alone: it is what puts a chosen filename on the file in every browser
+       this has been opened in, including the ones that would otherwise name
+       it after the query string. */
+    url=URL.createObjectURL(blob);
+    const a=document.createElement("a");
+    a.href=url;
+    a.download=`${which}-${new Date().toISOString().slice(0,10)}.ndjson`;
+    document.body.appendChild(a); a.click(); a.remove();
+    const kb=Math.max(1,Math.round(blob.size/1024));
+    say(`Saved ${a.download} — ${kb} KB, every line signed by whoever wrote it.`,"ok");
+  }catch{
+    say(`Could not export ${which} — the request did not complete.`,"err");
+  }finally{
+    /* Revoked on a timer, not immediately: Safari has historically cancelled
+       an in-flight download when its object URL is revoked in the same tick
+       as the click. */
+    if(url) setTimeout(()=>URL.revokeObjectURL(url),60000);
+    exporting=false;
+    const btn=$("rexp"); if(btn) btn.disabled=false;
+  }
+}
+if($("rexp")) $("rexp").addEventListener("click",exportRoom);
 
 function stamp(ts){
   if(!ts) return "";
