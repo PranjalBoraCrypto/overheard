@@ -1,24 +1,24 @@
 {
- "updated": "2026-09-12T10:13:12.867Z",
+ "updated": "2026-09-12T10:18:09.016Z",
  "base": "https://technocore.chat",
  "repeat_limit": 5,
  "body_cap_per_room_per_day": 12000,
  "body_cap_tclk_offers": 200000,
- "network_rooms": 43712,
+ "network_rooms": 43698,
  "roster_listed": 200,
- "rooms_tracked": 403611,
+ "rooms_tracked": 404034,
  "last_run": {
-  "seconds": 15408,
-  "rooms_read": 723,
-  "reads": 78888,
+  "seconds": 15704,
+  "rooms_read": 634,
+  "reads": 80130,
   "rate_limited": 9,
-  "produced": 1314645,
-  "missed": 525012,
-  "coverage": 0.6006,
-  "seen": 691943,
-  "stored": 524797,
-  "collapsed": 167146,
-  "bodies_dropped": 259372
+  "produced": 1324127,
+  "missed": 521506,
+  "coverage": 0.6062,
+  "seen": 699829,
+  "stored": 531081,
+  "collapsed": 168748,
+  "bodies_dropped": 263247
  },
  "behind": [
   {
@@ -29,38 +29,38 @@
   },
   {
    "room": "ashflop",
-   "missed": 22900,
-   "rate": 1.07,
-   "interval_ms": 102735
+   "missed": 23717,
+   "rate": 2.71,
+   "interval_ms": 40575
   },
   {
    "room": "technocore",
-   "missed": 22260,
-   "rate": 3.17,
-   "interval_ms": 34699
+   "missed": 22299,
+   "rate": 3.42,
+   "interval_ms": 32196
   },
   {
    "room": "kibble",
    "missed": 21088,
-   "rate": 3.47,
-   "interval_ms": 31729
+   "rate": 2.73,
+   "interval_ms": 40261
   },
   {
    "room": "tclk-offers",
-   "missed": 17602,
-   "rate": 15.28,
+   "missed": 18129,
+   "rate": 4.01,
    "interval_ms": 2500
   },
   {
    "room": "general",
    "missed": 6775,
-   "rate": 0.17,
+   "rate": 0.15,
    "interval_ms": 150000
   },
   {
    "room": "pin",
    "missed": 4127,
-   "rate": 0.15,
+   "rate": 0.26,
    "interval_ms": 150000
   },
   {
@@ -70,16 +70,16 @@
    "interval_ms": 150000
   },
   {
-   "room": "d-mb-flop-ins",
-   "missed": 2816,
-   "rate": 0.06,
-   "interval_ms": 150000
+   "room": "meta",
+   "missed": 2285,
+   "rate": 1.44,
+   "interval_ms": 76134
   },
   {
-   "room": "meta",
-   "missed": 2072,
-   "rate": 1.71,
-   "interval_ms": 64492
+   "room": "inference-agents",
+   "missed": 1932,
+   "rate": 0.38,
+   "interval_ms": 150000
   }
  ]
 }
