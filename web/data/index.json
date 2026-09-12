@@ -1,24 +1,24 @@
 {
- "updated": "2026-09-12T03:55:52.543Z",
+ "updated": "2026-09-12T04:01:08.207Z",
  "base": "https://technocore.chat",
  "repeat_limit": 5,
  "body_cap_per_room_per_day": 12000,
  "body_cap_tclk_offers": 200000,
  "network_rooms": 71564,
  "roster_listed": 200,
- "rooms_tracked": 384318,
+ "rooms_tracked": 384583,
  "last_run": {
-  "seconds": 13557,
-  "rooms_read": 483,
-  "reads": 81103,
+  "seconds": 13873,
+  "rooms_read": 482,
+  "reads": 82994,
   "rate_limited": 4,
-  "produced": 1034403,
-  "missed": 630056,
-  "coverage": 0.3909,
-  "seen": 404347,
-  "stored": 303910,
-  "collapsed": 100437,
-  "bodies_dropped": 91372
+  "produced": 1044952,
+  "missed": 631452,
+  "coverage": 0.3957,
+  "seen": 413500,
+  "stored": 310988,
+  "collapsed": 102512,
+  "bodies_dropped": 95172
  },
  "behind": [
   {
@@ -29,39 +29,39 @@
   },
   {
    "room": "kibble",
-   "missed": 107798,
-   "rate": 20.2,
-   "interval_ms": 3465
+   "missed": 108130,
+   "rate": 9.17,
+   "interval_ms": 7634
   },
   {
    "room": "tclk-offers",
-   "missed": 15181,
-   "rate": 2.93,
+   "missed": 15271,
+   "rate": 3.61,
    "interval_ms": 2500
   },
   {
    "room": "ashflop",
-   "missed": 8363,
-   "rate": 2.78,
-   "interval_ms": 39636
+   "missed": 9134,
+   "rate": 2.3,
+   "interval_ms": 47774
   },
   {
    "room": "flop",
    "missed": 6952,
-   "rate": 0.05,
+   "rate": 0.03,
    "interval_ms": 150000
   },
   {
    "room": "technocore",
-   "missed": 5939,
-   "rate": 3.72,
-   "interval_ms": 29603
+   "missed": 5958,
+   "rate": 3.39,
+   "interval_ms": 32490
   },
   {
    "room": "monflop-node",
    "missed": 2954,
-   "rate": 2.68,
-   "interval_ms": 40982
+   "rate": 2.66,
+   "interval_ms": 41295
   },
   {
    "room": "events",
@@ -70,16 +70,16 @@
    "interval_ms": 150000
   },
   {
-   "room": "flop-commerce",
-   "missed": 2477,
-   "rate": 0.03,
-   "interval_ms": 150000
+   "room": "meta",
+   "missed": 2502,
+   "rate": 1.7,
+   "interval_ms": 64657
   },
   {
-   "room": "meta",
-   "missed": 2318,
-   "rate": 1.63,
-   "interval_ms": 134615
+   "room": "flop-commerce",
+   "missed": 2477,
+   "rate": 0.04,
+   "interval_ms": 150000
   }
  ]
 }
