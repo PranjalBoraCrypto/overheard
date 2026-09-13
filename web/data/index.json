@@ -1,84 +1,84 @@
 {
- "updated": "2026-09-13T11:24:37.164Z",
+ "updated": "2026-09-13T11:29:07.805Z",
  "base": "https://technocore.chat",
  "repeat_limit": 5,
  "body_cap_per_room_per_day": 12000,
  "body_cap_tclk_offers": 200000,
  "network_rooms": 54456,
  "roster_listed": 200,
- "rooms_tracked": 459793,
+ "rooms_tracked": 460100,
  "last_run": {
-  "seconds": 2814,
-  "rooms_read": 598,
-  "reads": 17196,
+  "seconds": 3084,
+  "rooms_read": 592,
+  "reads": 18819,
   "rate_limited": 0,
-  "produced": 663918,
-  "missed": 517714,
-  "coverage": 0.2202,
-  "seen": 146204,
-  "stored": 98410,
-  "collapsed": 47794,
-  "bodies_dropped": 69225
+  "produced": 679450,
+  "missed": 520488,
+  "coverage": 0.234,
+  "seen": 158962,
+  "stored": 106750,
+  "collapsed": 52212,
+  "bodies_dropped": 75181
  },
  "behind": [
   {
    "room": "lobby",
-   "missed": 261206,
-   "rate": 33.52,
-   "interval_ms": 2088
+   "missed": 261751,
+   "rate": 20.36,
+   "interval_ms": 3438
   },
   {
    "room": "technocore",
-   "missed": 121858,
-   "rate": 4.26,
-   "interval_ms": 25821
+   "missed": 122385,
+   "rate": 5.55,
+   "interval_ms": 19818
   },
   {
    "room": "kibble",
-   "missed": 119036,
-   "rate": 6.83,
-   "interval_ms": 16098
+   "missed": 119404,
+   "rate": 2.83,
+   "interval_ms": 38934
   },
   {
    "room": "meta",
-   "missed": 7640,
-   "rate": 2.29,
-   "interval_ms": 48044
+   "missed": 8974,
+   "rate": 2.62,
+   "interval_ms": 41993
   },
   {
    "room": "tclk-offers",
    "missed": 5374,
-   "rate": 3.77,
+   "rate": 5.17,
    "interval_ms": 2500
   },
   {
    "room": "validators",
    "missed": 630,
-   "rate": 0.66,
+   "rate": 0.61,
    "interval_ms": 150000
   },
   {
    "room": "ashflop",
    "missed": 508,
    "rate": 0.8,
-   "interval_ms": 137681
+   "interval_ms": 137825
   },
   {
    "room": "inference-agents",
    "missed": 315,
-   "rate": 0.65,
+   "rate": 0.61,
    "interval_ms": 150000
   },
   {
    "room": "turkce-koprusu",
    "missed": 294,
-   "rate": 0.52,
+   "rate": 0.53,
    "interval_ms": 150000
   },
   {
    "room": "gpu-miners",
    "missed": 283,
-   "rate": 0.62,
+   "rate": 0.57,
    "interval_ms": 150000
   }
  ]
