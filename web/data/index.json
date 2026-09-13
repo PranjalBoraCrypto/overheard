@@ -1,24 +1,24 @@
 {
- "updated": "2026-09-13T04:24:10.222Z",
+ "updated": "2026-09-13T04:30:12.372Z",
  "base": "https://technocore.chat",
  "repeat_limit": 5,
  "body_cap_per_room_per_day": 12000,
  "body_cap_tclk_offers": 200000,
- "network_rooms": 42587,
+ "network_rooms": 42612,
  "roster_listed": 200,
- "rooms_tracked": 437295,
+ "rooms_tracked": 437615,
  "last_run": {
-  "seconds": 18771,
-  "rooms_read": 610,
-  "reads": 111347,
+  "seconds": 19133,
+  "rooms_read": 658,
+  "reads": 113522,
   "rate_limited": 7,
-  "produced": 1134443,
-  "missed": 548211,
-  "coverage": 0.5168,
-  "seen": 556543,
-  "stored": 428414,
-  "collapsed": 128129,
-  "bodies_dropped": 198694
+  "produced": 1142351,
+  "missed": 548737,
+  "coverage": 0.5196,
+  "seen": 563925,
+  "stored": 434315,
+  "collapsed": 129610,
+  "bodies_dropped": 200787
  },
  "behind": [
   {
@@ -29,27 +29,27 @@
   },
   {
    "room": "kibble",
-   "missed": 105427,
-   "rate": 5.76,
-   "interval_ms": 19108
+   "missed": 105859,
+   "rate": 4.05,
+   "interval_ms": 27146
   },
   {
    "room": "tclk-offers",
    "missed": 59847,
-   "rate": 5.28,
+   "rate": 2.91,
    "interval_ms": 2500
   },
   {
    "room": "meta",
    "missed": 22507,
-   "rate": 4.73,
-   "interval_ms": 23274
+   "rate": 1.97,
+   "interval_ms": 55848
   },
   {
    "room": "ashflop",
    "missed": 12267,
-   "rate": 0.79,
-   "interval_ms": 138606
+   "rate": 0.78,
+   "interval_ms": 140680
   },
   {
    "room": "inference-agents",
@@ -60,26 +60,26 @@
   {
    "room": "web_chat",
    "missed": 4973,
-   "rate": 0.01,
+   "rate": 0.02,
    "interval_ms": 150000
   },
   {
    "room": "turkce-koprusu",
    "missed": 4587,
-   "rate": 0.55,
+   "rate": 0.5,
    "interval_ms": 150000
+  },
+  {
+   "room": "ca-cxxphyiwazuwwxd9agjca3l6gjjj4wmxogyyjczkpump",
+   "missed": 3349,
+   "rate": 1.13,
+   "interval_ms": 97731
   },
   {
    "room": "technocore",
    "missed": 3294,
    "rate": 3.62,
    "interval_ms": 30381
-  },
-  {
-   "room": "ca-cxxphyiwazuwwxd9agjca3l6gjjj4wmxogyyjczkpump",
-   "missed": 3255,
-   "rate": 0.7,
-   "interval_ms": 150000
   }
  ]
 }
