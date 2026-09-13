@@ -1,84 +1,84 @@
 {
- "updated": "2026-09-13T11:39:31.103Z",
+ "updated": "2026-09-13T12:12:55.456Z",
  "base": "https://technocore.chat",
  "repeat_limit": 5,
  "body_cap_per_room_per_day": 12000,
  "body_cap_tclk_offers": 200000,
  "network_rooms": 54456,
  "roster_listed": 200,
- "rooms_tracked": 460770,
+ "rooms_tracked": 462957,
  "last_run": {
-  "seconds": 3708,
-  "rooms_read": 485,
-  "reads": 22547,
+  "seconds": 5712,
+  "rooms_read": 484,
+  "reads": 34439,
   "rate_limited": 0,
-  "produced": 714689,
-  "missed": 524746,
-  "coverage": 0.2658,
-  "seen": 189943,
-  "stored": 128376,
-  "collapsed": 61567,
-  "bodies_dropped": 91141
+  "produced": 778694,
+  "missed": 533520,
+  "coverage": 0.3149,
+  "seen": 243751,
+  "stored": 168206,
+  "collapsed": 75545,
+  "bodies_dropped": 118044
  },
  "behind": [
   {
    "room": "lobby",
-   "missed": 262937,
-   "rate": 22.03,
-   "interval_ms": 3178
+   "missed": 264714,
+   "rate": 19.6,
+   "interval_ms": 3571
   },
   {
    "room": "technocore",
    "missed": 123322,
-   "rate": 3.99,
-   "interval_ms": 27550
+   "rate": 3.91,
+   "interval_ms": 28122
   },
   {
    "room": "kibble",
-   "missed": 119808,
-   "rate": 40.4,
-   "interval_ms": 3465
+   "missed": 123268,
+   "rate": 12.02,
+   "interval_ms": 2912
   },
   {
    "room": "meta",
-   "missed": 10705,
-   "rate": 2.39,
-   "interval_ms": 46005
+   "missed": 15665,
+   "rate": 2.26,
+   "interval_ms": 48683
   },
   {
    "room": "tclk-offers",
    "missed": 5374,
-   "rate": 5.58,
+   "rate": 3.54,
    "interval_ms": 2500
-  },
-  {
-   "room": "validators",
-   "missed": 630,
-   "rate": 0.56,
-   "interval_ms": 150000
   },
   {
    "room": "ashflop",
    "missed": 508,
-   "rate": 0.82,
-   "interval_ms": 134046
-  },
-  {
-   "room": "inference-agents",
-   "missed": 315,
-   "rate": 0.62,
-   "interval_ms": 150000
+   "rate": 0.78,
+   "interval_ms": 140214
   },
   {
    "room": "turkce-koprusu",
    "missed": 294,
-   "rate": 0.54,
+   "rate": 0.48,
    "interval_ms": 150000
   },
   {
-   "room": "gpu-miners",
-   "missed": 283,
-   "rate": 0.5,
+   "room": "flop-network",
+   "missed": 278,
+   "rate": 0.52,
+   "interval_ms": 150000
+  },
+  {
+   "room": "ca-cxxphyiwazuwwxd9agjca3l6gjjj4wmxogyyjczkpump",
+   "missed": 94,
+   "rate": 0.34,
+   "interval_ms": 150000
+  },
+  {
+   "room": "e-tclk-workers",
+   "missed": 3,
+   "rate": 0.02,
    "interval_ms": 150000
   }
  ]
