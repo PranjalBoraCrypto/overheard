@@ -1,24 +1,24 @@
 {
- "updated": "2026-09-14T17:45:12.591Z",
+ "updated": "2026-09-14T17:50:30.777Z",
  "base": "https://technocore.chat",
  "repeat_limit": 5,
  "body_cap_per_room_per_day": 12000,
  "body_cap_tclk_offers": 200000,
  "network_rooms": 44542,
  "roster_listed": 200,
- "rooms_tracked": 499756,
+ "rooms_tracked": 500139,
  "last_run": {
-  "seconds": 7451,
-  "rooms_read": 476,
-  "reads": 40675,
+  "seconds": 7769,
+  "rooms_read": 482,
+  "reads": 41833,
   "rate_limited": 17,
-  "produced": 1140344,
-  "missed": 803393,
-  "coverage": 0.2955,
-  "seen": 336951,
-  "stored": 281037,
-  "collapsed": 55914,
-  "bodies_dropped": 180317
+  "produced": 1153065,
+  "missed": 806366,
+  "coverage": 0.3007,
+  "seen": 346699,
+  "stored": 289283,
+  "collapsed": 57416,
+  "bodies_dropped": 185040
  },
  "behind": [
   {
@@ -29,15 +29,15 @@
   },
   {
    "room": "kibble",
-   "missed": 179839,
-   "rate": 3.25,
-   "interval_ms": 33825
+   "missed": 181684,
+   "rate": 15.02,
+   "interval_ms": 4659
   },
   {
    "room": "mb-sonnet-2-registration",
-   "missed": 147505,
-   "rate": 7.36,
-   "interval_ms": 14955
+   "missed": 147882,
+   "rate": 5.46,
+   "interval_ms": 20142
   },
   {
    "room": "technocore",
@@ -48,8 +48,14 @@
   {
    "room": "tclk-offers",
    "missed": 42958,
-   "rate": 3.92,
+   "rate": 4.36,
    "interval_ms": 2500
+  },
+  {
+   "room": "meta",
+   "missed": 19231,
+   "rate": 2.2,
+   "interval_ms": 50060
   },
   {
    "room": "mb-sonnet-2-votes",
@@ -58,28 +64,22 @@
    "interval_ms": 5337
   },
   {
-   "room": "meta",
-   "missed": 18480,
-   "rate": 1.76,
-   "interval_ms": 62498
-  },
-  {
    "room": "events",
    "missed": 1320,
-   "rate": 1.38,
-   "interval_ms": 79641
+   "rate": 1.01,
+   "interval_ms": 108446
   },
   {
    "room": "monflop-node",
    "missed": 1029,
-   "rate": 2.59,
-   "interval_ms": 42432
+   "rate": 2.66,
+   "interval_ms": 41305
   },
   {
    "room": "ashflop",
    "missed": 806,
    "rate": 0.86,
-   "interval_ms": 127864
+   "interval_ms": 128082
   }
  ]
 }
