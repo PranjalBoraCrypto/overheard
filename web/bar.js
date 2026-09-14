@@ -218,7 +218,7 @@ const CSS = `
 }
 .ptxt i{
   display:block;margin-top:3px;font-style:normal;
-  font-size:11.5px;line-height:1.35;color:#5F8593;
+  font-size:11.5px;line-height:1.35;color:#7498A5;
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
 }
 /* Where you are. A filled row rather than a coloured word, because the whole
@@ -242,7 +242,7 @@ const CSS = `
    It has room here. */
 .nsoon{
   display:flex;align-items:center;gap:9px;margin-top:13px;padding:11px 13px;
-  border-radius:13px;font-family:inherit;font-size:12.5px;font-weight:600;color:#5F8593;
+  border-radius:13px;font-family:inherit;font-size:12.5px;font-weight:600;color:#7498A5;
   background:rgba(9,32,43,.55);border:1px dashed rgba(0,180,215,.24);
 }
 .nsoon svg{width:16px;height:16px;flex:none;fill:none;stroke:currentColor;stroke-width:1.8;
@@ -262,7 +262,7 @@ const CSS = `
 .soon{
   display:inline-flex;align-items:center;gap:8px;flex:none;margin-left:6px;
   padding:8px 12px;border-radius:11px;cursor:default;user-select:none;
-  font-family:inherit;font-size:12.5px;font-weight:600;line-height:1;color:#5F8593;
+  font-family:inherit;font-size:12.5px;font-weight:600;line-height:1;color:#7498A5;
   background:rgba(9,32,43,.6);border:1px dashed rgba(0,180,215,.28);
 }
 .soon .i{width:14px;height:14px;flex:none;fill:none;stroke:currentColor;stroke-width:1.8;
@@ -325,7 +325,7 @@ const CSS = `
   transition:transform .2s cubic-bezier(.22,.68,.24,1)}
 .pw button:hover{transform:translateY(-1px)}
 .pw button:disabled{opacity:.6;cursor:default;transform:none}
-.say{font-size:11.5px;line-height:1.5;color:#5F8593;margin-top:9px;min-height:1.2em}
+.say{font-size:11.5px;line-height:1.5;color:#7498A5;margin-top:9px;min-height:1.2em}
 .say.err{color:#FF9B9B}
 .say.ok{color:#3BE3B0}
 
@@ -517,7 +517,7 @@ const CSS = `
 .menu.wide{width:344px}
 .menu h3{
   font-family:"IBM Plex Mono",ui-monospace,Menlo,monospace;font-size:9.5px;font-weight:600;
-  letter-spacing:.16em;text-transform:uppercase;color:#5F8593;margin-bottom:8px;
+  letter-spacing:.16em;text-transform:uppercase;color:#7498A5;margin-bottom:8px;
 }
 .did{
   font-family:"IBM Plex Mono",ui-monospace,Menlo,monospace;font-size:10.5px;line-height:1.65;
@@ -631,12 +631,28 @@ const CSS = `
    anything else appeared. */
 /* THE ROW IS GONE AND THE BUTTON IS HERE, everywhere the row does not fit.
    See the block at the top of this stylesheet for why a button beats a
-   scrolling strip; the width is arithmetic. Without the Testnet pill the bar
-   still needs 175 + 466 + 152 + 48 = 841px of content, and a 900px window
-   gives 848. One pixel narrower than that and something has to wrap, so 900
-   is where the tabs stop and the button starts. Above it the desktop bar is
-   the row of tabs it has always been and this rule does not exist. */
-@media (max-width:899px){
+   scrolling strip; the width is arithmetic, and the arithmetic went stale.
+
+   IT USED TO SAY 899, and the sum behind it was 175 + 466 + 152 + 48 = 841px
+   of content against the 848 a 900px window gives. That was true when the row
+   held six tabs. It gained one and nobody re-did the sum, so from 900 to 999
+   the bar quietly wrapped onto TWO rows — 134px of navigation instead of 82 —
+   and signing in shifted it sideways because the wrap point moved. It failed
+   at exactly the widths a laptop uses, and it had been failing silently.
+
+   MEASURED 2026-09-14, at real breakpoints rather than by adding up guesses.
+   The row's content is 852px signed out and 894px signed in; two 16px gaps
+   make 884 and 926. The bar's inner width is the viewport less 62. So the row
+   needs 946px signed out and 988px signed in, and the binding case is signed
+   in — a bar that fits until you sign in is the bug this file already fixed
+   once at 560px. 999 is that number with a little air.
+
+   IF A PAGE IS EVER ADDED TO THE ROW, THIS NUMBER IS WRONG AGAIN. The probe
+   that produced it is small: open a page at a width, read the bar children's
+   widths and their vertical centres, and find where the spread
+   stops being zero. test-mobile.mjs checks 960, 980 and 1000 for that reason
+   — the three widths that would have caught this the day it broke. */
+@media (max-width:999px){
   .tabs{display:none}
   .nb{display:block;margin-left:auto}
   .me{margin-left:10px;order:0;flex:none}
@@ -669,7 +685,7 @@ const CSS = `
      signed in. The bar is now the same width signed in and signed out. */
   .chip .nm{display:none}
   .chip{padding:0 8px 0 5px}
-  /* Seven rows, a heading and the Testnet line come to about 558px, and a
+  /* Seven rows, a heading and the Testnet line came to about 558px, and a
      640-tall Android gives 86vh = 550. Nine pixels is not worth a scrollbar
      under a menu whose entire purpose is that you can see all of it at once,
      and this sheet has no text field in it, so there is no keyboard to leave
@@ -686,6 +702,29 @@ const CSS = `
      phone, but it is a continuous one that buys a shimmer nobody came for.
      The glyph keeps its glow; only the rotation stops. */
   .glyph::after{animation:none}
+}
+
+/* ── THE SHEET STILL FITS ON THE SHORTEST PHONE, WITH EIGHT ROWS ───────────
+   The rule above was written for seven rows: 558px of content against the
+   550 an 86vh sheet gets on a 640-tall Android, close enough that the nine
+   pixels were argued about in a comment. Prediction made it eight rows and
+   612px, against the 588 that 92vh gives — and the sheet began to scroll on
+   exactly the screen its own comment promised it would not.
+
+   A menu whose entire purpose is that you can see all of it at once must not
+   scroll, so the rows give the 24px back. Two off each row's top margin and
+   one off its vertical padding: 7 x 2 + 8 x 2 = 30px, which lands at 582 and
+   leaves a little air. Rows stay 52px, comfortably over the 44 that Apple and
+   Google both publish for a touch target, and test-mobile.mjs measures that
+   rather than trusting this comment.
+
+   KEYED TO HEIGHT, NOT WIDTH, because that is what actually runs out. A tall
+   phone keeps the roomier spacing; only a short one pays. And if a NINTH page
+   is ever added, this stops being enough — at that point the honest fix is a
+   scrolling sheet with an honest scrollbar, not another two pixels. */
+@media (max-height:700px){
+  .prow{margin-top:4px;padding:8px 12px}
+  .prow:first-of-type{margin-top:8px}
 }
 `;
 

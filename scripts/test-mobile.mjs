@@ -327,7 +327,14 @@ console.log("\n=== the bar is one row at every width");
     return { ...out, errs };
   };
 
-  for (const w of [360, 390, 430, 520, 560, 600, 768, 899, 900, 1024, 1280, 1440]) {
+  /* 960, 980 and 1000 are here because of what they caught. The tab row used
+     to switch on at 900 from a sum written when it held six tabs; it gained a
+     seventh, and from 900 to 999 the bar wrapped onto two rows — signed out
+     up to 959, signed in all the way to 999. The old list jumped 899 → 1024
+     and stepped straight over it. These three widths are the shape of that
+     mistake: the last width that fails signed out, the last that fails signed
+     in, and the first that passes both. */
+  for (const w of [360, 390, 430, 520, 560, 600, 768, 899, 900, 960, 980, 1000, 1024, 1280, 1440]) {
     const out = await look(w, 900, false);
     const inn = await look(w, 900, true);
     check(`${w}px: one row, signed out and in`,
@@ -340,9 +347,12 @@ console.log("\n=== the bar is one row at every width");
     check(`${w}px: signing in does not move the bar`,
       out.right === inn.right && out.h === inn.h,
       `right ${out.right} → ${inn.right}, h ${out.h} → ${inn.h}`);
-    /* And which navigation is on screen. 900 is the arithmetic: without the
-       Testnet pill the row still needs 841px of content and 900 gives 848. */
-    const wantTabs = w >= 900;
+    /* And which navigation is on screen. 1000 is the arithmetic, measured
+       rather than added up: the row's content is 852px signed out and 894px
+       signed in, two 16px gaps make 884 and 926, and the bar's inner width is
+       the viewport less 62 — so it needs 946 signed out and 988 signed in.
+       The binding case is signed in. See the long note in bar.js. */
+    const wantTabs = w >= 1000;
     check(`${w}px: ${wantTabs ? "the tab row" : "the button"}`,
       out.tabs === wantTabs && out.nb === !wantTabs && inn.tabs === wantTabs && inn.nb === !wantTabs,
       `tabs ${out.tabs}/${inn.tabs}, button ${out.nb}/${inn.nb}`);
@@ -385,14 +395,26 @@ console.log("\n=== and one tap shows the whole site");
   });
 
   /* THE SHORTEST PHONE STILL IN USE. 360×640 is where "all of it at once"
-     is a claim rather than an observation: seven rows, a heading and the
-     Testnet line come to about 558px and this screen offers 589. */
+     is a claim rather than an observation: eight rows, a heading and the
+     Testnet line come to 612px and this screen offers 589 at 92vh, which is
+     why the rows tighten under 700px of height. */
   {
     const { ctx, pg } = await open(360, 640, "/play");
     const s = await readSheet(pg);
     check("the sheet opens", !!s && s.expanded === "true");
-    check("with every page in the site, not just the tabs", s.rows.length === 7,
-      s.rows.map((r) => r.label).join(", "));
+    /* NOT A COUNT. This asserted `=== 7` and the site grew an eighth page, so
+       for however long that took, the suite reported a failure that said
+       nothing except that a number in a test was old. What the sheet promises
+       is EVERY page, so check that against the pages — the sheet is wrong if
+       one is missing, and equally wrong if it lists a route that does not
+       exist. A new page now either appears here or fails here by name. */
+    const PAGES = ["/", "/rooms", "/play", "/create", "/v", "/prediction", "/city", "/what"];
+    const hrefs = s.rows.map((r) => r.href);
+    check("with every page in the site, not just the tabs",
+      PAGES.every((p) => hrefs.includes(p)) && hrefs.length === PAGES.length,
+      PAGES.filter((p) => !hrefs.includes(p)).map((p) => `missing ${p}`)
+        .concat(hrefs.filter((h) => !PAGES.includes(h)).map((h) => `unexpected ${h}`))
+        .join(", ") || s.rows.map((r) => r.label).join(", "));
     check("including the explainer, which was never a tab",
       s.rows.some((r) => r.href === "/what"), s.rows.map((r) => r.href).join(" "));
     check("and City, which is the whole reason this exists",
@@ -431,17 +453,45 @@ console.log("\n=== and one tap shows the whole site");
      than no sheet. */
   {
     const { ctx, pg } = await open(390, 844, "/rooms");
-    const gone = () => pg.evaluate(() => !document.querySelector("overheard-bar")
-      .shadowRoot.querySelector(".menu.nav"));
+    /* WAITS FOR THE BAR, rather than assuming it is there. The last of these
+       three closes by clicking the row for the page you are already on, and a
+       same-URL link click is a RELOAD in Chromium — the comment below says the
+       browser does not navigate, and that is true of the address bar and false
+       of the document. So this ran against a page mid-reload, found no
+       <overheard-bar> yet, and threw instead of answering. The sheet not
+       existing is the thing being measured; the bar not existing yet is not. */
+    const gone = async () => {
+      await pg.waitForFunction(() => !!document.querySelector("overheard-bar")?.shadowRoot,
+        null, { timeout: 5000 });
+      return pg.evaluate(() => !document.querySelector("overheard-bar")
+        .shadowRoot.querySelector(".menu.nav"));
+    };
     check("Escape closes it", (await pg.keyboard.press("Escape"), await pg.waitForTimeout(200), await gone()));
     await pg.evaluate(() => document.querySelector("overheard-bar").shadowRoot.querySelector(".burger").click());
     await pg.waitForTimeout(300);
-    /* The left gutter, below the bar: page background on every layout here.
-       A tap in the middle of the page lands on whatever the page put there,
-       and on /rooms at 390px that is a room link. */
-    await pg.mouse.click(5, 250);
+    /* THE POINT IS COMPUTED, NOT TYPED. This used to tap (5, 250) and call it
+       "the page behind it", which it was for a seven-row sheet on a 390x844
+       phone. The eighth row raised the sheet's top edge from about 290 to 231
+       and the tap started landing INSIDE it — so the sheet stayed open, quite
+       correctly, and this reported that closing was broken. Worse, it left
+       the sheet open, the next line toggled it shut, and the line after that
+       queried a row that was no longer in the document and crashed the suite:
+       one stale coordinate, three red results and no run at all.
+
+       So ask the sheet where it is and tap above it. Halfway between the bar
+       and the sheet's top edge is outside by construction, at any number of
+       rows, on any phone. */
+    const at = await pg.evaluate(() => {
+      const r = document.querySelector("overheard-bar").shadowRoot;
+      const sheet = r.querySelector(".menu.nav").getBoundingClientRect();
+      const bar = r.querySelector(".bar").getBoundingClientRect();
+      return { y: Math.round((bar.bottom + sheet.top) / 2), gap: Math.round(sheet.top - bar.bottom) };
+    });
+    check("there is page between the bar and the sheet to tap on", at.gap > 20,
+      `${at.gap}px of gap — if this ever goes to zero the sheet covers the page and this check needs a different point`);
+    await pg.mouse.click(5, at.y);
     await pg.waitForTimeout(250);
-    check("a tap on the page behind it closes it", await gone());
+    check("a tap on the page behind it closes it", await gone(), `tapped y=${at.y}`);
     await pg.evaluate(() => document.querySelector("overheard-bar").shadowRoot.querySelector(".burger").click());
     await pg.waitForTimeout(300);
     /* And choosing the page you are already on. The browser does not
@@ -494,7 +544,16 @@ console.log("\n=== and one tap shows the whole site");
         soon: getComputedStyle(r.querySelector(".soon")).display };
     });
     check("on a desktop the button does not exist", d.nb === "none", d.nb);
-    check("all six tabs are simply there", d.tabs.length === 6, d.tabs.join(","));
+    /* NAMED, NOT COUNTED, for the same reason the sheet's rows are: this said
+       "six" and the row had grown to seven, so the suite reported a failure
+       whose only content was that a number in a test was out of date. The
+       sheet carries one more — the explainer, which was never a tab. */
+    const TABS = ["Card", "Rooms", "Play", "Create", "Verify", "Prediction", "City"];
+    check("every tab is simply there, no button and no scrolling",
+      TABS.every((t) => d.tabs.includes(t)) && d.tabs.length === TABS.length,
+      TABS.filter((t) => !d.tabs.includes(t)).map((t) => `missing ${t}`)
+        .concat(d.tabs.filter((t) => !TABS.includes(t)).map((t) => `unexpected ${t}`))
+        .join(", ") || d.tabs.join(","));
     check("and Testnet with them", d.soon !== "none", d.soon);
     await ctx.close();
   }

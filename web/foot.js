@@ -37,7 +37,7 @@ const CSS = `
   display:block;
   font-family:"Outfit",system-ui,-apple-system,"Segoe UI",sans-serif;
   -webkit-font-smoothing:antialiased;
-  color:#5F8593;
+  color:#7498A5;
 }
 *{box-sizing:border-box;margin:0;padding:0}
 /* THE GAP ABOVE THE FOOTER LIVES HERE, AND HERE IS THE ONLY PLACE IT CAN.
@@ -68,7 +68,7 @@ a:focus-visible{outline:2px solid #5FEBFF;outline-offset:3px;border-radius:6px}
 .brand{display:inline-flex;align-items:center;gap:11px;color:#EDFAFE;font-weight:800;font-size:19px;letter-spacing:-.02em}
 .brand .glyph{width:30px;height:30px;flex:none;display:block}
 .brand .glyph svg{width:100%;height:100%;display:block}
-.said{margin-top:13px;font-size:13.5px;line-height:1.65;max-width:34ch;color:#5F8593}
+.said{margin-top:13px;font-size:13.5px;line-height:1.65;max-width:34ch;color:#7498A5}
 .said b{color:#9CBFCB;font-weight:600}
 
 /* ── the link columns ──────────────────────────────────────────────────── */

@@ -43,7 +43,7 @@ const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
 const C = {
   void: "#00070A", plate: "#081E28", plateEdge: "#0D3040",
   build: "#0E2B38", buildHi: "#143C4E",
-  cy: "#00B4D7", cyHi: "#5FEBFF", good: "#3BE3B0", warn: "#F2B33D", faint: "#5F8593",
+  cy: "#00B4D7", cyHi: "#5FEBFF", good: "#3BE3B0", warn: "#F2B33D", faint: "#7498A5",
 };
 const rgba = (r, g, b, a) => `rgba(${r},${g},${b},${a})`;
 const CY = (a) => rgba(0, 180, 215, a);

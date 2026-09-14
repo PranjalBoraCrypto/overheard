@@ -140,6 +140,44 @@ const srv = http.createServer((q, r) => {
      is the state under test. */
   if (u === "/api/room") { r.writeHead(200, { "content-type": "application/json" });
     return r.end('{"source":"live","messages":[]}'); }
+  /* ── THE ARCHIVE, WHEN THE ARCHIVE IS NOT ON DISK ────────────────────────
+     Eight assertions in this file were failing for a reason that had nothing
+     to do with the page. They ask what the shop will and will not accept as a
+     brief, and the page answers that by fetching `/data/<room>/_meta.json`.
+     Those files are real and are in the repository — 376MB of them — which is
+     exactly why the working copies people actually use leave them out
+     (`git sparse-checkout ... '!/web/data/'`). With the folder absent every
+     lookup 404s, the page correctly reports that it holds nothing, and the
+     suite reports eight failures that say nothing about the code.
+
+     A test that only passes when a 376MB directory is present is a test
+     nobody runs. So the harness now answers these itself: the real file when
+     it is there, a fixture when it is not, and 404 for a room outside the
+     fixture — because "definitely not held" is a state under test too, and
+     the difference between 404 and a served file is the whole distinction
+     the page is drawing. The fixture is deliberately NOT a mirror of the real
+     archive; it is the smallest thing that makes the question answerable. */
+  const meta = u.match(/^\/data\/([^/]+)\/_meta\.json$/);
+  if (meta) {
+    const real = path.join(ROOT, "web", u);
+    if (fs.existsSync(real)) {
+      r.writeHead(200, { "content-type": "application/json" });
+      return r.end(fs.readFileSync(real));
+    }
+    /* Twenty contiguous days ending well before any date this suite types as
+       a wrong one. Contiguous is a simplification the real archive does not
+       promise, and the page is careful about that — it prints a count as well
+       as a range precisely so gaps cannot hide. The count is honest here too;
+       it is just a count of twenty. */
+    const DAYS = Array.from({ length: 20 },
+      (_, i) => `2026-08-${String(25 + i).padStart(2, "0")}`.replace(/-08-(3[2-9]|4\d)/,
+        (_m, d) => `-09-${String(Number(d) - 31).padStart(2, "0")}`));
+    const HELD = { technocore: DAYS, lobby: DAYS, general: DAYS, "tclk-offers": DAYS };
+    const days = HELD[decodeURIComponent(meta[1])];
+    if (!days) { r.writeHead(404); return r.end("no"); }
+    r.writeHead(200, { "content-type": "application/json" });
+    return r.end(JSON.stringify({ room: meta[1], days, total: days.length * 100 }));
+  }
   /* `ROOT` is the repository root; the site is the `web` directory under it.
      Joining the request path straight onto ROOT served 404s for everything,
      the page rendered blank, and three assertions failed with "0 options" —

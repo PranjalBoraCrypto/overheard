@@ -1262,10 +1262,27 @@ console.log("\n=== T. four things for sale, shaped like a listing");
     `${dev.before.verb} -> ${dev.after.verb}`);
   /* Half a turn is matrix(-1, 0, 0, -1, 0, 0). Checking the VALUE and not
      merely that it changed is what makes this catch a caret that starts to
-     move and stops. */
+     move and stops.
+
+     THE ANGLE IS READ, NOT STRING-MATCHED, and that is the difference between
+     a check and a coin toss. This asserted the literal text "matrix(-1, 0, 0,
+     -1"; Chromium composites the same 180 degrees as matrix(-1, 9.50647e-09,
+     -9.50647e-09, -1, 0, 0) often enough that the suite failed about one run
+     in two on a caret that had rotated perfectly. Two consecutive runs here
+     disagreed and nothing changed between them. A flake costs more than the
+     bug it guards, because it teaches whoever meets it that this file's
+     failures can be ignored. So parse the matrix, take its angle, and allow a
+     degree either side — which still catches a caret that stops halfway,
+     which is the thing this assertion is for. */
+  const deg = (t) => {
+    if (!t || t === "none") return 0;
+    const n = t.match(/matrix\(([^)]+)\)/);
+    if (!n) return NaN;
+    const [a, b] = n[1].split(",").map(Number);
+    return Math.abs(Math.atan2(b, a) * 180 / Math.PI);
+  };
   ok("and its caret turns a full half-circle, so the row and the panel are one object",
-    /^none|matrix\(1,\s*0,\s*0,\s*1/.test(dev.before.spin) &&
-    /matrix\(-1,\s*0,\s*0,\s*-1/.test(dev.after.spin),
+    deg(dev.before.spin) < 1 && Math.abs(deg(dev.after.spin) - 180) < 1,
     `${dev.before.spin} -> ${dev.after.spin}`);
   ok("and it is a real target rather than a line of text",
     dev.tall >= 44, dev.tall + "px tall");

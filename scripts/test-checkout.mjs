@@ -807,6 +807,17 @@ if (!chromium) {
     if (u === "/session.js") { r.writeHead(200, { "content-type": "text/javascript" }); return r.end(SESSION()); }
     if (u === "/api/room") { r.writeHead(200, { "content-type": "application/json" }); return r.end('{"source":"live","messages":[]}'); }
     if (u === "/data/tclk-offers/_meta.json") { r.writeHead(200, { "content-type": "application/json" }); return r.end('{"days":["2026-09-02","2026-09-03"]}'); }
+    /* AND THE ROOM THIS SUITE TYPES INTO THE BRIEF. Three assertions here —
+       the two capacity ones and "the shop stays open" — were failing for a
+       reason with nothing to do with capacity: look() fills the brief with
+       "technocore", the page checks whether the archive holds that room by
+       fetching this file, and web/data is deliberately absent from working
+       copies because it is 376MB (git sparse-checkout '!/web/data/'). With no
+       file the page correctly refuses the brief, the button stays disabled,
+       and three capacity assertions report a failure about capacity that was
+       never about capacity. The offers line above already stubs its own meta
+       for exactly this reason; this is the same stub for the room. */
+    if (u === "/data/technocore/_meta.json") { r.writeHead(200, { "content-type": "application/json" }); return r.end('{"days":["2026-09-02","2026-09-03"]}'); }
     /* ── THE CAPACITY READ, WHICH IS A GET AND NOT A STEP ─────────────────
        /hire reads GET /api/accept on load to say how full the shop is. It is
        deliberately NOT recorded below: `calls` is the record of what one

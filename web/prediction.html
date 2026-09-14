@@ -147,7 +147,7 @@ body{padding-bottom:var(--dock-h)}
 .topbar{display:flex;align-items:center;justify-content:space-between;gap:var(--s3);
   margin-bottom:var(--s3);flex-wrap:wrap}
 .back,.barlink{display:inline-flex;align-items:center;gap:8px;text-decoration:none;
-  font-size:var(--t-small);color:var(--dim);border:1px solid var(--line);
+  font-size:var(--t-small);color:var(--dim);border:1px solid var(--edge);
   padding:8px 13px;border-radius:999px;background:var(--sunk);transition:.16s}
 .back .i{transform:rotate(180deg)}
 .back .i,.barlink .i{width:14px;height:14px}
@@ -174,7 +174,7 @@ body{padding-bottom:var(--dock-h)}
    One panel, two halves, and the second half is the object. It bleeds its own
    light rather than sitting on a flat surface: one radial behind the core,
    painted once, never animated. */
-.hero{position:relative;overflow:hidden;border:1px solid var(--line);border-radius:22px;
+.hero{position:relative;overflow:hidden;border:1px solid var(--edge);border-radius:22px;
   background:var(--rise-1);
   display:grid;grid-template-columns:minmax(0,1fr) minmax(0,.58fr);
   gap:var(--s4);align-items:center;padding:var(--s4)}
@@ -235,7 +235,7 @@ h1{font-size:clamp(23px,2.4vw,31px);line-height:1.12;letter-spacing:-.028em;
 .prov{display:grid;grid-template-columns:repeat(3,auto);
   justify-content:space-between;
   gap:var(--s3) var(--s4);padding:13px var(--s4) 12px;
-  border:1px solid var(--line);border-radius:14px;background:var(--sunk)}
+  border:1px solid var(--edge);border-radius:14px;background:var(--sunk)}
 .provcell{display:grid;grid-template-columns:auto minmax(0,1fr);
   grid-template-areas:"i k" "i v";column-gap:12px;row-gap:3px;
   align-items:center;min-width:0}
@@ -256,12 +256,12 @@ h1{font-size:clamp(23px,2.4vw,31px);line-height:1.12;letter-spacing:-.028em;
 .prov a:hover{color:var(--blue);text-decoration-color:var(--blue)}
 .prov a:focus-visible{outline:none;box-shadow:var(--focus);border-radius:5px}
 .provnote{grid-column:1/-1;margin:0;padding-top:11px;
-  border-top:1px solid var(--line);
+  border-top:1px solid var(--edge);
   font-size:var(--t-micro);line-height:1.5;color:var(--faint);text-wrap:pretty}
 
 .facts{display:flex;flex-wrap:nowrap;justify-content:space-between;
   gap:var(--s3);padding:11px var(--s4);
-  border:1px solid var(--line);border-radius:14px;background:var(--sunk)}
+  border:1px solid var(--edge);border-radius:14px;background:var(--sunk)}
 .fact{white-space:nowrap}
 .fact{display:flex;align-items:baseline;gap:9px;min-width:0}
 .fact span{font-family:var(--mono);font-size:var(--t-micro);letter-spacing:.11em;
@@ -351,10 +351,10 @@ h1{font-size:clamp(23px,2.4vw,31px);line-height:1.12;letter-spacing:-.028em;
    Below three calls it does not loop — there is nothing to stream, and a
    marquee of one item sliding past is a page pretending to be busy. */
 .belt{display:grid;grid-template-columns:auto minmax(0,1fr);align-items:stretch;
-  border:1px solid var(--line);border-radius:14px;background:var(--sunk);overflow:hidden}
+  border:1px solid var(--edge);border-radius:14px;background:var(--sunk);overflow:hidden}
 .belt[hidden]{display:none}
 .belttag{display:flex;align-items:center;gap:8px;padding:0 15px;white-space:nowrap;
-  border-right:1px solid var(--line);background:var(--rise-1);
+  border-right:1px solid var(--edge);background:var(--rise-1);
   font-family:var(--mono);font-size:var(--t-micro);letter-spacing:.11em;
   text-transform:uppercase;color:var(--faint)}
 .belttag i{width:6px;height:6px;border-radius:50%;background:var(--blue);flex:none;
@@ -371,7 +371,7 @@ h1{font-size:clamp(23px,2.4vw,31px);line-height:1.12;letter-spacing:-.028em;
 @keyframes belt{from{transform:translateX(0)}to{transform:translateX(-50%)}}
 .beltrun.still{overflow-x:auto;width:100%;scrollbar-width:none}
 .sigchip{display:inline-flex;align-items:center;gap:9px;padding:11px 16px;white-space:nowrap;
-  font-size:var(--t-small);color:var(--dim);border-right:1px solid var(--line)}
+  font-size:var(--t-small);color:var(--dim);border-right:1px solid var(--edge)}
 .sigchip .dot{width:6px;height:6px;border-radius:50%;flex:none}
 .sigchip.y .dot{background:var(--yes)} .sigchip.n .dot{background:var(--no)}
 .sigchip .w{font-family:var(--mono);color:var(--white)}
@@ -400,7 +400,7 @@ h1{font-size:clamp(23px,2.4vw,31px);line-height:1.12;letter-spacing:-.028em;
 .hrow{display:grid;grid-template-columns:auto minmax(0,1fr) auto auto auto;
   align-items:center;gap:var(--s3);padding:11px var(--s3) 11px calc(var(--s3) + 4px);
   border-radius:13px;background:var(--surf-b);
-  border:1px solid var(--line);position:relative;overflow:hidden}
+  border:1px solid var(--edge);position:relative;overflow:hidden}
 .hrow::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px}
 .hrow.y::before{background:var(--yes)} .hrow.n::before{background:var(--no)}
 .hside{font-family:var(--mono);font-size:var(--t-micro);letter-spacing:.11em;
@@ -417,7 +417,7 @@ h1{font-size:clamp(23px,2.4vw,31px);line-height:1.12;letter-spacing:-.028em;
    position, and a quiet one per row. Same job, different weight, because
    sharing one call is the common act and sharing the lot is the occasional
    one. */
-.shbtn{display:inline-flex;align-items:center;gap:8px;border:1px solid var(--line);
+.shbtn{display:inline-flex;align-items:center;gap:8px;border:1px solid var(--edge);
   background:var(--sunk);color:var(--dim);border-radius:999px;cursor:pointer;
   font:inherit;font-size:var(--t-small);padding:8px 14px;
   transition:border-color .18s,color .18s,background .18s,transform .18s}
@@ -431,13 +431,13 @@ h1{font-size:clamp(23px,2.4vw,31px);line-height:1.12;letter-spacing:-.028em;
   letter-spacing:.09em;text-transform:uppercase}
 
 .hpage{display:flex;align-items:center;justify-content:space-between;gap:var(--s3);
-  margin-top:var(--s3);padding-top:var(--s3);border-top:1px solid var(--line)}
+  margin-top:var(--s3);padding-top:var(--s3);border-top:1px solid var(--edge)}
 .hpage[hidden]{display:none}
 .hpage span{font-family:var(--mono);font-size:var(--t-micro);color:var(--faint);
   letter-spacing:.09em;text-transform:uppercase}
 .hnav{display:flex;gap:8px}
 .hnav button{width:34px;height:34px;display:grid;place-items:center;border-radius:10px;
-  border:1px solid var(--line);background:var(--sunk);color:var(--dim);cursor:pointer;
+  border:1px solid var(--edge);background:var(--sunk);color:var(--dim);cursor:pointer;
   transition:.16s}
 .hnav button .i{width:14px;height:14px}
 .hnav button:disabled{opacity:.35;cursor:default}
@@ -461,7 +461,7 @@ h1{font-size:clamp(23px,2.4vw,31px);line-height:1.12;letter-spacing:-.028em;
    a thumb already travelling towards Yes does not land on a target that
    moved out from under it. */
 @keyframes nextUp{
-  0%,100%{box-shadow:0 0 0 0 rgba(88,233,255,0);border-color:var(--line)}
+  0%,100%{box-shadow:0 0 0 0 rgba(88,233,255,0);border-color:var(--edge)}
   45%    {box-shadow:0 0 0 3px rgba(88,233,255,.20);border-color:rgba(88,233,255,.55)}
 }
 @keyframes nextTag{
@@ -560,7 +560,7 @@ h1{font-size:clamp(23px,2.4vw,31px);line-height:1.12;letter-spacing:-.028em;
 .sheetbar{display:flex;align-items:center;justify-content:center;gap:11px;flex-wrap:wrap}
 .sbtn{display:inline-flex;align-items:center;gap:9px;border-radius:12px;cursor:pointer;
   font:inherit;font-size:var(--t-small);font-weight:600;padding:12px 18px;min-height:46px;
-  border:1px solid var(--line);background:var(--surf-b);color:var(--white);
+  border:1px solid var(--edge);background:var(--surf-b);color:var(--white);
   transition:border-color .18s,background .18s,transform .16s,color .18s}
 .sbtn .i{width:16px;height:16px}
 .sbtn:focus-visible{outline:none;box-shadow:var(--focus)}
@@ -575,7 +575,7 @@ h1{font-size:clamp(23px,2.4vw,31px);line-height:1.12;letter-spacing:-.028em;
   font-size:var(--t-small);color:var(--dim);user-select:none}
 .keytog input{position:absolute;opacity:0;width:0;height:0}
 .keytog i{width:38px;height:22px;border-radius:999px;background:var(--sunk);
-  border:1px solid var(--line);position:relative;flex:none;transition:.2s}
+  border:1px solid var(--edge);position:relative;flex:none;transition:.2s}
 .keytog i::after{content:"";position:absolute;top:2px;left:2px;width:16px;height:16px;
   border-radius:50%;background:var(--faint);transition:transform .22s cubic-bezier(.2,.9,.3,1.2),background .2s}
 .keytog input:checked + i{background:rgba(0,180,215,.22);border-color:rgba(88,233,255,.4)}
@@ -592,13 +592,13 @@ h1{font-size:clamp(23px,2.4vw,31px);line-height:1.12;letter-spacing:-.028em;
    what was meant anyway: just above the card's top-right corner. */
 .shclose{position:absolute;top:-52px;right:0;
   z-index:2;width:40px;height:40px;border-radius:12px;display:grid;place-items:center;
-  border:1px solid var(--line);background:rgba(2,11,15,.7);color:var(--dim);cursor:pointer}
+  border:1px solid var(--edge);background:rgba(2,11,15,.7);color:var(--dim);cursor:pointer}
 .shclose .i{width:16px;height:16px}
 .shclose:focus-visible{outline:none;box-shadow:var(--focus)}
 @media (hover:hover){ .shclose:hover{color:var(--white);border-color:rgba(88,233,255,.34)} }
 
 /* ══ CARDS ═════════════════════════════════════════════════════════════════*/
-.card{background:var(--rise-1);border:1px solid var(--line);border-radius:18px;padding:var(--s4)}
+.card{background:var(--rise-1);border:1px solid var(--edge);border-radius:18px;padding:var(--s4)}
 .ch{display:flex;align-items:baseline;justify-content:space-between;gap:var(--s3);
   margin-bottom:var(--s3)}
 .ch h2{font-size:15px;color:var(--white);font-weight:600;letter-spacing:-.01em}
@@ -606,8 +606,8 @@ h1{font-size:clamp(23px,2.4vw,31px);line-height:1.12;letter-spacing:-.028em;
   letter-spacing:.11em;text-transform:uppercase;color:var(--faint)}
 
 /* ── the two sides, as numbers ─────────────────────────────────────────────*/
-.sides2{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--line);
-  border:1px solid var(--line);border-radius:14px;overflow:hidden;margin-top:var(--s4);
+.sides2{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--edge);
+  border:1px solid var(--edge);border-radius:14px;overflow:hidden;margin-top:var(--s4);
   position:relative;z-index:1}
 .s2{background:var(--surf-b);padding:15px var(--s3);display:grid;gap:3px}
 .s2 .k{display:flex;align-items:center;gap:8px;font-family:var(--mono);font-size:var(--t-micro);
@@ -643,14 +643,14 @@ h1{font-size:clamp(23px,2.4vw,31px);line-height:1.12;letter-spacing:-.028em;
    pick a side, put it down. Nothing about the mechanics changes — the tap is
    still its own signed frame, still once per key — only the telling. */
 .panel{padding:var(--s4)}
-.step{display:grid;gap:10px;padding:var(--s3) 0;border-top:1px solid var(--line)}
+.step{display:grid;gap:10px;padding:var(--s3) 0;border-top:1px solid var(--edge)}
 .step:first-of-type{border-top:0;padding-top:0}
 .step[data-on="0"]{opacity:.42}
 .step[data-on="0"] .side,.step[data-on="0"] .amt,.step[data-on="0"] .go{pointer-events:none}
 .stepk{display:flex;align-items:center;gap:9px;font-family:var(--mono);font-size:var(--t-micro);
   letter-spacing:.12em;text-transform:uppercase;color:var(--faint)}
 .stepk i{width:17px;height:17px;flex:none;border-radius:50%;display:grid;place-items:center;
-  font-size:9px;border:1px solid var(--line);color:var(--faint);font-style:normal}
+  font-size:9px;border:1px solid var(--edge);color:var(--faint);font-style:normal}
 .step[data-on="1"] .stepk{color:var(--dim)}
 .step[data-on="1"] .stepk i{border-color:rgba(88,233,255,.4);color:var(--blue)}
 .step[data-done="1"] .stepk i{background:rgba(59,227,176,.16);border-color:rgba(59,227,176,.45);
@@ -664,7 +664,7 @@ h1{font-size:clamp(23px,2.4vw,31px);line-height:1.12;letter-spacing:-.028em;
 
 .sides{display:grid;grid-template-columns:1fr 1fr;gap:9px}
 .side{min-height:58px;display:flex;flex-direction:column;align-items:center;justify-content:center;
-  gap:2px;border-radius:13px;border:1px solid var(--line);background:var(--sunk);
+  gap:2px;border-radius:13px;border:1px solid var(--edge);background:var(--sunk);
   color:var(--dim);font:inherit;font-weight:600;cursor:pointer;position:relative;overflow:hidden;
   transition:transform .18s cubic-bezier(.34,1.4,.64,1),border-color .16s,background .16s,color .16s}
 .side small{font-family:var(--mono);font-size:var(--t-micro);color:var(--faint);font-weight:400}
@@ -687,7 +687,7 @@ h1{font-size:clamp(23px,2.4vw,31px);line-height:1.12;letter-spacing:-.028em;
 .side:focus-visible{outline:none;box-shadow:var(--focus)}
 
 .amts{display:grid;grid-template-columns:repeat(4,1fr);gap:7px}
-.amt{min-height:44px;border-radius:11px;border:1px solid var(--line);background:var(--sunk);
+.amt{min-height:44px;border-radius:11px;border:1px solid var(--edge);background:var(--sunk);
   color:var(--dim);font-family:var(--mono);font-size:var(--t-small);font-weight:600;
   cursor:pointer;font-variant-numeric:tabular-nums;
   transition:transform .16s cubic-bezier(.34,1.4,.64,1),color .14s,background .14s,border-color .14s}
@@ -732,7 +732,7 @@ h1{font-size:clamp(23px,2.4vw,31px);line-height:1.12;letter-spacing:-.028em;
    down the edge, always visible, and the payoff is the number on the right. */
 .feed{display:grid;gap:8px}
 .fr{display:grid;grid-template-columns:26px minmax(0,1fr) auto auto;align-items:center;
-  gap:var(--s3);padding:13px var(--s3) 13px 15px;border:1px solid var(--line);
+  gap:var(--s3);padding:13px var(--s3) 13px 15px;border:1px solid var(--edge);
   border-radius:13px;background:var(--surf-b);position:relative;overflow:hidden;
   transition:transform .18s cubic-bezier(.22,.61,.36,1),border-color .16s,background .16s}
 .fr::before{content:"";position:absolute;left:0;top:0;bottom:0;width:2px}
@@ -813,7 +813,7 @@ h1{font-size:clamp(23px,2.4vw,31px);line-height:1.12;letter-spacing:-.028em;
 .pinsep::before,.pinsep::after{content:"";flex:1;height:1px;background:var(--edge)}
 
 .blank{padding:var(--s5) var(--s4);text-align:center;display:grid;gap:8px;justify-items:center;
-  border:1px dashed var(--line);border-radius:14px}
+  border:1px dashed var(--edge);border-radius:14px}
 .blank b{color:var(--white);font-size:16px}
 .blank p{font-size:var(--t-small);color:var(--faint);max-width:38ch}
 
@@ -856,7 +856,7 @@ h1{font-size:clamp(23px,2.4vw,31px);line-height:1.12;letter-spacing:-.028em;
    it, the footer and its arrow light up and slide, the X mark goes white, and
    the picture turns a few degrees on a spring. Five things, one motion. */
 .quote{display:block;text-decoration:none;color:inherit;
-  border:1px solid var(--line);border-left:2px solid var(--gold);border-radius:14px;
+  border:1px solid var(--edge);border-left:2px solid var(--gold);border-radius:14px;
   padding:var(--s3) var(--s4);background:var(--sunk);transition:.16s}
 @media (hover:hover){
   .quote:hover{border-color:rgba(88,233,255,.3);background:rgba(88,233,255,.04);
@@ -875,7 +875,7 @@ h1{font-size:clamp(23px,2.4vw,31px);line-height:1.12;letter-spacing:-.028em;
    mask would clip four corners off somebody else's mark. Fixed width and
    height so the row never jumps while it loads. */
 .qav{width:34px;height:34px;flex:none;display:block;background:#000;
-  border:1px solid var(--line)}
+  border:1px solid var(--edge)}
 .qwho{display:flex;flex-direction:column;line-height:1.25;min-width:0}
 .qwho b{display:block;color:var(--white);font-size:14px;font-weight:600}
 .qwho em{display:block;font-style:normal;font-family:var(--mono);
@@ -891,7 +891,7 @@ h1{font-size:clamp(23px,2.4vw,31px);line-height:1.12;letter-spacing:-.028em;
 [data-fx="lean"] .quote,[data-fx="lean"] .qav{transition:none}
 
 /* ══ HOW IT SETTLES ════════════════════════════════════════════════════════*/
-.rules{display:grid;gap:1px;background:var(--line);border:1px solid var(--line);
+.rules{display:grid;gap:1px;background:var(--edge);border:1px solid var(--edge);
   border-radius:14px;overflow:hidden}
 .rule{background:var(--surf-b);padding:15px var(--s3);display:grid;gap:4px}
 .rule b{font-size:var(--t-small);color:var(--white);font-weight:600}
@@ -907,8 +907,8 @@ h1{font-size:clamp(23px,2.4vw,31px);line-height:1.12;letter-spacing:-.028em;
 .faqgroup + .faqgroup{margin-top:var(--s4)}
 .faqh{font-family:var(--mono);font-size:var(--t-micro);letter-spacing:.14em;
   text-transform:uppercase;color:var(--faint);margin-bottom:8px}
-.faq details{border-bottom:1px solid var(--line);overflow:hidden}
-.faq details:first-of-type{border-top:1px solid var(--line)}
+.faq details{border-bottom:1px solid var(--edge);overflow:hidden}
+.faq details:first-of-type{border-top:1px solid var(--edge)}
 .faq summary{list-style:none;cursor:pointer;padding:15px 2px;
   display:flex;align-items:center;gap:var(--s3);color:var(--white);font-weight:600;
   font-size:var(--t-small);min-height:52px}

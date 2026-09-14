@@ -45,7 +45,7 @@
   --void:#00070A; --ink:#04141C; --ink-2:#072230; --ink-3:#0A2E3E;
   --edge:#10394A; --edge-lit:#1E6C85;
   --cy:#00B4D7; --cy-hi:#5FEBFF; --cy-lo:#0077A0; --cy-deep:#003A4E;
-  --txt:#EDFAFE; --dim:#9CBFCB; --faint:#5F8593;
+  --txt:#EDFAFE; --dim:#9CBFCB; --faint:#7498A5;
   --warn:#F2B33D; --bad:#FF6B6B;
   --display:"Outfit",system-ui,sans-serif;
   --mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
@@ -1868,7 +1868,7 @@ function bootCard(pub, did, progress){
     });
     ctx.globalAlpha=1;
     ctx.textAlign="center";
-    ctx.fillStyle="#5F8593"; ctx.font="500 12px 'IBM Plex Mono', monospace";
+    ctx.fillStyle="#7498A5"; ctx.font="500 12px 'IBM Plex Mono', monospace";
     ctx.letterSpacing="2.4px"; ctx.fillText("THE PUBLIC ID WE ARE CHECKING",W/2,408); ctx.letterSpacing="0px";
 
     /* Real checks, real ticks — and the block is centred on the widest ROW,
@@ -2356,7 +2356,7 @@ async function drawCard(did,pub,stats,note){
   fitFont(ctx,idText,COL-M-24,25,15,"700");
   ctx.fillStyle="#EDFAFE"; ctx.fillText(idText,LCX,432+CY);
 
-  ctx.fillStyle="#5F8593"; ctx.font="500 12px 'IBM Plex Mono', monospace";
+  ctx.fillStyle="#7498A5"; ctx.font="500 12px 'IBM Plex Mono', monospace";
   ctx.letterSpacing="1.1px";
   if(stats){
     ctx.fillText(`${stats.count.toLocaleString()} ORIGINAL · ${stats.rooms} ROOM${stats.rooms===1?"":"S"}`
@@ -2502,7 +2502,7 @@ async function drawCard(did,pub,stats,note){
   }else if(stats||reg){
     // No stored words yet. Say why, rather than leaving a hole where a
     // feature obviously belongs.
-    ctx.fillStyle="#5F8593"; ctx.font="400 18px 'Outfit', sans-serif";
+    ctx.fillStyle="#7498A5"; ctx.font="400 18px 'Outfit', sans-serif";
     const lines=layoutQuote(ctx,"No message recorded yet — the next one this identity signs appears here.",RW,3);
     lines.forEach((ln,i)=>ctx.fillText(ln,RX,qTop+52+i*28));
   }
