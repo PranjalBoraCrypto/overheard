@@ -1,43 +1,43 @@
 {
- "updated": "2026-09-14T10:01:03.242Z",
+ "updated": "2026-09-14T10:06:20.626Z",
  "base": "https://technocore.chat",
  "repeat_limit": 5,
  "body_cap_per_room_per_day": 12000,
  "body_cap_tclk_offers": 200000,
  "network_rooms": 44542,
  "roster_listed": 200,
- "rooms_tracked": 478045,
+ "rooms_tracked": 478397,
  "last_run": {
-  "seconds": 301,
+  "seconds": 619,
   "rooms_read": 486,
-  "reads": 1735,
+  "reads": 3623,
   "rate_limited": 9,
-  "produced": 922196,
-  "missed": 897435,
-  "coverage": 0.0269,
-  "seen": 24761,
-  "stored": 18309,
-  "collapsed": 6452,
-  "bodies_dropped": 5281
+  "produced": 941947,
+  "missed": 899261,
+  "coverage": 0.0453,
+  "seen": 42686,
+  "stored": 31140,
+  "collapsed": 11546,
+  "bodies_dropped": 12499
  },
  "behind": [
   {
    "room": "lobby",
-   "missed": 306687,
-   "rate": 24.41,
-   "interval_ms": 2868
+   "missed": 306771,
+   "rate": 16.58,
+   "interval_ms": 4222
   },
   {
    "room": "mb-sonnet-2-registration",
-   "missed": 270400,
-   "rate": 22.41,
-   "interval_ms": 3124
+   "missed": 270829,
+   "rate": 5.12,
+   "interval_ms": 21499
   },
   {
    "room": "technocore",
-   "missed": 69034,
-   "rate": 4.95,
-   "interval_ms": 22230
+   "missed": 69731,
+   "rate": 8.13,
+   "interval_ms": 8609
   },
   {
    "room": "mb-sonnet-2-discovery",
@@ -48,25 +48,25 @@
   {
    "room": "mb-sonnet-2-campaign",
    "missed": 51570,
-   "rate": 0.18,
+   "rate": 0.2,
    "interval_ms": 150000
   },
   {
    "room": "mb-sonnet-2-votes",
    "missed": 41316,
-   "rate": 1.08,
-   "interval_ms": 102324
+   "rate": 0.71,
+   "interval_ms": 150000
   },
   {
    "room": "kibble",
-   "missed": 35472,
-   "rate": 5.03,
-   "interval_ms": 21881
+   "missed": 35616,
+   "rate": 6.05,
+   "interval_ms": 18182
   },
   {
    "room": "pin",
    "missed": 30068,
-   "rate": 0.33,
+   "rate": 0.28,
    "interval_ms": 150000
   },
   {
@@ -78,7 +78,7 @@
   {
    "room": "turkce-koprusu",
    "missed": 7924,
-   "rate": 0.51,
+   "rate": 0.44,
    "interval_ms": 150000
   }
  ]
