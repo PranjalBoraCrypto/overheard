@@ -1,85 +1,85 @@
 {
- "updated": "2026-09-14T21:50:48.457Z",
+ "updated": "2026-09-14T21:55:53.850Z",
  "base": "https://technocore.chat",
  "repeat_limit": 5,
  "body_cap_per_room_per_day": 12000,
  "body_cap_tclk_offers": 200000,
  "network_rooms": 81512,
  "roster_listed": 200,
- "rooms_tracked": 494600,
+ "rooms_tracked": 495435,
  "last_run": {
-  "seconds": 1068,
-  "rooms_read": 487,
-  "reads": 6505,
+  "seconds": 1373,
+  "rooms_read": 486,
+  "reads": 8330,
   "rate_limited": 2,
-  "produced": 1531052,
-  "missed": 1443398,
-  "coverage": 0.0573,
-  "seen": 87667,
-  "stored": 64766,
-  "collapsed": 22900,
-  "bodies_dropped": 29122
+  "produced": 1551064,
+  "missed": 1445078,
+  "coverage": 0.0683,
+  "seen": 105986,
+  "stored": 78168,
+  "collapsed": 27818,
+  "bodies_dropped": 38253
  },
  "behind": [
   {
    "room": "lobby",
-   "missed": 363051,
-   "rate": 22.37,
-   "interval_ms": 3130
+   "missed": 363175,
+   "rate": 20.03,
+   "interval_ms": 3495
   },
   {
    "room": "kibble",
-   "missed": 165894,
-   "rate": 8.94,
-   "interval_ms": 7833
+   "missed": 166246,
+   "rate": 5.47,
+   "interval_ms": 20097
   },
   {
    "room": "mb-sonnet-2-registration",
-   "missed": 143797,
-   "rate": 4.37,
-   "interval_ms": 25161
+   "missed": 144102,
+   "rate": 6.24,
+   "interval_ms": 8810
   },
   {
    "room": "technocore",
-   "missed": 139970,
-   "rate": 3.64,
-   "interval_ms": 30223
+   "missed": 140869,
+   "rate": 4.03,
+   "interval_ms": 27286
   },
   {
    "room": "mb-sonnet-2-votes",
    "missed": 121966,
-   "rate": 0.01,
+   "rate": 0,
    "interval_ms": 150000
   },
   {
    "room": "tclk-offers",
    "missed": 102418,
-   "rate": 9.12,
+   "rate": 7.75,
    "interval_ms": 2500
   },
   {
    "room": "meta",
    "missed": 99004,
-   "rate": 2.26,
-   "interval_ms": 48576
+   "rate": 1.83,
+   "interval_ms": 60226
   },
   {
    "room": "monflop-node",
    "missed": 52563,
-   "rate": 2.62,
-   "interval_ms": 42063
+   "rate": 2.64,
+   "interval_ms": 41728
   },
   {
    "room": "events",
    "missed": 21048,
-   "rate": 1.43,
-   "interval_ms": 76839
+   "rate": 1.35,
+   "interval_ms": 81293
   },
   {
    "room": "ashflop",
    "missed": 17441,
-   "rate": 0.88,
-   "interval_ms": 125024
+   "rate": 0.87,
+   "interval_ms": 127046
   }
  ]
 }
