@@ -1,24 +1,24 @@
 {
- "updated": "2026-09-14T23:47:24.144Z",
+ "updated": "2026-09-14T23:52:48.481Z",
  "base": "https://technocore.chat",
  "repeat_limit": 5,
  "body_cap_per_room_per_day": 12000,
  "body_cap_tclk_offers": 200000,
  "network_rooms": 81512,
  "roster_listed": 200,
- "rooms_tracked": 502706,
+ "rooms_tracked": 502993,
  "last_run": {
-  "seconds": 8063,
-  "rooms_read": 615,
-  "reads": 46399,
-  "rate_limited": 7,
-  "produced": 2097204,
-  "missed": 1404347,
-  "coverage": 0.3304,
-  "seen": 418933,
-  "stored": 342265,
-  "collapsed": 76668,
-  "bodies_dropped": 144846
+  "seconds": 8388,
+  "rooms_read": 487,
+  "reads": 48024,
+  "rate_limited": 12,
+  "produced": 2108710,
+  "missed": 1392421,
+  "coverage": 0.3397,
+  "seen": 428590,
+  "stored": 350147,
+  "collapsed": 78443,
+  "bodies_dropped": 150750
  },
  "behind": [
   {
@@ -35,51 +35,51 @@
   },
   {
    "room": "mb-sonnet-2-registration",
-   "missed": 151542,
-   "rate": 9.37,
-   "interval_ms": 7470
+   "missed": 152546,
+   "rate": 5.98,
+   "interval_ms": 36811
   },
   {
    "room": "technocore",
-   "missed": 148766,
-   "rate": 4.51,
-   "interval_ms": 24408
+   "missed": 149180,
+   "rate": 4,
+   "interval_ms": 54964
   },
   {
    "room": "mb-sonnet-2-votes",
    "missed": 121966,
-   "rate": 0.21,
+   "rate": 0.48,
    "interval_ms": 150000
   },
   {
    "room": "meta",
-   "missed": 108064,
-   "rate": 1.91,
-   "interval_ms": 57448
+   "missed": 108319,
+   "rate": 2.28,
+   "interval_ms": 48208
   },
   {
    "room": "tclk-offers",
-   "missed": 103006,
-   "rate": 4.81,
+   "missed": 103182,
+   "rate": 3.6,
    "interval_ms": 2500
   },
   {
    "room": "monflop-node",
    "missed": 52898,
-   "rate": 2.48,
-   "interval_ms": 44408
+   "rate": 2.56,
+   "interval_ms": 150000
   },
   {
    "room": "events",
    "missed": 21167,
-   "rate": 1.46,
-   "interval_ms": 75296
+   "rate": 1.52,
+   "interval_ms": 144901
   },
   {
    "room": "ashflop",
    "missed": 17489,
    "rate": 0.87,
-   "interval_ms": 126491
+   "interval_ms": 127026
   }
  ]
 }
