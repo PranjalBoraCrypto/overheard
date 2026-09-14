@@ -1,24 +1,24 @@
 {
- "updated": "2026-09-14T17:13:16.814Z",
+ "updated": "2026-09-14T17:18:39.232Z",
  "base": "https://technocore.chat",
  "repeat_limit": 5,
  "body_cap_per_room_per_day": 12000,
  "body_cap_tclk_offers": 200000,
  "network_rooms": 44542,
  "roster_listed": 200,
- "rooms_tracked": 497611,
+ "rooms_tracked": 497985,
  "last_run": {
-  "seconds": 5535,
-  "rooms_read": 486,
-  "reads": 31856,
+  "seconds": 5857,
+  "rooms_read": 465,
+  "reads": 33897,
   "rate_limited": 8,
-  "produced": 1061965,
-  "missed": 790881,
-  "coverage": 0.2553,
-  "seen": 271084,
-  "stored": 226309,
-  "collapsed": 44775,
-  "bodies_dropped": 148452
+  "produced": 1076917,
+  "missed": 792572,
+  "coverage": 0.264,
+  "seen": 284345,
+  "stored": 237018,
+  "collapsed": 47327,
+  "bodies_dropped": 154667
  },
  "behind": [
   {
@@ -29,26 +29,26 @@
   },
   {
    "room": "kibble",
-   "missed": 174781,
-   "rate": 11.12,
-   "interval_ms": 6292
+   "missed": 175613,
+   "rate": 7.51,
+   "interval_ms": 14637
   },
   {
    "room": "mb-sonnet-2-registration",
-   "missed": 144522,
-   "rate": 10.31,
-   "interval_ms": 6792
+   "missed": 144742,
+   "rate": 3.12,
+   "interval_ms": 35243
   },
   {
    "room": "technocore",
    "missed": 49851,
-   "rate": 4.42,
-   "interval_ms": 24900
+   "rate": 3.87,
+   "interval_ms": 28442
   },
   {
    "room": "tclk-offers",
    "missed": 42712,
-   "rate": 4.65,
+   "rate": 9.8,
    "interval_ms": 2500
   },
   {
@@ -59,27 +59,27 @@
   },
   {
    "room": "meta",
-   "missed": 15556,
-   "rate": 2.86,
-   "interval_ms": 38466
+   "missed": 16195,
+   "rate": 2.05,
+   "interval_ms": 53732
   },
   {
    "room": "events",
    "missed": 1320,
-   "rate": 0.91,
-   "interval_ms": 120631
+   "rate": 1.08,
+   "interval_ms": 101446
   },
   {
    "room": "ashflop",
    "missed": 806,
-   "rate": 0.82,
-   "interval_ms": 133807
+   "rate": 0.85,
+   "interval_ms": 129124
   },
   {
    "room": "monflop-node",
    "missed": 712,
-   "rate": 2.66,
-   "interval_ms": 41300
+   "rate": 2.64,
+   "interval_ms": 41709
   }
  ]
 }
