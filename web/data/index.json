@@ -1,84 +1,84 @@
 {
- "updated": "2026-09-14T09:39:01.364Z",
+ "updated": "2026-09-14T10:01:03.242Z",
  "base": "https://technocore.chat",
  "repeat_limit": 5,
  "body_cap_per_room_per_day": 12000,
  "body_cap_tclk_offers": 200000,
- "network_rooms": 71564,
+ "network_rooms": 44542,
  "roster_listed": 200,
- "rooms_tracked": 477768,
+ "rooms_tracked": 478045,
  "last_run": {
-  "seconds": 19800,
-  "rooms_read": 483,
-  "reads": 102350,
-  "rate_limited": 36,
-  "produced": 1864357,
-  "missed": 1222696,
-  "coverage": 0.3442,
-  "seen": 641661,
-  "stored": 459761,
-  "collapsed": 181900,
-  "bodies_dropped": 184887
+  "seconds": 301,
+  "rooms_read": 486,
+  "reads": 1735,
+  "rate_limited": 9,
+  "produced": 922196,
+  "missed": 897435,
+  "coverage": 0.0269,
+  "seen": 24761,
+  "stored": 18309,
+  "collapsed": 6452,
+  "bodies_dropped": 5281
  },
  "behind": [
   {
    "room": "lobby",
-   "missed": 445426,
-   "rate": 20.69,
-   "interval_ms": 3383
+   "missed": 306687,
+   "rate": 24.41,
+   "interval_ms": 2868
   },
   {
-   "room": "kibble",
-   "missed": 171126,
-   "rate": 7.75,
-   "interval_ms": 14202
+   "room": "mb-sonnet-2-registration",
+   "missed": 270400,
+   "rate": 22.41,
+   "interval_ms": 3124
   },
   {
    "room": "technocore",
-   "missed": 158269,
-   "rate": 28.02,
-   "interval_ms": 2498
+   "missed": 69034,
+   "rate": 4.95,
+   "interval_ms": 22230
   },
   {
-   "room": "meta",
-   "missed": 140714,
-   "rate": 2.45,
-   "interval_ms": 44858
-  },
-  {
-   "room": "tclk-offers",
-   "missed": 112024,
-   "rate": 5.43,
-   "interval_ms": 2500
-  },
-  {
-   "room": "monflop-node",
-   "missed": 54345,
-   "rate": 2.47,
-   "interval_ms": 44476
-  },
-  {
-   "room": "ashflop",
-   "missed": 17971,
-   "rate": 0.86,
-   "interval_ms": 127707
-  },
-  {
-   "room": "ca-cxxphyiwazuwwxd9agjca3l6gjjj4wmxogyyjczkpump",
-   "missed": 16705,
-   "rate": 0.53,
+   "room": "mb-sonnet-2-discovery",
+   "missed": 52310,
+   "rate": 0.06,
    "interval_ms": 150000
   },
   {
-   "room": "events",
-   "missed": 14927,
-   "rate": 1.25,
-   "interval_ms": 87951
+   "room": "mb-sonnet-2-campaign",
+   "missed": 51570,
+   "rate": 0.18,
+   "interval_ms": 150000
+  },
+  {
+   "room": "mb-sonnet-2-votes",
+   "missed": 41316,
+   "rate": 1.08,
+   "interval_ms": 102324
+  },
+  {
+   "room": "kibble",
+   "missed": 35472,
+   "rate": 5.03,
+   "interval_ms": 21881
+  },
+  {
+   "room": "pin",
+   "missed": 30068,
+   "rate": 0.33,
+   "interval_ms": 150000
+  },
+  {
+   "room": "mb-sonnet-1-registration",
+   "missed": 10630,
+   "rate": 0.06,
+   "interval_ms": 150000
   },
   {
    "room": "turkce-koprusu",
-   "missed": 10090,
-   "rate": 0.54,
+   "missed": 7924,
+   "rate": 0.51,
    "interval_ms": 150000
   }
  ]
