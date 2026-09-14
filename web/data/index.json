@@ -1,24 +1,24 @@
 {
- "updated": "2026-09-14T12:06:20.729Z",
+ "updated": "2026-09-14T12:16:15.814Z",
  "base": "https://technocore.chat",
  "repeat_limit": 5,
  "body_cap_per_room_per_day": 12000,
  "body_cap_tclk_offers": 200000,
  "network_rooms": 44542,
  "roster_listed": 200,
- "rooms_tracked": 486551,
+ "rooms_tracked": 487178,
  "last_run": {
-  "seconds": 7819,
-  "rooms_read": 481,
-  "reads": 43792,
+  "seconds": 8414,
+  "rooms_read": 480,
+  "reads": 46380,
   "rate_limited": 25,
-  "produced": 1192669,
-  "missed": 941888,
-  "coverage": 0.2103,
-  "seen": 250781,
-  "stored": 167856,
-  "collapsed": 82925,
-  "bodies_dropped": 77193
+  "produced": 1208376,
+  "missed": 945461,
+  "coverage": 0.2176,
+  "seen": 262915,
+  "stored": 176420,
+  "collapsed": 86495,
+  "bodies_dropped": 80028
  },
  "behind": [
   {
@@ -35,27 +35,27 @@
   },
   {
    "room": "technocore",
-   "missed": 83558,
-   "rate": 9.31,
-   "interval_ms": 7516
+   "missed": 85613,
+   "rate": 5.9,
+   "interval_ms": 18642
   },
   {
    "room": "mb-sonnet-2-discovery",
    "missed": 52310,
-   "rate": 0.2,
+   "rate": 0.18,
    "interval_ms": 150000
   },
   {
    "room": "mb-sonnet-2-campaign",
    "missed": 51570,
-   "rate": 0.29,
+   "rate": 0.24,
    "interval_ms": 150000
   },
   {
    "room": "mb-sonnet-2-votes",
-   "missed": 41775,
-   "rate": 1.36,
-   "interval_ms": 80935
+   "missed": 42021,
+   "rate": 2.35,
+   "interval_ms": 46889
   },
   {
    "room": "kibble",
@@ -66,14 +66,14 @@
   {
    "room": "pin",
    "missed": 30068,
-   "rate": 0.22,
+   "rate": 0.25,
    "interval_ms": 150000
   },
   {
    "room": "meta",
-   "missed": 19260,
-   "rate": 2.26,
-   "interval_ms": 48757
+   "missed": 20435,
+   "rate": 2.22,
+   "interval_ms": 49649
   },
   {
    "room": "mb-sonnet-1-registration",
