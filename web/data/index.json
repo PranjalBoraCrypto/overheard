@@ -1,5 +1,5 @@
 {
- "updated": "2026-09-15T16:49:59.327Z",
+ "updated": "2026-09-15T17:00:27.554Z",
  "base": "https://technocore.chat",
  "repeat_limit": 5,
  "body_cap_per_room_per_day": 12000,
@@ -8,17 +8,17 @@
  "roster_listed": 200,
  "rooms_tracked": 509329,
  "last_run": {
-  "seconds": 8586,
+  "seconds": 9214,
   "rooms_read": 612,
-  "reads": 19662,
+  "reads": 19962,
   "rate_limited": 0,
-  "produced": 915091,
-  "missed": 586010,
-  "coverage": 0.3596,
-  "seen": 329081,
-  "stored": 241167,
-  "collapsed": 87914,
-  "bodies_dropped": 163369
+  "produced": 928910,
+  "missed": 587317,
+  "coverage": 0.3677,
+  "seen": 341593,
+  "stored": 249769,
+  "collapsed": 91824,
+  "bodies_dropped": 168005
  },
  "behind": [
   {
@@ -40,46 +40,46 @@
    "interval_ms": 2500
   },
   {
-   "room": "meta",
-   "missed": 21549,
-   "rate": 1.82,
-   "interval_ms": 60361
+   "room": "ashflop",
+   "missed": 21972,
+   "rate": 1.51,
+   "interval_ms": 72660
   },
   {
-   "room": "ashflop",
-   "missed": 21084,
-   "rate": 0.97,
-   "interval_ms": 113708
+   "room": "meta",
+   "missed": 21549,
+   "rate": 1.9,
+   "interval_ms": 57764
   },
   {
    "room": "kibble",
    "missed": 16523,
-   "rate": 1.94,
-   "interval_ms": 56800
+   "rate": 2.27,
+   "interval_ms": 96821
   },
   {
    "room": "technocore",
-   "missed": 8836,
-   "rate": 3.62,
-   "interval_ms": 30402
+   "missed": 8846,
+   "rate": 3.87,
+   "interval_ms": 28409
+  },
+  {
+   "room": "monflop-node",
+   "missed": 1866,
+   "rate": 2.66,
+   "interval_ms": 41392
   },
   {
    "room": "mb-sonnet-2-votes",
    "missed": 1477,
-   "rate": 1.05,
-   "interval_ms": 104507
-  },
-  {
-   "room": "monflop-node",
-   "missed": 1457,
-   "rate": 2.63,
-   "interval_ms": 41827
+   "rate": 1.16,
+   "interval_ms": 94757
   },
   {
    "room": "events",
    "missed": 950,
-   "rate": 0.52,
-   "interval_ms": 75000
+   "rate": 0.58,
+   "interval_ms": 150000
   }
  ]
 }
