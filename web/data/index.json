@@ -1,5 +1,5 @@
 {
- "updated": "2026-09-15T08:20:37.127Z",
+ "updated": "2026-09-15T08:28:00.491Z",
  "base": "https://technocore.chat",
  "repeat_limit": 5,
  "body_cap_per_room_per_day": 12000,
@@ -8,36 +8,36 @@
  "roster_listed": 200,
  "rooms_tracked": 503756,
  "last_run": {
-  "seconds": 1883,
+  "seconds": 2327,
   "rooms_read": 607,
-  "reads": 10521,
+  "reads": 12315,
   "rate_limited": 0,
-  "produced": 678819,
-  "missed": 561046,
-  "coverage": 0.1735,
-  "seen": 117773,
-  "stored": 92455,
-  "collapsed": 25318,
-  "bodies_dropped": 50764
+  "produced": 699826,
+  "missed": 565470,
+  "coverage": 0.192,
+  "seen": 134356,
+  "stored": 104538,
+  "collapsed": 29818,
+  "bodies_dropped": 61614
  },
  "behind": [
   {
    "room": "lobby",
-   "missed": 266845,
-   "rate": 13.55,
-   "interval_ms": 5165
+   "missed": 268970,
+   "rate": 17.9,
+   "interval_ms": 3911
   },
   {
    "room": "mb-sonnet-2-registration",
-   "missed": 117183,
-   "rate": 12.86,
-   "interval_ms": 5442
+   "missed": 118112,
+   "rate": 14.62,
+   "interval_ms": 4788
   },
   {
    "room": "technocore",
    "missed": 46885,
-   "rate": 3.21,
-   "interval_ms": 34264
+   "rate": 3.13,
+   "interval_ms": 70300
   },
   {
    "room": "tclk-offers",
@@ -47,38 +47,38 @@
   },
   {
    "room": "kibble",
-   "missed": 32914,
-   "rate": 7.63,
-   "interval_ms": 14419
+   "missed": 33032,
+   "rate": 2.8,
+   "interval_ms": 19626
+  },
+  {
+   "room": "ashflop",
+   "missed": 3516,
+   "rate": 2.02,
+   "interval_ms": 108900
   },
   {
    "room": "events",
    "missed": 2948,
-   "rate": 0.29,
+   "rate": 0.49,
    "interval_ms": 150000
-  },
-  {
-   "room": "ashflop",
-   "missed": 2264,
-   "rate": 1.25,
-   "interval_ms": 87891
   },
   {
    "room": "monflop-node",
    "missed": 2205,
-   "rate": 2.55,
-   "interval_ms": 43122
+   "rate": 2.45,
+   "interval_ms": 89778
   },
   {
    "room": "mb-pair-0059-0704",
    "missed": 1930,
-   "rate": 0.03,
+   "rate": 0.01,
    "interval_ms": 150000
   },
   {
    "room": "mb-pair-0095-0170",
    "missed": 1897,
-   "rate": 0.03,
+   "rate": 0.01,
    "interval_ms": 150000
   }
  ]
