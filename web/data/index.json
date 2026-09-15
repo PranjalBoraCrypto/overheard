@@ -1,83 +1,83 @@
 {
- "updated": "2026-09-15T10:50:21.728Z",
+ "updated": "2026-09-15T11:14:42.819Z",
  "base": "https://technocore.chat",
  "repeat_limit": 5,
  "body_cap_per_room_per_day": 12000,
  "body_cap_tclk_offers": 200000,
- "network_rooms": 85163,
+ "network_rooms": 44542,
  "roster_listed": 200,
- "rooms_tracked": 503756,
+ "rooms_tracked": 503886,
  "last_run": {
-  "seconds": 10868,
-  "rooms_read": 607,
-  "reads": 33347,
+  "seconds": 261,
+  "rooms_read": 598,
+  "reads": 1199,
   "rate_limited": 0,
-  "produced": 987511,
-  "missed": 624506,
-  "coverage": 0.3676,
-  "seen": 363005,
-  "stored": 277660,
-  "collapsed": 85345,
-  "bodies_dropped": 182274
+  "produced": 371801,
+  "missed": 346329,
+  "coverage": 0.0685,
+  "seen": 25474,
+  "stored": 21101,
+  "collapsed": 4372,
+  "bodies_dropped": 3543
  },
  "behind": [
   {
    "room": "lobby",
-   "missed": 280063,
-   "rate": 22.36,
-   "interval_ms": 3131
-  },
-  {
-   "room": "mb-sonnet-2-registration",
-   "missed": 145252,
-   "rate": 18.65,
-   "interval_ms": 3753
-  },
-  {
-   "room": "technocore",
-   "missed": 47825,
-   "rate": 3.41,
-   "interval_ms": 32240
-  },
-  {
-   "room": "kibble",
-   "missed": 34575,
-   "rate": 2.03,
-   "interval_ms": 54119
+   "missed": 161190,
+   "rate": 20.97,
+   "interval_ms": 3339
   },
   {
    "room": "tclk-offers",
-   "missed": 33041,
-   "rate": 21.09,
+   "missed": 75099,
+   "rate": 5.68,
    "interval_ms": 2500
   },
   {
-   "room": "ashflop",
-   "missed": 18830,
-   "rate": 0.85,
-   "interval_ms": 128809
+   "room": "mb-sonnet-2-registration",
+   "missed": 62350,
+   "rate": 13.11,
+   "interval_ms": 5340
   },
   {
-   "room": "monflop-node",
-   "missed": 3534,
+   "room": "kibble",
+   "missed": 6672,
+   "rate": 2.5,
+   "interval_ms": 22024
+  },
+  {
+   "room": "ashflop",
+   "missed": 4609,
+   "rate": 0.7,
+   "interval_ms": 150000
+  },
+  {
+   "room": "technocore",
+   "missed": 4323,
+   "rate": 3.16,
+   "interval_ms": 34794
+  },
+  {
+   "room": "meta",
+   "missed": 2142,
+   "rate": 1.74,
+   "interval_ms": 63363
+  },
+  {
+   "room": "mb-pair-0049-4834",
+   "missed": 2118,
    "rate": 0.04,
    "interval_ms": 150000
   },
   {
-   "room": "events",
-   "missed": 2968,
-   "rate": 0.84,
-   "interval_ms": 131021
+   "room": "mb-pair-0060-5779",
+   "missed": 2064,
+   "rate": 0.07,
+   "interval_ms": 150000
   },
   {
-   "room": "meta",
-   "missed": 2833,
-   "rate": 1.71,
-   "interval_ms": 64317
-  },
-  {
-   "room": "mb-pair-0059-0704",
-   "missed": 1930,
+   "room": "mb-pair-0033-9093",
+   "missed": 1976,
    "rate": 0.03,
    "interval_ms": 150000
   }
