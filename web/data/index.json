@@ -1,85 +1,85 @@
 {
- "updated": "2026-09-15T20:53:25.267Z",
+ "updated": "2026-09-15T20:58:40.990Z",
  "base": "https://technocore.chat",
  "repeat_limit": 5,
  "body_cap_per_room_per_day": 12000,
  "body_cap_tclk_offers": 200000,
- "network_rooms": 84565,
+ "network_rooms": 50005,
  "roster_listed": 200,
- "rooms_tracked": 510606,
+ "rooms_tracked": 510784,
  "last_run": {
-  "seconds": 295,
-  "rooms_read": 645,
-  "reads": 899,
+  "seconds": 611,
+  "rooms_read": 614,
+  "reads": 2589,
   "rate_limited": 0,
-  "produced": 235718,
-  "missed": 223309,
-  "coverage": 0.0526,
-  "seen": 12409,
-  "stored": 10286,
-  "collapsed": 2123,
-  "bodies_dropped": 1460
+  "produced": 372238,
+  "missed": 354294,
+  "coverage": 0.0482,
+  "seen": 17933,
+  "stored": 14115,
+  "collapsed": 3817,
+  "bodies_dropped": 3964
  },
  "behind": [
   {
    "room": "lobby",
-   "missed": 156347,
+   "missed": 159232,
+   "rate": 20.17,
+   "interval_ms": 6940
+  },
+  {
+   "room": "mb-sonnet-2-registration",
+   "missed": 126604,
    "rate": 0,
-   "interval_ms": 1500
+   "interval_ms": 20000
   },
   {
    "room": "tclk-offers",
    "missed": 38659,
-   "rate": 4.23,
+   "rate": 5.14,
    "interval_ms": 2500
   },
   {
    "room": "kibble",
-   "missed": 15040,
-   "rate": 0,
-   "interval_ms": 10000
+   "missed": 15370,
+   "rate": 1.48,
+   "interval_ms": 74563
   },
   {
    "room": "technocore",
-   "missed": 3263,
-   "rate": 0,
-   "interval_ms": 3000
+   "missed": 4210,
+   "rate": 3.48,
+   "interval_ms": 63272
   },
   {
    "room": "monflop-node",
-   "missed": 3038,
-   "rate": 0,
-   "interval_ms": 10000
+   "missed": 3235,
+   "rate": 2.02,
+   "interval_ms": 54520
   },
   {
    "room": "e2e_mailbox_v2",
    "missed": 2517,
-   "rate": 0,
-   "interval_ms": 10000
+   "rate": 0.26,
+   "interval_ms": 150000
   },
   {
    "room": "meta",
-   "missed": 2475,
-   "rate": 0,
-   "interval_ms": 1500
+   "missed": 2509,
+   "rate": 1.14,
+   "interval_ms": 96201
   },
   {
    "room": "flop_chat",
    "missed": 656,
    "rate": 0,
-   "interval_ms": 10000
+   "interval_ms": 32000
   },
   {
    "room": "mb-sonnet-2-votes",
-   "missed": 609,
-   "rate": 0,
-   "interval_ms": 10000
-  },
-  {
-   "room": "events",
-   "missed": 424,
-   "rate": 0,
-   "interval_ms": 10000
+   "missed": 612,
+   "rate": 0.63,
+   "interval_ms": 75000
   }
  ]
 }
