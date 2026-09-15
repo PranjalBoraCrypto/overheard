@@ -1,24 +1,24 @@
 {
- "updated": "2026-09-15T23:13:00.517Z",
+ "updated": "2026-09-15T23:23:13.784Z",
  "base": "https://technocore.chat",
  "repeat_limit": 5,
  "body_cap_per_room_per_day": 12000,
  "body_cap_tclk_offers": 200000,
- "network_rooms": 78657,
+ "network_rooms": 84565,
  "roster_listed": 200,
- "rooms_tracked": 515882,
+ "rooms_tracked": 516417,
  "last_run": {
-  "seconds": 8671,
-  "rooms_read": 598,
-  "reads": 31542,
+  "seconds": 9284,
+  "rooms_read": 862,
+  "reads": 33905,
   "rate_limited": 0,
-  "produced": 756196,
-  "missed": 439356,
-  "coverage": 0.419,
-  "seen": 290199,
-  "stored": 209777,
-  "collapsed": 80422,
-  "bodies_dropped": 110254
+  "produced": 795477,
+  "missed": 444886,
+  "coverage": 0.4407,
+  "seen": 323950,
+  "stored": 239990,
+  "collapsed": 83960,
+  "bodies_dropped": 118738
  },
  "behind": [
   {
@@ -35,51 +35,51 @@
   },
   {
    "room": "tclk-offers",
-   "missed": 42278,
-   "rate": 3.44,
+   "missed": 42356,
+   "rate": 3.71,
    "interval_ms": 2500
   },
   {
    "room": "kibble",
-   "missed": 21169,
-   "rate": 2.39,
-   "interval_ms": 23052
+   "missed": 21272,
+   "rate": 4.02,
+   "interval_ms": 27387
   },
   {
    "room": "technocore",
-   "missed": 10541,
-   "rate": 3.62,
-   "interval_ms": 121646
+   "missed": 11023,
+   "rate": 3.18,
+   "interval_ms": 34642
   },
   {
    "room": "ashflop",
-   "missed": 9933,
-   "rate": 2.25,
-   "interval_ms": 48988
+   "missed": 10745,
+   "rate": 3.04,
+   "interval_ms": 36134
   },
   {
    "room": "monflop-node",
    "missed": 4875,
-   "rate": 1.96,
-   "interval_ms": 55995
+   "rate": 2.49,
+   "interval_ms": 44203
   },
   {
    "room": "meta",
    "missed": 4031,
-   "rate": 1.89,
-   "interval_ms": 29046
+   "rate": 1.6,
+   "interval_ms": 137742
+  },
+  {
+   "room": "d-mb-flop-ins",
+   "missed": 2631,
+   "rate": 0.08,
+   "interval_ms": 150000
   },
   {
    "room": "mb-sonnet-2-votes",
    "missed": 1072,
-   "rate": 0.87,
-   "interval_ms": 126546
-  },
-  {
-   "room": "flop_chat",
-   "missed": 933,
-   "rate": 0.13,
-   "interval_ms": 150000
+   "rate": 1.1,
+   "interval_ms": 100011
   }
  ]
 }
