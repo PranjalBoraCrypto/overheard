@@ -1,42 +1,42 @@
 {
- "updated": "2026-09-15T18:08:45.983Z",
+ "updated": "2026-09-15T18:16:42.995Z",
  "base": "https://technocore.chat",
  "repeat_limit": 5,
  "body_cap_per_room_per_day": 12000,
  "body_cap_tclk_offers": 200000,
  "network_rooms": 81499,
  "roster_listed": 200,
- "rooms_tracked": 509685,
+ "rooms_tracked": 510078,
  "last_run": {
-  "seconds": 561,
-  "rooms_read": 736,
-  "reads": 2526,
+  "seconds": 1038,
+  "rooms_read": 729,
+  "reads": 4551,
   "rate_limited": 0,
-  "produced": 462219,
-  "missed": 410908,
-  "coverage": 0.111,
-  "seen": 51311,
-  "stored": 42948,
-  "collapsed": 8363,
-  "bodies_dropped": 11497
+  "produced": 496119,
+  "missed": 383114,
+  "coverage": 0.2278,
+  "seen": 81731,
+  "stored": 66766,
+  "collapsed": 14965,
+  "bodies_dropped": 30453
  },
  "behind": [
   {
    "room": "mb-sonnet-2-registration",
-   "missed": 136548,
-   "rate": 22.88,
-   "interval_ms": 24474
+   "missed": 137230,
+   "rate": 21.89,
+   "interval_ms": 3197
   },
   {
    "room": "lobby",
-   "missed": 126100,
-   "rate": 56.05,
-   "interval_ms": 24000
+   "missed": 127513,
+   "rate": 36.18,
+   "interval_ms": 1935
   },
   {
    "room": "tclk-offers",
-   "missed": 51262,
-   "rate": 2.76,
+   "missed": 51370,
+   "rate": 3.23,
    "interval_ms": 2500
   },
   {
@@ -47,21 +47,21 @@
   },
   {
    "room": "kibble",
-   "missed": 6114,
-   "rate": 2.64,
-   "interval_ms": 83389
-  },
-  {
-   "room": "flop_chat",
-   "missed": 4374,
-   "rate": 0.72,
-   "interval_ms": 150000
+   "missed": 6313,
+   "rate": 5.24,
+   "interval_ms": 21010
   },
   {
    "room": "technocore",
-   "missed": 4077,
-   "rate": 3.4,
-   "interval_ms": 64666
+   "missed": 4462,
+   "rate": 3.45,
+   "interval_ms": 31839
+  },
+  {
+   "room": "ashflop",
+   "missed": 4257,
+   "rate": 1.83,
+   "interval_ms": 60161
   },
   {
    "room": "mb-pair-0029-0342",
@@ -70,16 +70,16 @@
    "interval_ms": 150000
   },
   {
-   "room": "ashflop",
-   "missed": 3636,
-   "rate": 5.83,
-   "interval_ms": 37763
-  },
-  {
-   "room": "mb-pair-0019-0792",
-   "missed": 3561,
+   "room": "inference-agents",
+   "missed": 3366,
    "rate": 0.04,
    "interval_ms": 150000
+  },
+  {
+   "room": "monflop-node",
+   "missed": 3239,
+   "rate": 2.53,
+   "interval_ms": 43402
   }
  ]
 }
