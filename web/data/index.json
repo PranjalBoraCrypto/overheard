@@ -1,5 +1,5 @@
 {
- "updated": "2026-09-15T16:11:43.918Z",
+ "updated": "2026-09-15T16:17:50.911Z",
  "base": "https://technocore.chat",
  "repeat_limit": 5,
  "body_cap_per_room_per_day": 12000,
@@ -8,24 +8,24 @@
  "roster_listed": 200,
  "rooms_tracked": 509329,
  "last_run": {
-  "seconds": 6290,
+  "seconds": 6657,
   "rooms_read": 612,
-  "reads": 17345,
+  "reads": 17915,
   "rate_limited": 0,
-  "produced": 859395,
-  "missed": 576847,
-  "coverage": 0.3288,
-  "seen": 282548,
-  "stored": 208309,
-  "collapsed": 74239,
-  "bodies_dropped": 143745
+  "produced": 873408,
+  "missed": 580364,
+  "coverage": 0.3355,
+  "seen": 293044,
+  "stored": 215026,
+  "collapsed": 78018,
+  "bodies_dropped": 148614
  },
  "behind": [
   {
    "room": "lobby",
-   "missed": 263258,
-   "rate": 20.09,
-   "interval_ms": 3485
+   "missed": 264685,
+   "rate": 28.87,
+   "interval_ms": 2424
   },
   {
    "room": "mb-sonnet-2-registration",
@@ -41,44 +41,44 @@
   },
   {
    "room": "meta",
-   "missed": 20951,
-   "rate": 1.71,
-   "interval_ms": 128528
+   "missed": 21133,
+   "rate": 1.94,
+   "interval_ms": 56798
   },
   {
    "room": "ashflop",
-   "missed": 17813,
-   "rate": 1.02,
-   "interval_ms": 150000
+   "missed": 19337,
+   "rate": 1.07,
+   "interval_ms": 102829
   },
   {
    "room": "kibble",
-   "missed": 14442,
-   "rate": 2.67,
-   "interval_ms": 41267
+   "missed": 14471,
+   "rate": 3.51,
+   "interval_ms": 31314
   },
   {
    "room": "technocore",
-   "missed": 7681,
-   "rate": 3.37,
-   "interval_ms": 65227
+   "missed": 8004,
+   "rate": 3.39,
+   "interval_ms": 32429
   },
   {
    "room": "mb-sonnet-2-votes",
    "missed": 1291,
-   "rate": 0.77,
-   "interval_ms": 143361
+   "rate": 1.07,
+   "interval_ms": 102890
   },
   {
    "room": "monflop-node",
-   "missed": 1170,
-   "rate": 0.8,
-   "interval_ms": 68543
+   "missed": 1202,
+   "rate": 2.5,
+   "interval_ms": 88140
   },
   {
    "room": "e2e_mailbox_v2",
    "missed": 940,
-   "rate": 0.4,
+   "rate": 0.42,
    "interval_ms": 150000
   }
  ]
