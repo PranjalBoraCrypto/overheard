@@ -1,37 +1,37 @@
 {
- "updated": "2026-09-15T18:30:58.333Z",
+ "updated": "2026-09-15T18:37:17.792Z",
  "base": "https://technocore.chat",
  "repeat_limit": 5,
  "body_cap_per_room_per_day": 12000,
  "body_cap_tclk_offers": 200000,
- "network_rooms": 79895,
+ "network_rooms": 84565,
  "roster_listed": 200,
- "rooms_tracked": 510594,
+ "rooms_tracked": 510595,
  "last_run": {
-  "seconds": 1894,
-  "rooms_read": 753,
-  "reads": 7611,
+  "seconds": 2273,
+  "rooms_read": 721,
+  "reads": 8628,
   "rate_limited": 0,
-  "produced": 564353,
-  "missed": 398657,
-  "coverage": 0.2936,
-  "seen": 134414,
-  "stored": 106729,
-  "collapsed": 27685,
-  "bodies_dropped": 59584
+  "produced": 624536,
+  "missed": 399747,
+  "coverage": 0.3599,
+  "seen": 165175,
+  "stored": 133021,
+  "collapsed": 32154,
+  "bodies_dropped": 71200
  },
  "behind": [
   {
    "room": "mb-sonnet-2-registration",
-   "missed": 139139,
-   "rate": 13.78,
-   "interval_ms": 5080
+   "missed": 139724,
+   "rate": 15.61,
+   "interval_ms": 4484
   },
   {
    "room": "lobby",
-   "missed": 130090,
-   "rate": 20.49,
-   "interval_ms": 6832
+   "missed": 130835,
+   "rate": 16.68,
+   "interval_ms": 4198
   },
   {
    "room": "tclk-offers",
@@ -40,45 +40,45 @@
    "interval_ms": 2500
   },
   {
-   "room": "web_chat",
-   "missed": 7042,
-   "rate": 0.03,
-   "interval_ms": 150000
-  },
-  {
    "room": "kibble",
-   "missed": 6487,
-   "rate": 3.11,
-   "interval_ms": 35356
+   "missed": 6746,
+   "rate": 12.36,
+   "interval_ms": 5662
   },
   {
    "room": "ashflop",
    "missed": 6461,
-   "rate": 2.37,
-   "interval_ms": 46459
+   "rate": 0.96,
+   "interval_ms": 114652
   },
   {
    "room": "technocore",
    "missed": 4785,
-   "rate": 3.48,
-   "interval_ms": 15821
+   "rate": 3.45,
+   "interval_ms": 31864
   },
   {
    "room": "mb-pair-0029-0342",
    "missed": 3646,
-   "rate": 0.03,
+   "rate": 0.04,
    "interval_ms": 150000
   },
   {
    "room": "monflop-node",
    "missed": 3389,
-   "rate": 2.53,
-   "interval_ms": 21716
+   "rate": 2.61,
+   "interval_ms": 42134
   },
   {
    "room": "inference-agents",
    "missed": 3366,
-   "rate": 0.04,
+   "rate": 0.03,
+   "interval_ms": 150000
+  },
+  {
+   "room": "mb-pair-0025-2153",
+   "missed": 3221,
+   "rate": 0.03,
    "interval_ms": 150000
   }
  ]
