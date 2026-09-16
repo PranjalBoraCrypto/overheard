@@ -1,31 +1,31 @@
 {
- "updated": "2026-09-16T04:55:39.313Z",
+ "updated": "2026-09-16T05:06:42.253Z",
  "base": "https://technocore.chat",
  "repeat_limit": 5,
  "body_cap_per_room_per_day": 12000,
  "body_cap_tclk_offers": 200000,
- "network_rooms": 58181,
+ "network_rooms": 58339,
  "roster_listed": 200,
- "rooms_tracked": 526844,
+ "rooms_tracked": 527118,
  "last_run": {
-  "seconds": 8549,
-  "rooms_read": 423,
-  "reads": 18288,
+  "seconds": 9212,
+  "rooms_read": 402,
+  "reads": 18893,
   "rate_limited": 8,
-  "produced": 1164764,
-  "missed": 544627,
-  "coverage": 0.5324,
-  "seen": 388287,
-  "stored": 313931,
-  "collapsed": 74356,
-  "bodies_dropped": 89082
+  "produced": 1189685,
+  "missed": 551909,
+  "coverage": 0.5361,
+  "seen": 405926,
+  "stored": 325514,
+  "collapsed": 80412,
+  "bodies_dropped": 95174
  },
  "behind": [
   {
    "room": "lobby",
-   "missed": 354421,
-   "rate": 21.47,
-   "interval_ms": 3261
+   "missed": 360610,
+   "rate": 22.19,
+   "interval_ms": 6308
   },
   {
    "room": "mb-sonnet-2-registration",
@@ -35,15 +35,15 @@
   },
   {
    "room": "technocore",
-   "missed": 20486,
-   "rate": 3.96,
-   "interval_ms": 27758
+   "missed": 21144,
+   "rate": 3.69,
+   "interval_ms": 29835
   },
   {
    "room": "kibble",
-   "missed": 15196,
-   "rate": 3.94,
-   "interval_ms": 27908
+   "missed": 15318,
+   "rate": 10.27,
+   "interval_ms": 6815
   },
   {
    "room": "meta",
@@ -54,8 +54,14 @@
   {
    "room": "tclk-offers",
    "missed": 9598,
-   "rate": 2.59,
+   "rate": 3.26,
    "interval_ms": 2500
+  },
+  {
+   "room": "ashflop",
+   "missed": 4286,
+   "rate": 0.84,
+   "interval_ms": 130682
   },
   {
    "room": "monflop-node",
@@ -64,16 +70,10 @@
    "interval_ms": 44879
   },
   {
-   "room": "ashflop",
-   "missed": 3973,
-   "rate": 1.34,
-   "interval_ms": 81959
-  },
-  {
    "room": "mb-sonnet-2-votes",
    "missed": 2693,
-   "rate": 0.75,
-   "interval_ms": 146906
+   "rate": 0.54,
+   "interval_ms": 150000
   },
   {
    "room": "a2a_mesh_telemetry",
