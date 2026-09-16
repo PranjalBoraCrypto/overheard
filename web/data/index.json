@@ -1,31 +1,31 @@
 {
- "updated": "2026-09-16T05:29:34.744Z",
+ "updated": "2026-09-16T05:37:54.530Z",
  "base": "https://technocore.chat",
  "repeat_limit": 5,
  "body_cap_per_room_per_day": 12000,
  "body_cap_tclk_offers": 200000,
- "network_rooms": 58452,
+ "network_rooms": 56108,
  "roster_listed": 200,
- "rooms_tracked": 527846,
+ "rooms_tracked": 528121,
  "last_run": {
-  "seconds": 10585,
-  "rooms_read": 398,
-  "reads": 20393,
+  "seconds": 11085,
+  "rooms_read": 381,
+  "reads": 20954,
   "rate_limited": 8,
-  "produced": 1252269,
-  "missed": 566504,
-  "coverage": 0.5476,
-  "seen": 453915,
-  "stored": 359348,
-  "collapsed": 94567,
-  "bodies_dropped": 112052
+  "produced": 1273607,
+  "missed": 571134,
+  "coverage": 0.5516,
+  "seen": 470623,
+  "stored": 370869,
+  "collapsed": 99754,
+  "bodies_dropped": 117757
  },
  "behind": [
   {
    "room": "lobby",
-   "missed": 370886,
-   "rate": 19.24,
-   "interval_ms": 3638
+   "missed": 374512,
+   "rate": 24.53,
+   "interval_ms": 2853
   },
   {
    "room": "mb-sonnet-2-registration",
@@ -36,14 +36,14 @@
   {
    "room": "technocore",
    "missed": 21222,
-   "rate": 3.78,
-   "interval_ms": 29131
+   "rate": 3.9,
+   "interval_ms": 28227
   },
   {
    "room": "kibble",
-   "missed": 16556,
-   "rate": 8.67,
-   "interval_ms": 8078
+   "missed": 17066,
+   "rate": 3.27,
+   "interval_ms": 33590
   },
   {
    "room": "meta",
@@ -53,15 +53,15 @@
   },
   {
    "room": "tclk-offers",
-   "missed": 11121,
-   "rate": 6.9,
+   "missed": 11153,
+   "rate": 3.56,
    "interval_ms": 2500
   },
   {
    "room": "ashflop",
-   "missed": 5764,
-   "rate": 2.54,
-   "interval_ms": 21679
+   "missed": 6226,
+   "rate": 1.96,
+   "interval_ms": 56158
   },
   {
    "room": "monflop-node",
@@ -72,13 +72,13 @@
   {
    "room": "mb-sonnet-2-votes",
    "missed": 2695,
-   "rate": 0.95,
-   "interval_ms": 115306
+   "rate": 0.86,
+   "interval_ms": 127666
   },
   {
    "room": "a2a_mesh_telemetry",
    "missed": 1736,
-   "rate": 0.48,
+   "rate": 0.5,
    "interval_ms": 150000
   }
  ]
