@@ -1,31 +1,31 @@
 {
- "updated": "2026-09-16T05:40:09.830Z",
+ "updated": "2026-09-16T05:47:27.212Z",
  "base": "https://technocore.chat",
  "repeat_limit": 5,
  "body_cap_per_room_per_day": 12000,
  "body_cap_tclk_offers": 200000,
- "network_rooms": 56150,
+ "network_rooms": 56242,
  "roster_listed": 200,
- "rooms_tracked": 528199,
+ "rooms_tracked": 528472,
  "last_run": {
-  "seconds": 11220,
-  "rooms_read": 410,
-  "reads": 21096,
+  "seconds": 11657,
+  "rooms_read": 394,
+  "reads": 21636,
   "rate_limited": 8,
-  "produced": 1279983,
-  "missed": 572875,
-  "coverage": 0.5524,
-  "seen": 475258,
-  "stored": 373973,
-  "collapsed": 101285,
-  "bodies_dropped": 118731
+  "produced": 1298740,
+  "missed": 576833,
+  "coverage": 0.5559,
+  "seen": 490057,
+  "stored": 384295,
+  "collapsed": 105762,
+  "bodies_dropped": 124620
  },
  "behind": [
   {
    "room": "lobby",
-   "missed": 375795,
-   "rate": 38.5,
-   "interval_ms": 1500
+   "missed": 378794,
+   "rate": 18.62,
+   "interval_ms": 7520
   },
   {
    "room": "mb-sonnet-2-registration",
@@ -36,14 +36,14 @@
   {
    "room": "technocore",
    "missed": 21222,
-   "rate": 3.78,
-   "interval_ms": 29118
+   "rate": 3.68,
+   "interval_ms": 29901
   },
   {
    "room": "kibble",
-   "missed": 17066,
-   "rate": 2.39,
-   "interval_ms": 45931
+   "missed": 17343,
+   "rate": 9.82,
+   "interval_ms": 7125
   },
   {
    "room": "meta",
@@ -53,15 +53,15 @@
   },
   {
    "room": "tclk-offers",
-   "missed": 11406,
-   "rate": 4.41,
+   "missed": 12088,
+   "rate": 3.69,
    "interval_ms": 2500
   },
   {
    "room": "ashflop",
    "missed": 6431,
-   "rate": 2,
-   "interval_ms": 55002
+   "rate": 0.91,
+   "interval_ms": 121395
   },
   {
    "room": "monflop-node",
@@ -72,13 +72,13 @@
   {
    "room": "mb-sonnet-2-votes",
    "missed": 2695,
-   "rate": 0.86,
-   "interval_ms": 127518
+   "rate": 0.92,
+   "interval_ms": 119872
   },
   {
    "room": "a2a_mesh_telemetry",
    "missed": 1736,
-   "rate": 0.49,
+   "rate": 0.51,
    "interval_ms": 150000
   }
  ]
