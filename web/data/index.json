@@ -1,43 +1,43 @@
 {
- "updated": "2026-09-16T03:34:54.414Z",
+ "updated": "2026-09-16T03:40:13.672Z",
  "base": "https://technocore.chat",
  "repeat_limit": 5,
  "body_cap_per_room_per_day": 12000,
  "body_cap_tclk_offers": 200000,
  "network_rooms": 61390,
  "roster_listed": 200,
- "rooms_tracked": 524114,
+ "rooms_tracked": 524407,
  "last_run": {
-  "seconds": 3704,
-  "rooms_read": 658,
-  "reads": 11252,
+  "seconds": 4024,
+  "rooms_read": 610,
+  "reads": 12276,
   "rate_limited": 8,
-  "produced": 875642,
-  "missed": 482226,
-  "coverage": 0.4493,
-  "seen": 222648,
-  "stored": 186664,
-  "collapsed": 35984,
-  "bodies_dropped": 39059
+  "produced": 901885,
+  "missed": 483117,
+  "coverage": 0.4643,
+  "seen": 236463,
+  "stored": 198473,
+  "collapsed": 37990,
+  "bodies_dropped": 45233
  },
  "behind": [
   {
    "room": "lobby",
-   "missed": 298051,
-   "rate": 24.31,
-   "interval_ms": 150000
+   "missed": 306868,
+   "rate": 16.71,
+   "interval_ms": 8379
   },
   {
    "room": "mb-sonnet-2-registration",
-   "missed": 111378,
-   "rate": 7.39,
-   "interval_ms": 59528
+   "missed": 112604,
+   "rate": 11.43,
+   "interval_ms": 6127
   },
   {
    "room": "technocore",
-   "missed": 15861,
-   "rate": 3.28,
-   "interval_ms": 134283
+   "missed": 16442,
+   "rate": 3.77,
+   "interval_ms": 58331
   },
   {
    "room": "meta",
@@ -47,14 +47,14 @@
   },
   {
    "room": "kibble",
-   "missed": 7998,
-   "rate": 2.35,
-   "interval_ms": 93684
+   "missed": 8726,
+   "rate": 5.02,
+   "interval_ms": 21931
   },
   {
    "room": "tclk-offers",
-   "missed": 5352,
-   "rate": 10.48,
+   "missed": 5634,
+   "rate": 16.79,
    "interval_ms": 2500
   },
   {
@@ -65,20 +65,20 @@
   },
   {
    "room": "mb-sonnet-2-votes",
-   "missed": 2506,
-   "rate": 0.68,
-   "interval_ms": 150000
-  },
-  {
-   "room": "mb-2d226e434009",
-   "missed": 1811,
-   "rate": 0,
-   "interval_ms": 32000
+   "missed": 2546,
+   "rate": 1.02,
+   "interval_ms": 107407
   },
   {
    "room": "a2a_mesh_telemetry",
    "missed": 1736,
-   "rate": 0.44,
+   "rate": 0.38,
+   "interval_ms": 150000
+  },
+  {
+   "room": "mb-f407fcbea9b6",
+   "missed": 1594,
+   "rate": 0,
    "interval_ms": 150000
   }
  ]
