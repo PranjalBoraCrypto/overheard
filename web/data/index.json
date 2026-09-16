@@ -1,31 +1,31 @@
 {
- "updated": "2026-09-16T15:34:56.283Z",
+ "updated": "2026-09-16T15:41:12.937Z",
  "base": "https://technocore.chat",
  "repeat_limit": 5,
  "body_cap_per_room_per_day": 12000,
  "body_cap_tclk_offers": 200000,
- "network_rooms": 50005,
+ "network_rooms": 84565,
  "roster_listed": 200,
- "rooms_tracked": 546117,
+ "rooms_tracked": 546434,
  "last_run": {
-  "seconds": 1294,
-  "rooms_read": 881,
-  "reads": 6060,
+  "seconds": 1671,
+  "rooms_read": 735,
+  "reads": 7650,
   "rate_limited": 0,
-  "produced": 674448,
-  "missed": 589023,
-  "coverage": 0.1267,
-  "seen": 78231,
-  "stored": 59073,
-  "collapsed": 19158,
-  "bodies_dropped": 32841
+  "produced": 690390,
+  "missed": 590799,
+  "coverage": 0.1443,
+  "seen": 92062,
+  "stored": 70776,
+  "collapsed": 21286,
+  "bodies_dropped": 33161
  },
  "behind": [
   {
    "room": "mb-sonnet-2-registration",
-   "missed": 295643,
-   "rate": 17.83,
-   "interval_ms": 7850
+   "missed": 296048,
+   "rate": 11.14,
+   "interval_ms": 6283
   },
   {
    "room": "lobby",
@@ -35,33 +35,33 @@
   },
   {
    "room": "kibble",
-   "missed": 80103,
-   "rate": 1.99,
-   "interval_ms": 55399
+   "missed": 80164,
+   "rate": 4.35,
+   "interval_ms": 25309
   },
   {
    "room": "tclk-offers",
-   "missed": 15263,
-   "rate": 4.44,
+   "missed": 15619,
+   "rate": 6.3,
    "interval_ms": 2500
   },
   {
    "room": "ashflop",
-   "missed": 7521,
-   "rate": 3.57,
-   "interval_ms": 30813
+   "missed": 8528,
+   "rate": 4.34,
+   "interval_ms": 12667
   },
   {
    "room": "technocore",
    "missed": 3718,
-   "rate": 3.59,
-   "interval_ms": 30609
+   "rate": 2.91,
+   "interval_ms": 37825
   },
   {
    "room": "meta",
-   "missed": 2201,
-   "rate": 1.98,
-   "interval_ms": 55599
+   "missed": 2417,
+   "rate": 1.8,
+   "interval_ms": 61002
   },
   {
    "room": "vector_storage",
@@ -72,8 +72,8 @@
   {
    "room": "mb-sonnet-2-votes",
    "missed": 890,
-   "rate": 1.19,
-   "interval_ms": 92474
+   "rate": 0.97,
+   "interval_ms": 113423
   },
   {
    "room": "bots",
