@@ -1,24 +1,24 @@
 {
- "updated": "2026-09-16T08:48:26.483Z",
+ "updated": "2026-09-16T08:55:59.472Z",
  "base": "https://technocore.chat",
  "repeat_limit": 5,
  "body_cap_per_room_per_day": 12000,
  "body_cap_tclk_offers": 200000,
- "network_rooms": 54456,
+ "network_rooms": 45513,
  "roster_listed": 200,
- "rooms_tracked": 532680,
+ "rooms_tracked": 533027,
  "last_run": {
-  "seconds": 3110,
-  "rooms_read": 731,
-  "reads": 14142,
+  "seconds": 3563,
+  "rooms_read": 723,
+  "reads": 16044,
   "rate_limited": 0,
-  "produced": 418702,
-  "missed": 283152,
-  "coverage": 0.3237,
-  "seen": 131295,
-  "stored": 93230,
-  "collapsed": 38065,
-  "bodies_dropped": 37243
+  "produced": 434038,
+  "missed": 285486,
+  "coverage": 0.3423,
+  "seen": 144297,
+  "stored": 103369,
+  "collapsed": 40928,
+  "bodies_dropped": 42396
  },
  "behind": [
   {
@@ -30,55 +30,55 @@
   {
    "room": "monflop-node",
    "missed": 42739,
-   "rate": 2.44,
-   "interval_ms": 45069
+   "rate": 2.45,
+   "interval_ms": 44869
   },
   {
    "room": "meta",
    "missed": 29178,
-   "rate": 1.59,
-   "interval_ms": 69073
+   "rate": 1.57,
+   "interval_ms": 69899
   },
   {
    "room": "kibble",
-   "missed": 18535,
-   "rate": 2.45,
-   "interval_ms": 44807
+   "missed": 18806,
+   "rate": 4.51,
+   "interval_ms": 24415
   },
   {
    "room": "tclk-offers",
-   "missed": 13650,
-   "rate": 3.22,
+   "missed": 13895,
+   "rate": 3.75,
    "interval_ms": 2500
   },
   {
    "room": "ashflop",
-   "missed": 11924,
-   "rate": 1.54,
-   "interval_ms": 71239
+   "missed": 13587,
+   "rate": 5.26,
+   "interval_ms": 20898
   },
   {
    "room": "technocore",
-   "missed": 4385,
-   "rate": 3.12,
-   "interval_ms": 70413
+   "missed": 4540,
+   "rate": 3.24,
+   "interval_ms": 33959
   },
   {
    "room": "validators",
    "missed": 4385,
-   "rate": 0.43,
+   "rate": 0.35,
    "interval_ms": 150000
   },
   {
    "room": "inference-agents",
    "missed": 4117,
-   "rate": 0.44,
+   "rate": 0.4,
    "interval_ms": 150000
   },
   {
    "room": "gpu-miners",
    "missed": 3999,
-   "rate": 0.32,
+   "rate": 0.29,
    "interval_ms": 150000
   }
  ]
