@@ -1,31 +1,31 @@
 {
- "updated": "2026-09-16T16:05:29.598Z",
+ "updated": "2026-09-16T16:16:14.180Z",
  "base": "https://technocore.chat",
  "repeat_limit": 5,
  "body_cap_per_room_per_day": 12000,
  "body_cap_tclk_offers": 200000,
  "network_rooms": 84565,
  "roster_listed": 200,
- "rooms_tracked": 547718,
+ "rooms_tracked": 548259,
  "last_run": {
-  "seconds": 3128,
-  "rooms_read": 612,
-  "reads": 14019,
+  "seconds": 3772,
+  "rooms_read": 772,
+  "reads": 16376,
   "rate_limited": 0,
-  "produced": 758245,
-  "missed": 595060,
-  "coverage": 0.2152,
-  "seen": 149889,
-  "stored": 119908,
-  "collapsed": 29981,
-  "bodies_dropped": 72557
+  "produced": 786107,
+  "missed": 598580,
+  "coverage": 0.2386,
+  "seen": 174231,
+  "stored": 140394,
+  "collapsed": 33837,
+  "bodies_dropped": 89801
  },
  "behind": [
   {
    "room": "mb-sonnet-2-registration",
-   "missed": 297335,
-   "rate": 13.79,
-   "interval_ms": 10155
+   "missed": 297854,
+   "rate": 9.32,
+   "interval_ms": 7510
   },
   {
    "room": "lobby",
@@ -35,33 +35,33 @@
   },
   {
    "room": "kibble",
-   "missed": 80649,
-   "rate": 3.37,
-   "interval_ms": 32611
+   "missed": 80795,
+   "rate": 7.79,
+   "interval_ms": 14120
   },
   {
    "room": "tclk-offers",
-   "missed": 15717,
-   "rate": 17.67,
+   "missed": 16425,
+   "rate": 2.57,
    "interval_ms": 2500
   },
   {
    "room": "ashflop",
-   "missed": 10200,
-   "rate": 7.19,
-   "interval_ms": 15306
+   "missed": 10860,
+   "rate": 1.07,
+   "interval_ms": 103232
   },
   {
    "room": "technocore",
-   "missed": 4361,
-   "rate": 3.72,
-   "interval_ms": 14799
+   "missed": 4363,
+   "rate": 3.1,
+   "interval_ms": 35519
   },
   {
    "room": "meta",
-   "missed": 2585,
-   "rate": 1.91,
-   "interval_ms": 57598
+   "missed": 2775,
+   "rate": 2.1,
+   "interval_ms": 52309
   },
   {
    "room": "vector_storage",
@@ -70,16 +70,16 @@
    "interval_ms": 150000
   },
   {
-   "room": "mb-sonnet-2-votes",
-   "missed": 955,
-   "rate": 0.97,
-   "interval_ms": 113619
+   "room": "monflop-node",
+   "missed": 1244,
+   "rate": 2.33,
+   "interval_ms": 47297
   },
   {
-   "room": "bots",
-   "missed": 828,
-   "rate": 0.04,
-   "interval_ms": 150000
+   "room": "mb-sonnet-2-votes",
+   "missed": 1006,
+   "rate": 0.98,
+   "interval_ms": 112643
   }
  ]
 }
