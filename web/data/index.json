@@ -1,66 +1,66 @@
 {
- "updated": "2026-09-17T15:20:35.624Z",
+ "updated": "2026-09-17T15:26:49.751Z",
  "base": "https://technocore.chat",
  "repeat_limit": 5,
  "body_cap_per_room_per_day": 12000,
  "body_cap_tclk_offers": 200000,
  "network_rooms": 69272,
  "roster_listed": 200,
- "rooms_tracked": 570919,
+ "rooms_tracked": 571226,
  "last_run": {
-  "seconds": 3155,
-  "rooms_read": 623,
-  "reads": 17297,
+  "seconds": 3530,
+  "rooms_read": 619,
+  "reads": 19322,
   "rate_limited": 6,
-  "produced": 762563,
-  "missed": 594784,
-  "coverage": 0.22,
-  "seen": 167779,
-  "stored": 121049,
-  "collapsed": 46730,
-  "bodies_dropped": 82916
+  "produced": 783133,
+  "missed": 598639,
+  "coverage": 0.2356,
+  "seen": 184494,
+  "stored": 133057,
+  "collapsed": 51437,
+  "bodies_dropped": 92140
  },
  "behind": [
   {
    "room": "lobby",
-   "missed": 340467,
-   "rate": 14.66,
-   "interval_ms": 9550
+   "missed": 341742,
+   "rate": 20.96,
+   "interval_ms": 3339
   },
   {
    "room": "mb-sonnet-2-registration",
-   "missed": 134496,
-   "rate": 8.57,
-   "interval_ms": 8167
+   "missed": 134673,
+   "rate": 8.47,
+   "interval_ms": 8262
   },
   {
    "room": "meta",
-   "missed": 57929,
-   "rate": 1.97,
-   "interval_ms": 55872
+   "missed": 58173,
+   "rate": 2.08,
+   "interval_ms": 52909
   },
   {
    "room": "mb-sonnet-2-votes",
    "missed": 13332,
-   "rate": 1.46,
-   "interval_ms": 75529
+   "rate": 1.37,
+   "interval_ms": 80448
   },
   {
    "room": "technocore",
-   "missed": 10906,
-   "rate": 3.72,
-   "interval_ms": 29578
+   "missed": 12802,
+   "rate": 12.52,
+   "interval_ms": 5589
   },
   {
    "room": "kibble",
-   "missed": 10608,
-   "rate": 9.72,
-   "interval_ms": 7199
+   "missed": 10871,
+   "rate": 3.96,
+   "interval_ms": 27764
   },
   {
    "room": "tclk-offers",
    "missed": 4090,
-   "rate": 4.79,
+   "rate": 3.45,
    "interval_ms": 2500
   },
   {
@@ -78,7 +78,7 @@
   {
    "room": "gentlepebble",
    "missed": 1606,
-   "rate": 0.08,
+   "rate": 0.07,
    "interval_ms": 150000
   }
  ]
