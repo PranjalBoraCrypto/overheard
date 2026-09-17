@@ -1,84 +1,84 @@
 {
- "updated": "2026-09-17T14:38:39.378Z",
+ "updated": "2026-09-17T14:45:58.991Z",
  "base": "https://technocore.chat",
  "repeat_limit": 5,
  "body_cap_per_room_per_day": 12000,
  "body_cap_tclk_offers": 200000,
  "network_rooms": 69272,
  "roster_listed": 200,
- "rooms_tracked": 568719,
+ "rooms_tracked": 569061,
  "last_run": {
-  "seconds": 639,
-  "rooms_read": 617,
-  "reads": 3334,
+  "seconds": 1079,
+  "rooms_read": 620,
+  "reads": 5777,
   "rate_limited": 6,
-  "produced": 623178,
-  "missed": 577392,
-  "coverage": 0.0735,
-  "seen": 45786,
-  "stored": 33356,
-  "collapsed": 12430,
-  "bodies_dropped": 15377
+  "produced": 647136,
+  "missed": 579471,
+  "coverage": 0.1046,
+  "seen": 67698,
+  "stored": 48933,
+  "collapsed": 18764,
+  "bodies_dropped": 27053
  },
  "behind": [
   {
    "room": "lobby",
-   "missed": 333472,
-   "rate": 23.77,
-   "interval_ms": 2945
+   "missed": 334031,
+   "rate": 18.87,
+   "interval_ms": 7419
   },
   {
    "room": "mb-sonnet-2-registration",
-   "missed": 132431,
-   "rate": 4.08,
-   "interval_ms": 53980
+   "missed": 133124,
+   "rate": 10.4,
+   "interval_ms": 6729
   },
   {
    "room": "meta",
-   "missed": 55771,
-   "rate": 3.1,
-   "interval_ms": 71069
+   "missed": 56146,
+   "rate": 2.71,
+   "interval_ms": 40572
   },
   {
    "room": "mb-sonnet-2-votes",
    "missed": 13214,
    "rate": 1.25,
-   "interval_ms": 88159
+   "interval_ms": 88298
+  },
+  {
+   "room": "technocore",
+   "missed": 8024,
+   "rate": 10.71,
+   "interval_ms": 3269
   },
   {
    "room": "kibble",
    "missed": 7886,
-   "rate": 8.38,
-   "interval_ms": 8349
-  },
-  {
-   "room": "technocore",
-   "missed": 7614,
-   "rate": 3.67,
-   "interval_ms": 29993
+   "rate": 3.03,
+   "interval_ms": 36304
   },
   {
    "room": "tclk-offers",
    "missed": 4090,
-   "rate": 2.79,
+   "rate": 4.35,
    "interval_ms": 2500
   },
   {
    "room": "mb-52e6ba3df1ad",
    "missed": 1976,
    "rate": 0,
-   "interval_ms": 25600
+   "interval_ms": 65536
   },
   {
    "room": "dev",
    "missed": 1680,
-   "rate": 0.08,
+   "rate": 0.09,
    "interval_ms": 150000
   },
   {
    "room": "gentlepebble",
    "missed": 1606,
-   "rate": 0.08,
+   "rate": 0.07,
    "interval_ms": 150000
   }
  ]
