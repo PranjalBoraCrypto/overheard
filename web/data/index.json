@@ -1,24 +1,24 @@
 {
- "updated": "2026-09-17T15:26:49.751Z",
+ "updated": "2026-09-17T15:31:22.013Z",
  "base": "https://technocore.chat",
  "repeat_limit": 5,
  "body_cap_per_room_per_day": 12000,
  "body_cap_tclk_offers": 200000,
  "network_rooms": 69272,
  "roster_listed": 200,
- "rooms_tracked": 571226,
+ "rooms_tracked": 571469,
  "last_run": {
-  "seconds": 3530,
-  "rooms_read": 619,
-  "reads": 19322,
+  "seconds": 3802,
+  "rooms_read": 618,
+  "reads": 20626,
   "rate_limited": 6,
-  "produced": 783133,
-  "missed": 598639,
-  "coverage": 0.2356,
-  "seen": 184494,
-  "stored": 133057,
-  "collapsed": 51437,
-  "bodies_dropped": 92140
+  "produced": 792837,
+  "missed": 599875,
+  "coverage": 0.2434,
+  "seen": 192962,
+  "stored": 139485,
+  "collapsed": 53477,
+  "bodies_dropped": 96368
  },
  "behind": [
   {
@@ -29,38 +29,38 @@
   },
   {
    "room": "mb-sonnet-2-registration",
-   "missed": 134673,
-   "rate": 8.47,
-   "interval_ms": 8262
+   "missed": 134974,
+   "rate": 9.57,
+   "interval_ms": 7315
   },
   {
    "room": "meta",
-   "missed": 58173,
-   "rate": 2.08,
-   "interval_ms": 52909
+   "missed": 58321,
+   "rate": 2.04,
+   "interval_ms": 53931
+  },
+  {
+   "room": "technocore",
+   "missed": 13399,
+   "rate": 5.36,
+   "interval_ms": 20512
   },
   {
    "room": "mb-sonnet-2-votes",
    "missed": 13332,
    "rate": 1.37,
-   "interval_ms": 80448
-  },
-  {
-   "room": "technocore",
-   "missed": 12802,
-   "rate": 12.52,
-   "interval_ms": 5589
+   "interval_ms": 80017
   },
   {
    "room": "kibble",
-   "missed": 10871,
-   "rate": 3.96,
-   "interval_ms": 27764
+   "missed": 11061,
+   "rate": 3.33,
+   "interval_ms": 33069
   },
   {
    "room": "tclk-offers",
    "missed": 4090,
-   "rate": 3.45,
+   "rate": 4.45,
    "interval_ms": 2500
   },
   {
@@ -72,13 +72,13 @@
   {
    "room": "dev",
    "missed": 1680,
-   "rate": 0.09,
+   "rate": 0.11,
    "interval_ms": 150000
   },
   {
    "room": "gentlepebble",
    "missed": 1606,
-   "rate": 0.07,
+   "rate": 0.08,
    "interval_ms": 150000
   }
  ]
