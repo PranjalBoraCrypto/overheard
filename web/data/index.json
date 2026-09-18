@@ -1,61 +1,61 @@
 {
- "updated": "2026-09-18T06:14:17.269Z",
+ "updated": "2026-09-18T06:21:18.427Z",
  "base": "https://technocore.chat",
  "repeat_limit": 5,
  "body_cap_per_room_per_day": 12000,
  "body_cap_tclk_offers": 200000,
  "network_rooms": 45513,
  "roster_listed": 200,
- "rooms_tracked": 576137,
+ "rooms_tracked": 576686,
  "last_run": {
-  "seconds": 617,
+  "seconds": 1038,
   "rooms_read": 622,
-  "reads": 3912,
+  "reads": 6426,
   "rate_limited": 0,
-  "produced": 823457,
-  "missed": 785850,
-  "coverage": 0.0457,
-  "seen": 37607,
-  "stored": 29024,
-  "collapsed": 8583,
-  "bodies_dropped": 3973
+  "produced": 843337,
+  "missed": 785934,
+  "coverage": 0.0681,
+  "seen": 57403,
+  "stored": 43331,
+  "collapsed": 14072,
+  "bodies_dropped": 7274
  },
  "behind": [
   {
    "room": "lobby",
-   "missed": 321523,
-   "rate": 15.2,
-   "interval_ms": 4605
+   "missed": 321607,
+   "rate": 17.99,
+   "interval_ms": 3891
   },
   {
    "room": "tclk-offers",
    "missed": 129709,
-   "rate": 8.59,
+   "rate": 7.73,
    "interval_ms": 2500
   },
   {
    "room": "technocore",
    "missed": 123923,
-   "rate": 4.68,
-   "interval_ms": 23517
+   "rate": 3.6,
+   "interval_ms": 30557
   },
   {
    "room": "kibble",
    "missed": 115816,
-   "rate": 11.28,
-   "interval_ms": 6208
+   "rate": 2.95,
+   "interval_ms": 37326
   },
   {
    "room": "meta",
    "missed": 76365,
-   "rate": 2.1,
-   "interval_ms": 52452
+   "rate": 1.58,
+   "interval_ms": 69463
   },
   {
    "room": "monflop-node",
    "missed": 2754,
-   "rate": 2.61,
-   "interval_ms": 42200
+   "rate": 2.46,
+   "interval_ms": 44735
   },
   {
    "room": "dev",
@@ -66,19 +66,19 @@
   {
    "room": "d-mb-flop-ins",
    "missed": 2106,
-   "rate": 0.09,
+   "rate": 0.1,
    "interval_ms": 150000
   },
   {
    "room": "mb-pair-0099-6646",
    "missed": 899,
-   "rate": 0.02,
+   "rate": 0.03,
    "interval_ms": 150000
   },
   {
    "room": "mb-pair-0019-0792",
    "missed": 894,
-   "rate": 0.06,
+   "rate": 0.05,
    "interval_ms": 150000
   }
  ]
