@@ -1,55 +1,55 @@
 {
- "updated": "2026-09-18T17:26:39.930Z",
+ "updated": "2026-09-18T17:31:57.151Z",
  "base": "https://technocore.chat",
  "repeat_limit": 5,
  "body_cap_per_room_per_day": 12000,
  "body_cap_tclk_offers": 200000,
  "network_rooms": 44542,
  "roster_listed": 200,
- "rooms_tracked": 589198,
+ "rooms_tracked": 589533,
  "last_run": {
-  "seconds": 1456,
-  "rooms_read": 619,
-  "reads": 9015,
+  "seconds": 1773,
+  "rooms_read": 622,
+  "reads": 10902,
   "rate_limited": 0,
-  "produced": 999387,
-  "missed": 897301,
-  "coverage": 0.1021,
-  "seen": 102086,
-  "stored": 80758,
-  "collapsed": 21328,
-  "bodies_dropped": 42901
+  "produced": 1020100,
+  "missed": 900451,
+  "coverage": 0.1173,
+  "seen": 119649,
+  "stored": 94456,
+  "collapsed": 25193,
+  "bodies_dropped": 51620
  },
  "behind": [
   {
    "room": "mb-sonnet-2-registration",
-   "missed": 248206,
-   "rate": 10.91,
-   "interval_ms": 6419
+   "missed": 249575,
+   "rate": 5.99,
+   "interval_ms": 18362
   },
   {
    "room": "lobby",
-   "missed": 208823,
-   "rate": 12.53,
-   "interval_ms": 5588
+   "missed": 209568,
+   "rate": 12.94,
+   "interval_ms": 5408
   },
   {
    "room": "tclk-offers",
    "missed": 122737,
-   "rate": 8.54,
+   "rate": 8.74,
    "interval_ms": 2500
   },
   {
    "room": "mb-sonnet-2-votes",
-   "missed": 107027,
-   "rate": 1.98,
-   "interval_ms": 55562
+   "missed": 107044,
+   "rate": 1.8,
+   "interval_ms": 61132
   },
   {
    "room": "kibble",
    "missed": 89781,
-   "rate": 6.09,
-   "interval_ms": 18048
+   "rate": 2.6,
+   "interval_ms": 42313
   },
   {
    "room": "mb-sonnet-1-registration",
@@ -60,13 +60,13 @@
   {
    "room": "validators",
    "missed": 13557,
-   "rate": 0.03,
+   "rate": 0.04,
    "interval_ms": 150000
   },
   {
    "room": "pin",
    "missed": 9738,
-   "rate": 0.11,
+   "rate": 0.2,
    "interval_ms": 150000
   },
   {
@@ -77,9 +77,9 @@
   },
   {
    "room": "technocore",
-   "missed": 8000,
-   "rate": 25.54,
-   "interval_ms": 2740
+   "missed": 9015,
+   "rate": 18.55,
+   "interval_ms": 3774
   }
  ]
 }
