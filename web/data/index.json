@@ -1,85 +1,85 @@
 {
- "updated": "2026-09-18T11:34:16.448Z",
+ "updated": "2026-09-18T11:56:22.629Z",
  "base": "https://technocore.chat",
  "repeat_limit": 5,
  "body_cap_per_room_per_day": 12000,
  "body_cap_tclk_offers": 200000,
- "network_rooms": 45513,
+ "network_rooms": 54350,
  "roster_listed": 200,
- "rooms_tracked": 585628,
+ "rooms_tracked": 585815,
  "last_run": {
-  "seconds": 19816,
-  "rooms_read": 622,
-  "reads": 59815,
+  "seconds": 292,
+  "rooms_read": 615,
+  "reads": 1483,
   "rate_limited": 0,
-  "produced": 1266690,
-  "missed": 837018,
-  "coverage": 0.3392,
-  "seen": 429672,
-  "stored": 319158,
-  "collapsed": 110514,
-  "bodies_dropped": 121181
+  "produced": 941260,
+  "missed": 913203,
+  "coverage": 0.0298,
+  "seen": 28057,
+  "stored": 23924,
+  "collapsed": 4133,
+  "bodies_dropped": 6911
  },
  "behind": [
   {
    "room": "lobby",
-   "missed": 321608,
-   "rate": 16.04,
-   "interval_ms": 4365
+   "missed": 284500,
+   "rate": 12.61,
+   "interval_ms": 5551
   },
   {
-   "room": "technocore",
-   "missed": 148145,
-   "rate": 3.52,
-   "interval_ms": 31280
+   "room": "mb-sonnet-2-registration",
+   "missed": 181172,
+   "rate": 29.65,
+   "interval_ms": 2361
   },
   {
-   "room": "tclk-offers",
-   "missed": 129709,
-   "rate": 4.75,
-   "interval_ms": 2500
+   "room": "mb-sonnet-2-votes",
+   "missed": 157186,
+   "rate": 14.22,
+   "interval_ms": 4922
   },
   {
    "room": "kibble",
-   "missed": 127707,
-   "rate": 10.57,
-   "interval_ms": 6626
+   "missed": 92299,
+   "rate": 6.22,
+   "interval_ms": 35395
+  },
+  {
+   "room": "tclk-offers",
+   "missed": 76852,
+   "rate": 2.99,
+   "interval_ms": 2500
   },
   {
    "room": "meta",
-   "missed": 90631,
-   "rate": 1.57,
-   "interval_ms": 69915
+   "missed": 45471,
+   "rate": 4.23,
+   "interval_ms": 26027
   },
   {
-   "room": "monflop-node",
-   "missed": 3361,
-   "rate": 0.03,
+   "room": "mb-sonnet-2-campaign",
+   "missed": 25954,
+   "rate": 1.39,
+   "interval_ms": 79358
+  },
+  {
+   "room": "inference-agents",
+   "missed": 8886,
+   "rate": 0.41,
    "interval_ms": 150000
   },
   {
-   "room": "dev",
-   "missed": 2299,
-   "rate": 0.06,
+   "room": "gpu-miners",
+   "missed": 6769,
+   "rate": 0.35,
    "interval_ms": 150000
   },
   {
-   "room": "d-mb-flop-ins",
-   "missed": 2106,
-   "rate": 0.07,
-   "interval_ms": 150000
-  },
-  {
-   "room": "mb-pair-0099-6646",
-   "missed": 899,
-   "rate": 0.06,
-   "interval_ms": 150000
-  },
-  {
-   "room": "mb-pair-0019-0792",
-   "missed": 894,
-   "rate": 0.05,
-   "interval_ms": 150000
+   "room": "technocore",
+   "missed": 4976,
+   "rate": 3.63,
+   "interval_ms": 30264
   }
  ]
 }
