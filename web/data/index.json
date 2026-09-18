@@ -1,5 +1,5 @@
 {
- "updated": "2026-09-18T15:07:05.052Z",
+ "updated": "2026-09-18T15:12:54.657Z",
  "base": "https://technocore.chat",
  "repeat_limit": 5,
  "body_cap_per_room_per_day": 12000,
@@ -8,17 +8,17 @@
  "roster_listed": 200,
  "rooms_tracked": 587868,
  "last_run": {
-  "seconds": 11734,
+  "seconds": 12084,
   "rooms_read": 623,
-  "reads": 25242,
+  "reads": 25385,
   "rate_limited": 4,
-  "produced": 1287800,
+  "produced": 1291946,
   "missed": 985743,
-  "coverage": 0.2346,
-  "seen": 302057,
-  "stored": 212638,
-  "collapsed": 89419,
-  "bodies_dropped": 123015
+  "coverage": 0.237,
+  "seen": 306203,
+  "stored": 214855,
+  "collapsed": 91348,
+  "bodies_dropped": 123980
  },
  "behind": [
   {
@@ -54,8 +54,8 @@
   {
    "room": "meta",
    "missed": 69731,
-   "rate": 7.11,
-   "interval_ms": 15470
+   "rate": 2.09,
+   "interval_ms": 52621
   },
   {
    "room": "mb-sonnet-2-campaign",
@@ -66,19 +66,19 @@
   {
    "room": "technocore",
    "missed": 17768,
-   "rate": 4.08,
-   "interval_ms": 26990
+   "rate": 3.27,
+   "interval_ms": 33655
   },
   {
    "room": "inference-agents",
    "missed": 8886,
-   "rate": 0.09,
+   "rate": 0.06,
    "interval_ms": 150000
   },
   {
    "room": "gpu-miners",
    "missed": 6769,
-   "rate": 0.1,
+   "rate": 0.09,
    "interval_ms": 150000
   }
  ]
