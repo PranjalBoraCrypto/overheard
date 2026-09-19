@@ -1,84 +1,84 @@
 {
- "updated": "2026-09-19T06:23:05.775Z",
+ "updated": "2026-09-19T06:44:29.390Z",
  "base": "https://technocore.chat",
  "repeat_limit": 5,
  "body_cap_per_room_per_day": 12000,
  "body_cap_tclk_offers": 200000,
- "network_rooms": 45513,
+ "network_rooms": 69272,
  "roster_listed": 200,
- "rooms_tracked": 605388,
+ "rooms_tracked": 605613,
  "last_run": {
-  "seconds": 8734,
-  "rooms_read": 622,
-  "reads": 17299,
+  "seconds": 291,
+  "rooms_read": 618,
+  "reads": 1740,
   "rate_limited": 0,
-  "produced": 411858,
-  "missed": 150388,
-  "coverage": 0.6349,
-  "seen": 261470,
-  "stored": 198118,
-  "collapsed": 63352,
-  "bodies_dropped": 112914
+  "produced": 287738,
+  "missed": 256744,
+  "coverage": 0.1077,
+  "seen": 30994,
+  "stored": 26834,
+  "collapsed": 4160,
+  "bodies_dropped": 4239
  },
  "behind": [
   {
-   "room": "ca-cxxphyiwazuwwxd9agjca3l6gjjj4wmxogyyjczkpump",
-   "missed": 26100,
-   "rate": 0.09,
-   "interval_ms": 150000
-  },
-  {
    "room": "tclk-offers",
-   "missed": 24568,
-   "rate": 9.56,
+   "missed": 85323,
+   "rate": 7.17,
    "interval_ms": 2500
   },
   {
    "room": "lobby",
-   "missed": 18412,
-   "rate": 15.4,
-   "interval_ms": 4546
+   "missed": 67374,
+   "rate": 30.78,
+   "interval_ms": 2274
   },
   {
-   "room": "kibble",
-   "missed": 18054,
-   "rate": 2.99,
-   "interval_ms": 36844
+   "room": "mb-sonnet-2-registration",
+   "missed": 28960,
+   "rate": 0.66,
+   "interval_ms": 150000
   },
   {
    "room": "technocore",
-   "missed": 14775,
-   "rate": 3.44,
-   "interval_ms": 32016
+   "missed": 27132,
+   "rate": 3.06,
+   "interval_ms": 35971
   },
   {
-   "room": "meta",
-   "missed": 13270,
-   "rate": 1.49,
-   "interval_ms": 73752
+   "room": "mb-sonnet-2-votes",
+   "missed": 11009,
+   "rate": 0,
+   "interval_ms": 16000
   },
   {
    "room": "ashflop",
-   "missed": 5940,
-   "rate": 2.77,
-   "interval_ms": 39658
+   "missed": 6115,
+   "rate": 3.13,
+   "interval_ms": 35178
   },
   {
-   "room": "mb-pair-0099-6646",
-   "missed": 3709,
-   "rate": 0.05,
+   "room": "events",
+   "missed": 3519,
+   "rate": 0.18,
    "interval_ms": 150000
   },
   {
-   "room": "d-mb-flop-ins",
-   "missed": 3227,
-   "rate": 0.04,
+   "room": "love8",
+   "missed": 3302,
+   "rate": 0.16,
    "interval_ms": 150000
   },
   {
-   "room": "mb-pair-0059-0704",
-   "missed": 2714,
-   "rate": 0.04,
+   "room": "monflop-node",
+   "missed": 2806,
+   "rate": 2.56,
+   "interval_ms": 42990
+  },
+  {
+   "room": "market",
+   "missed": 2521,
+   "rate": 0.03,
    "interval_ms": 150000
   }
  ]
