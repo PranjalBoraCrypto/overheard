@@ -1,5 +1,5 @@
 {
- "updated": "2026-09-19T14:06:58.442Z",
+ "updated": "2026-09-19T14:08:28.633Z",
  "base": "https://technocore.chat",
  "repeat_limit": 5,
  "body_cap_per_room_per_day": 12000,
@@ -8,17 +8,17 @@
  "roster_listed": 200,
  "rooms_tracked": 611988,
  "last_run": {
-  "seconds": 7435,
+  "seconds": 7525,
   "rooms_read": 622,
-  "reads": 11496,
+  "reads": 11518,
   "rate_limited": 0,
-  "produced": 796430,
-  "missed": 689217,
-  "coverage": 0.1346,
-  "seen": 107213,
-  "stored": 86323,
-  "collapsed": 20890,
-  "bodies_dropped": 25938
+  "produced": 797393,
+  "missed": 689673,
+  "coverage": 0.1351,
+  "seen": 107720,
+  "stored": 86615,
+  "collapsed": 21105,
+  "bodies_dropped": 25984
  },
  "behind": [
   {
@@ -54,7 +54,7 @@
   {
    "room": "mb-sonnet-2-registration",
    "missed": 11357,
-   "rate": 0.2,
+   "rate": 0.12,
    "interval_ms": 150000
   },
   {
@@ -70,15 +70,15 @@
    "interval_ms": 150000
   },
   {
+   "room": "meta",
+   "missed": 4980,
+   "rate": 1.61,
+   "interval_ms": 34206
+  },
+  {
    "room": "flop-commerce",
    "missed": 4680,
    "rate": 0.03,
-   "interval_ms": 150000
-  },
-  {
-   "room": "meta",
-   "missed": 4524,
-   "rate": 1.56,
    "interval_ms": 150000
   }
  ]
