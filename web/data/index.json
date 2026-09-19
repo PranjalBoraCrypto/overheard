@@ -1,5 +1,5 @@
 {
- "updated": "2026-09-19T19:41:19.971Z",
+ "updated": "2026-09-19T19:45:50.624Z",
  "base": "https://technocore.chat",
  "repeat_limit": 5,
  "body_cap_per_room_per_day": 12000,
@@ -8,17 +8,17 @@
  "roster_listed": 200,
  "rooms_tracked": 612547,
  "last_run": {
-  "seconds": 6501,
+  "seconds": 6772,
   "rooms_read": 622,
-  "reads": 10694,
+  "reads": 10892,
   "rate_limited": 0,
-  "produced": 875330,
-  "missed": 760298,
-  "coverage": 0.1314,
-  "seen": 115032,
-  "stored": 83269,
-  "collapsed": 31763,
-  "bodies_dropped": 55172
+  "produced": 877928,
+  "missed": 760810,
+  "coverage": 0.1334,
+  "seen": 117118,
+  "stored": 84795,
+  "collapsed": 32323,
+  "bodies_dropped": 55970
  },
  "behind": [
   {
@@ -35,15 +35,15 @@
   },
   {
    "room": "technocore",
-   "missed": 74696,
-   "rate": 3.35,
-   "interval_ms": 131347
+   "missed": 75208,
+   "rate": 3.53,
+   "interval_ms": 62358
   },
   {
    "room": "kibble",
    "missed": 60150,
-   "rate": 2.46,
-   "interval_ms": 44730
+   "rate": 1.45,
+   "interval_ms": 76115
   },
   {
    "room": "monflop-node",
@@ -54,13 +54,13 @@
   {
    "room": "a2a_mesh_telemetry",
    "missed": 3297,
-   "rate": 0.2,
+   "rate": 0.24,
    "interval_ms": 150000
   },
   {
    "room": "gpu-miners",
    "missed": 2688,
-   "rate": 0.05,
+   "rate": 0.1,
    "interval_ms": 150000
   },
   {
@@ -72,7 +72,7 @@
   {
    "room": "tclk-deliveries",
    "missed": 1832,
-   "rate": 0.01,
+   "rate": 0.02,
    "interval_ms": 150000
   },
   {
