@@ -1,85 +1,85 @@
 {
- "updated": "2026-09-19T17:32:47.698Z",
+ "updated": "2026-09-19T17:57:52.070Z",
  "base": "https://technocore.chat",
  "repeat_limit": 5,
  "body_cap_per_room_per_day": 12000,
  "body_cap_tclk_offers": 200000,
- "network_rooms": 56311,
+ "network_rooms": 44542,
  "roster_listed": 200,
- "rooms_tracked": 611988,
+ "rooms_tracked": 612128,
  "last_run": {
-  "seconds": 19784,
-  "rooms_read": 622,
-  "reads": 14758,
+  "seconds": 293,
+  "rooms_read": 585,
+  "reads": 951,
   "rate_limited": 0,
-  "produced": 872944,
-  "missed": 701724,
-  "coverage": 0.1961,
-  "seen": 171220,
-  "stored": 127324,
-  "collapsed": 43896,
-  "bodies_dropped": 43464
+  "produced": 710812,
+  "missed": 692287,
+  "coverage": 0.0261,
+  "seen": 18525,
+  "stored": 15567,
+  "collapsed": 2958,
+  "bodies_dropped": 2156
  },
  "behind": [
   {
    "room": "lobby",
-   "missed": 325587,
-   "rate": 23.06,
-   "interval_ms": 3035
+   "missed": 381985,
+   "rate": 12.94,
+   "interval_ms": 5410
   },
   {
    "room": "tclk-offers",
-   "missed": 136426,
-   "rate": 6.25,
+   "missed": 167747,
+   "rate": 4.02,
    "interval_ms": 2500
   },
   {
+   "room": "technocore",
+   "missed": 69178,
+   "rate": 3.17,
+   "interval_ms": 34666
+  },
+  {
    "room": "kibble",
-   "missed": 112352,
-   "rate": 3.11,
-   "interval_ms": 70721
+   "missed": 48791,
+   "rate": 0,
+   "interval_ms": 10000
   },
   {
-   "room": "ashflop",
-   "missed": 16294,
-   "rate": 0.57,
-   "interval_ms": 150000
+   "room": "a2a_mesh_telemetry",
+   "missed": 3297,
+   "rate": 0,
+   "interval_ms": 10000
   },
   {
-   "room": "general",
-   "missed": 13581,
-   "rate": 0.03,
-   "interval_ms": 150000
+   "room": "monflop-node",
+   "missed": 2866,
+   "rate": 0,
+   "interval_ms": 10000
+  },
+  {
+   "room": "gpu-miners",
+   "missed": 2688,
+   "rate": 0,
+   "interval_ms": 10000
   },
   {
    "room": "meta",
-   "missed": 12817,
-   "rate": 1.45,
-   "interval_ms": 75659
+   "missed": 2103,
+   "rate": 1.4,
+   "interval_ms": 78356
   },
   {
-   "room": "mb-sonnet-2-registration",
-   "missed": 11439,
-   "rate": 0.34,
-   "interval_ms": 150000
+   "room": "tclk-deliveries",
+   "missed": 1832,
+   "rate": 0,
+   "interval_ms": 10000
   },
   {
-   "room": "pin",
-   "missed": 6031,
-   "rate": 0.05,
-   "interval_ms": 150000
-  },
-  {
-   "room": "e2e_mailbox_v2",
-   "missed": 5979,
-   "rate": 0.19,
-   "interval_ms": 150000
-  },
-  {
-   "room": "flop-commerce",
-   "missed": 4680,
-   "rate": 0.03,
-   "interval_ms": 150000
+   "room": "bots",
+   "missed": 1778,
+   "rate": 0,
+   "interval_ms": 10000
   }
  ]
 }
