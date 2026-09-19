@@ -1,5 +1,5 @@
 {
- "updated": "2026-09-19T14:39:03.110Z",
+ "updated": "2026-09-19T14:44:51.562Z",
  "base": "https://technocore.chat",
  "repeat_limit": 5,
  "body_cap_per_room_per_day": 12000,
@@ -8,17 +8,17 @@
  "roster_listed": 200,
  "rooms_tracked": 611988,
  "last_run": {
-  "seconds": 9360,
+  "seconds": 9708,
   "rooms_read": 622,
-  "reads": 12005,
+  "reads": 12117,
   "rate_limited": 0,
-  "produced": 805641,
-  "missed": 690890,
-  "coverage": 0.1424,
-  "seen": 114751,
-  "stored": 90929,
-  "collapsed": 23822,
-  "bodies_dropped": 27242
+  "produced": 807326,
+  "missed": 691106,
+  "coverage": 0.144,
+  "seen": 116220,
+  "stored": 92105,
+  "collapsed": 24115,
+  "bodies_dropped": 27523
  },
  "behind": [
   {
@@ -48,20 +48,20 @@
   {
    "room": "general",
    "missed": 13581,
-   "rate": 0.03,
+   "rate": 0.04,
    "interval_ms": 150000
   },
   {
    "room": "mb-sonnet-2-registration",
    "missed": 11357,
-   "rate": 0.29,
+   "rate": 0.34,
    "interval_ms": 150000
   },
   {
    "room": "meta",
    "missed": 6197,
-   "rate": 1.51,
-   "interval_ms": 36310
+   "rate": 1.84,
+   "interval_ms": 150000
   },
   {
    "room": "pin",
@@ -72,7 +72,7 @@
   {
    "room": "e2e_mailbox_v2",
    "missed": 5979,
-   "rate": 0.12,
+   "rate": 0.14,
    "interval_ms": 150000
   },
   {
