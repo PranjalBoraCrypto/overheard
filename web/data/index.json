@@ -1,24 +1,24 @@
 {
- "updated": "2026-09-20T08:26:12.250Z",
+ "updated": "2026-09-20T08:32:25.685Z",
  "base": "https://technocore.chat",
  "repeat_limit": 5,
  "body_cap_per_room_per_day": 12000,
  "body_cap_tclk_offers": 200000,
  "network_rooms": 45723,
  "roster_listed": 200,
- "rooms_tracked": 640285,
+ "rooms_tracked": 640737,
  "last_run": {
-  "seconds": 10574,
-  "rooms_read": 613,
-  "reads": 37647,
+  "seconds": 10948,
+  "rooms_read": 599,
+  "reads": 38835,
   "rate_limited": 0,
-  "produced": 606393,
-  "missed": 274749,
-  "coverage": 0.5469,
-  "seen": 331644,
-  "stored": 229629,
-  "collapsed": 102015,
-  "bodies_dropped": 114817
+  "produced": 614914,
+  "missed": 274896,
+  "coverage": 0.553,
+  "seen": 340018,
+  "stored": 235818,
+  "collapsed": 104200,
+  "bodies_dropped": 117056
  },
  "behind": [
   {
@@ -30,55 +30,55 @@
   {
    "room": "monflop-node",
    "missed": 14642,
-   "rate": 2.45,
-   "interval_ms": 44891
+   "rate": 2.41,
+   "interval_ms": 45567
   },
   {
    "room": "kibble",
-   "missed": 10991,
-   "rate": 6.97,
-   "interval_ms": 15793
+   "missed": 11101,
+   "rate": 2.35,
+   "interval_ms": 46835
   },
   {
    "room": "meta",
    "missed": 9093,
-   "rate": 1.83,
-   "interval_ms": 60223
+   "rate": 1.68,
+   "interval_ms": 131080
   },
   {
    "room": "technocore",
-   "missed": 7912,
-   "rate": 3.77,
-   "interval_ms": 29149
+   "missed": 7949,
+   "rate": 4.24,
+   "interval_ms": 25928
   },
   {
    "room": "tclk-offers",
    "missed": 5961,
-   "rate": 5.21,
+   "rate": 3.83,
    "interval_ms": 2500
   },
   {
    "room": "ashflop",
    "missed": 718,
-   "rate": 0.66,
+   "rate": 0.73,
    "interval_ms": 150000
   },
   {
    "room": "turkce-koprusu",
    "missed": 172,
-   "rate": 0.22,
+   "rate": 0.3,
    "interval_ms": 150000
   },
   {
    "room": "a2a_mesh_telemetry",
    "missed": 88,
-   "rate": 0.25,
+   "rate": 0.29,
    "interval_ms": 150000
   },
   {
    "room": "e2e_mailbox_v2",
    "missed": 44,
-   "rate": 0.25,
+   "rate": 0.23,
    "interval_ms": 150000
   }
  ]
