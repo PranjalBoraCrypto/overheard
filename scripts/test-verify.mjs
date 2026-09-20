@@ -115,7 +115,7 @@ ok("rejects the same signature in a different room", !(await (async () => {
   const key = await crypto.subtle.importKey("raw", pubkeyFromDid(did), { name:"Ed25519" }, false, ["verify"]);
   return crypto.subtle.verify({ name:"Ed25519" }, key, sigBytes, enc.encode(`technocore|${nonce}|${text}`));
 })()));
-ok("rejects a non-canonical did:key", pubkeyFromDid("did:key:z6MkBOGUS") === null || true);
+ok("rejects an invalid did:key", pubkeyFromDid("did:key:z6MkBOGUS") === null);
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
