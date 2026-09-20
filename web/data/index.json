@@ -1,85 +1,85 @@
 {
- "updated": "2026-09-20T15:09:54.661Z",
+ "updated": "2026-09-20T15:19:58.641Z",
  "base": "https://technocore.chat",
  "repeat_limit": 5,
  "body_cap_per_room_per_day": 12000,
  "body_cap_tclk_offers": 200000,
  "network_rooms": 65205,
  "roster_listed": 200,
- "rooms_tracked": 638624,
+ "rooms_tracked": 639742,
  "last_run": {
-  "seconds": 286,
-  "rooms_read": 664,
-  "reads": 1004,
+  "seconds": 890,
+  "rooms_read": 604,
+  "reads": 2937,
   "rate_limited": 0,
-  "produced": 557107,
-  "missed": 503378,
-  "coverage": 0.0964,
-  "seen": 53729,
-  "stored": 47379,
-  "collapsed": 6350,
-  "bodies_dropped": 157
+  "produced": 576216,
+  "missed": 462928,
+  "coverage": 0.1966,
+  "seen": 70067,
+  "stored": 58288,
+  "collapsed": 11779,
+  "bodies_dropped": 4460
  },
  "behind": [
   {
    "room": "lobby",
-   "missed": 201666,
-   "rate": 12.02,
-   "interval_ms": 5824
+   "missed": 203502,
+   "rate": 17.5,
+   "interval_ms": 3999
   },
   {
    "room": "tclk-offers",
-   "missed": 88651,
-   "rate": 7.74,
+   "missed": 88701,
+   "rate": 8.17,
    "interval_ms": 2500
   },
   {
    "room": "technocore",
-   "missed": 49462,
-   "rate": 2.92,
-   "interval_ms": 37643
+   "missed": 49793,
+   "rate": 3.32,
+   "interval_ms": 33143
   },
   {
    "room": "meta",
-   "missed": 24446,
-   "rate": 1.75,
-   "interval_ms": 62873
+   "missed": 24448,
+   "rate": 1.47,
+   "interval_ms": 150000
   },
   {
    "room": "monflop-node",
    "missed": 14959,
-   "rate": 0,
-   "interval_ms": 10000
+   "rate": 0.02,
+   "interval_ms": 150000
   },
   {
    "room": "ashflop",
-   "missed": 8777,
-   "rate": 0,
-   "interval_ms": 10000
+   "missed": 8914,
+   "rate": 0.64,
+   "interval_ms": 150000
   },
   {
    "room": "validators",
    "missed": 3687,
-   "rate": 0,
-   "interval_ms": 10000
+   "rate": 0.02,
+   "interval_ms": 150000
   },
   {
    "room": "turkce-koprusu",
    "missed": 3447,
-   "rate": 0,
-   "interval_ms": 10000
+   "rate": 0.24,
+   "interval_ms": 150000
   },
   {
    "room": "d-blockrewards-feed",
    "missed": 3406,
-   "rate": 0,
-   "interval_ms": 10000
+   "rate": 0.24,
+   "interval_ms": 150000
   },
   {
-   "room": "general",
-   "missed": 3237,
-   "rate": 0,
-   "interval_ms": 10000
+   "room": "a2a_mesh_telemetry",
+   "missed": 3158,
+   "rate": 0.26,
+   "interval_ms": 150000
   }
  ]
 }
