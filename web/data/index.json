@@ -1,84 +1,84 @@
 {
- "updated": "2026-09-20T06:11:16.602Z",
+ "updated": "2026-09-20T06:17:23.880Z",
  "base": "https://technocore.chat",
  "repeat_limit": 5,
  "body_cap_per_room_per_day": 12000,
  "body_cap_tclk_offers": 200000,
  "network_rooms": 45723,
  "roster_listed": 200,
- "rooms_tracked": 632195,
+ "rooms_tracked": 632556,
  "last_run": {
-  "seconds": 2479,
-  "rooms_read": 611,
-  "reads": 10325,
+  "seconds": 2846,
+  "rooms_read": 600,
+  "reads": 11730,
   "rate_limited": 0,
-  "produced": 324821,
-  "missed": 243541,
-  "coverage": 0.2502,
-  "seen": 81280,
-  "stored": 55073,
-  "collapsed": 26207,
-  "bodies_dropped": 25131
+  "produced": 337451,
+  "missed": 244440,
+  "coverage": 0.2756,
+  "seen": 93011,
+  "stored": 63232,
+  "collapsed": 29779,
+  "bodies_dropped": 29196
  },
  "behind": [
   {
    "room": "lobby",
-   "missed": 205242,
-   "rate": 14.72,
-   "interval_ms": 4755
+   "missed": 206141,
+   "rate": 12.38,
+   "interval_ms": 5655
   },
   {
    "room": "monflop-node",
    "missed": 13737,
-   "rate": 2.51,
-   "interval_ms": 43778
+   "rate": 2.06,
+   "interval_ms": 53281
   },
   {
    "room": "meta",
    "missed": 7756,
-   "rate": 1.61,
-   "interval_ms": 68299
+   "rate": 1.53,
+   "interval_ms": 143497
   },
   {
    "room": "tclk-offers",
    "missed": 5935,
-   "rate": 5.21,
+   "rate": 6.69,
    "interval_ms": 2500
   },
   {
    "room": "kibble",
    "missed": 4999,
-   "rate": 1.95,
-   "interval_ms": 56498
+   "rate": 1.63,
+   "interval_ms": 135030
   },
   {
    "room": "technocore",
    "missed": 4957,
-   "rate": 3.78,
-   "interval_ms": 29130
+   "rate": 3.1,
+   "interval_ms": 70918
   },
   {
    "room": "ashflop",
    "missed": 611,
-   "rate": 0.69,
+   "rate": 0.72,
    "interval_ms": 150000
   },
   {
    "room": "turkce-koprusu",
    "missed": 172,
-   "rate": 0.28,
+   "rate": 0.29,
    "interval_ms": 150000
   },
   {
    "room": "a2a_mesh_telemetry",
    "missed": 88,
-   "rate": 0.24,
+   "rate": 0.27,
    "interval_ms": 150000
   },
   {
    "room": "e2e_mailbox_v2",
    "missed": 44,
-   "rate": 0.21,
+   "rate": 0.24,
    "interval_ms": 150000
   }
  ]
