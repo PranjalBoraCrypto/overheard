@@ -83,11 +83,16 @@ async function grabText(p) {
   } catch { return null; }
 }
 
-/** One archived line, kept only if it is one of ours. Reduced to what a fold
- *  needs: who signed it, when the server saw it, and what it said. */
+/** One archived line, including the evidence an independent reader needs.
+ *  `signed` is an archive assertion, not a substitute for `sig` and `nonce`.
+ *  Sequence and timestamp remain unsigned venue metadata. */
 function frameFrom(line) {
   let row;
-  try { row = JSON.parse(line); } catch { return null; }
+  try {
+    // As in api/room.js, preserve large integer nonces before JSON.parse can
+    // round them. Quoted nonce strings are already lossless.
+    row = JSON.parse(line.replace(/"(nonce|seq)"\s*:\s*(-?\d{15,})(?=\s*[,}])/g, '"$1":"$2"'));
+  } catch { return null; }
   const text = String(row?.text ?? "");
   if (!text.startsWith(PREFIX)) return null;
   /* A KEY, NOT A NICKNAME. Technocore accepts unsigned posts under a
@@ -116,6 +121,11 @@ function frameFrom(line) {
     ...(typeof row.signed === "boolean" ? { signed: row.signed }
         : "sig" in (row ?? {}) ? { signed: typeof row.sig === "string" && row.sig.length > 0 }
         : {}),
+    // Keep the original proof, without labelling its presence as verification.
+    // Omit absent fields: inventing sig:null on a legacy row would change the
+    // fold's existing acceptance of records whose evidence was never retained.
+    ...(typeof row.sig === "string" ? { sig: row.sig } : {}),
+    ...(row.nonce != null ? { nonce: String(row.nonce) } : {}),
     text,
   };
 }
