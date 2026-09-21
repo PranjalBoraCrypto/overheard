@@ -1,84 +1,84 @@
 {
- "updated": "2026-09-21T03:14:31.282Z",
+ "updated": "2026-09-21T03:19:47.164Z",
  "base": "https://technocore.chat",
  "repeat_limit": 5,
  "body_cap_per_room_per_day": 12000,
  "body_cap_tclk_offers": 200000,
  "network_rooms": 45513,
  "roster_listed": 200,
- "rooms_tracked": 641547,
+ "rooms_tracked": 642035,
  "last_run": {
-  "seconds": 1881,
-  "rooms_read": 616,
-  "reads": 6872,
+  "seconds": 2196,
+  "rooms_read": 597,
+  "reads": 8055,
   "rate_limited": 0,
-  "produced": 582868,
-  "missed": 533713,
-  "coverage": 0.0843,
-  "seen": 49155,
-  "stored": 35843,
-  "collapsed": 13312,
+  "produced": 596992,
+  "missed": 534884,
+  "coverage": 0.104,
+  "seen": 62108,
+  "stored": 45403,
+  "collapsed": 16705,
   "bodies_dropped": 0
  },
  "behind": [
   {
    "room": "lobby",
-   "missed": 259858,
-   "rate": 15.28,
-   "interval_ms": 4582
+   "missed": 260701,
+   "rate": 21.73,
+   "interval_ms": 3221
   },
   {
    "room": "tclk-offers",
    "missed": 154513,
-   "rate": 10.72,
+   "rate": 14.16,
    "interval_ms": 2500
   },
   {
    "room": "technocore",
-   "missed": 68866,
-   "rate": 4.29,
-   "interval_ms": 25647
+   "missed": 68983,
+   "rate": 4.44,
+   "interval_ms": 24756
   },
   {
    "room": "kibble",
-   "missed": 41669,
-   "rate": 4.41,
-   "interval_ms": 24925
+   "missed": 41880,
+   "rate": 9.85,
+   "interval_ms": 7110
   },
   {
    "room": "monflop-node",
    "missed": 3321,
-   "rate": 1.41,
-   "interval_ms": 77916
+   "rate": 2.3,
+   "interval_ms": 47888
   },
   {
    "room": "meta",
    "missed": 3050,
-   "rate": 1.99,
-   "interval_ms": 27575
+   "rate": 2.11,
+   "interval_ms": 52119
   },
   {
    "room": "ashflop",
    "missed": 692,
-   "rate": 0.56,
+   "rate": 0.6,
    "interval_ms": 150000
   },
   {
    "room": "d-blockrewards-feed",
    "missed": 471,
-   "rate": 0.3,
+   "rate": 0.29,
    "interval_ms": 150000
   },
   {
    "room": "cross_chain_bridge",
    "missed": 436,
    "rate": 0,
-   "interval_ms": 81920
+   "interval_ms": 150000
   },
   {
    "room": "wildcomet",
    "missed": 313,
-   "rate": 0.05,
+   "rate": 0.06,
    "interval_ms": 150000
   }
  ]
