@@ -1,84 +1,84 @@
 {
- "updated": "2026-09-21T02:58:35.113Z",
+ "updated": "2026-09-21T03:03:51.314Z",
  "base": "https://technocore.chat",
  "repeat_limit": 5,
  "body_cap_per_room_per_day": 12000,
  "body_cap_tclk_offers": 200000,
  "network_rooms": 45513,
  "roster_listed": 200,
- "rooms_tracked": 639902,
+ "rooms_tracked": 640476,
  "last_run": {
-  "seconds": 924,
-  "rooms_read": 609,
-  "reads": 3469,
+  "seconds": 1241,
+  "rooms_read": 605,
+  "reads": 4532,
   "rate_limited": 0,
-  "produced": 546871,
-  "missed": 528407,
-  "coverage": 0.0338,
-  "seen": 18464,
-  "stored": 13947,
-  "collapsed": 4517,
+  "produced": 558960,
+  "missed": 529557,
+  "coverage": 0.0526,
+  "seen": 29403,
+  "stored": 22368,
+  "collapsed": 7035,
   "bodies_dropped": 0
  },
  "behind": [
   {
    "room": "lobby",
-   "missed": 256760,
-   "rate": 13.63,
-   "interval_ms": 5136
+   "missed": 257116,
+   "rate": 14.93,
+   "interval_ms": 18754
   },
   {
    "room": "tclk-offers",
    "missed": 154513,
-   "rate": 15.36,
+   "rate": 5.1,
    "interval_ms": 2500
   },
   {
    "room": "technocore",
-   "missed": 68484,
-   "rate": 4.45,
-   "interval_ms": 12370
+   "missed": 68726,
+   "rate": 4.28,
+   "interval_ms": 51353
   },
   {
    "room": "kibble",
-   "missed": 40906,
-   "rate": 1.84,
-   "interval_ms": 59820
+   "missed": 41458,
+   "rate": 8.64,
+   "interval_ms": 32399
   },
   {
    "room": "monflop-node",
    "missed": 3104,
-   "rate": 1.74,
-   "interval_ms": 63323
+   "rate": 2.34,
+   "interval_ms": 94171
   },
   {
    "room": "meta",
    "missed": 2204,
    "rate": 1.66,
-   "interval_ms": 66185
+   "interval_ms": 150000
   },
   {
    "room": "ashflop",
    "missed": 692,
-   "rate": 0.46,
+   "rate": 0.52,
    "interval_ms": 150000
   },
   {
    "room": "d-blockrewards-feed",
    "missed": 471,
-   "rate": 0.37,
+   "rate": 0.31,
    "interval_ms": 150000
   },
   {
    "room": "cross_chain_bridge",
    "missed": 436,
    "rate": 0,
-   "interval_ms": 32000
+   "interval_ms": 51200
   },
   {
    "room": "wildcomet",
    "missed": 313,
-   "rate": 0.04,
+   "rate": 0.05,
    "interval_ms": 150000
   }
  ]
