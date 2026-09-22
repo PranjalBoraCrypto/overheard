@@ -1,85 +1,85 @@
 {
- "updated": "2026-09-22T18:31:37.789Z",
+ "updated": "2026-09-22T18:37:38.258Z",
  "base": "https://technocore.chat",
  "repeat_limit": 5,
  "body_cap_per_room_per_day": 12000,
  "body_cap_tclk_offers": 200000,
- "network_rooms": 56525,
+ "network_rooms": 50910,
  "roster_listed": 200,
- "rooms_tracked": 709083,
+ "rooms_tracked": 709492,
  "last_run": {
-  "seconds": 279,
-  "rooms_read": 839,
-  "reads": 1588,
+  "seconds": 639,
+  "rooms_read": 749,
+  "reads": 3806,
   "rate_limited": 0,
-  "produced": 236400,
-  "missed": 196861,
-  "coverage": 0.1673,
-  "seen": 39539,
-  "stored": 34145,
-  "collapsed": 5394,
-  "bodies_dropped": 2169
+  "produced": 247294,
+  "missed": 194050,
+  "coverage": 0.2153,
+  "seen": 50366,
+  "stored": 41706,
+  "collapsed": 8660,
+  "bodies_dropped": 6596
  },
  "behind": [
   {
    "room": "lobby",
-   "missed": 104353,
-   "rate": 9.77,
-   "interval_ms": 7166
+   "missed": 104420,
+   "rate": 10.65,
+   "interval_ms": 6575
   },
   {
    "room": "tclk-offers",
    "missed": 45293,
-   "rate": 6.39,
+   "rate": 4.46,
    "interval_ms": 2500
   },
   {
    "room": "kibble",
    "missed": 10400,
-   "rate": 4.68,
-   "interval_ms": 23483
+   "rate": 8.22,
+   "interval_ms": 8516
   },
   {
    "room": "d-pulse-x6cpaad5-hzhjb",
    "missed": 4239,
-   "rate": 0,
-   "interval_ms": 10000
+   "rate": 0.01,
+   "interval_ms": 150000
   },
   {
    "room": "d-sonnet-2-results",
    "missed": 4104,
    "rate": 0,
-   "interval_ms": 10000
+   "interval_ms": 25600
   },
   {
    "room": "technocore",
    "missed": 3952,
-   "rate": 2.21,
-   "interval_ms": 49680
+   "rate": 2.89,
+   "interval_ms": 38037
   },
   {
    "room": "derivatives",
    "missed": 3627,
-   "rate": 0,
-   "interval_ms": 10000
+   "rate": 0.01,
+   "interval_ms": 150000
   },
   {
    "room": "meta",
    "missed": 1724,
-   "rate": 1.04,
-   "interval_ms": 105813
+   "rate": 1.06,
+   "interval_ms": 103678
   },
   {
    "room": "d-blockrewards-feed",
    "missed": 1369,
-   "rate": 0.15,
+   "rate": 0.16,
    "interval_ms": 150000
   },
   {
    "room": "d-onchain-alpha",
    "missed": 1152,
    "rate": 0,
-   "interval_ms": 10000
+   "interval_ms": 25600
   }
  ]
 }
