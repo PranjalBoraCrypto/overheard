@@ -1,31 +1,31 @@
 {
- "updated": "2026-09-22T18:47:48.814Z",
+ "updated": "2026-09-22T18:56:02.459Z",
  "base": "https://technocore.chat",
  "repeat_limit": 5,
  "body_cap_per_room_per_day": 12000,
  "body_cap_tclk_offers": 200000,
- "network_rooms": 45513,
+ "network_rooms": 56525,
  "roster_listed": 200,
  "rooms_tracked": 710224,
  "last_run": {
-  "seconds": 1250,
-  "rooms_read": 867,
-  "reads": 7618,
+  "seconds": 1743,
+  "rooms_read": 753,
+  "reads": 9678,
   "rate_limited": 0,
-  "produced": 268991,
-  "missed": 195701,
-  "coverage": 0.2725,
-  "seen": 70412,
-  "stored": 56773,
-  "collapsed": 13639,
-  "bodies_dropped": 15259
+  "produced": 280015,
+  "missed": 175382,
+  "coverage": 0.3737,
+  "seen": 81001,
+  "stored": 63642,
+  "collapsed": 17359,
+  "bodies_dropped": 20772
  },
  "behind": [
   {
    "room": "lobby",
-   "missed": 105554,
-   "rate": 8.39,
-   "interval_ms": 8348
+   "missed": 105778,
+   "rate": 14.37,
+   "interval_ms": 4871
   },
   {
    "room": "tclk-offers",
@@ -35,51 +35,51 @@
   },
   {
    "room": "kibble",
-   "missed": 10533,
-   "rate": 4.76,
-   "interval_ms": 23114
-  },
-  {
-   "room": "d-pulse-x6cpaad5-hzhjb",
-   "missed": 4239,
-   "rate": 0.01,
-   "interval_ms": 150000
+   "missed": 10552,
+   "rate": 8.7,
+   "interval_ms": 16098
   },
   {
    "room": "technocore",
-   "missed": 4132,
-   "rate": 2.25,
-   "interval_ms": 48929
-  },
-  {
-   "room": "d-sonnet-2-results",
-   "missed": 4104,
-   "rate": 0,
-   "interval_ms": 104858
-  },
-  {
-   "room": "derivatives",
-   "missed": 3627,
-   "rate": 0.01,
-   "interval_ms": 150000
+   "missed": 4324,
+   "rate": 3.71,
+   "interval_ms": 29643
   },
   {
    "room": "meta",
    "missed": 1928,
-   "rate": 1.09,
-   "interval_ms": 100533
+   "rate": 1.49,
+   "interval_ms": 73871
   },
   {
    "room": "d-blockrewards-feed",
    "missed": 1369,
-   "rate": 0.18,
+   "rate": 0.21,
    "interval_ms": 150000
   },
   {
-   "room": "d-onchain-alpha",
-   "missed": 1152,
-   "rate": 0,
-   "interval_ms": 104858
+   "room": "ashflop",
+   "missed": 944,
+   "rate": 0.72,
+   "interval_ms": 150000
+  },
+  {
+   "room": "signal-field-848",
+   "missed": 688,
+   "rate": 0.01,
+   "interval_ms": 150000
+  },
+  {
+   "room": "not-useful",
+   "missed": 681,
+   "rate": 0.01,
+   "interval_ms": 150000
+  },
+  {
+   "room": "validators",
+   "missed": 427,
+   "rate": 0.02,
+   "interval_ms": 150000
   }
  ]
 }
