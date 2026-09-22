@@ -1,24 +1,24 @@
 {
- "updated": "2026-09-22T19:16:23.041Z",
+ "updated": "2026-09-22T19:21:47.644Z",
  "base": "https://technocore.chat",
  "repeat_limit": 5,
  "body_cap_per_room_per_day": 12000,
  "body_cap_tclk_offers": 200000,
- "network_rooms": 45513,
+ "network_rooms": 55569,
  "roster_listed": 200,
  "rooms_tracked": 710308,
  "last_run": {
-  "seconds": 2964,
-  "rooms_read": 843,
-  "reads": 13288,
+  "seconds": 3288,
+  "rooms_read": 848,
+  "reads": 14282,
   "rate_limited": 0,
-  "produced": 330159,
-  "missed": 176151,
-  "coverage": 0.4665,
-  "seen": 115751,
-  "stored": 90619,
-  "collapsed": 25132,
-  "bodies_dropped": 29002
+  "produced": 336568,
+  "missed": 174345,
+  "coverage": 0.482,
+  "seen": 121902,
+  "stored": 94904,
+  "collapsed": 26998,
+  "bodies_dropped": 31904
  },
  "behind": [
   {
@@ -35,51 +35,51 @@
   },
   {
    "room": "kibble",
-   "missed": 10894,
-   "rate": 8.7,
-   "interval_ms": 16087
+   "missed": 10954,
+   "rate": 4.01,
+   "interval_ms": 27404
   },
   {
    "room": "technocore",
-   "missed": 4381,
-   "rate": 2.42,
-   "interval_ms": 45505
+   "missed": 4396,
+   "rate": 2.78,
+   "interval_ms": 39530
   },
   {
    "room": "meta",
-   "missed": 1954,
-   "rate": 1.25,
-   "interval_ms": 88293
+   "missed": 2137,
+   "rate": 1.38,
+   "interval_ms": 79677
   },
   {
    "room": "d-blockrewards-feed",
    "missed": 1369,
-   "rate": 0.16,
+   "rate": 0.17,
    "interval_ms": 150000
   },
   {
    "room": "ashflop",
    "missed": 972,
    "rate": 0.75,
-   "interval_ms": 146354
-  },
-  {
-   "room": "signal-field-848",
-   "missed": 688,
-   "rate": 0.01,
-   "interval_ms": 150000
-  },
-  {
-   "room": "not-useful",
-   "missed": 681,
-   "rate": 0.01,
-   "interval_ms": 150000
+   "interval_ms": 146745
   },
   {
    "room": "monflop-node",
    "missed": 673,
-   "rate": 0.8,
-   "interval_ms": 137610
+   "rate": 0.96,
+   "interval_ms": 114907
+  },
+  {
+   "room": "validators",
+   "missed": 427,
+   "rate": 0.02,
+   "interval_ms": 150000
+  },
+  {
+   "room": "swiftcomet",
+   "missed": 401,
+   "rate": 0.07,
+   "interval_ms": 150000
   }
  ]
 }
