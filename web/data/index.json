@@ -1,43 +1,43 @@
 {
- "updated": "2026-09-22T18:37:38.258Z",
+ "updated": "2026-09-22T18:45:33.047Z",
  "base": "https://technocore.chat",
  "repeat_limit": 5,
  "body_cap_per_room_per_day": 12000,
  "body_cap_tclk_offers": 200000,
  "network_rooms": 50910,
  "roster_listed": 200,
- "rooms_tracked": 709492,
+ "rooms_tracked": 710054,
  "last_run": {
-  "seconds": 639,
-  "rooms_read": 749,
-  "reads": 3806,
+  "seconds": 1114,
+  "rooms_read": 752,
+  "reads": 6660,
   "rate_limited": 0,
-  "produced": 247294,
-  "missed": 194050,
-  "coverage": 0.2153,
-  "seen": 50366,
-  "stored": 41706,
-  "collapsed": 8660,
-  "bodies_dropped": 6596
+  "produced": 263492,
+  "missed": 195477,
+  "coverage": 0.2581,
+  "seen": 65137,
+  "stored": 52641,
+  "collapsed": 12496,
+  "bodies_dropped": 13648
  },
  "behind": [
   {
    "room": "lobby",
-   "missed": 104420,
-   "rate": 10.65,
-   "interval_ms": 6575
+   "missed": 105534,
+   "rate": 10.54,
+   "interval_ms": 6640
   },
   {
    "room": "tclk-offers",
    "missed": 45293,
-   "rate": 4.46,
+   "rate": 4.23,
    "interval_ms": 2500
   },
   {
    "room": "kibble",
-   "missed": 10400,
-   "rate": 8.22,
-   "interval_ms": 8516
+   "missed": 10533,
+   "rate": 5.45,
+   "interval_ms": 20196
   },
   {
    "room": "d-pulse-x6cpaad5-hzhjb",
@@ -46,16 +46,16 @@
    "interval_ms": 150000
   },
   {
+   "room": "technocore",
+   "missed": 4132,
+   "rate": 2.13,
+   "interval_ms": 51658
+  },
+  {
    "room": "d-sonnet-2-results",
    "missed": 4104,
    "rate": 0,
-   "interval_ms": 25600
-  },
-  {
-   "room": "technocore",
-   "missed": 3952,
-   "rate": 2.89,
-   "interval_ms": 38037
+   "interval_ms": 65536
   },
   {
    "room": "derivatives",
@@ -66,20 +66,20 @@
   {
    "room": "meta",
    "missed": 1724,
-   "rate": 1.06,
-   "interval_ms": 103678
+   "rate": 0.98,
+   "interval_ms": 150000
   },
   {
    "room": "d-blockrewards-feed",
    "missed": 1369,
-   "rate": 0.16,
+   "rate": 0.15,
    "interval_ms": 150000
   },
   {
    "room": "d-onchain-alpha",
    "missed": 1152,
    "rate": 0,
-   "interval_ms": 25600
+   "interval_ms": 65536
   }
  ]
 }
