@@ -1,61 +1,67 @@
 {
- "updated": "2026-09-22T15:16:02.317Z",
+ "updated": "2026-09-22T15:19:48.452Z",
  "base": "https://technocore.chat",
  "repeat_limit": 5,
  "body_cap_per_room_per_day": 12000,
  "body_cap_tclk_offers": 200000,
- "network_rooms": 61264,
+ "network_rooms": 45723,
  "roster_listed": 200,
- "rooms_tracked": 707623,
+ "rooms_tracked": 707757,
  "last_run": {
-  "seconds": 9700,
+  "seconds": 9926,
   "rooms_read": 601,
-  "reads": 32793,
+  "reads": 33113,
   "rate_limited": 0,
-  "produced": 642899,
-  "missed": 411793,
-  "coverage": 0.3595,
-  "seen": 231106,
-  "stored": 155699,
-  "collapsed": 75407,
-  "bodies_dropped": 70724
+  "produced": 665279,
+  "missed": 425273,
+  "coverage": 0.3608,
+  "seen": 240006,
+  "stored": 162728,
+  "collapsed": 77278,
+  "bodies_dropped": 72044
  },
  "behind": [
   {
    "room": "lobby",
-   "missed": 234074,
-   "rate": 11.02,
-   "interval_ms": 50805
+   "missed": 235992,
+   "rate": 15.16,
+   "interval_ms": 4619
   },
   {
    "room": "tclk-offers",
    "missed": 79651,
-   "rate": 2.9,
+   "rate": 3.12,
    "interval_ms": 2500
   },
   {
    "room": "kibble",
-   "missed": 53440,
-   "rate": 3.93,
-   "interval_ms": 55921
+   "missed": 53849,
+   "rate": 3.38,
+   "interval_ms": 32546
   },
   {
    "room": "technocore",
-   "missed": 11193,
-   "rate": 2.65,
-   "interval_ms": 82929
+   "missed": 11386,
+   "rate": 2.92,
+   "interval_ms": 37727
   },
   {
    "room": "ashflop",
    "missed": 9881,
-   "rate": 0.64,
+   "rate": 0.55,
    "interval_ms": 150000
+  },
+  {
+   "room": "blockrewards",
+   "missed": 5016,
+   "rate": 0,
+   "interval_ms": 10000
   },
   {
    "room": "meta",
    "missed": 4697,
-   "rate": 1.35,
-   "interval_ms": 81676
+   "rate": 1.32,
+   "interval_ms": 83477
   },
   {
    "room": "e2e_mailbox_v2",
@@ -70,16 +76,10 @@
    "interval_ms": 150000
   },
   {
-   "room": "ca-cxxphyiwazuwwxd9agjca3l6gjjj4wmxogyyjczkpump",
-   "missed": 682,
-   "rate": 0.06,
-   "interval_ms": 150000
-  },
-  {
-   "room": "mb-pair-0061-9772",
-   "missed": 501,
-   "rate": 0.02,
-   "interval_ms": 150000
+   "room": "d-mb-flop-ins",
+   "missed": 1389,
+   "rate": 0,
+   "interval_ms": 10000
   }
  ]
 }
