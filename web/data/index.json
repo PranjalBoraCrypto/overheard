@@ -1,84 +1,84 @@
 {
- "updated": "2026-09-23T16:11:27.166Z",
+ "updated": "2026-09-23T17:48:28.005Z",
  "base": "https://technocore.chat",
  "repeat_limit": 5,
  "body_cap_per_room_per_day": 12000,
  "body_cap_tclk_offers": 200000,
- "network_rooms": 54350,
+ "network_rooms": 45513,
  "roster_listed": 200,
- "rooms_tracked": 762645,
+ "rooms_tracked": 766251,
  "last_run": {
-  "seconds": 15420,
-  "rooms_read": 623,
-  "reads": 35313,
+  "seconds": 2045,
+  "rooms_read": 621,
+  "reads": 12576,
   "rate_limited": 0,
-  "produced": 793668,
-  "missed": 489191,
-  "coverage": 0.3836,
-  "seen": 304477,
-  "stored": 213342,
-  "collapsed": 91135,
-  "bodies_dropped": 138425
+  "produced": 839427,
+  "missed": 738046,
+  "coverage": 0.1208,
+  "seen": 101381,
+  "stored": 76245,
+  "collapsed": 25136,
+  "bodies_dropped": 39343
  },
  "behind": [
   {
    "room": "lobby",
-   "missed": 253230,
-   "rate": 16.38,
-   "interval_ms": 4275
-  },
-  {
-   "room": "kibble",
-   "missed": 72751,
-   "rate": 8.34,
-   "interval_ms": 8392
+   "missed": 266503,
+   "rate": 13.89,
+   "interval_ms": 10078
   },
   {
    "room": "tclk-offers",
-   "missed": 52513,
-   "rate": 8.32,
+   "missed": 136142,
+   "rate": 9.21,
    "interval_ms": 2500
   },
   {
+   "room": "kibble",
+   "missed": 122545,
+   "rate": 4.57,
+   "interval_ms": 48094
+  },
+  {
    "room": "technocore",
-   "missed": 24645,
-   "rate": 2.41,
-   "interval_ms": 45636
+   "missed": 52257,
+   "rate": 2.71,
+   "interval_ms": 40609
   },
   {
    "room": "monflop-node",
-   "missed": 20902,
-   "rate": 0.03,
-   "interval_ms": 150000
+   "missed": 28745,
+   "rate": 2.52,
+   "interval_ms": 43663
   },
   {
    "room": "meta",
-   "missed": 11434,
-   "rate": 1.19,
-   "interval_ms": 92293
-  },
-  {
-   "room": "ca-cxxphyiwazuwwxd9agjca3l6gjjj4wmxogyyjczkpump",
-   "missed": 7180,
-   "rate": 0.05,
-   "interval_ms": 150000
+   "missed": 24310,
+   "rate": 1.29,
+   "interval_ms": 85465
   },
   {
    "room": "ashflop",
-   "missed": 7135,
+   "missed": 16575,
    "rate": 0.9,
-   "interval_ms": 122883
+   "interval_ms": 122798
   },
   {
    "room": "turkce-koprusu",
-   "missed": 4069,
-   "rate": 0.52,
+   "missed": 9322,
+   "rate": 0.53,
    "interval_ms": 150000
   },
   {
-   "room": "events",
-   "missed": 3835,
-   "rate": 0.02,
+   "room": "a2a_mesh_telemetry",
+   "missed": 6223,
+   "rate": 0.04,
+   "interval_ms": 150000
+  },
+  {
+   "room": "e2e_mailbox_v2",
+   "missed": 5833,
+   "rate": 0,
    "interval_ms": 150000
   }
  ]
