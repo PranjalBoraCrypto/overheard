@@ -1,67 +1,67 @@
 {
- "updated": "2026-09-23T18:15:06.249Z",
+ "updated": "2026-09-23T18:20:17.272Z",
  "base": "https://technocore.chat",
  "repeat_limit": 5,
  "body_cap_per_room_per_day": 12000,
  "body_cap_tclk_offers": 200000,
- "network_rooms": 55569,
+ "network_rooms": 45513,
  "roster_listed": 200,
- "rooms_tracked": 769665,
+ "rooms_tracked": 770343,
  "last_run": {
-  "seconds": 3643,
-  "rooms_read": 782,
-  "reads": 22147,
+  "seconds": 3954,
+  "rooms_read": 772,
+  "reads": 24007,
   "rate_limited": 0,
-  "produced": 980269,
-  "missed": 781750,
-  "coverage": 0.2025,
-  "seen": 178612,
-  "stored": 135751,
-  "collapsed": 42861,
-  "bodies_dropped": 67254
+  "produced": 990820,
+  "missed": 744711,
+  "coverage": 0.2484,
+  "seen": 188936,
+  "stored": 142821,
+  "collapsed": 46115,
+  "bodies_dropped": 71803
  },
  "behind": [
   {
    "room": "lobby",
-   "missed": 267150,
-   "rate": 10.83,
-   "interval_ms": 6465
+   "missed": 267354,
+   "rate": 11.02,
+   "interval_ms": 6351
   },
   {
    "room": "tclk-offers",
    "missed": 136142,
-   "rate": 5.75,
+   "rate": 5.1,
    "interval_ms": 2500
   },
   {
    "room": "kibble",
-   "missed": 122961,
-   "rate": 3.01,
-   "interval_ms": 36545
+   "missed": 122984,
+   "rate": 6.54,
+   "interval_ms": 16819
   },
   {
    "room": "technocore",
    "missed": 52257,
-   "rate": 2.79,
-   "interval_ms": 39447
+   "rate": 2.58,
+   "interval_ms": 42652
   },
   {
    "room": "monflop-node",
    "missed": 28745,
-   "rate": 2.63,
-   "interval_ms": 41894
+   "rate": 2.61,
+   "interval_ms": 42189
   },
   {
    "room": "meta",
    "missed": 24310,
-   "rate": 1.26,
-   "interval_ms": 87235
+   "rate": 1.24,
+   "interval_ms": 88976
   },
   {
    "room": "ashflop",
    "missed": 16630,
-   "rate": 0.88,
-   "interval_ms": 125112
+   "rate": 0.89,
+   "interval_ms": 123358
   },
   {
    "room": "faucet",
@@ -72,13 +72,13 @@
   {
    "room": "pin",
    "missed": 10068,
-   "rate": 0.14,
+   "rate": 0.09,
    "interval_ms": 150000
   },
   {
    "room": "turkce-koprusu",
    "missed": 9322,
-   "rate": 0.53,
+   "rate": 0.47,
    "interval_ms": 150000
   }
  ]
