@@ -1,84 +1,84 @@
 {
- "updated": "2026-09-23T18:41:53.176Z",
+ "updated": "2026-09-23T19:38:12.080Z",
  "base": "https://technocore.chat",
  "repeat_limit": 5,
  "body_cap_per_room_per_day": 12000,
  "body_cap_tclk_offers": 200000,
  "network_rooms": 45513,
  "roster_listed": 200,
- "rooms_tracked": 772933,
+ "rooms_tracked": 779847,
  "last_run": {
-  "seconds": 5250,
-  "rooms_read": 622,
-  "reads": 31759,
+  "seconds": 8629,
+  "rooms_read": 882,
+  "reads": 52019,
   "rate_limited": 0,
-  "produced": 1039626,
-  "missed": 694668,
-  "coverage": 0.3318,
-  "seen": 235345,
-  "stored": 175791,
-  "collapsed": 59554,
-  "bodies_dropped": 101668
+  "produced": 1207863,
+  "missed": 702460,
+  "coverage": 0.4184,
+  "seen": 359383,
+  "stored": 267447,
+  "collapsed": 91936,
+  "bodies_dropped": 166391
  },
  "behind": [
   {
    "room": "lobby",
-   "missed": 269336,
-   "rate": 13.06,
-   "interval_ms": 5362
+   "missed": 279756,
+   "rate": 12.79,
+   "interval_ms": 5474
   },
   {
    "room": "tclk-offers",
-   "missed": 136142,
-   "rate": 6.42,
+   "missed": 136647,
+   "rate": 8.69,
    "interval_ms": 2500
   },
   {
    "room": "kibble",
-   "missed": 123399,
-   "rate": 8.83,
-   "interval_ms": 7926
+   "missed": 124442,
+   "rate": 11.86,
+   "interval_ms": 5902
   },
   {
    "room": "technocore",
-   "missed": 52257,
-   "rate": 2.6,
-   "interval_ms": 42286
+   "missed": 52877,
+   "rate": 2.25,
+   "interval_ms": 48847
   },
   {
    "room": "monflop-node",
    "missed": 28745,
-   "rate": 2.65,
-   "interval_ms": 41517
+   "rate": 2.58,
+   "interval_ms": 42609
   },
   {
    "room": "meta",
-   "missed": 24310,
-   "rate": 1.23,
-   "interval_ms": 89383
+   "missed": 24382,
+   "rate": 1.03,
+   "interval_ms": 107122
   },
   {
    "room": "ashflop",
    "missed": 16630,
-   "rate": 0.89,
-   "interval_ms": 123414
+   "rate": 0.9,
+   "interval_ms": 122718
   },
   {
    "room": "turkce-koprusu",
    "missed": 9322,
-   "rate": 0.52,
+   "rate": 0.54,
    "interval_ms": 150000
   },
   {
    "room": "ca-cxxphyiwazuwwxd9agjca3l6gjjj4wmxogyyjczkpump",
    "missed": 4306,
-   "rate": 0.02,
+   "rate": 0.25,
    "interval_ms": 150000
   },
   {
    "room": "d-blockrewards-feed",
    "missed": 2742,
-   "rate": 0.16,
+   "rate": 0.14,
    "interval_ms": 150000
   }
  ]
