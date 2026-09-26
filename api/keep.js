@@ -158,6 +158,10 @@ function frameFrom(row) {
     ts: typeof row.ts === "string" ? row.ts : null,
     from: row.from,
     signed: typeof row.sig === "string" && row.sig.length > 0,
+    // Preserve the proof itself, not just the transport's signed-status flag.
+    // No private key is involved; both fields are already public in the room.
+    ...(typeof row.sig === "string" ? { sig: row.sig } : {}),
+    ...(row.nonce != null ? { nonce: String(row.nonce) } : {}),
     text,
   };
 }
@@ -215,7 +219,10 @@ export default async function handler(request) {
       signal: AbortSignal.timeout(15000),
     });
     if (!r.ok) return json({ ok: false, kept: 0, reason: `the room answered HTTP ${r.status}` }, 200);
-    const j = await r.json();
+    // r.json() would round nanosecond nonces above Number.MAX_SAFE_INTEGER.
+    // Match api/room.js: keep their original integer spelling before parsing.
+    const raw = await r.text();
+    const j = JSON.parse(raw.replace(/"(nonce|seq)"\s*:\s*(-?\d{15,})(?=\s*[,}])/g, '"$1":"$2"'));
     live = Array.isArray(j) ? j : (j.messages ?? []);
   } catch {
     return json({ ok: false, kept: 0, reason: "could not read the room" }, 200);
@@ -274,6 +281,12 @@ export default async function handler(request) {
 
     const body = have + (have && !have.endsWith("\n") ? "\n" : "")
       + add.map((f) => JSON.stringify(f)).join("\n") + "\n";
+
+    // Signature evidence increases each row's size. Bound the completed UTF-8
+    // body as well as the existing ledger, before asking GitHub to store it.
+    if (new TextEncoder().encode(body).length > MAX_BYTES) {
+      return json({ ok: true, kept: 0, reason: "the ledger is full" });
+    }
 
     const put = await gh(`/contents/${PATH}`, {
       method: "PUT",
