@@ -79,11 +79,13 @@ console.log("\n=== B. two places ask, and neither of them is a cron");
   ok("deploy.yml exists and runs on a push to main",
     /push:\s*\n\s*branches:\s*\[main\]/.test(dep));
   ok("and it POSTs the deploy hook", /VERCEL_DEPLOY_HOOK/.test(dep) && /curl[^\n]*-X POST/.test(dep));
-  /* ONCE A DAY, and the number is pinned because it is a budget decision
-     rather than a taste: a deployment costs about seven minutes, five of them
-     cloning, so every publish is real money. */
-  ok("the archive publishes the data about once a day",
-    /MIN_HOURS_BETWEEN_PUBLISHES=22/.test(arc) && /VERCEL_DEPLOY_HOOK/.test(arc),
+  /* ONCE A WEEK (Oct 2026), and the number is pinned because it is a budget
+     decision rather than a taste: a deployment costs about fifteen minutes of
+     build time, so every publish is real money. Every page reads the archive
+     from the repository now (/api/live, /api/recent, /api/profile, the
+     rewrites); the deployed copy is only the offline fallback. */
+  ok("the archive publishes the data about once a week",
+    /MIN_HOURS_BETWEEN_PUBLISHES=168/.test(arc) && /VERCEL_DEPLOY_HOOK/.test(arc),
     (arc.match(/MIN_HOURS_BETWEEN_PUBLISHES=\d+/) || ["(not set)"])[0]);
   ok("only when something new was actually published",
     /published.*-le.*published_when_deployed/.test(arc));

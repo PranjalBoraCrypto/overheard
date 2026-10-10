@@ -5225,13 +5225,23 @@ const finePointer=matchMedia("(hover: hover) and (pointer: fine)").matches;
 (async()=>{
   const box=$("meters"); if(!box) return;
   let idx=null, profiles=0, messages=0;
+  // The repository copy first (/api/live, /api/recent), the deployed copy as
+  // the fallback: the deployed one is only refreshed by a rare publish now.
   try{
-    idx=await (await fetch("./data/index.json",{cache:"no-cache"})).json();
-  }catch{ return; }
+    const r=await fetch("/api/live?f=index",{cache:"no-store"});
+    if(r.ok) idx=await r.json();
+  }catch{}
+  if(!idx){
+    try{
+      idx=await (await fetch("./data/index.json",{cache:"no-cache"})).json();
+    }catch{ return; }
+  }
   if(!idx || idx.sample) return;
   try{
-    const r=await fetch("./data/recent.json",{cache:"no-cache"});
-    if(r.ok){ const j=await r.json(); profiles=j.total_identities??0; }
+    let r=await fetch("/api/recent",{cache:"no-store"});
+    let j=r.ok?await r.json():null;
+    if(!j || j.source==="unavailable"){ r=await fetch("./data/recent.json",{cache:"no-cache"}); j=r.ok?await r.json():null; }
+    if(j) profiles=j.total_identities??0;
   }catch{}
   const vals=[
     profiles || idx.identities || null,

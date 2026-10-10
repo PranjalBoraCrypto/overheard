@@ -458,7 +458,11 @@ jobs:
           # a file that looks like the answer to "how often does this happen"
           # and is not. So the deciding happens in exactly one place now, at
           # the end of the window, and it reads how long it has actually been.
-          MIN_HOURS_BETWEEN_PUBLISHES=22
+          # Weekly (Oct 2026): every page now reads index, roster, recent, profiles and
+          # room history from the repository (/api/live, /api/recent, /api/profile and
+          # the vercel.json rewrites), so the deployed copy is only the offline
+          # fallback. A daily publish cost about $25 a month in build time.
+          MIN_HOURS_BETWEEN_PUBLISHES=168
           published_when_deployed=0
           while true; do
             sleep 300

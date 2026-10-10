@@ -1183,7 +1183,9 @@ if(!/^[a-z0-9][a-z0-9_-]{0,63}$/.test(room)) room="lobby";
 
 async function loadRooms(){
   try{
-    const r=await fetch("./data/roster.json",{cache:"no-cache"});
+    // The repository copy first (always current), the deployed copy as the fallback.
+    let r=await fetch("/api/live?f=roster",{cache:"no-store"}).catch(()=>null);
+    if(!r || !r.ok) r=await fetch("./data/roster.json",{cache:"no-cache"});
     if(!r.ok) throw 0;
     const j=await r.json();
     ROOMS=(j.rooms||[]).filter(x=>/^[a-z0-9][a-z0-9_-]{0,63}$/.test(x.room));
