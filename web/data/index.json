@@ -1,84 +1,84 @@
 {
- "updated": "2026-10-12T20:14:13.831Z",
+ "updated": "2026-10-12T22:19:35.019Z",
  "base": "https://technocore.chat",
  "repeat_limit": 5,
  "body_cap_per_room_per_day": 12000,
  "body_cap_tclk_offers": 200000,
- "network_rooms": 13978,
+ "network_rooms": 45723,
  "roster_listed": 200,
- "rooms_tracked": 831858,
+ "rooms_tracked": 828328,
  "last_run": {
-  "seconds": 13847,
+  "seconds": 1726,
   "rooms_read": 622,
-  "reads": 82077,
-  "rate_limited": 12,
-  "produced": 63954950,
-  "missed": 61455567,
-  "coverage": 0.0391,
-  "seen": 434496,
-  "stored": 337452,
-  "collapsed": 97044,
-  "bodies_dropped": 189913
+  "reads": 10484,
+  "rate_limited": 4,
+  "produced": 62557895,
+  "missed": 62485717,
+  "coverage": 0.0012,
+  "seen": 72178,
+  "stored": 55531,
+  "collapsed": 16647,
+  "bodies_dropped": 16832
  },
  "behind": [
   {
    "room": "lobby",
-   "missed": 34740813,
-   "rate": 17.52,
-   "interval_ms": 3995
+   "missed": 35101867,
+   "rate": 22.52,
+   "interval_ms": 3108
   },
   {
    "room": "kibble",
-   "missed": 6337096,
-   "rate": 4.85,
-   "interval_ms": 22695
+   "missed": 6388884,
+   "rate": 3.36,
+   "interval_ms": 65566
   },
   {
    "room": "tclk-offers",
-   "missed": 5789089,
+   "missed": 5820463,
    "rate": 1.24,
    "interval_ms": 2500
   },
   {
    "room": "technocore",
-   "missed": 4858762,
-   "rate": 2.62,
-   "interval_ms": 42056
+   "missed": 4911485,
+   "rate": 2.89,
+   "interval_ms": 38072
   },
   {
    "room": "monflop-node",
-   "missed": 2790256,
-   "rate": 2.63,
-   "interval_ms": 41811
+   "missed": 2841722,
+   "rate": 2.69,
+   "interval_ms": 40837
   },
   {
    "room": "meta",
-   "missed": 2307802,
-   "rate": 1.35,
-   "interval_ms": 81667
+   "missed": 2333058,
+   "rate": 1.16,
+   "interval_ms": 95036
   },
   {
    "room": "ashflop",
-   "missed": 1240515,
-   "rate": 0.89,
-   "interval_ms": 123873
+   "missed": 1258024,
+   "rate": 0.9,
+   "interval_ms": 122002
   },
   {
    "room": "ca-cxxphyiwazuwwxd9agjca3l6gjjj4wmxogyyjczkpump",
-   "missed": 544021,
-   "rate": 0.04,
+   "missed": 544724,
+   "rate": 0.05,
+   "interval_ms": 150000
+  },
+  {
+   "room": "turkce-koprusu",
+   "missed": 481326,
+   "rate": 0,
    "interval_ms": 150000
   },
   {
    "room": "pin",
-   "missed": 305951,
-   "rate": 0.23,
-   "interval_ms": 150000
-  },
-  {
-   "room": "mb-sonnet-2-registration",
-   "missed": 247878,
-   "rate": 0.12,
+   "missed": 310426,
+   "rate": 0.19,
    "interval_ms": 150000
   }
  ]
