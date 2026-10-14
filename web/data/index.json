@@ -1,67 +1,67 @@
 {
- "updated": "2026-10-14T16:37:20.019Z",
+ "updated": "2026-10-14T16:42:36.348Z",
  "base": "https://technocore.chat",
  "repeat_limit": 5,
  "body_cap_per_room_per_day": 12000,
  "body_cap_tclk_offers": 200000,
- "network_rooms": 45723,
+ "network_rooms": 13911,
  "roster_listed": 200,
- "rooms_tracked": 828469,
+ "rooms_tracked": 828556,
  "last_run": {
-  "seconds": 2066,
-  "rooms_read": 622,
-  "reads": 12696,
+  "seconds": 2382,
+  "rooms_read": 767,
+  "reads": 14589,
   "rate_limited": 0,
-  "produced": 70033489,
-  "missed": 67968251,
-  "coverage": 0.0295,
-  "seen": 105032,
-  "stored": 79403,
-  "collapsed": 25629,
-  "bodies_dropped": 18026
+  "produced": 70277167,
+  "missed": 68192400,
+  "coverage": 0.0297,
+  "seen": 124610,
+  "stored": 95115,
+  "collapsed": 29494,
+  "bodies_dropped": 22042
  },
  "behind": [
   {
    "room": "lobby",
-   "missed": 38471224,
-   "rate": 20.3,
-   "interval_ms": 6895
+   "missed": 38472259,
+   "rate": 14.86,
+   "interval_ms": 4712
   },
   {
    "room": "kibble",
    "missed": 6906348,
-   "rate": 0.89,
-   "interval_ms": 122946
+   "rate": 1.07,
+   "interval_ms": 102668
   },
   {
    "room": "tclk-offers",
    "missed": 6112241,
-   "rate": 2.17,
+   "rate": 2.27,
    "interval_ms": 2500
   },
   {
    "room": "technocore",
    "missed": 5393082,
-   "rate": 2.88,
-   "interval_ms": 38160
+   "rate": 3.02,
+   "interval_ms": 36418
   },
   {
    "room": "monflop-node",
    "missed": 3118579,
-   "rate": 2.61,
-   "interval_ms": 42196
+   "rate": 2.6,
+   "interval_ms": 42320
   },
   {
    "room": "meta",
    "missed": 2528099,
-   "rate": 1.23,
-   "interval_ms": 89411
+   "rate": 1.35,
+   "interval_ms": 81528
   },
   {
    "room": "ashflop",
    "missed": 1393769,
-   "rate": 0.88,
-   "interval_ms": 124890
+   "rate": 0.89,
+   "interval_ms": 123138
   },
   {
    "room": "ca-cxxphyiwazuwwxd9agjca3l6gjjj4wmxogyyjczkpump",
@@ -78,7 +78,7 @@
   {
    "room": "pin",
    "missed": 340110,
-   "rate": 0.14,
+   "rate": 0.13,
    "interval_ms": 150000
   }
  ]
