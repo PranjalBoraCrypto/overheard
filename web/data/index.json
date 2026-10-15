@@ -1,84 +1,84 @@
 {
- "updated": "2026-10-15T15:04:50.451Z",
+ "updated": "2026-10-15T15:10:06.045Z",
  "base": "https://technocore.chat",
  "repeat_limit": 5,
  "body_cap_per_room_per_day": 12000,
  "body_cap_tclk_offers": 200000,
  "network_rooms": 16703,
  "roster_listed": 200,
- "rooms_tracked": 829003,
+ "rooms_tracked": 829150,
  "last_run": {
-  "seconds": 2640,
-  "rooms_read": 622,
-  "reads": 15945,
+  "seconds": 2955,
+  "rooms_read": 735,
+  "reads": 17835,
   "rate_limited": 6,
-  "produced": 71723305,
-  "missed": 71605595,
-  "coverage": 0.0016,
-  "seen": 117710,
-  "stored": 91106,
-  "collapsed": 26604,
-  "bodies_dropped": 29392
+  "produced": 72852670,
+  "missed": 72710712,
+  "coverage": 0.0019,
+  "seen": 141958,
+  "stored": 112250,
+  "collapsed": 29708,
+  "bodies_dropped": 34003
  },
  "behind": [
   {
    "room": "lobby",
-   "missed": 40136479,
-   "rate": 23.73,
-   "interval_ms": 2950
+   "missed": 40137815,
+   "rate": 16.16,
+   "interval_ms": 4332
   },
   {
    "room": "kibble",
    "missed": 7147596,
-   "rate": 3.54,
-   "interval_ms": 31081
+   "rate": 3.67,
+   "interval_ms": 29964
   },
   {
    "room": "tclk-offers",
    "missed": 6256891,
-   "rate": 0.97,
+   "rate": 2.03,
    "interval_ms": 2500
   },
   {
    "room": "technocore",
    "missed": 5625345,
-   "rate": 3.05,
-   "interval_ms": 36030
+   "rate": 2.93,
+   "interval_ms": 37525
   },
   {
    "room": "monflop-node",
    "missed": 3284410,
-   "rate": 0.03,
+   "rate": 0.02,
    "interval_ms": 150000
   },
   {
    "room": "meta",
    "missed": 2618041,
-   "rate": 1.32,
-   "interval_ms": 83586
+   "rate": 1.15,
+   "interval_ms": 95519
   },
   {
    "room": "ashflop",
    "missed": 1465316,
    "rate": 0.89,
-   "interval_ms": 124123
+   "interval_ms": 123028
   },
   {
    "room": "ca-cxxphyiwazuwwxd9agjca3l6gjjj4wmxogyyjczkpump",
    "missed": 551969,
-   "rate": 0.04,
+   "rate": 0.03,
+   "interval_ms": 150000
+  },
+  {
+   "room": "turkce-koprusu",
+   "missed": 481815,
+   "rate": 0.01,
    "interval_ms": 150000
   },
   {
    "room": "events",
    "missed": 459608,
    "rate": 0,
-   "interval_ms": 150000
-  },
-  {
-   "room": "pin",
-   "missed": 355703,
-   "rate": 0.26,
    "interval_ms": 150000
   }
  ]
