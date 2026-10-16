@@ -1,67 +1,67 @@
 {
- "updated": "2026-10-16T15:05:57.904Z",
+ "updated": "2026-10-16T16:09:24.284Z",
  "base": "https://technocore.chat",
  "repeat_limit": 5,
  "body_cap_per_room_per_day": 12000,
  "body_cap_tclk_offers": 200000,
- "network_rooms": 16529,
+ "network_rooms": 13978,
  "roster_listed": 200,
- "rooms_tracked": 829859,
+ "rooms_tracked": 830635,
  "last_run": {
-  "seconds": 4870,
-  "rooms_read": 686,
-  "reads": 29491,
-  "rate_limited": 0,
-  "produced": 76434328,
-  "missed": 74357745,
-  "coverage": 0.0272,
-  "seen": 223604,
-  "stored": 175897,
-  "collapsed": 47707,
-  "bodies_dropped": 67066
+  "seconds": 8677,
+  "rooms_read": 622,
+  "reads": 51995,
+  "rate_limited": 2,
+  "produced": 76557496,
+  "missed": 74308830,
+  "coverage": 0.0294,
+  "seen": 323266,
+  "stored": 250074,
+  "collapsed": 73192,
+  "bodies_dropped": 128446
  },
  "behind": [
   {
    "room": "lobby",
-   "missed": 42026816,
-   "rate": 35.01,
-   "interval_ms": 1999
+   "missed": 42049700,
+   "rate": 24.31,
+   "interval_ms": 2880
   },
   {
    "room": "kibble",
-   "missed": 7455647,
-   "rate": 2.08,
-   "interval_ms": 52960
+   "missed": 7455693,
+   "rate": 1.85,
+   "interval_ms": 59440
   },
   {
    "room": "tclk-offers",
    "missed": 6382441,
-   "rate": 1.37,
+   "rate": 1.03,
    "interval_ms": 2500
   },
   {
    "room": "technocore",
-   "missed": 5889211,
-   "rate": 2,
-   "interval_ms": 55072
+   "missed": 5889286,
+   "rate": 1.95,
+   "interval_ms": 56499
   },
   {
    "room": "monflop-node",
-   "missed": 3449764,
-   "rate": 0.02,
-   "interval_ms": 150000
+   "missed": 3449987,
+   "rate": 2.43,
+   "interval_ms": 90560
   },
   {
    "room": "meta",
    "missed": 2718445,
-   "rate": 0.88,
-   "interval_ms": 124551
+   "rate": 0.79,
+   "interval_ms": 139539
   },
   {
    "room": "ashflop",
    "missed": 1540585,
    "rate": 0.88,
-   "interval_ms": 124437
+   "interval_ms": 124341
   },
   {
    "room": "ca-cxxphyiwazuwwxd9agjca3l6gjjj4wmxogyyjczkpump",
@@ -78,7 +78,7 @@
   {
    "room": "mb-sonnet-2-registration",
    "missed": 307356,
-   "rate": 0.12,
+   "rate": 0.23,
    "interval_ms": 150000
   }
  ]
