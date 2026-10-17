@@ -1,83 +1,83 @@
 {
- "updated": "2026-10-17T00:32:00.537Z",
+ "updated": "2026-10-17T00:37:42.232Z",
  "base": "https://technocore.chat",
  "repeat_limit": 5,
  "body_cap_per_room_per_day": 12000,
  "body_cap_tclk_offers": 200000,
- "network_rooms": 45723,
+ "network_rooms": 59478,
  "roster_listed": 200,
- "rooms_tracked": 828394,
+ "rooms_tracked": 828465,
  "last_run": {
-  "seconds": 1703,
-  "rooms_read": 647,
-  "reads": 10518,
+  "seconds": 2045,
+  "rooms_read": 883,
+  "reads": 12578,
   "rate_limited": 0,
-  "produced": 76107381,
-  "missed": 76028552,
-  "coverage": 0.001,
-  "seen": 78829,
-  "stored": 60715,
-  "collapsed": 18114,
-  "bodies_dropped": 15298
+  "produced": 77048814,
+  "missed": 76951473,
+  "coverage": 0.0013,
+  "seen": 97341,
+  "stored": 75562,
+  "collapsed": 21779,
+  "bodies_dropped": 20740
  },
  "behind": [
   {
    "room": "lobby",
-   "missed": 42765858,
-   "rate": 22.98,
-   "interval_ms": 3047
+   "missed": 42766963,
+   "rate": 17.76,
+   "interval_ms": 3940
   },
   {
    "room": "kibble",
    "missed": 7561613,
-   "rate": 3.34,
-   "interval_ms": 32917
+   "rate": 2.78,
+   "interval_ms": 39560
   },
   {
    "room": "tclk-offers",
    "missed": 6442448,
-   "rate": 0.69,
+   "rate": 0.35,
    "interval_ms": 2500
   },
   {
    "room": "technocore",
    "missed": 5973657,
-   "rate": 2.7,
-   "interval_ms": 40676
+   "rate": 3.25,
+   "interval_ms": 33841
   },
   {
    "room": "monflop-node",
    "missed": 3526118,
-   "rate": 2.67,
-   "interval_ms": 20567
+   "rate": 2.62,
+   "interval_ms": 41979
   },
   {
    "room": "meta",
-   "missed": 2751654,
-   "rate": 0.9,
-   "interval_ms": 122825
+   "missed": 2751713,
+   "rate": 0.92,
+   "interval_ms": 119526
   },
   {
    "room": "ashflop",
    "missed": 1573612,
    "rate": 0.9,
-   "interval_ms": 122744
+   "interval_ms": 122790
   },
   {
    "room": "ca-cxxphyiwazuwwxd9agjca3l6gjjj4wmxogyyjczkpump",
    "missed": 555773,
-   "rate": 0.01,
+   "rate": 0.03,
    "interval_ms": 150000
+  },
+  {
+   "room": "turkce-koprusu",
+   "missed": 482032,
+   "rate": 0,
+   "interval_ms": 32000
   },
   {
    "room": "events",
    "missed": 464356,
-   "rate": 0,
-   "interval_ms": 150000
-  },
-  {
-   "room": "pin",
-   "missed": 362920,
    "rate": 0,
    "interval_ms": 150000
   }
