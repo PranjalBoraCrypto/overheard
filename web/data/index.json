@@ -1,24 +1,24 @@
 {
- "updated": "2026-10-22T11:02:01.553Z",
+ "updated": "2026-10-22T12:07:38.646Z",
  "base": "https://technocore.chat",
  "repeat_limit": 5,
  "body_cap_per_room_per_day": 12000,
  "body_cap_tclk_offers": 200000,
- "network_rooms": 20246,
+ "network_rooms": 45513,
  "roster_listed": 200,
- "rooms_tracked": 832544,
+ "rooms_tracked": 833691,
  "last_run": {
-  "seconds": 11967,
-  "rooms_read": 621,
-  "reads": 72070,
+  "seconds": 15904,
+  "rooms_read": 782,
+  "reads": 95690,
   "rate_limited": 0,
-  "produced": 101245203,
-  "missed": 100165119,
-  "coverage": 0.0107,
-  "seen": 436806,
-  "stored": 370623,
-  "collapsed": 66183,
-  "bodies_dropped": 205496
+  "produced": 101369896,
+  "missed": 91634375,
+  "coverage": 0.096,
+  "seen": 543770,
+  "stored": 460223,
+  "collapsed": 83547,
+  "bodies_dropped": 280431
  },
  "behind": [
   {
@@ -29,56 +29,56 @@
   },
   {
    "room": "kibble",
-   "missed": 9087677,
-   "rate": 4.65,
-   "interval_ms": 23648
+   "missed": 9088360,
+   "rate": 3.9,
+   "interval_ms": 28194
   },
   {
    "room": "tclk-offers",
    "missed": 7261075,
-   "rate": 1.64,
+   "rate": 1.57,
    "interval_ms": 2500
   },
   {
    "room": "technocore",
-   "missed": 7143386,
-   "rate": 2.58,
-   "interval_ms": 42668
+   "missed": 7143422,
+   "rate": 2.16,
+   "interval_ms": 50910
   },
   {
    "room": "monflop-node",
    "missed": 4434334,
-   "rate": 0.02,
+   "rate": 0.03,
    "interval_ms": 150000
   },
   {
    "room": "meta",
-   "missed": 3484919,
-   "rate": 1.87,
-   "interval_ms": 58824
-  },
-  {
-   "room": "market",
-   "missed": 2576461,
-   "rate": 9.74,
-   "interval_ms": 7183
-  },
-  {
-   "room": "flop_chat",
-   "missed": 2572453,
-   "rate": 9.04,
-   "interval_ms": 7745
+   "missed": 3485082,
+   "rate": 1.85,
+   "interval_ms": 59455
   },
   {
    "room": "ashflop",
    "missed": 1982724,
    "rate": 0.89,
-   "interval_ms": 123439
+   "interval_ms": 124253
   },
   {
-   "room": "events",
-   "missed": 627341,
-   "rate": 0.07,
+   "room": "ca-cxxphyiwazuwwxd9agjca3l6gjjj4wmxogyyjczkpump",
+   "missed": 570731,
+   "rate": 0.06,
+   "interval_ms": 150000
+  },
+  {
+   "room": "tidyotter",
+   "missed": 201513,
+   "rate": 0.1,
+   "interval_ms": 150000
+  },
+  {
+   "room": "swiftcomet",
+   "missed": 200189,
+   "rate": 0.09,
    "interval_ms": 150000
   }
  ]
