@@ -1,24 +1,24 @@
 {
- "updated": "2026-10-24T12:23:04.435Z",
+ "updated": "2026-10-24T13:20:50.869Z",
  "base": "https://technocore.chat",
  "repeat_limit": 5,
  "body_cap_per_room_per_day": 12000,
  "body_cap_tclk_offers": 200000,
  "network_rooms": 18376,
  "roster_listed": 200,
- "rooms_tracked": 829313,
+ "rooms_tracked": 831060,
  "last_run": {
-  "seconds": 4897,
+  "seconds": 8363,
   "rooms_read": 621,
-  "reads": 29637,
-  "rate_limited": 0,
-  "produced": 110087793,
-  "missed": 109851399,
-  "coverage": 0.0021,
-  "seen": 236394,
-  "stored": 198105,
-  "collapsed": 38289,
-  "bodies_dropped": 96790
+  "reads": 48935,
+  "rate_limited": 6,
+  "produced": 110173236,
+  "missed": 109857008,
+  "coverage": 0.0029,
+  "seen": 316228,
+  "stored": 265403,
+  "collapsed": 50825,
+  "bodies_dropped": 146025
  },
  "behind": [
   {
@@ -29,39 +29,39 @@
   },
   {
    "room": "kibble",
-   "missed": 9584485,
-   "rate": 3.49,
-   "interval_ms": 31549
+   "missed": 9584637,
+   "rate": 2.86,
+   "interval_ms": 38416
   },
   {
    "room": "tclk-offers",
    "missed": 7609042,
-   "rate": 2.05,
+   "rate": 2.76,
    "interval_ms": 2500
   },
   {
    "room": "technocore",
-   "missed": 7584057,
-   "rate": 1.94,
-   "interval_ms": 56644
+   "missed": 7584155,
+   "rate": 2.07,
+   "interval_ms": 53125
   },
   {
    "room": "monflop-node",
    "missed": 4788465,
-   "rate": 0.02,
+   "rate": 0.03,
    "interval_ms": 150000
   },
   {
    "room": "market",
-   "missed": 3872167,
-   "rate": 6.57,
-   "interval_ms": 33503
+   "missed": 3875084,
+   "rate": 6.16,
+   "interval_ms": 17849
   },
   {
    "room": "flop_chat",
-   "missed": 3867323,
-   "rate": 6.25,
-   "interval_ms": 17600
+   "missed": 3869765,
+   "rate": 7.02,
+   "interval_ms": 15663
   },
   {
    "room": "meta",
@@ -73,12 +73,12 @@
    "room": "ashflop",
    "missed": 2146494,
    "rate": 0.89,
-   "interval_ms": 123586
+   "interval_ms": 124022
   },
   {
    "room": "ca-cxxphyiwazuwwxd9agjca3l6gjjj4wmxogyyjczkpump",
    "missed": 588019,
-   "rate": 0,
+   "rate": 0.02,
    "interval_ms": 150000
   }
  ]
