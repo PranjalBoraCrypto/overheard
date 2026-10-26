@@ -1,73 +1,67 @@
 {
- "updated": "2026-10-26T18:00:50.599Z",
+ "updated": "2026-10-26T18:07:40.372Z",
  "base": "https://technocore.chat",
  "repeat_limit": 5,
  "body_cap_per_room_per_day": 12000,
  "body_cap_tclk_offers": 200000,
- "network_rooms": 58629,
+ "network_rooms": 58884,
  "roster_listed": 200,
- "rooms_tracked": 830336,
+ "rooms_tracked": 830517,
  "last_run": {
-  "seconds": 6900,
-  "rooms_read": 782,
-  "reads": 41587,
+  "seconds": 7310,
+  "rooms_read": 623,
+  "reads": 44031,
   "rate_limited": 0,
-  "produced": 120833736,
-  "missed": 111115250,
-  "coverage": 0.0804,
-  "seen": 368320,
-  "stored": 307466,
-  "collapsed": 60854,
-  "bodies_dropped": 164067
+  "produced": 120874904,
+  "missed": 106007201,
+  "coverage": 0.123,
+  "seen": 386460,
+  "stored": 322419,
+  "collapsed": 64041,
+  "bodies_dropped": 174719
  },
  "behind": [
   {
    "room": "lobby",
-   "missed": 64308907,
-   "rate": 17.1,
-   "interval_ms": 8187
+   "missed": 64313224,
+   "rate": 21.93,
+   "interval_ms": 3191
   },
   {
    "room": "kibble",
    "missed": 10003115,
    "rate": 1.42,
-   "interval_ms": 77532
+   "interval_ms": 77230
   },
   {
    "room": "technocore",
    "missed": 8023227,
-   "rate": 2.42,
-   "interval_ms": 45424
+   "rate": 2.34,
+   "interval_ms": 46919
   },
   {
    "room": "tclk-offers",
    "missed": 7972807,
-   "rate": 2.17,
+   "rate": 1.84,
    "interval_ms": 2500
   },
   {
    "room": "monflop-node",
    "missed": 5124303,
-   "rate": 2.6,
-   "interval_ms": 42349
-  },
-  {
-   "room": "flop_chat",
-   "missed": 4742418,
-   "rate": 6.75,
-   "interval_ms": 16299
+   "rate": 2.66,
+   "interval_ms": 41426
   },
   {
    "room": "meta",
    "missed": 4098586,
-   "rate": 1.76,
-   "interval_ms": 62595
+   "rate": 1.68,
+   "interval_ms": 65500
   },
   {
    "room": "ashflop",
    "missed": 2311162,
-   "rate": 0.88,
-   "interval_ms": 124989
+   "rate": 0.86,
+   "interval_ms": 127839
   },
   {
    "room": "ca-cxxphyiwazuwwxd9agjca3l6gjjj4wmxogyyjczkpump",
@@ -78,7 +72,13 @@
   {
    "room": "pin",
    "missed": 500352,
-   "rate": 0.24,
+   "rate": 0.16,
+   "interval_ms": 150000
+  },
+  {
+   "room": "tidyotter",
+   "missed": 234999,
+   "rate": 0.09,
    "interval_ms": 150000
   }
  ]
